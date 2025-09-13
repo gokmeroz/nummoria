@@ -1,0 +1,29 @@
+import express from "express";
+import cors from "cors";
+import helmet from "helmet";
+import morgan from "morgan";
+
+import authRoutes from "./routes/auth.js";
+import meRoutes from "./routes/me.js";
+import accountRoutes from "./routes/accountRoutes.js";
+
+const app = express(); // Initialize Express app
+
+app.use(express.json()); // Middleware to parse JSON bodies
+app.use(cors()); // Enable CORS for all routes
+app.use(helmet()); // Secure HTTP headers
+app.use(morgan("dev")); // HTTP request logger
+
+app.use("/auth", authRoutes); // Auth routes
+app.use("/me", meRoutes); // User profile routes
+app.use("/accounts", accountRoutes); // Account management routes
+
+//Basic health check route
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", timestamp: Date.now() });
+});
+// Basic route for testing
+app.get("/me", (req, res) => {
+  res.send("My Page...\n This site is under construction");
+});
+export default app; // Export the app for use in server.js
