@@ -6,6 +6,8 @@ import morgan from "morgan";
 import authRoutes from "./routes/auth.js";
 import meRoutes from "./routes/me.js";
 import accountRoutes from "./routes/accountRoutes.js";
+import categoryRoutes from "./routes/categoryRoutes.js";
+import transactionRoutes from "./routes/transactionRoutes.js";
 
 const app = express(); // Initialize Express app
 
@@ -17,6 +19,8 @@ app.use(morgan("dev")); // HTTP request logger
 app.use("/auth", authRoutes); // Auth routes
 app.use("/me", meRoutes); // User profile routes
 app.use("/accounts", accountRoutes); // Account management routes
+app.use("/categories", categoryRoutes); // Category management routes
+app.use("/transactions", transactionRoutes); // Transaction management routes
 
 //Basic health check route
 app.get("/health", (req, res) => {

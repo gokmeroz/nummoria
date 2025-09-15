@@ -16,7 +16,7 @@ router.get("/", getAccounts);
 router.get("/:id", getAccountById);
 router.post("/", createAccount);
 router.put("/:id", updateAccount);
-router.delete("/", softDeleteAccount);
-router.delete("/:id", hardDeleteAccount);
+router.delete("/:id", softDeleteAccount);
+router.delete("/:id/hard", hardDeleteAccount);
 
 export default router;
