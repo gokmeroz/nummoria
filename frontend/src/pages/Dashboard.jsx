@@ -1,3 +1,4 @@
+// frontend/src/pages/Dashboard.jsx
 import { useEffect, useState } from "react";
 import api from "../lib/api";
 
@@ -17,80 +18,11 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-dvh bg-white">
-      {/* Top Nav */}
-      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur border-b">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          {/* Brand */}
-          <a href="/" className="flex items-center gap-2">
-            <span
-              className="w-8 h-8 rounded-full inline-block"
-              style={{ backgroundColor: main }}
-            />
-            <span className="font-semibold text-lg" style={{ color: main }}>
-              Nummora
-            </span>
-          </a>
-
-          {/* Links */}
-          <nav className="hidden md:flex items-center gap-6 text-sm">
-            <a href="/expenses" className="text-gray-700 hover:text-black">
-              Expenses
-            </a>
-            <a href="/income" className="text-gray-700 hover:text-black">
-              Income
-            </a>
-            <a href="/investments" className="text-gray-700 hover:text-black">
-              Investments
-            </a>
-            <a href="/reports" className="text-gray-700 hover:text-black">
-              Reports
-            </a>
-            <a href="/support" className="text-gray-700 hover:text-black">
-              Support
-            </a>
-          </nav>
-
-          {/* Right side */}
-          <div className="flex items-center gap-3">
-            <a
-              href="/login"
-              onClick={(e) => {
-                e.preventDefault();
-                localStorage.removeItem("token");
-                location.href = "/login";
-              }}
-              className="hidden sm:inline-block text-sm px-3 py-1.5 rounded border"
-              style={{ borderColor: secondary, color: main }}
-            >
-              Logout
-            </a>
-            <a
-              href="/user"
-              className="flex items-center gap-2 text-sm"
-              title="User settings"
-            >
-              <div
-                className="w-9 h-9 rounded-full grid place-items-center text-white font-semibold"
-                style={{ backgroundColor: main }}
-              >
-                {me?.name ? me.name[0]?.toUpperCase() : "U"}
-              </div>
-              <span className="hidden sm:block text-gray-700">
-                {me?.name || "User"}
-              </span>
-            </a>
-          </div>
-        </div>
-      </header>
-
       {/* Hero */}
       <section className="relative">
-        {/* Replace the URL below with your own hero image in /public */}
         <div
           className="h-[360px] md:h-[460px] bg-center bg-cover"
-          style={{
-            backgroundImage: "url('/hero.jpg')", // e.g. public/hero.jpg
-          }}
+          style={{ backgroundImage: "url('/hero.jpg')" }}
         />
         {/* Overlay card */}
         <div className="absolute inset-0 flex items-center">
@@ -111,7 +43,7 @@ export default function Dashboard() {
               <div className="mt-6 flex flex-wrap items-center gap-3">
                 <a
                   href="/transactions/new"
-                  className="px-5 py-2.5 rounded font-semibold text-white"
+                  className="px-5 py-2.5 rounded font-semibold text-white transition"
                   style={{ backgroundColor: main }}
                   onMouseEnter={(e) =>
                     (e.currentTarget.style.backgroundColor = secondary)
@@ -135,7 +67,7 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* Social proof / stats (like “Battle-tested…”) */}
+      {/* Social proof / stats */}
       <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10 md:py-14">
         <h2
           className="text-2xl md:text-3xl font-semibold text-center"
@@ -172,7 +104,7 @@ export default function Dashboard() {
 
         {err && <div className="text-red-600 mt-6 text-center">{err}</div>}
 
-        {me && (
+        {/* {me && (
           <div
             className="mt-8 rounded border bg-white p-5 shadow-sm max-w-3xl mx-auto"
             style={{ borderColor: secondary }}
@@ -207,7 +139,7 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
-        )}
+        )} */}
       </section>
 
       {/* Footer-ish CTA */}
@@ -219,7 +151,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-3">
             <a
               href="/expenses"
-              className="px-4 py-2 rounded text-white"
+              className="px-4 py-2 rounded text-white transition"
               style={{ backgroundColor: main }}
               onMouseEnter={(e) =>
                 (e.currentTarget.style.backgroundColor = secondary)

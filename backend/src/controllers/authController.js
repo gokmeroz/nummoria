@@ -78,38 +78,93 @@ export async function login(req, res) {
     res.status(500).json({ error: err.message });
   }
 }
-// POST /auth/request-password-reset
+// // POST /auth/request-password-reset
+// export async function forgotPassword(req, res) {
+//   try {
+//     const { email } = req.body;
+//     if (!email) {
+//       return res.status(400).json({ error: "Email is required" });
+//     }
+//     const user = await User.findOne({ email });
+//     if (!user) {
+//       // To prevent email enumeration, respond with success even if user not found
+//       return res.json({
+//         message:
+//           "If that email is registered, check your inbox for reset instructions.",
+//       });
+//     }
+//     const rawToken = crypto.randomBytes(32).toString("hex");
+//     const tokenHash = await bcrypt.hash(rawToken, 10);
+//     const expires = new Date(Date.now() + 30 * 60 * 1000); // 0.5 hour from now
+
+//     user.resetPasswordTokenHash = tokenHash;
+//     user.resetPasswordExpiresAt = expires;
+//     await user.save();
+
+//     const resetUrl = `http://localhost:4000/reset-password?token=${rawToken}&email=${encodeURIComponent(
+//       email
+//     )}`;
+
+//     console.log(
+//       `Password reset requested for ${email}. Reset URL (valid for 30 mins): ${resetUrl}`
+//     );
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// }
+// at top of file (or config)
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+// const BACKEND_URL  = process.env.BACKEND_URL  || "http://localhost:3000"; // if needed
+const IS_DEV = process.env.NODE_ENV !== "production";
+
+// POST /auth/forgot-password
 export async function forgotPassword(req, res) {
   try {
     const { email } = req.body;
     if (!email) {
       return res.status(400).json({ error: "Email is required" });
     }
+
     const user = await User.findOne({ email });
+
+    // Always behave the same to avoid email enumeration
     if (!user) {
-      // To prevent email enumeration, respond with success even if user not found
       return res.json({
         message:
           "If that email is registered, check your inbox for reset instructions.",
       });
     }
+
+    // 1) create token & expiry
     const rawToken = crypto.randomBytes(32).toString("hex");
     const tokenHash = await bcrypt.hash(rawToken, 10);
-    const expires = new Date(Date.now() + 30 * 60 * 1000); // 0.5 hour from now
+    const expires = new Date(Date.now() + 30 * 60 * 1000); // 30 mins
 
     user.resetPasswordTokenHash = tokenHash;
     user.resetPasswordExpiresAt = expires;
     await user.save();
 
-    const resetUrl = `http://localhost:4000/reset-password?token=${rawToken}&email=${encodeURIComponent(
+    // 2) build a FRONTEND reset link (user should land on the React app)
+    const resetUrl = `${FRONTEND_URL}/reset-password?token=${rawToken}&email=${encodeURIComponent(
       email
     )}`;
 
     console.log(
       `Password reset requested for ${email}. Reset URL (valid for 30 mins): ${resetUrl}`
     );
+
+    // 3) RESPOND IMMEDIATELY so the browser doesn't hang
+    // In dev we can also return `token` to allow instant redirect (your Option A).
+    return res.json({
+      message: "Reset link created",
+      resetUrl, // prod-friendly
+      ...(IS_DEV ? { token: rawToken } : {}), // dev-only convenience
+    });
+
+    // 4) OPTIONAL: send email async (do NOT await before responding)
+    // sendResetEmail(email, resetUrl).catch(err => console.error("Email error:", err));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 }
 
