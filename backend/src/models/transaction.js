@@ -15,9 +15,13 @@ const transactionSchema = new mongoose.Schema(
     amountMinor: { type: Number, required: true }, // amount in minor units (e.g., cents)
     currency: { type: String, required: true },
     date: { type: Date, required: true, index: true },
+
     description: { type: String },
     notes: { type: String },
     tags: [{ type: String }],
+
+    assetSymbol: { type: String, trim: true, index: true }, // e.g. AAPL, BTC-USD, VOO
+    units: { type: Number }, // e.g. 2.5 shares/coinss
     isDeleted: { type: Boolean, default: false, index: true },
   },
   { timestamps: { createdAt: "createdAt", updatedAt: false } }

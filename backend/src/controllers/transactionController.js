@@ -1,5 +1,7 @@
+// backend/src/controllers/transactionController.js
 import mongoose from "mongoose";
-import { Transaction } from "../models/transaction.js";
+// If your file is backend/src/models/transactions.js (plural), use that path:
+import { Transaction } from "../models/transaction.js"; // <- change to "../models/transactions.js" if that's your filename
 import { Category } from "../models/category.js";
 
 const { ObjectId } = mongoose.Types;
@@ -7,10 +9,8 @@ const { ObjectId } = mongoose.Types;
 /** GET /transactions */
 export async function getTransactions(req, res) {
   try {
-    // always filter by userId and not deleted
     const filter = { userId: req.userId, isDeleted: { $ne: true } };
 
-    // optionally filter by query params (?accountId=...&categoryId=...)
     if (req.query.accountId && ObjectId.isValid(req.query.accountId)) {
       filter.accountId = req.query.accountId;
     }
@@ -19,7 +19,6 @@ export async function getTransactions(req, res) {
     }
 
     const transactions = await Transaction.find(filter).lean();
-
     return res.status(200).json(transactions);
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -50,7 +49,7 @@ export async function getTransactionById(req, res) {
   }
 }
 
-// POST /transactions
+/** POST /transactions */
 export async function createTransaction(req, res) {
   try {
     const {
@@ -63,6 +62,8 @@ export async function createTransaction(req, res) {
       description,
       notes,
       tags,
+      assetSymbol,
+      units,
     } = req.body;
 
     // Basic required fields
@@ -72,7 +73,7 @@ export async function createTransaction(req, res) {
       });
     }
 
-    // amountMinor: must be a number (can be 0)
+    // amountMinor must be a number (can be 0)
     if (typeof amountMinor !== "number" || Number.isNaN(amountMinor)) {
       return res.status(400).json({ error: "amountMinor must be a number" });
     }
@@ -92,20 +93,41 @@ export async function createTransaction(req, res) {
     }
 
     // Enforce type ↔ category.kind consistency (if category provided)
-    if (categoryId && (type === "income" || type === "expense")) {
+    if (categoryId) {
       const cat = await Category.findOne({
         _id: categoryId,
         userId: req.userId,
         isDeleted: { $ne: true },
-      }).lean();
+      })
+        .select("kind")
+        .lean();
 
       if (!cat) {
         return res.status(400).json({ error: "Category not found" });
       }
-      if (cat.kind !== type) {
+      // For income/expense/investment, category.kind must match type
+      if (
+        ["income", "expense", "investment"].includes(type) &&
+        cat.kind !== type
+      ) {
         return res.status(400).json({
           error: `Category kind (${cat.kind}) does not match transaction type (${type})`,
         });
+      }
+    }
+
+    // Investment-specific validation
+    if (type === "investment") {
+      const sym = typeof assetSymbol === "string" ? assetSymbol.trim() : "";
+      if (!sym) {
+        return res
+          .status(400)
+          .json({ error: "assetSymbol is required for investment" });
+      }
+      if (typeof units !== "number" || Number.isNaN(units) || units === 0) {
+        return res
+          .status(400)
+          .json({ error: "units must be a non-zero number for investment" });
       }
     }
 
@@ -126,6 +148,10 @@ export async function createTransaction(req, res) {
       description: description || null,
       notes: notes || null,
       tags: cleanTags,
+      assetSymbol: assetSymbol
+        ? String(assetSymbol).toUpperCase().trim()
+        : null,
+      units: typeof units === "number" ? units : null,
       isDeleted: false,
     });
 
@@ -134,17 +160,15 @@ export async function createTransaction(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
-// PUT/PATCH /transactions/:id
+
+/** PUT/PATCH /transactions/:id */
 export async function updateTransaction(req, res) {
   try {
     const { id } = req.params;
-
-    // Validate id
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ error: "Invalid transaction id" });
     }
 
-    // Whitelist updatable fields
     const {
       accountId,
       categoryId,
@@ -155,6 +179,8 @@ export async function updateTransaction(req, res) {
       description,
       notes,
       tags,
+      assetSymbol,
+      units,
     } = req.body;
 
     const updates = {};
@@ -230,41 +256,61 @@ export async function updateTransaction(req, res) {
       updates.tags = cleanTags;
     }
 
+    // NEW: allow updating assetSymbol & units
+    if (assetSymbol !== undefined) {
+      if (assetSymbol !== null && typeof assetSymbol !== "string") {
+        return res
+          .status(400)
+          .json({ error: "assetSymbol must be a string or null" });
+      }
+      updates.assetSymbol =
+        assetSymbol === null ? null : String(assetSymbol).toUpperCase().trim();
+    }
+
+    if (units !== undefined) {
+      if (
+        units !== null &&
+        (typeof units !== "number" || Number.isNaN(units))
+      ) {
+        return res
+          .status(400)
+          .json({ error: "units must be a number or null" });
+      }
+      updates.units = units;
+    }
+
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ error: "No updatable fields provided" });
     }
 
-    // Enforce type ↔ category.kind consistency if both are (or will be) present
-    const nextType = updates.type; // may be undefined
-    const nextCategoryId =
-      updates.categoryId === undefined ? undefined : updates.categoryId;
+    // We may need to validate final state (type/category/asset fields)
+    const needCurrentFetch =
+      updates.type !== undefined ||
+      updates.categoryId !== undefined ||
+      updates.assetSymbol !== undefined ||
+      updates.units !== undefined;
 
-    if (
-      nextType === "income" ||
-      nextType === "expense" ||
-      (nextCategoryId !== undefined && nextCategoryId !== null)
-    ) {
-      // We need the eventual type & categoryId after update to validate.
-      // Fetch current doc to resolve missing side.
+    if (needCurrentFetch) {
       const current = await Transaction.findOne({
         _id: id,
         userId: req.userId,
         isDeleted: { $ne: true },
       })
-        .select("type categoryId")
+        .select("type categoryId assetSymbol units")
         .lean();
 
-      if (!current)
+      if (!current) {
         return res.status(404).json({ error: "Transaction not found" });
+      }
 
-      const finalType = nextType ?? current.type;
+      const finalType = updates.type ?? current.type;
       const finalCategoryId =
-        nextCategoryId === undefined ? current.categoryId : nextCategoryId;
+        updates.categoryId === undefined
+          ? current.categoryId
+          : updates.categoryId;
 
-      if (
-        finalCategoryId &&
-        (finalType === "income" || finalType === "expense")
-      ) {
+      // Category.kind must match type for income/expense/investment
+      if (finalCategoryId) {
         const cat = await Category.findOne({
           _id: finalCategoryId,
           userId: req.userId,
@@ -276,15 +322,43 @@ export async function updateTransaction(req, res) {
         if (!cat) {
           return res.status(400).json({ error: "Category not found" });
         }
-        if (cat.kind !== finalType) {
+        if (
+          ["income", "expense", "investment"].includes(finalType) &&
+          cat.kind !== finalType
+        ) {
           return res.status(400).json({
             error: `Category kind (${cat.kind}) does not match transaction type (${finalType})`,
           });
         }
       }
+
+      // Investment-specific sanity: if final type is investment, ensure symbol + non-zero units
+      if (finalType === "investment") {
+        const finalSymbol =
+          updates.assetSymbol === undefined
+            ? current.assetSymbol
+            : updates.assetSymbol;
+        const finalUnits =
+          updates.units === undefined ? current.units : updates.units;
+
+        if (!finalSymbol || !String(finalSymbol).trim()) {
+          return res
+            .status(400)
+            .json({ error: "assetSymbol is required for investment" });
+        }
+        if (
+          typeof finalUnits !== "number" ||
+          Number.isNaN(finalUnits) ||
+          finalUnits === 0
+        ) {
+          return res
+            .status(400)
+            .json({ error: "units must be a non-zero number for investment" });
+        }
+      }
     }
 
-    // Perform update (scoped to user & not deleted)
+    // Perform update
     const updated = await Transaction.findOneAndUpdate(
       { _id: id, userId: req.userId, isDeleted: { $ne: true } },
       { $set: updates },
@@ -301,7 +375,7 @@ export async function updateTransaction(req, res) {
   }
 }
 
-// DELETE /transactions/:id  -> soft delete (isDeleted: true)
+/** DELETE /transactions/:id (soft) */
 export async function softDeleteTransaction(req, res) {
   try {
     const { id } = req.params;
@@ -327,7 +401,7 @@ export async function softDeleteTransaction(req, res) {
   }
 }
 
-// DELETE /transactions/:id/hard  -> permanent delete
+/** DELETE /transactions/:id/hard */
 export async function hardDeleteTransaction(req, res) {
   try {
     const { id } = req.params;

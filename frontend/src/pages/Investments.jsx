@@ -1,4 +1,4 @@
-// src/pages/Expenses.jsx
+// src/pages/Investments.jsx
 import React, {
   useEffect,
   useMemo,
@@ -9,7 +9,6 @@ import React, {
 import api from "../lib/api";
 
 /* --------------------------- investment-only categories --------------------------- */
-
 const INVESTMENT_CATEGORY_OPTIONS = [
   "Stock Market",
   "Crypto Currency Exchange",
@@ -28,9 +27,12 @@ async function createInvestmentCategory(name) {
 export default function InvestmentsScreen({ accountId }) {
   // data
   const [transactions, setTransactions] = useState([]);
-  const [categories, setCategories] = useState([]); // expense-kind only
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+
+  // performance (from /investments/performance)
+  const [holdings, setHoldings] = useState([]);
 
   // ui state
   const [selectedCategory, setSelectedCategory] = useState("ALL");
@@ -47,6 +49,8 @@ export default function InvestmentsScreen({ accountId }) {
     currency: "USD",
     date: new Date().toISOString().slice(0, 10),
     categoryId: "",
+    assetSymbol: "",
+    units: "",
     description: "",
     tagsCsv: "",
   });
@@ -69,6 +73,13 @@ export default function InvestmentsScreen({ accountId }) {
     const decimals = decimalsForCurrency(currency);
     return (minor / Math.pow(10, decimals)).toFixed(decimals);
   }
+  const fmtMoney = (minor, cur = "USD") =>
+    new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: cur,
+    }).format((minor || 0) / Math.pow(10, decimalsForCurrency(cur)));
+  const pct = (num) =>
+    Number.isFinite(num) ? `${(num * 100).toFixed(2)}%` : "—";
 
   /* --------------------------------- Derived -------------------------------- */
   const filtered = useMemo(() => {
@@ -82,6 +93,7 @@ export default function InvestmentsScreen({ accountId }) {
         (t) =>
           (t.description || "").toLowerCase().includes(q) ||
           (t.notes || "").toLowerCase().includes(q) ||
+          (t.assetSymbol || "").toLowerCase().includes(q) ||
           (t.tags || []).some((tag) => (tag || "").toLowerCase().includes(q))
       );
     }
@@ -104,20 +116,33 @@ export default function InvestmentsScreen({ accountId }) {
     }));
   }, [filtered]);
 
+  // Map symbol -> plMinor (unrealized P/L)
+  const plBySymbol = useMemo(() => {
+    const m = new Map();
+    for (const h of holdings) {
+      if (h && h.symbol) m.set(h.symbol.toUpperCase(), h.plMinor);
+    }
+    return m;
+  }, [holdings]);
+
   /* ---------------------------------- Data ---------------------------------- */
   const loadAll = useCallback(async () => {
     try {
       setLoading(true);
       setErr("");
-      const [txRes, catRes] = await Promise.all([
+      const [txRes, catRes, perfRes] = await Promise.all([
         api.get("/transactions"),
         api.get("/categories"),
+        api
+          .get("/investments/performance")
+          .catch(() => ({ data: { holdings: [] } })),
       ]);
       const cats = (catRes.data || []).filter(
         (c) => c.kind === "investment" && !c.isDeleted
       );
       setCategories(cats);
       setTransactions(txRes.data || []);
+      setHoldings(perfRes.data?.holdings || []);
     } catch (e) {
       setErr(e?.response?.data?.error || e.message || "Failed to load data");
     } finally {
@@ -137,6 +162,8 @@ export default function InvestmentsScreen({ accountId }) {
       currency: filtered[0]?.currency || "USD",
       date: new Date().toISOString().slice(0, 10),
       categoryId: categories[0]?._id || "",
+      assetSymbol: "",
+      units: "",
       description: "",
       tagsCsv: "",
     });
@@ -149,6 +176,8 @@ export default function InvestmentsScreen({ accountId }) {
       currency: tx.currency,
       date: new Date(tx.date).toISOString().slice(0, 10),
       categoryId: tx.categoryId || "",
+      assetSymbol: tx.assetSymbol || "",
+      units: tx.units ?? "",
       description: tx.description || "",
       tagsCsv: (tx.tags || []).join(", "),
     });
@@ -186,13 +215,13 @@ export default function InvestmentsScreen({ accountId }) {
   function Header() {
     return (
       <div className="space-y-3 p-4 border-b bg-white">
-        <h1 className="text-2xl font-bold">investments</h1>
+        <h1 className="text-2xl font-bold">Investments</h1>
 
         <div className="flex gap-2">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search description, notes or #tags"
+            placeholder="Search symbol, description, notes or #tags"
             className="flex-1 border rounded-lg px-3 py-2"
           />
         </div>
@@ -238,7 +267,7 @@ export default function InvestmentsScreen({ accountId }) {
         <div className="flex flex-wrap items-center gap-4 text-sm">
           {totals.map(({ cur, major }) => (
             <span key={cur} className="font-semibold">
-              Total {cur}: {major}
+              Total Cost {cur}: {major}
             </span>
           ))}
         </div>
@@ -259,6 +288,103 @@ export default function InvestmentsScreen({ accountId }) {
           >
             Refresh
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  /* ----------------------------- Holdings Summary ---------------------------- */
+  function HoldingsSummary({ data }) {
+    if (!data?.length) return null;
+
+    const sum = data.reduce(
+      (acc, h) => {
+        acc.costMinor += h.costMinor || 0;
+        acc.valueMinor += h.currentValueMinor ?? 0;
+        acc.plMinor += h.plMinor ?? 0;
+        return acc;
+      },
+      { costMinor: 0, valueMinor: 0, plMinor: 0 }
+    );
+
+    const cur = data[0]?.currency || "USD";
+    const fmt = (minor) => fmtMoney(minor ?? 0, cur);
+
+    return (
+      <div className="m-4 rounded-xl border bg-white p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold">Holdings</h2>
+          <div className="text-sm text-gray-500">
+            Total Cost:{" "}
+            <span className="font-medium">{fmt(sum.costMinor)}</span> · Value:{" "}
+            <span className="font-medium">{fmt(sum.valueMinor)}</span> · P/L:{" "}
+            <span
+              className={`font-semibold ${
+                sum.plMinor >= 0 ? "text-green-700" : "text-red-700"
+              }`}
+            >
+              {fmt(sum.plMinor)} (
+              {pct(sum.costMinor ? sum.plMinor / sum.costMinor : NaN)})
+            </span>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="text-left text-gray-600">
+              <tr>
+                <th className="py-2 pr-4">Symbol</th>
+                <th className="py-2 pr-4">Units</th>
+                <th className="py-2 pr-4">Avg Cost</th>
+                <th className="py-2 pr-4">Price</th>
+                <th className="py-2 pr-4">Value</th>
+                <th className="py-2">P/L</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((h) => {
+                const price = h.quote ?? null; // per-unit major
+                const value = h.currentValueMinor ?? null;
+                const pl = h.plMinor ?? null;
+                const plPct = h.costMinor ? pl / h.costMinor : NaN;
+                const perUnit = (v) =>
+                  Number.isFinite(v)
+                    ? new Intl.NumberFormat(undefined, {
+                        style: "currency",
+                        currency: h.currency || "USD",
+                      }).format(v)
+                    : "—";
+
+                return (
+                  <tr key={h.symbol} className="border-t">
+                    <td className="py-2 pr-4 font-medium">{h.symbol}</td>
+                    <td className="py-2 pr-4">{h.units}</td>
+                    <td className="py-2 pr-4">{perUnit(h.avgCostPerUnit)}</td>
+                    <td className="py-2 pr-4">
+                      {price != null ? perUnit(price) : "—"}
+                    </td>
+                    <td className="py-2 pr-4">
+                      {value != null
+                        ? fmtMoney(value, h.currency || "USD")
+                        : "—"}
+                    </td>
+                    <td
+                      className={`py-2 ${
+                        pl != null
+                          ? pl >= 0
+                            ? "text-green-700"
+                            : "text-red-700"
+                          : "text-gray-500"
+                      }`}
+                    >
+                      {pl != null ? fmtMoney(pl, h.currency || "USD") : "—"}{" "}
+                      <span className="text-gray-500">({pct(plPct)})</span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
     );
@@ -290,7 +416,7 @@ export default function InvestmentsScreen({ accountId }) {
 
     async function seedAll() {
       try {
-        if (!window.confirm("Seed all standard expense categories?")) return;
+        if (!window.confirm("Seed all standard investment categories?")) return;
         setBusy(true);
         for (const name of INVESTMENT_CATEGORY_OPTIONS) {
           if (!existingNames.has(name)) {
@@ -334,7 +460,7 @@ export default function InvestmentsScreen({ accountId }) {
             disabled={busy}
             className="px-4 py-2 rounded-lg border font-semibold disabled:opacity-60"
           >
-            Seed all expense categories
+            Seed all investment categories
           </button>
         </div>
         <div className="text-sm text-gray-600">
@@ -353,16 +479,30 @@ export default function InvestmentsScreen({ accountId }) {
   function Row({ item }) {
     const catName =
       categories.find((c) => c._id === item.categoryId)?.name || "—";
+    const symbol = (item.assetSymbol || "").toUpperCase();
+    const plMinor =
+      symbol && plBySymbol.has(symbol) ? plBySymbol.get(symbol) : null;
+    const sign = plMinor != null && plMinor >= 0 ? "+" : "";
+    const plClass =
+      plMinor == null
+        ? "text-gray-400"
+        : plMinor >= 0
+        ? "text-green-700"
+        : "text-red-700";
+
     return (
       <div className="p-4 border-b bg-white">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <div className="font-semibold">{catName}</div>
+            <div className="font-semibold">
+              {symbol ? `${symbol} • ${catName}` : catName}
+            </div>
             <div className="text-sm text-gray-600 truncate">
               {item.description || "No description"}
             </div>
             <div className="text-xs text-gray-400">
               {new Date(item.date).toLocaleDateString()}
+              {item.units ? ` • ${item.units} units` : ""}
             </div>
             {item.tags?.length ? (
               <div className="text-sm text-[#90a955] mt-1">
@@ -373,7 +513,13 @@ export default function InvestmentsScreen({ accountId }) {
 
           <div className="text-right">
             <div className="font-bold">
-              {minorToMajor(item.amountMinor, item.currency)} {item.currency}
+              {fmtMoney(item.amountMinor, item.currency)}{" "}
+              {plMinor != null && (
+                <span className={`ml-1 ${plClass}`}>
+                  ({sign}
+                  {fmtMoney(plMinor, item.currency)})
+                </span>
+              )}
             </div>
             <div className="mt-2 flex justify-end">
               <button
@@ -404,6 +550,8 @@ export default function InvestmentsScreen({ accountId }) {
     const currencyRef = useRef(null);
     const dateRef = useRef(null);
     const categoryRef = useRef(null);
+    const symbolRef = useRef(null);
+    const unitsRef = useRef(null);
     const descRef = useRef(null);
     const tagsRef = useRef(null);
 
@@ -414,12 +562,17 @@ export default function InvestmentsScreen({ accountId }) {
       const currency = (currencyRef.current?.value ?? "USD").toUpperCase();
       const date = dateRef.current?.value ?? "";
       const categoryId = categoryRef.current?.value ?? "";
+      const assetSymbol = (symbolRef.current?.value ?? "").toUpperCase().trim();
+      const units = Number(unitsRef.current?.value ?? 0);
       const description = (descRef.current?.value ?? "").trim();
       const tagsCsv = tagsRef.current?.value ?? "";
 
       const amountMinor = majorToMinor(amount, currency);
       if (Number.isNaN(amountMinor)) return window.alert("Invalid amount");
       if (!categoryId) return window.alert("Pick a category");
+      if (!assetSymbol) return window.alert("Asset symbol required");
+      if (!units || Number.isNaN(units) || units <= 0)
+        return window.alert("Units must be a positive number");
       if (!accountId && !editing) {
         return window.alert(
           "Missing account: pass an accountId to add investments."
@@ -433,6 +586,8 @@ export default function InvestmentsScreen({ accountId }) {
         amountMinor,
         currency,
         date: new Date(date).toISOString(),
+        assetSymbol,
+        units,
         description: description || null,
         tags: tagsCsv
           .split(",")
@@ -454,6 +609,9 @@ export default function InvestmentsScreen({ accountId }) {
           );
         }
         setModalOpen(false);
+        // refresh perf so P/L updates
+        const perf = await api.get("/investments/performance");
+        setHoldings(perf.data?.holdings || []);
       } catch (e) {
         window.alert(e?.response?.data?.error || e.message || "Error");
       }
@@ -467,26 +625,53 @@ export default function InvestmentsScreen({ accountId }) {
       >
         <div className="w-full max-w-xl bg-white rounded-2xl p-5 space-y-4">
           <div className="text-lg font-bold">
-            {editing ? "Edit Expense" : "New Expense"}
+            {editing ? "Edit Investment" : "New Investment"}
           </div>
 
           <div className="flex gap-3">
             <div className="space-y-1 w-full">
-              <label className="font-semibold text-sm">Amount</label>
+              <label className="font-semibold text-sm">Total Cost</label>
               <input
                 ref={amountRef}
                 defaultValue={form.amount}
-                placeholder="e.g., 12.34"
+                placeholder="e.g., 1500.00"
                 inputMode="decimal"
                 className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
               />
             </div>
-            <div className="space-y-1 w-full">
+            <div className="space-y-1 w-28">
               <label className="font-semibold text-sm">Currency</label>
               <input
                 ref={currencyRef}
                 defaultValue={form.currency}
                 maxLength={3}
+                className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
+                onBlur={(e) => (e.target.value = e.target.value.toUpperCase())}
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <div className="space-y-1 w-full">
+              <label className="font-semibold text-sm">Asset Symbol</label>
+              <input
+                ref={symbolRef}
+                defaultValue={form.assetSymbol}
+                placeholder="e.g., AAPL, BTC-USD, VOO"
+                className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
+                onBlur={(e) => (e.target.value = e.target.value.toUpperCase())}
+              />
+              <p className="text-xs text-gray-500">
+                Use Yahoo-style symbols (AAPL, VOO, BTC-USD…)
+              </p>
+            </div>
+            <div className="space-y-1 w-36">
+              <label className="font-semibold text-sm">Units</label>
+              <input
+                ref={unitsRef}
+                defaultValue={form.units}
+                placeholder="e.g., 2.5"
+                inputMode="decimal"
                 className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
               />
             </div>
@@ -534,7 +719,7 @@ export default function InvestmentsScreen({ accountId }) {
             <input
               ref={tagsRef}
               defaultValue={form.tagsCsv}
-              placeholder="food, date-night"
+              placeholder="long-term, dividend"
               className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
             />
           </div>
@@ -576,7 +761,10 @@ export default function InvestmentsScreen({ accountId }) {
     <div className="min-h-[100dvh] bg-[#f8faf8]">
       <Header />
 
-      {/* Step 1: Manage categories (expense-only) */}
+      {/* NEW: Holdings summary */}
+      <HoldingsSummary data={holdings} />
+
+      {/* Step 1: Manage categories (investment-only) */}
       <CategoryManager />
 
       {err ? (
@@ -585,7 +773,7 @@ export default function InvestmentsScreen({ accountId }) {
         </div>
       ) : null}
 
-      {/* Step 2: Use those categories to add/list expenses */}
+      {/* Step 2: Use those categories to add/list investments */}
       {filtered.length === 0 ? (
         <div className="p-6 text-center text-gray-600">
           No investments yet. Add your first one.

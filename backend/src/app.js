@@ -8,7 +8,7 @@ import meRoutes from "./routes/me.js";
 import accountRoutes from "./routes/accountRoutes.js";
 import categoryRoutes from "./routes/categoryRoutes.js";
 import transactionRoutes from "./routes/transactionRoutes.js";
-
+import investmentPerformance from "./routes/investmentPerformance.js";
 const app = express(); // Initialize Express app
 
 app.use(express.json()); // Middleware to parse JSON bodies
@@ -21,7 +21,7 @@ app.use("/me", meRoutes); // User profile routes
 app.use("/accounts", accountRoutes); // Account management routes
 app.use("/categories", categoryRoutes); // Category management routes
 app.use("/transactions", transactionRoutes); // Transaction management routes
-
+app.use("/investments", investmentPerformance);
 //Basic health check route
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: Date.now() });
