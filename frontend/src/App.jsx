@@ -9,6 +9,8 @@ import UserPage from "./pages/User";
 import ErrorPage from "./pages/ErrorPage";
 import ExpensesScreen from "./pages/Expenses";
 import Footer from "./components/Footer";
+import IncomesScreen from "./pages/Income";
+import InvestmentsScreen from "./pages/Investments";
 
 export default function App() {
   function handleLogout() {
@@ -32,6 +34,14 @@ export default function App() {
           <Route
             path="/expenses"
             element={<ExpensesScreen accountId={myDefaultUserId} />}
+          />
+          <Route
+            path="/incomes"
+            element={<IncomesScreen accountId={myDefaultUserId} />}
+          />
+          <Route
+            path="/investments"
+            element={<InvestmentsScreen accountId={myDefaultUserId} />}
           />
           {/* add more: expenses, income, etc. */}
         </Route>

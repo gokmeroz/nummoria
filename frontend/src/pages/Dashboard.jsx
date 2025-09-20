@@ -72,6 +72,116 @@ function useMonthlyExpenseTotal(baseCurrency) {
 
   return { totalMajor, loading, error };
 }
+function useMonthlyIncomeTotal(baseCurrency) {
+  const [tx, setTx] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        setLoading(true);
+        setError("");
+        const { data } = await api.get("/transactions");
+        if (!mounted) return;
+        setTx(Array.isArray(data) ? data : []);
+      } catch (e) {
+        if (!mounted) return;
+        setError(
+          e?.response?.data?.error || e.message || "Failed to load transactions"
+        );
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const totalMajor = useMemo(() => {
+    if (!baseCurrency) return 0;
+
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1); // first day 00:00
+    const end = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999
+    ); // last day 23:59:59
+
+    let sumMinor = 0;
+    for (const t of tx) {
+      if (t.type !== "income") continue;
+      if (t.currency !== baseCurrency) continue; // simple same-currency sum
+      const d = new Date(t.date);
+      if (d >= start && d <= end) sumMinor += t.amountMinor;
+    }
+    return minorToMajorNumber(sumMinor, baseCurrency);
+  }, [tx, baseCurrency]);
+
+  return { totalMajor, loading, error };
+}
+function useMonthlyInvestmentTotal(baseCurrency) {
+  const [tx, setTx] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        setLoading(true);
+        setError("");
+        const { data } = await api.get("/transactions");
+        if (!mounted) return;
+        setTx(Array.isArray(data) ? data : []);
+      } catch (e) {
+        if (!mounted) return;
+        setError(
+          e?.response?.data?.error || e.message || "Failed to load transactions"
+        );
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const totalMajor = useMemo(() => {
+    if (!baseCurrency) return 0;
+
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1); // first day 00:00
+    const end = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999
+    ); // last day 23:59:59
+
+    let sumMinor = 0;
+    for (const t of tx) {
+      if (t.type !== "investment") continue;
+      if (t.currency !== baseCurrency) continue; // simple same-currency sum
+      const d = new Date(t.date);
+      if (d >= start && d <= end) sumMinor += t.amountMinor;
+    }
+    return minorToMajorNumber(sumMinor, baseCurrency);
+  }, [tx, baseCurrency]);
+
+  return { totalMajor, loading, error };
+}
 
 export default function Dashboard() {
   const [me, setMe] = useState(null);
@@ -93,6 +203,18 @@ export default function Dashboard() {
     loading: expLoading,
     error: expErr,
   } = useMonthlyExpenseTotal(me?.baseCurrency || "USD");
+  //monthly income (live)
+  const {
+    totalMajor: monthlyIncome,
+    loading: incLoading,
+    error: incErr,
+  } = useMonthlyIncomeTotal(me?.baseCurrency || "USD");
+  //monthly investments (live)
+  const {
+    totalMajor: monthlyInvestments,
+    loading: invLoading,
+    error: invErr,
+  } = useMonthlyInvestmentTotal(me?.baseCurrency || "USD");
 
   return (
     <div className="min-h-dvh bg-white">
@@ -171,13 +293,21 @@ export default function Dashboard() {
           />
           <StatCard
             title="This Month's Income"
-            value={formatCurrency(4100, me?.baseCurrency || "USD")}
+            value={
+              incLoading
+                ? "…"
+                : formatCurrency(monthlyIncome, me?.baseCurrency || "USD")
+            }
             main={main}
             secondary={secondary}
           />
           <StatCard
             title="Invested Balance"
-            value={formatCurrency(12850, me?.baseCurrency || "USD")}
+            value={
+              invLoading
+                ? "…"
+                : formatCurrency(monthlyInvestments, me?.baseCurrency || "USD")
+            }
             main={main}
             secondary={secondary}
           />
@@ -186,6 +316,12 @@ export default function Dashboard() {
         {err && <div className="text-red-600 mt-6 text-center">{err}</div>}
         {expErr && (
           <div className="text-red-600 mt-2 text-center">{expErr}</div>
+        )}
+        {incErr && (
+          <div className="text-red-600 mt-2 text-center">{incErr}</div>
+        )}
+        {invErr && (
+          <div className="text-red-600 mt-2 text-center">{invErr}</div>
         )}
 
         {/* {me && (
