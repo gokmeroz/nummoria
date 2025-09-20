@@ -24,7 +24,16 @@ export default function Login() {
         email: loginEmail,
         password: loginPassword,
       });
+
+      // store auth + default user id
       localStorage.setItem("token", data.token);
+      if (data?.user?.id) {
+        localStorage.setItem("defaultId", data.user.id);
+        // optional conveniences:
+        localStorage.setItem("userEmail", data.user.email || "");
+        localStorage.setItem("userName", data.user.name || "");
+      }
+
       location.href = "/";
     } catch (e) {
       setLoginErr(e.response?.data?.error || "Login failed");
@@ -43,12 +52,22 @@ export default function Login() {
         email: signEmail,
         password: signPassword,
       });
-      // after successful sign up, auto-login:
+
+      // auto-login after register
       const { data } = await api.post("/auth/login", {
         email: signEmail,
         password: signPassword,
       });
+
+      // store auth + default user id
       localStorage.setItem("token", data.token);
+      if (data?.user?.id) {
+        localStorage.setItem("defaultId", data.user.id);
+        // optional conveniences:
+        localStorage.setItem("userEmail", data.user.email || "");
+        localStorage.setItem("userName", data.user.name || "");
+      }
+
       location.href = "/";
     } catch (e) {
       setSignErr(e.response?.data?.error || "Registration failed");

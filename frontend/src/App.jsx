@@ -6,6 +6,8 @@ import Dashboard from "./pages/Dashboard";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import UserPage from "./pages/User";
+import ErrorPage from "./pages/ErrorPage";
+import ExpensesScreen from "./pages/Expenses";
 
 export default function App() {
   function handleLogout() {
@@ -14,7 +16,7 @@ export default function App() {
   }
 
   const me = { name: "Göktuğ Mert Özdoğan" }; // later fetch from /me
-
+  const myDefaultUserId = localStorage.getItem("defaultId");
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
@@ -26,11 +28,15 @@ export default function App() {
         <Route element={<Layout me={me} onLogout={handleLogout} />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/user" element={<UserPage />} />
+          <Route
+            path="/expenses"
+            element={<ExpensesScreen accountId={myDefaultUserId} />}
+          />
           {/* add more: expenses, income, etc. */}
         </Route>
       </Route>
 
-      <Route path="*" element={<div className="p-6">Not found</div>} />
+      <Route path="*" element={<ErrorPage />} />
     </Routes>
   );
 }

@@ -51,7 +51,9 @@ export async function login(req, res) {
 
     const match = await bcrypt.compare(password, user.passwordHash);
     if (!match) return res.status(401).json({ error: "Invalid credentials" });
-
+    // Update last login
+    user.lastLogin = new Date();
+    await user.save();
     // Generate JWT
     const token = jwt.sign(
       { id: user._id, email: user.email },
@@ -70,7 +72,7 @@ export async function login(req, res) {
         baseCurrency: user.baseCurrency,
         profession: user.profession,
         createdAt: user.createdAt,
-        lastLogin: Date.now(),
+        lastLogin: user.lastLogin,
         isActive: user.isActive,
       },
     });

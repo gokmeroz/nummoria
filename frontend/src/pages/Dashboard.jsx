@@ -1,6 +1,76 @@
 // frontend/src/pages/Dashboard.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import api from "../lib/api";
+
+/* ----------------------- money helpers (minor → major) ---------------------- */
+function decimalsForCurrency(code) {
+  const zero = new Set(["JPY", "KRW", "CLP", "VND"]);
+  const three = new Set(["BHD", "IQD", "JOD", "KWD", "OMR", "TND"]);
+  if (zero.has(code)) return 0;
+  if (three.has(code)) return 3;
+  return 2;
+}
+function minorToMajorNumber(minor, currency) {
+  const d = decimalsForCurrency(currency);
+  return minor / Math.pow(10, d);
+}
+
+/* --------------------- hook: this month's expense total --------------------- */
+function useMonthlyExpenseTotal(baseCurrency) {
+  const [tx, setTx] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        setLoading(true);
+        setError("");
+        const { data } = await api.get("/transactions");
+        if (!mounted) return;
+        setTx(Array.isArray(data) ? data : []);
+      } catch (e) {
+        if (!mounted) return;
+        setError(
+          e?.response?.data?.error || e.message || "Failed to load transactions"
+        );
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const totalMajor = useMemo(() => {
+    if (!baseCurrency) return 0;
+
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1); // first day 00:00
+    const end = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999
+    ); // last day 23:59:59
+
+    let sumMinor = 0;
+    for (const t of tx) {
+      if (t.type !== "expense") continue;
+      if (t.currency !== baseCurrency) continue; // simple same-currency sum
+      const d = new Date(t.date);
+      if (d >= start && d <= end) sumMinor += t.amountMinor;
+    }
+    return minorToMajorNumber(sumMinor, baseCurrency);
+  }, [tx, baseCurrency]);
+
+  return { totalMajor, loading, error };
+}
 
 export default function Dashboard() {
   const [me, setMe] = useState(null);
@@ -15,6 +85,13 @@ export default function Dashboard() {
 
   const main = "#4f772d";
   const secondary = "#90a955";
+
+  // monthly expenses (live)
+  const {
+    totalMajor: monthlyExpense,
+    loading: expLoading,
+    error: expErr,
+  } = useMonthlyExpenseTotal(me?.baseCurrency || "USD");
 
   return (
     <div className="min-h-dvh bg-white">
@@ -84,25 +161,32 @@ export default function Dashboard() {
         <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
           <StatCard
             title="This Month's Expenses"
-            value={formatCurrency(2340, me?.baseCurrency)}
+            value={
+              expLoading
+                ? "…"
+                : formatCurrency(monthlyExpense, me?.baseCurrency || "USD")
+            }
             main={main}
             secondary={secondary}
           />
           <StatCard
             title="This Month's Income"
-            value={formatCurrency(4100, me?.baseCurrency)}
+            value={formatCurrency(4100, me?.baseCurrency || "USD")}
             main={main}
             secondary={secondary}
           />
           <StatCard
             title="Invested Balance"
-            value={formatCurrency(12850, me?.baseCurrency)}
+            value={formatCurrency(12850, me?.baseCurrency || "USD")}
             main={main}
             secondary={secondary}
           />
         </div>
 
         {err && <div className="text-red-600 mt-6 text-center">{err}</div>}
+        {expErr && (
+          <div className="text-red-600 mt-2 text-center">{expErr}</div>
+        )}
 
         {/* {me && (
           <div
@@ -200,6 +284,6 @@ function formatCurrency(n, currency = "USD") {
       maximumFractionDigits: 0,
     }).format(n);
   } catch {
-    return `$${n.toLocaleString()}`;
+    return `$${Number(n || 0).toLocaleString()}`;
   }
 }
