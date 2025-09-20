@@ -8,6 +8,7 @@ import ResetPassword from "./pages/ResetPassword";
 import UserPage from "./pages/User";
 import ErrorPage from "./pages/ErrorPage";
 import ExpensesScreen from "./pages/Expenses";
+import Footer from "./components/Footer";
 
 export default function App() {
   function handleLogout() {
@@ -37,6 +38,7 @@ export default function App() {
       </Route>
 
       <Route path="*" element={<ErrorPage />} />
+      {/* <Route path="/error" element={<Footer />} /> */}
     </Routes>
   );
 }

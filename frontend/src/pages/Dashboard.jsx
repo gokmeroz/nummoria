@@ -1,5 +1,6 @@
 // frontend/src/pages/Dashboard.jsx
 import { useEffect, useMemo, useState } from "react";
+import Footer from "../components/Footer";
 import api from "../lib/api";
 
 /* ----------------------- money helpers (minor → major) ---------------------- */
@@ -143,7 +144,6 @@ export default function Dashboard() {
           </div>
         </div>
       </section>
-
       {/* Social proof / stats */}
       <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10 md:py-14">
         <h2
@@ -225,8 +225,16 @@ export default function Dashboard() {
           </div>
         )} */}
       </section>
-
-      {/* Footer-ish CTA */}
+      {/* <Footer
+        main={main}
+        secondary={secondary}
+        brand={{ name: "Nummora", tagline: "A clearer way to see your money." }}
+        socials={{
+          x: "https://x.com/yourhandle",
+          github: "https://github.com/yourorg",
+          linkedin: "https://www.linkedin.com/company/yourorg",
+        }}
+      />{" "} */}
       <section className="bg-gray-50 border-t">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-gray-700">
@@ -256,6 +264,16 @@ export default function Dashboard() {
           </div>
         </div>
       </section>
+      {/* <Footer
+        main={main}
+        secondary={secondary}
+        brand={{ name: "Nummora", tagline: "A clearer way to see your money." }}
+        socials={{
+          x: "https://x.com/yourhandle",
+          github: "https://github.com/yourorg",
+          linkedin: "https://www.linkedin.com/company/yourorg",
+        }}
+      /> */}
     </div>
   );
 }

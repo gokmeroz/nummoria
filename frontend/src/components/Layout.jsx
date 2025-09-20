@@ -1,5 +1,6 @@
 // frontend/src/components/Layout.jsx
 import { Link, Outlet } from "react-router-dom";
+import Footer from "./Footer";
 
 export default function Layout({ me, onLogout }) {
   return (
@@ -52,9 +53,12 @@ export default function Layout({ me, onLogout }) {
       </header>
 
       {/* PAGE CONTENT */}
-      <main className="flex-1 bg-gray-50">
+      {/* The [&>*]:!min-h-0 removes min-h-[100dvh]/min-h-dvh from page roots to kill that big gap */}
+      <main className="flex-1 bg-gray-50 min-h-0 [&>*]:!min-h-0">
         <Outlet />
       </main>
+
+      <Footer />
     </div>
   );
 }
