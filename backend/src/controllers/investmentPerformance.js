@@ -1,5 +1,6 @@
-import yahooFinance from "yahoo-finance2";
-import { Transaction } from "../models/transaction.js"; // change to "../models/transactions.js" if your file is plural
+// NO hard import of yahoo-finance2 here.
+// import yahooFinance from "yahoo-finance2";
+import { Transaction } from "../models/transaction.js"; // or "../models/transactions.js" if that's your file
 
 function decimalsForCurrency(code) {
   const zero = new Set(["JPY", "KRW", "CLP", "VND"]);
@@ -9,10 +10,25 @@ function decimalsForCurrency(code) {
   return 2;
 }
 
+// Optional flag to (re)enable quotes later without changing code
+const ENABLE_QUOTES = process.env.ENABLE_QUOTES === "true";
+
+// Lazy/dynamic import so the server still runs if the package isn't installed
+async function fetchQuote(symbol) {
+  if (!ENABLE_QUOTES) return null;
+  try {
+    const mod = await import("yahoo-finance2");
+    const yf = mod.default || mod;
+    return await yf.quote(symbol);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * GET /investments/performance
- * Aggregates investment transactions by (assetSymbol, currency),
- * fetches current price, and returns value & P/L in minor units.
+ * Aggregates investment transactions by (assetSymbol, currency).
+ * If quotes are disabled/unavailable, price/value/PL are returned as null.
  */
 export async function getInvestmentPerformance(req, res) {
   try {
@@ -28,19 +44,26 @@ export async function getInvestmentPerformance(req, res) {
       return res.json({ holdings: [], totals: {} });
     }
 
-    // aggregate by symbol|currency
+    // Aggregate by symbol|currency
     const map = new Map();
     for (const t of txns) {
       const symbol = String(t.assetSymbol || "")
         .toUpperCase()
         .trim();
       const currency = t.currency || "USD";
-      if (!symbol || !t.units) continue;
+      const units = Number(t.units || 0);
+      const amountMinor = Number(t.amountMinor || 0);
+      if (!symbol || !units) continue;
 
       const key = `${symbol}|${currency}`;
-      const agg = map.get(key) || { symbol, currency, units: 0, costMinor: 0 };
-      agg.units += Number(t.units || 0);
-      agg.costMinor += Number(t.amountMinor || 0);
+      const agg = map.get(key) || {
+        symbol,
+        currency,
+        units: 0,
+        costMinor: 0,
+      };
+      agg.units += units;
+      agg.costMinor += amountMinor;
       map.set(key, agg);
     }
 
@@ -49,17 +72,12 @@ export async function getInvestmentPerformance(req, res) {
       return res.json({ holdings: [], totals: {} });
     }
 
-    // fetch quotes
+    // Try to fetch quotes only if enabled; otherwise all nulls
     const symbols = [...new Set(groups.map((g) => g.symbol))];
     const quotes = {};
     await Promise.all(
       symbols.map(async (sym) => {
-        try {
-          const q = await yahooFinance.quote(sym);
-          quotes[sym] = q || null;
-        } catch {
-          quotes[sym] = null; // keep going even if one fails
-        }
+        quotes[sym] = await fetchQuote(sym); // may be null
       })
     );
 
@@ -71,42 +89,58 @@ export async function getInvestmentPerformance(req, res) {
       const cur = g.currency;
       const dec = decimalsForCurrency(cur);
 
-      const price = q?.regularMarketPrice ?? null;
+      // Keep both names to be frontend-compatible: quote/price & currentValueMinor/valueMinor
+      const quote =
+        typeof q?.regularMarketPrice === "number" ? q.regularMarketPrice : null;
+      const price = quote; // alias
       const priceCurrency = q?.currency ?? null;
 
       let valueMinor = null;
       let plMinor = null;
 
-      // Only compute P/L if quote currency matches txn currency
+      // Only compute value/PL if we have a quote AND its currency matches
       if (
-        typeof price === "number" &&
+        typeof quote === "number" &&
         (!priceCurrency || priceCurrency === cur)
       ) {
-        const raw = price * g.units * Math.pow(10, dec);
-        valueMinor = Math.round(raw);
+        valueMinor = Math.round(quote * g.units * Math.pow(10, dec));
         plMinor = valueMinor - g.costMinor;
 
-        totalsByCur[cur] = totalsByCur[cur] || {
-          costMinor: 0,
-          valueMinor: 0,
-          plMinor: 0,
-        };
+        if (!totalsByCur[cur]) {
+          totalsByCur[cur] = { costMinor: 0, valueMinor: 0, plMinor: 0 };
+        }
         totalsByCur[cur].costMinor += g.costMinor;
         totalsByCur[cur].valueMinor += valueMinor;
         totalsByCur[cur].plMinor += plMinor;
+      } else {
+        // Totals at least include cost; value/PL stay null when we have no quote
+        if (!totalsByCur[cur]) {
+          totalsByCur[cur] = { costMinor: 0, valueMinor: null, plMinor: null };
+        }
+        totalsByCur[cur].costMinor += g.costMinor;
       }
 
+      const avgCostPerUnit = g.units
+        ? g.costMinor / g.units / Math.pow(10, dec)
+        : null;
+
+      // Provide both property names to avoid breaking older frontend code
       holdings.push({
         symbol: g.symbol,
         currency: cur,
         units: g.units,
         costMinor: g.costMinor,
-        avgCostPerUnit: g.units
-          ? g.costMinor / g.units / Math.pow(10, dec)
-          : null,
+        avgCostPerUnit,
+
+        // aliases for compatibility
+        quote,
         price,
         priceCurrency,
+
+        // both names for value
         valueMinor,
+        currentValueMinor: valueMinor,
+
         plMinor,
       });
     }
@@ -117,5 +151,5 @@ export async function getInvestmentPerformance(req, res) {
   }
 }
 
-// alias export to be tolerant with different import names
+// (Alias export keeps other imports working)
 export const getInvestmentsPerformance = getInvestmentPerformance;
