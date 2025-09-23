@@ -242,7 +242,7 @@ export default function Dashboard() {
 
               <div className="mt-6 flex flex-wrap items-center gap-3">
                 <a
-                  href="/transactions/new"
+                  href="/ai/financial-advice"
                   className="px-5 py-2.5 rounded font-semibold text-white transition"
                   style={{ backgroundColor: main }}
                   onMouseEnter={(e) =>
@@ -252,7 +252,7 @@ export default function Dashboard() {
                     (e.currentTarget.style.backgroundColor = main)
                   }
                 >
-                  ADD TRANSACTION
+                  GET ADVICE
                 </a>
                 <a
                   href="/reports"

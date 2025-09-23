@@ -1,4 +1,4 @@
-// src/pages/Expenses.jsx
+// src/pages/incomes.jsx
 import React, {
   useEffect,
   useMemo,
@@ -8,8 +8,7 @@ import React, {
 } from "react";
 import api from "../lib/api";
 
-/* --------------------------- Income-only categories --------------------------- */
-
+/* --------------------------- income-only categories --------------------------- */
 const INCOME_CATEGORY_OPTIONS = [
   "Salary",
   "Rentals",
@@ -25,9 +24,12 @@ async function createIncomeCategory(name) {
 export default function IncomesScreen({ accountId }) {
   // data
   const [transactions, setTransactions] = useState([]);
-  const [categories, setCategories] = useState([]); // expense-kind only
+  const [categories, setCategories] = useState([]); // income-kind only
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+
+  // [ACCOUNT] NEW: accounts state for choose-account in modal
+  const [accounts, setAccounts] = useState([]);
 
   // ui state
   const [selectedCategory, setSelectedCategory] = useState("ALL");
@@ -46,6 +48,8 @@ export default function IncomesScreen({ accountId }) {
     categoryId: "",
     description: "",
     tagsCsv: "",
+    // [ACCOUNT] NEW: accountId seed used by the modal select
+    accountId: "",
   });
 
   /* ------------------------------ Money helpers ------------------------------ */
@@ -101,20 +105,31 @@ export default function IncomesScreen({ accountId }) {
     }));
   }, [filtered]);
 
+  // [ACCOUNT] NEW: quick map to show account names in list rows
+  const accountsById = useMemo(() => {
+    const m = new Map();
+    for (const a of accounts) m.set(a._id, a);
+    return m;
+  }, [accounts]);
+
   /* ---------------------------------- Data ---------------------------------- */
   const loadAll = useCallback(async () => {
     try {
       setLoading(true);
       setErr("");
-      const [txRes, catRes] = await Promise.all([
+      // [ACCOUNT] MOD: also fetch /accounts so modal can list them
+      const [txRes, catRes, accRes] = await Promise.all([
         api.get("/transactions"),
         api.get("/categories"),
+        api.get("/accounts"),
       ]);
       const cats = (catRes.data || []).filter(
         (c) => c.kind === "income" && !c.isDeleted
       );
       setCategories(cats);
       setTransactions(txRes.data || []);
+      // [ACCOUNT] NEW: filter out deleted and store
+      setAccounts((accRes.data || []).filter((a) => !a.isDeleted));
     } catch (e) {
       setErr(e?.response?.data?.error || e.message || "Failed to load data");
     } finally {
@@ -128,6 +143,8 @@ export default function IncomesScreen({ accountId }) {
 
   /* --------------------------------- CRUD Tx -------------------------------- */
   function openCreate() {
+    // [ACCOUNT] NEW: prefer the page prop accountId, else first account
+    const defaultAccId = accountId || accounts[0]?._id || "";
     setEditing(null);
     setForm({
       amount: "",
@@ -136,6 +153,8 @@ export default function IncomesScreen({ accountId }) {
       categoryId: categories[0]?._id || "",
       description: "",
       tagsCsv: "",
+      // [ACCOUNT] NEW
+      accountId: defaultAccId,
     });
     setModalOpen(true);
   }
@@ -148,6 +167,8 @@ export default function IncomesScreen({ accountId }) {
       categoryId: tx.categoryId || "",
       description: tx.description || "",
       tagsCsv: (tx.tags || []).join(", "),
+      // [ACCOUNT] NEW: carry the existing account (editable)
+      accountId: tx.accountId || accountId || accounts[0]?._id || "",
     });
     setModalOpen(true);
   }
@@ -183,7 +204,7 @@ export default function IncomesScreen({ accountId }) {
   function Header() {
     return (
       <div className="space-y-3 p-4 border-b bg-white">
-        <h1 className="text-2xl font-bold">Incomes</h1>
+        <h1 className="text-2xl font-bold">incomes</h1>
 
         <div className="flex gap-2">
           <input
@@ -246,7 +267,7 @@ export default function IncomesScreen({ accountId }) {
             onClick={openCreate}
             className="inline-flex items-center px-4 py-2 rounded-xl bg-[#4f772d] text-white font-bold hover:bg-[#3f5f24]"
           >
-            + New Income
+            + New income
           </button>
           <button
             type="button"
@@ -287,7 +308,7 @@ export default function IncomesScreen({ accountId }) {
 
     async function seedAll() {
       try {
-        if (!window.confirm("Seed all standard expense categories?")) return;
+        if (!window.confirm("Seed all standard income categories?")) return;
         setBusy(true);
         for (const name of INCOME_CATEGORY_OPTIONS) {
           if (!existingNames.has(name)) {
@@ -331,7 +352,7 @@ export default function IncomesScreen({ accountId }) {
             disabled={busy}
             className="px-4 py-2 rounded-lg border font-semibold disabled:opacity-60"
           >
-            Seed all expense categories
+            Seed all income categories
           </button>
         </div>
         <div className="text-sm text-gray-600">
@@ -350,11 +371,20 @@ export default function IncomesScreen({ accountId }) {
   function Row({ item }) {
     const catName =
       categories.find((c) => c._id === item.categoryId)?.name || "—";
+    // [ACCOUNT] NEW: show the account name the income belongs to
+    const accName = accountsById.get(item.accountId)?.name || "—";
+
     return (
       <div className="p-4 border-b bg-white">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="font-semibold">{catName}</div>
+            <div className="text-xs text-gray-500 mb-1">
+              {/* [ACCOUNT] NEW: tiny badge with account */}
+              <span className="inline-block px-2 py-0.5 rounded-full border">
+                {accName}
+              </span>
+            </div>
             <div className="text-sm text-gray-600 truncate">
               {item.description || "No description"}
             </div>
@@ -370,7 +400,7 @@ export default function IncomesScreen({ accountId }) {
 
           <div className="text-right">
             <div className="font-bold">
-              {minorToMajor(item.amountMinor, item.currency)} {item.currency}
+              -{minorToMajor(item.amountMinor, item.currency)} {item.currency}
             </div>
             <div className="mt-2 flex justify-end">
               <button
@@ -403,6 +433,8 @@ export default function IncomesScreen({ accountId }) {
     const categoryRef = useRef(null);
     const descRef = useRef(null);
     const tagsRef = useRef(null);
+    // [ACCOUNT] NEW: ref for the account select
+    const accountRef = useRef(null);
 
     if (!modalOpen) return null;
 
@@ -413,18 +445,18 @@ export default function IncomesScreen({ accountId }) {
       const categoryId = categoryRef.current?.value ?? "";
       const description = (descRef.current?.value ?? "").trim();
       const tagsCsv = tagsRef.current?.value ?? "";
+      // [ACCOUNT] NEW: selected account id from modal
+      const pickedAccountId = accountRef.current?.value ?? "";
 
       const amountMinor = majorToMinor(amount, currency);
       if (Number.isNaN(amountMinor)) return window.alert("Invalid amount");
       if (!categoryId) return window.alert("Pick a category");
-      if (!accountId && !editing) {
-        return window.alert(
-          "Missing account: pass an accountId to add incomes."
-        );
-      }
+      // [ACCOUNT] MOD: require a chosen account (no dependency on page prop)
+      if (!pickedAccountId) return window.alert("Pick an account");
 
       const payload = {
-        accountId: editing ? editing.accountId : accountId,
+        // [ACCOUNT] MOD: always use the selected account id
+        accountId: pickedAccountId,
         categoryId,
         type: "income",
         amountMinor,
@@ -456,6 +488,9 @@ export default function IncomesScreen({ accountId }) {
       }
     };
 
+    // compute default accountId value for the select
+    const defaultAccId = form.accountId || accountId || accounts[0]?._id || "";
+
     return (
       <div
         className="fixed inset-0 z-50 grid place-items-center bg-black/40"
@@ -464,7 +499,24 @@ export default function IncomesScreen({ accountId }) {
       >
         <div className="w-full max-w-xl bg-white rounded-2xl p-5 space-y-4">
           <div className="text-lg font-bold">
-            {editing ? "Edit Expense" : "New Expense"}
+            {editing ? "Edit income" : "New income"}
+          </div>
+
+          {/* [ACCOUNT] NEW: Account selector goes first to nudge the user */}
+          <div className="space-y-1 w-full">
+            <label className="font-semibold text-sm">Account</label>
+            <select
+              ref={accountRef}
+              defaultValue={defaultAccId}
+              className="w-full border rounded-lg px-3 py-2 bg-white"
+            >
+              <option value="">— Pick an account —</option>
+              {accounts.map((a) => (
+                <option key={a._id} value={a._id}>
+                  {a.name} · {a.type} · {a.currency}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="flex gap-3">
@@ -573,7 +625,7 @@ export default function IncomesScreen({ accountId }) {
     <div className="min-h-[100dvh] bg-[#f8faf8]">
       <Header />
 
-      {/* Step 1: Manage categories (expense-only) */}
+      {/* Step 1: Manage categories (income-only) */}
       <CategoryManager />
 
       {err ? (
@@ -582,7 +634,7 @@ export default function IncomesScreen({ accountId }) {
         </div>
       ) : null}
 
-      {/* Step 2: Use those categories to add/list expenses */}
+      {/* Step 2: Use those categories to add/list incomes */}
       {filtered.length === 0 ? (
         <div className="p-6 text-center text-gray-600">
           No incomes yet. Add your first one.

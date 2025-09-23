@@ -22,7 +22,7 @@ export default function Layout({ me, onLogout }) {
 
           {/* Links */}
           <nav className="hidden md:flex items-center gap-6 text-sm">
-            <Link to="/ai">Financial Helper</Link>
+            <Link to="/ai/financial-helper">Financial Helper</Link>
             <Link to="/expenses">Expenses</Link>
             <Link to="/incomes">Income</Link>
             <Link to="/investments">Investments</Link>

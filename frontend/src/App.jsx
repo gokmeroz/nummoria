@@ -11,6 +11,7 @@ import ExpensesScreen from "./pages/Expenses";
 import Footer from "./components/Footer";
 import IncomesScreen from "./pages/Income";
 import InvestmentsScreen from "./pages/Investments";
+import ReportsPage from "./pages/Reports";
 
 export default function App() {
   function handleLogout() {
@@ -43,6 +44,7 @@ export default function App() {
             path="/investments"
             element={<InvestmentsScreen accountId={myDefaultUserId} />}
           />
+          <Route path="/reports" element={<ReportsPage />}></Route>
           {/* add more: expenses, income, etc. */}
         </Route>
       </Route>
