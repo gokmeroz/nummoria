@@ -1,6 +1,6 @@
 // src/components/Footer.jsx
 import React from "react";
-import logo from "../assets/numora_logo.png";
+import logo from "../assets/nummora_logo.png";
 
 // helper: build full URL from a handle or accept a full URL as-is
 function socialUrl(platform, value) {

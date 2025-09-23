@@ -11,7 +11,7 @@ export default function Layout({ me, onLogout }) {
           {/* Logo + Brand */}
           <Link to="/" className="flex items-center gap-2">
             <img
-              src="../src/assets/numora_logo.png"
+              src="../src/assets/nummora_logo.png"
               alt="Nummora Logo"
               className="h-8 w-8"
             />

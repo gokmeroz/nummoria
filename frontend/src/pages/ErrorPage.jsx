@@ -17,7 +17,7 @@ export default function ErrorPage() {
       {/* Header */}
       <div className="flex items-center gap-2 mb-6">
         <img
-          src="../src/assets/numora_logo.png"
+          src="../src/assets/nummora_logo.png"
           alt="Nummora Logo"
           className="h-8 w-8"
         />
