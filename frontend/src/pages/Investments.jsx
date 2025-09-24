@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 // src/pages/Investments.jsx
 import React, {
   useEffect,
@@ -19,29 +20,52 @@ const INVESTMENT_CATEGORY_OPTIONS = [
   "Other Investments",
 ];
 
+const main = "#4f772d";
+const secondary = "#90a955";
+
+// Keep kind lowercase to match API/DB
 async function createInvestmentCategory(name) {
-  return api.post("/categories", { name, kind: "Investment" });
+  return api.post("/categories", { name, kind: "investment" });
 }
+
+/* ------------------------------ Locale control ------------------------------ */
+/* HERE CHANGED: force the date pickers to English.
+   - "en-US" => month-first UI
+   - "en-GB" => day-first UI
+*/
+const DATE_LANG = "en-US"; // change to "en-GB" if you prefer DD/MM/YYYY
 
 /* ---------------------------------- Screen ---------------------------------- */
 export default function InvestmentsScreen({ accountId }) {
   // data
   const [transactions, setTransactions] = useState([]);
-  const [categories, setCategories] = useState([]); // Investment-kind only
+  const [categories, setCategories] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+
+  // ui
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
-  // [ACCOUNT] NEW: accounts state for choose-account in modal
-  const [accounts, setAccounts] = useState([]);
+  //TODO THE FILTERING: unified search + filters
+  const [q, setQ] = useState("");
 
-  // ui state
-  const [selectedCategory, setSelectedCategory] = useState("ALL");
-  const [search, setSearch] = useState("");
-  const [sortDesc, setSortDesc] = useState(true);
+  // HERE CHANGED: store ISO strings from <input type="date"> (YYYY-MM-DD)
+  const [fStartISO, setFStartISO] = useState(""); // e.g. "2025-01-01"
+  const [fEndISO, setFEndISO] = useState(""); // e.g. "2025-12-31"
+
+  const [fAccountId, setFAccountId] = useState("ALL");
+  const [fCategoryId, setFCategoryId] = useState("ALL");
+  const [fCurrency, setFCurrency] = useState("ALL");
+  const [fMin, setFMin] = useState("");
+  const [fMax, setFMax] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+
+  // HERE CHANGED: sorting options
+  const [sortKey, setSortKey] = useState("date_desc");
 
   // modal state (create / edit)
   const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState(null); // transaction object or null
+  const [editing, setEditing] = useState(null);
 
   // form seeds for the modal (used as defaultValue only)
   const [form, setForm] = useState({
@@ -49,9 +73,10 @@ export default function InvestmentsScreen({ accountId }) {
     currency: "USD",
     date: new Date().toISOString().slice(0, 10),
     categoryId: "",
+    assetSymbol: "",
+    units: "",
     description: "",
     tagsCsv: "",
-    // [ACCOUNT] NEW: accountId seed used by the modal select
     accountId: "",
   });
 
@@ -73,54 +98,39 @@ export default function InvestmentsScreen({ accountId }) {
     const decimals = decimalsForCurrency(currency);
     return (minor / Math.pow(10, decimals)).toFixed(decimals);
   }
+  const fmtMoney = (minor, cur = "USD") =>
+    new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: cur || "USD",
+    }).format((minor || 0) / Math.pow(10, decimalsForCurrency(cur || "USD")));
 
-  /* --------------------------------- Derived -------------------------------- */
-  const filtered = useMemo(() => {
-    let rows = transactions.filter((t) => t.type === "investment");
-    if (selectedCategory !== "ALL") {
-      rows = rows.filter((t) => t.categoryId === selectedCategory);
-    }
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      rows = rows.filter(
-        (t) =>
-          (t.description || "").toLowerCase().includes(q) ||
-          (t.notes || "").toLowerCase().includes(q) ||
-          (t.tags || []).some((tag) => (tag || "").toLowerCase().includes(q))
-      );
-    }
-    rows.sort((a, b) =>
-      sortDesc
-        ? new Date(b.date) - new Date(a.date)
-        : new Date(a.date) - new Date(b.date)
-    );
-    return rows;
-  }, [transactions, selectedCategory, search, sortDesc]);
+  /* ---------------------------- Lookups / helpers --------------------------- */
+  const categoriesById = useMemo(() => {
+    const m = new Map();
+    for (const c of categories) m.set(c._id, c);
+    return m;
+  }, [categories]);
 
-  const totals = useMemo(() => {
-    const byCur = {};
-    for (const t of filtered) {
-      byCur[t.currency] = (byCur[t.currency] || 0) + t.amountMinor;
-    }
-    return Object.entries(byCur).map(([cur, minor]) => ({
-      cur,
-      major: minorToMajor(minor, cur),
-    }));
-  }, [filtered]);
-
-  // [ACCOUNT] NEW: quick map to show account names in list rows
   const accountsById = useMemo(() => {
     const m = new Map();
     for (const a of accounts) m.set(a._id, a);
     return m;
   }, [accounts]);
 
+  const currencies = useMemo(() => {
+    const s = new Set(
+      transactions
+        .filter((t) => t.type === "investment")
+        .map((t) => t.currency || "USD")
+    );
+    return ["ALL", ...Array.from(s)];
+  }, [transactions]);
+
   /* ---------------------------------- Data ---------------------------------- */
   const loadAll = useCallback(async () => {
     try {
       setLoading(true);
       setErr("");
-      // [ACCOUNT] MOD: also fetch /accounts so modal can list them
       const [txRes, catRes, accRes] = await Promise.all([
         api.get("/transactions"),
         api.get("/categories"),
@@ -131,7 +141,6 @@ export default function InvestmentsScreen({ accountId }) {
       );
       setCategories(cats);
       setTransactions(txRes.data || []);
-      // [ACCOUNT] NEW: filter out deleted and store
       setAccounts((accRes.data || []).filter((a) => !a.isDeleted));
     } catch (e) {
       setErr(e?.response?.data?.error || e.message || "Failed to load data");
@@ -144,23 +153,136 @@ export default function InvestmentsScreen({ accountId }) {
     loadAll();
   }, [loadAll]);
 
+  /* ------------------------------- Filtering -------------------------------- */
+  //TODO THE FILTERING: central filtering (always limit to investment rows)
+  const rows = useMemo(() => {
+    // HERE CHANGED: convert ISO strings to Date; end is inclusive to end-of-day
+    const start = fStartISO ? new Date(`${fStartISO}T00:00:00`) : null;
+    const end = fEndISO ? new Date(`${fEndISO}T23:59:59.999`) : null;
+
+    const minNum = fMin !== "" ? Number(fMin) : null; // major
+    const maxNum = fMax !== "" ? Number(fMax) : null; // major
+    const needle = q.trim().toLowerCase();
+
+    const filtered = transactions.filter((t) => {
+      if ((t.type || "") !== "investment") return false;
+
+      // account
+      if (fAccountId !== "ALL" && t.accountId !== fAccountId) return false;
+
+      // category
+      if (fCategoryId !== "ALL" && t.categoryId !== fCategoryId) return false;
+
+      // currency
+      const cur = t.currency || "USD";
+      if (fCurrency !== "ALL" && cur !== fCurrency) return false;
+
+      // dates
+      const dt = new Date(t.date);
+      if (start && dt < start) return false;
+      if (end && dt > end) return false;
+
+      // amount (major)
+      const major =
+        Number(t.amountMinor || 0) / Math.pow(10, decimalsForCurrency(cur));
+      if (minNum !== null && major < minNum) return false;
+      if (maxNum !== null && major > maxNum) return false;
+
+      // free text
+      if (needle) {
+        const cat = categoriesById.get(t.categoryId)?.name || "";
+        const acc = accountsById.get(t.accountId)?.name || "";
+        const hay = `${t.description || ""} ${t.notes || ""} ${cat} ${acc} ${(
+          t.tags || []
+        ).join(" ")} ${(t.assetSymbol || "").toUpperCase()}`.toLowerCase();
+        if (!hay.includes(needle)) return false;
+      }
+
+      return true;
+    });
+
+    // HERE CHANGED: new sort engine
+    filtered.sort((a, b) => {
+      switch (sortKey) {
+        case "date_asc":
+          return new Date(a.date) - new Date(b.date);
+        case "amount_desc": {
+          const aMaj =
+            Number(a.amountMinor || 0) /
+            Math.pow(10, decimalsForCurrency(a.currency || "USD"));
+          const bMaj =
+            Number(b.amountMinor || 0) /
+            Math.pow(10, decimalsForCurrency(b.currency || "USD"));
+          return bMaj - aMaj;
+        }
+        case "amount_asc": {
+          const aMaj =
+            Number(a.amountMinor || 0) /
+            Math.pow(10, decimalsForCurrency(a.currency || "USD"));
+          const bMaj =
+            Number(b.amountMinor || 0) /
+            Math.pow(10, decimalsForCurrency(b.currency || "USD"));
+          return aMaj - bMaj;
+        }
+        case "symbol_asc":
+          return (a.assetSymbol || "").localeCompare(b.assetSymbol || "");
+        case "symbol_desc":
+          return (b.assetSymbol || "").localeCompare(a.assetSymbol || "");
+        case "date_desc":
+        default:
+          return new Date(b.date) - new Date(a.date);
+      }
+    });
+
+    return filtered;
+  }, [
+    transactions,
+    q,
+    fStartISO, // HERE CHANGED
+    fEndISO, // HERE CHANGED
+    fAccountId,
+    fCategoryId,
+    fCurrency,
+    fMin,
+    fMax,
+    categoriesById,
+    accountsById,
+    sortKey,
+  ]);
+
+  /* --------------------------------- Totals --------------------------------- */
+  const totals = useMemo(() => {
+    const byCur = {};
+    for (const t of rows) {
+      byCur[t.currency] = (byCur[t.currency] || 0) + Number(t.amountMinor || 0);
+    }
+    return Object.entries(byCur).map(([cur, minor]) => ({
+      cur,
+      major: minorToMajor(minor, cur),
+    }));
+  }, [rows]);
+
   /* --------------------------------- CRUD Tx -------------------------------- */
   function openCreate() {
-    // [ACCOUNT] NEW: prefer the page prop accountId, else first account
     const defaultAccId = accountId || accounts[0]?._id || "";
+    const defaultCur =
+      accounts.find((a) => a._id === defaultAccId)?.currency || "USD";
+
     setEditing(null);
     setForm({
       amount: "",
-      currency: filtered[0]?.currency || "USD",
+      currency: defaultCur,
       date: new Date().toISOString().slice(0, 10),
       categoryId: categories[0]?._id || "",
+      assetSymbol: "",
+      units: "",
       description: "",
       tagsCsv: "",
-      // [ACCOUNT] NEW
       accountId: defaultAccId,
     });
     setModalOpen(true);
   }
+
   function openEdit(tx) {
     setEditing(tx);
     setForm({
@@ -168,16 +290,17 @@ export default function InvestmentsScreen({ accountId }) {
       currency: tx.currency,
       date: new Date(tx.date).toISOString().slice(0, 10),
       categoryId: tx.categoryId || "",
+      assetSymbol: (tx.assetSymbol || "").toUpperCase(),
+      units: tx.units ?? "",
       description: tx.description || "",
       tagsCsv: (tx.tags || []).join(", "),
-      // [ACCOUNT] NEW: carry the existing account (editable)
       accountId: tx.accountId || accountId || accounts[0]?._id || "",
     });
     setModalOpen(true);
   }
 
   async function softDelete(tx) {
-    if (!window.confirm("Delete Investment?")) return;
+    if (!window.confirm("Delete investment?")) return;
     try {
       await api.delete(`/transactions/${tx._id}`);
       setTransactions((prev) => prev.filter((t) => t._id !== tx._id));
@@ -186,7 +309,7 @@ export default function InvestmentsScreen({ accountId }) {
     }
   }
 
-  /* ------------------------------ UI Primitives ----------------------------- */
+  /* --------------------------------- UI Bits -------------------------------- */
   function Chip({ label, selected, onClick }) {
     return (
       <button
@@ -207,55 +330,198 @@ export default function InvestmentsScreen({ accountId }) {
   function Header() {
     return (
       <div className="space-y-3 p-4 border-b bg-white">
-        <h1 className="text-2xl font-bold">Investments</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Investments</h1>
 
+          {/* HERE CHANGED: Filters toggle + Sorting dropdown */}
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => setShowFilters((v) => !v)}
+              className="inline-flex items-center gap-1 text-[#4f772d] hover:text-[#3f5f24]"
+              title="Show filters"
+            >
+              {/* simple sliders icon */}
+              <svg
+                className="w-4 h-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="4" y1="21" x2="4" y2="14" />
+                <line x1="4" y1="10" x2="4" y2="3" />
+                <line x1="12" y1="21" x2="12" y2="12" />
+                <line x1="12" y1="8" x2="12" y2="3" />
+                <line x1="20" y1="21" x2="20" y2="16" />
+                <line x1="20" y1="12" x2="20" y2="3" />
+                <line x1="1" y1="14" x2="7" y2="14" />
+                <line x1="9" y1="8" x2="15" y2="8" />
+                <line x1="17" y1="16" x2="23" y2="16" />
+              </svg>
+              <span className="font-medium">Filters</span>
+            </button>
+
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Sorting</span>
+              <select
+                value={sortKey}
+                onChange={(e) => setSortKey(e.target.value)}
+                className="border rounded-lg px-3 py-1.5"
+                title="Sorting"
+              >
+                <option value="date_desc">Newest</option>
+                <option value="date_asc">Oldest</option>
+                <option value="amount_desc">Amount: High → Low</option>
+                <option value="amount_asc">Amount: Low → High</option>
+                <option value="symbol_asc">Symbol: A → Z</option>
+                <option value="symbol_desc">Symbol: Z → A</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/*TODO THE FILTERING: unified search box */}
         <div className="flex gap-2">
           <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search description, notes or #tags"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search symbol, description, notes, account, category or #tags"
             className="flex-1 border rounded-lg px-3 py-2"
           />
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-600">Sort:</span>
-          <button
-            type="button"
-            onClick={() => setSortDesc(true)}
-            className={`px-3 py-1.5 rounded-lg border text-sm ${
-              sortDesc ? "bg-gray-100 border-gray-300" : "border-transparent"
-            }`}
-          >
-            Newest
-          </button>
-          <button
-            type="button"
-            onClick={() => setSortDesc(false)}
-            className={`px-3 py-1.5 rounded-lg border text-sm ${
-              !sortDesc ? "bg-gray-100 border-gray-300" : "border-transparent"
-            }`}
-          >
-            Oldest
-          </button>
-        </div>
-
+        {/*TODO THE FILTERING: quick category chips feed fCategoryId */}
         <div className="flex flex-wrap gap-2">
           <Chip
-            label="All"
-            selected={selectedCategory === "ALL"}
-            onClick={() => setSelectedCategory("ALL")}
+            label="All categories"
+            selected={fCategoryId === "ALL"}
+            onClick={() => setFCategoryId("ALL")}
           />
           {categories.map((c) => (
             <Chip
               key={c._id}
               label={c.name}
-              selected={selectedCategory === c._id}
-              onClick={() => setSelectedCategory(c._id)}
+              selected={fCategoryId === c._id}
+              onClick={() => setFCategoryId(c._id)}
             />
           ))}
         </div>
 
+        {/* HERE CHANGED: collapsible filter panel with EN-native date pickers */}
+        {showFilters && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-3 border rounded-xl bg-[#fafdf9]">
+            <div className="flex flex-col gap-1">
+              <label className="text-sm text-gray-600">Account</label>
+              <select
+                value={fAccountId}
+                onChange={(e) => setFAccountId(e.target.value)}
+                className="border rounded-lg px-3 py-2"
+              >
+                <option value="ALL">All accounts</option>
+                {accounts.map((a) => (
+                  <option key={a._id} value={a._id}>
+                    {a.name} · {a.type} · {a.currency}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-sm text-gray-600">Currency</label>
+              <select
+                value={fCurrency}
+                onChange={(e) => setFCurrency(e.target.value)}
+                className="border rounded-lg px-3 py-2"
+              >
+                {currencies.map((c) => (
+                  <option key={c} value={c}>
+                    {c === "ALL" ? "All currencies" : c}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* HERE CHANGED: native date picker in English */}
+            <div className="flex flex-col gap-1">
+              <label className="text-sm text-gray-600">From</label>
+              <input
+                type="date"
+                lang={DATE_LANG} // <-- forces English UI, no Turkish text
+                value={fStartISO}
+                onChange={(e) => setFStartISO(e.target.value)}
+                className="border rounded-lg px-3 py-2"
+                title="From date"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-sm text-gray-600">To</label>
+              <input
+                type="date"
+                lang={DATE_LANG} // <-- forces English UI, no Turkish text
+                value={fEndISO}
+                onChange={(e) => setFEndISO(e.target.value)}
+                className="border rounded-lg px-3 py-2"
+                title="To date"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-sm text-gray-600">Min amount</label>
+              <input
+                type="number"
+                inputMode="decimal"
+                placeholder="e.g., 50"
+                value={fMin}
+                onChange={(e) => setFMin(e.target.value)}
+                className="border rounded-lg px-3 py-2"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-sm text-gray-600">Max amount</label>
+              <input
+                type="number"
+                inputMode="decimal"
+                placeholder="e.g., 1000"
+                value={fMax}
+                onChange={(e) => setFMax(e.target.value)}
+                className="border rounded-lg px-3 py-2"
+              />
+            </div>
+
+            <div className="col-span-full flex gap-2 justify-end">
+              <button
+                type="button"
+                className="px-3 py-2 border rounded-lg"
+                onClick={() => {
+                  setFAccountId("ALL");
+                  setFCategoryId("ALL");
+                  setFCurrency("ALL");
+                  setFStartISO(""); // HERE CHANGED
+                  setFEndISO(""); // HERE CHANGED
+                  setFMin("");
+                  setFMax("");
+                }}
+              >
+                Clear filters
+              </button>
+              <button
+                type="button"
+                className="px-3 py-2 rounded-lg text-white"
+                style={{ background: main }}
+                onClick={() => setShowFilters(false)}
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Totals */}
         <div className="flex flex-wrap items-center gap-4 text-sm">
           {totals.map(({ cur, major }) => (
             <span key={cur} className="font-semibold">
@@ -264,7 +530,8 @@ export default function InvestmentsScreen({ accountId }) {
           ))}
         </div>
 
-        <div className="flex gap-3">
+        {/* Actions */}
+        <div className="flex gap-3 items-center flex-wrap">
           <button
             type="button"
             onClick={openCreate}
@@ -280,6 +547,14 @@ export default function InvestmentsScreen({ accountId }) {
           >
             Refresh
           </button>
+
+          <a
+            href="/investments/performance"
+            className="px-3 py-2 rounded-xl border"
+            style={{ borderColor: secondary, color: main }}
+          >
+            VIEW MARKET
+          </a>
         </div>
       </div>
     );
@@ -311,7 +586,7 @@ export default function InvestmentsScreen({ accountId }) {
 
     async function seedAll() {
       try {
-        if (!window.confirm("Seed all standard Investment categories?")) return;
+        if (!window.confirm("Seed all standard investment categories?")) return;
         setBusy(true);
         for (const name of INVESTMENT_CATEGORY_OPTIONS) {
           if (!existingNames.has(name)) {
@@ -328,7 +603,7 @@ export default function InvestmentsScreen({ accountId }) {
 
     return (
       <div className="p-4 bg-white border rounded-xl space-y-3 m-4">
-        <div className="font-semibold">Categories (Investment only)</div>
+        <div className="font-semibold">Categories (investment only)</div>
         <div className="flex flex-wrap gap-2 items-center">
           <select
             className="border rounded-lg px-3 py-2"
@@ -355,7 +630,7 @@ export default function InvestmentsScreen({ accountId }) {
             disabled={busy}
             className="px-4 py-2 rounded-lg border font-semibold disabled:opacity-60"
           >
-            Seed all Investment categories
+            Seed all investment categories
           </button>
         </div>
         <div className="text-sm text-gray-600">
@@ -374,19 +649,24 @@ export default function InvestmentsScreen({ accountId }) {
   function Row({ item }) {
     const catName =
       categories.find((c) => c._id === item.categoryId)?.name || "—";
-    // [ACCOUNT] NEW: show the account name the Investment belongs to
     const accName = accountsById.get(item.accountId)?.name || "—";
+    const symbol = (item.assetSymbol || "").toUpperCase();
+    const units = item.units ?? null;
 
     return (
       <div className="p-4 border-b bg-white">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <div className="font-semibold">{catName}</div>
+            <div className="font-semibold">
+              {symbol ? `${symbol} • ${catName}` : catName}
+            </div>
             <div className="text-xs text-gray-500 mb-1">
-              {/* [ACCOUNT] NEW: tiny badge with account */}
               <span className="inline-block px-2 py-0.5 rounded-full border">
                 {accName}
               </span>
+              {units ? (
+                <span className="ml-2 text-gray-500">{units} units</span>
+              ) : null}
             </div>
             <div className="text-sm text-gray-600 truncate">
               {item.description || "No description"}
@@ -434,9 +714,10 @@ export default function InvestmentsScreen({ accountId }) {
     const currencyRef = useRef(null);
     const dateRef = useRef(null);
     const categoryRef = useRef(null);
+    const symbolRef = useRef(null);
+    const unitsRef = useRef(null);
     const descRef = useRef(null);
     const tagsRef = useRef(null);
-    // [ACCOUNT] NEW: ref for the account select
     const accountRef = useRef(null);
 
     if (!modalOpen) return null;
@@ -446,25 +727,29 @@ export default function InvestmentsScreen({ accountId }) {
       const currency = (currencyRef.current?.value ?? "USD").toUpperCase();
       const date = dateRef.current?.value ?? "";
       const categoryId = categoryRef.current?.value ?? "";
+      const assetSymbol = (symbolRef.current?.value ?? "").toUpperCase().trim();
+      const units = Number(unitsRef.current?.value ?? 0);
       const description = (descRef.current?.value ?? "").trim();
       const tagsCsv = tagsRef.current?.value ?? "";
-      // [ACCOUNT] NEW: selected account id from modal
       const pickedAccountId = accountRef.current?.value ?? "";
 
       const amountMinor = majorToMinor(amount, currency);
       if (Number.isNaN(amountMinor)) return window.alert("Invalid amount");
       if (!categoryId) return window.alert("Pick a category");
-      // [ACCOUNT] MOD: require a chosen account (no dependency on page prop)
       if (!pickedAccountId) return window.alert("Pick an account");
+      if (!assetSymbol) return window.alert("Asset symbol required");
+      if (!units || Number.isNaN(units) || units <= 0)
+        return window.alert("Units must be a positive number");
 
       const payload = {
-        // [ACCOUNT] MOD: always use the selected account id
         accountId: pickedAccountId,
         categoryId,
         type: "investment",
         amountMinor,
         currency,
         date: new Date(date).toISOString(),
+        assetSymbol,
+        units,
         description: description || null,
         tags: tagsCsv
           .split(",")
@@ -491,7 +776,6 @@ export default function InvestmentsScreen({ accountId }) {
       }
     };
 
-    // compute default accountId value for the select
     const defaultAccId = form.accountId || accountId || accounts[0]?._id || "";
 
     return (
@@ -505,7 +789,7 @@ export default function InvestmentsScreen({ accountId }) {
             {editing ? "Edit Investment" : "New Investment"}
           </div>
 
-          {/* [ACCOUNT] NEW: Account selector goes first to nudge the user */}
+          {/* Account */}
           <div className="space-y-1 w-full">
             <label className="font-semibold text-sm">Account</label>
             <select
@@ -524,21 +808,45 @@ export default function InvestmentsScreen({ accountId }) {
 
           <div className="flex gap-3">
             <div className="space-y-1 w-full">
-              <label className="font-semibold text-sm">Amount</label>
+              <label className="font-semibold text-sm">Total Cost</label>
               <input
                 ref={amountRef}
                 defaultValue={form.amount}
-                placeholder="e.g., 12.34"
+                placeholder="e.g., 1500.00"
                 inputMode="decimal"
                 className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
               />
             </div>
-            <div className="space-y-1 w-full">
+            <div className="space-y-1 w-28">
               <label className="font-semibold text-sm">Currency</label>
               <input
                 ref={currencyRef}
                 defaultValue={form.currency}
                 maxLength={3}
+                className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
+                onBlur={(e) => (e.target.value = e.target.value.toUpperCase())}
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <div className="space-y-1 w-full">
+              <label className="font-semibold text-sm">Asset Symbol</label>
+              <input
+                ref={symbolRef}
+                defaultValue={form.assetSymbol}
+                placeholder="e.g., AAPL, BTC-USD, VOO"
+                className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
+                onBlur={(e) => (e.target.value = e.target.value.toUpperCase())}
+              />
+            </div>
+            <div className="space-y-1 w-36">
+              <label className="font-semibold text-sm">Units</label>
+              <input
+                ref={unitsRef}
+                defaultValue={form.units}
+                placeholder="e.g., 2.5"
+                inputMode="decimal"
                 className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
               />
             </div>
@@ -586,7 +894,7 @@ export default function InvestmentsScreen({ accountId }) {
             <input
               ref={tagsRef}
               defaultValue={form.tagsCsv}
-              placeholder="food, date-night"
+              placeholder="long-term, dividend"
               className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
             />
           </div>
@@ -628,7 +936,7 @@ export default function InvestmentsScreen({ accountId }) {
     <div className="min-h-[100dvh] bg-[#f8faf8]">
       <Header />
 
-      {/* Step 1: Manage categories (Investment-only) */}
+      {/* Step 1: Manage categories (investment-only) */}
       <CategoryManager />
 
       {err ? (
@@ -637,20 +945,25 @@ export default function InvestmentsScreen({ accountId }) {
         </div>
       ) : null}
 
-      {/* Step 2: Use those categories to add/list Investments */}
-      {filtered.length === 0 ? (
+      {/* Step 2: Use those categories to add/list investments */}
+      {rows.length === 0 ? (
         <div className="p-6 text-center text-gray-600">
-          No Investments yet. Add your first one.
+          No investments found. Add your first one or adjust filters.
         </div>
       ) : (
         <div>
-          {filtered.map((item) => (
+          {rows.map((item) => (
             <Row key={item._id} item={item} />
           ))}
         </div>
       )}
-
       <InvestmentModal />
     </div>
   );
 }
+/**const INCOME_CATEGORY_OPTIONS = [
+  "Salary",
+  "Rentals",
+  "Business Income & Freelance",
+  "Other Income",
+]; */

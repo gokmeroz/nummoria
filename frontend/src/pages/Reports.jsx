@@ -35,16 +35,14 @@ const fmtMoneyUI = (minor, cur = "USD") =>
 const fmtMoneyPDF = (minor, cur = "USD") => {
   const val =
     Number(minor || 0) / Math.pow(10, decimalsForCurrency(cur || "USD"));
-  // force en-US to avoid narrow no-break spaces and odd minus signs
   let s = new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: cur || "USD",
     currencyDisplay: "symbol",
   }).format(val);
-  // replace any non-ASCII (just in case)
   s = s
     .replace(/\u00A0|\u202F/g, " ") // NBSP / NNBSP → space
-    .replace(/\u2212/g, "-") // Unicode minus → ASCII hyphen
+    .replace(/\u2212/g, "-") // Unicode minus → ASCII
     .replace(/[^\x20-\x7E]/g, ""); // strip non-ASCII
   return s;
 };
@@ -80,6 +78,16 @@ function ReportsView() {
   const [err, setErr] = useState("");
   const [q, setQ] = useState("");
   const [downloading, setDownloading] = useState(false);
+
+  //TODO THE FILTERING: filter state (copy to other pages as needed)
+  const [fStart, setFStart] = useState(""); // YYYY-MM-DD
+  const [fEnd, setFEnd] = useState(""); // YYYY-MM-DD
+  const [fType, setFType] = useState("ALL"); // ALL | income | expense | investment
+  const [fAccountId, setFAccountId] = useState("ALL"); // ALL or account _id
+  const [fCategoryId, setFCategoryId] = useState("ALL"); // ALL or category _id
+  const [fCurrency, setFCurrency] = useState("ALL"); // ALL or currency code
+  const [fMin, setFMin] = useState(""); // number (major)
+  const [fMax, setFMax] = useState(""); // number (major)
 
   /* ---------------------------------- Load ---------------------------------- */
   const loadAll = useCallback(async () => {
@@ -120,26 +128,80 @@ function ReportsView() {
     return m;
   }, [accounts]);
 
+  // unique currencies for the filter dropdown
+  const currencies = useMemo(() => {
+    const s = new Set(transactions.map((t) => t.currency || "USD"));
+    return ["ALL", ...Array.from(s)];
+  }, [transactions]);
+
   /* ------------------------------- Filtering -------------------------------- */
+  //TODO THE FILTERING: core filtering logic (copy to other pages and adapt)
   const rows = useMemo(() => {
+    // Prepare date bounds (end is inclusive)
+    const start = fStart ? new Date(`${fStart}T00:00:00`) : null;
+    const end = fEnd ? new Date(`${fEnd}T23:59:59.999`) : null;
+
+    const minNum = fMin !== "" ? Number(fMin) : null; // in MAJOR
+    const maxNum = fMax !== "" ? Number(fMax) : null; // in MAJOR
+
     const needle = q.trim().toLowerCase();
-    const sorted = [...transactions].sort(
-      (a, b) => new Date(b.date) - new Date(a.date)
-    );
-    if (!needle) return sorted;
-    return sorted.filter((t) => {
-      const cat = categoriesById.get(t.categoryId)?.name || "";
-      const acc = accountsById.get(t.accountId)?.name || "";
-      return (
-        (t.description || "").toLowerCase().includes(needle) ||
-        (t.notes || "").toLowerCase().includes(needle) ||
-        (t.type || "").toLowerCase().includes(needle) ||
-        cat.toLowerCase().includes(needle) ||
-        acc.toLowerCase().includes(needle) ||
-        (t.tags || []).some((tg) => (tg || "").toLowerCase().includes(needle))
-      );
+
+    const filtered = transactions.filter((t) => {
+      // type
+      if (fType !== "ALL" && (t.type || "").toLowerCase() !== fType)
+        return false;
+
+      // account
+      if (fAccountId !== "ALL" && t.accountId !== fAccountId) return false;
+
+      // category
+      if (fCategoryId !== "ALL" && t.categoryId !== fCategoryId) return false;
+
+      // currency
+      const cur = t.currency || "USD";
+      if (fCurrency !== "ALL" && cur !== fCurrency) return false;
+
+      // date range
+      const dt = new Date(t.date);
+      if (start && dt < start) return false;
+      if (end && dt > end) return false;
+
+      // amount range (compare in MAJOR to be currency-agnostic)
+      const major =
+        Number(t.amountMinor || 0) / Math.pow(10, decimalsForCurrency(cur));
+      if (minNum !== null && major < minNum) return false;
+      if (maxNum !== null && major > maxNum) return false;
+
+      // free-text search
+      if (needle) {
+        const cat = categoriesById.get(t.categoryId)?.name || "";
+        const acc = accountsById.get(t.accountId)?.name || "";
+        const hay = `${t.description || ""} ${t.notes || ""} ${
+          t.type || ""
+        } ${cat} ${acc} ${(t.tags || []).join(" ")}`.toLowerCase();
+        if (!hay.includes(needle)) return false;
+      }
+
+      return true;
     });
-  }, [transactions, q, categoriesById, accountsById]);
+
+    // sort newest first
+    filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+    return filtered;
+  }, [
+    transactions,
+    q,
+    fStart,
+    fEnd,
+    fType,
+    fAccountId,
+    fCategoryId,
+    fCurrency,
+    fMin,
+    fMax,
+    categoriesById,
+    accountsById,
+  ]);
 
   /* ------------------------------ Money flow ------------------------------- */
   const totalsByCurrency = useMemo(() => {
@@ -192,6 +254,33 @@ function ReportsView() {
       doc.setDrawColor(200);
       doc.line(margin, 90, pageWidth - margin, 90);
 
+      // ---------- Optional: show active filters in PDF ----------
+      //TODO THE FILTERING: export the current filter chips to the PDF subtitle
+      const activeFilters = [];
+      if (fStart) activeFilters.push(`from ${fStart}`);
+      if (fEnd) activeFilters.push(`to ${fEnd}`);
+      if (fType !== "ALL") activeFilters.push(`type=${fType}`);
+      if (fAccountId !== "ALL")
+        activeFilters.push(
+          `account=${toPdfText(accountsById.get(fAccountId)?.name || "")}`
+        );
+      if (fCategoryId !== "ALL")
+        activeFilters.push(
+          `category=${toPdfText(categoriesById.get(fCategoryId)?.name || "")}`
+        );
+      if (fCurrency !== "ALL") activeFilters.push(`currency=${fCurrency}`);
+      if (fMin !== "") activeFilters.push(`min=${fMin}`);
+      if (fMax !== "") activeFilters.push(`max=${fMax}`);
+      if (activeFilters.length) {
+        doc.setFontSize(10);
+        doc.setTextColor(80);
+        doc.text(
+          `Filters: ${toPdfText(activeFilters.join(" · "))}`,
+          margin,
+          104
+        );
+      }
+
       // ---------- Table (dynamic widths that always fit) ----------
       // Columns: Date, Account, Category, Type, Description, Amount
       const colW = {
@@ -228,7 +317,7 @@ function ReportsView() {
       });
 
       autoTable(doc, {
-        startY: 110,
+        startY: 110 + (activeFilters.length ? 16 : 0),
         margin: { left: margin, right: margin },
         head: [
           ["Date", "Account", "Category", "Type", "Description", "Amount"].map(
@@ -342,7 +431,7 @@ function ReportsView() {
           </div>
         </div>
 
-        {/* Quick search/filter (client-side) */}
+        {/* Quick search */}
         <div className="mt-3 flex gap-2">
           <input
             value={q}
@@ -351,6 +440,126 @@ function ReportsView() {
             className="flex-1 border rounded-lg px-3 py-2"
           />
         </div>
+
+        {/* ========================= FILTER BAR (reusable) ========================= */}
+        {/*TODO THE FILTERING: filter inputs UI (copy to other pages and adapt) */}
+        <div className="mt-3 grid grid-cols-1 xl:grid-cols-6 gap-2">
+          {/* Date range */}
+          <div className="flex gap-2">
+            <input
+              type="date"
+              value={fStart}
+              onChange={(e) => setFStart(e.target.value)}
+              className="border rounded-lg px-3 py-2 w-full"
+              title="From date"
+            />
+            <input
+              type="date"
+              value={fEnd}
+              onChange={(e) => setFEnd(e.target.value)}
+              className="border rounded-lg px-3 py-2 w-full"
+              title="To date"
+            />
+          </div>
+
+          {/* Type */}
+          <select
+            value={fType}
+            onChange={(e) => setFType(e.target.value)}
+            className="border rounded-lg px-3 py-2"
+            title="Type"
+          >
+            <option value="ALL">All types</option>
+            <option value="income">Income</option>
+            <option value="expense">Expense</option>
+            <option value="investment">Investment</option>
+          </select>
+
+          {/* Account */}
+          <select
+            value={fAccountId}
+            onChange={(e) => setFAccountId(e.target.value)}
+            className="border rounded-lg px-3 py-2"
+            title="Account"
+          >
+            <option value="ALL">All accounts</option>
+            {accounts.map((a) => (
+              <option key={a._id} value={a._id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+
+          {/* Category */}
+          <select
+            value={fCategoryId}
+            onChange={(e) => setFCategoryId(e.target.value)}
+            className="border rounded-lg px-3 py-2"
+            title="Category"
+          >
+            <option value="ALL">All categories</option>
+            {categories.map((c) => (
+              <option key={c._id} value={c._id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+
+          {/* Currency */}
+          <select
+            value={fCurrency}
+            onChange={(e) => setFCurrency(e.target.value)}
+            className="border rounded-lg px-3 py-2"
+            title="Currency"
+          >
+            {currencies.map((c) => (
+              <option key={c} value={c}>
+                {c === "ALL" ? "All currencies" : c}
+              </option>
+            ))}
+          </select>
+
+          {/* Amount range (major units) */}
+          <div className="flex gap-2">
+            <input
+              type="number"
+              inputMode="decimal"
+              value={fMin}
+              onChange={(e) => setFMin(e.target.value)}
+              placeholder="Min amount"
+              className="border rounded-lg px-3 py-2 w-full"
+            />
+            <input
+              type="number"
+              inputMode="decimal"
+              value={fMax}
+              onChange={(e) => setFMax(e.target.value)}
+              placeholder="Max amount"
+              className="border rounded-lg px-3 py-2 w-full"
+            />
+          </div>
+        </div>
+
+        {/* Reset filters */}
+        <div className="mt-2">
+          <button
+            type="button"
+            onClick={() => {
+              //TODO THE FILTERING: reset filters
+              setFStart("");
+              setFEnd("");
+              setFType("ALL");
+              setFAccountId("ALL");
+              setFCategoryId("ALL");
+              setFCurrency("ALL");
+              setFMin("");
+              setFMax("");
+            }}
+            className="px-3 py-1.5 text-sm rounded border"
+          >
+            Reset filters
+          </button>
+        </div>
       </div>
 
       {/* =============================== Totals bar =============================== */}
@@ -358,7 +567,9 @@ function ReportsView() {
         <div className="rounded-lg border bg-white p-4">
           <div className="font-semibold mb-2">Totals / Money Flow</div>
           {totalsByCurrency.length === 0 ? (
-            <div className="text-gray-600">No transactions yet.</div>
+            <div className="text-gray-600">
+              No transactions match these filters.
+            </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
               {totalsByCurrency.map((t) => {
@@ -396,7 +607,12 @@ function ReportsView() {
       {/* =============================== Table list ============================== */}
       <div className="p-4">
         <div className="rounded-lg border bg-white overflow-x-auto">
-          <div className="p-4 font-semibold border-b">All Transactions</div>
+          <div className="p-4 font-semibold border-b">
+            All Transactions{" "}
+            <span className="text-gray-500 font-normal">
+              ({rows.length} result{rows.length === 1 ? "" : "s"})
+            </span>
+          </div>
           <table className="min-w-full text-sm">
             <thead className="text-left text-gray-600">
               <tr>
