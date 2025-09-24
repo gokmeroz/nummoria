@@ -1,4 +1,3 @@
-// src/components/Footer.jsx
 import React from "react";
 import logo from "../assets/nummora_logo.png";
 
@@ -12,7 +11,6 @@ function socialUrl(platform, value) {
     case "github":
       return `https://github.com/${value}`;
     case "linkedin":
-      // if they pass a company/page, keep /company/...; otherwise assume profile
       return value.includes("/")
         ? `https://www.linkedin.com/${value.replace(/^\/+/, "")}`
         : `https://www.linkedin.com/in/${value}`;
@@ -45,8 +43,18 @@ export default function Footer({
     linkedin: "goktugmertozdogan",
   },
   className = "",
+  fullBleed = false,
 }) {
   const year = new Date().getFullYear();
+
+  const wrapTop = fullBleed
+    ? "w-full px-6 lg:px-10 py-10"
+    : "mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10";
+
+  const wrapBottom = fullBleed
+    ? "w-full px-6 lg:px-10 py-4"
+    : "mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4";
+
   const sectionsOrder = ["Product", "Company", "Legal"];
 
   const xUrl = socialUrl("x", socials.x);
@@ -54,9 +62,11 @@ export default function Footer({
   const liUrl = socialUrl("linkedin", socials.linkedin);
 
   return (
-    <footer className={`border-t border-gray-200 bg-gray-50 ${className}`}>
+    <footer
+      className={`w-full border-t border-gray-200 bg-gray-50 ${className}`}
+    >
       {/* Top */}
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
+      <div className={wrapTop}>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-8">
           {/* Brand */}
           <div className="col-span-1 md:col-span-2">
@@ -106,7 +116,12 @@ export default function Footer({
 
       {/* Bottom bar */}
       <div className="border-t border-gray-200 bg-gray-50">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row items-center justify-between gap-3">
+        <div
+          className={
+            wrapBottom +
+            " flex flex-col md:flex-row items-center justify-between gap-3"
+          }
+        >
           <div className="text-xs text-gray-500">
             © {year} {brand.name}. All rights reserved.
           </div>

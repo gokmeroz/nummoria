@@ -11,6 +11,7 @@ import ExpensesScreen from "./pages/Expenses";
 import Footer from "./components/Footer";
 import IncomesScreen from "./pages/Income";
 import InvestmentsScreen from "./pages/Investments";
+import InvestmentPerformances from "./pages/InvestmentPerformances";
 import ReportsPage from "./pages/Reports";
 
 export default function App() {
@@ -45,6 +46,10 @@ export default function App() {
             element={<InvestmentsScreen accountId={myDefaultUserId} />}
           />
           <Route path="/reports" element={<ReportsPage />}></Route>
+          <Route
+            path="/investments/performance"
+            element={<InvestmentPerformances />}
+          ></Route>
           {/* add more: expenses, income, etc. */}
         </Route>
       </Route>
