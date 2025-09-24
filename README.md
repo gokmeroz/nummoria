@@ -1,8 +1,4 @@
-Nice, broski 👌 Yours is already solid but a bit too backend-only. Since **Nummora** is now full-stack (backend + React frontend), I’d polish it into something more professional but still simple.
 
-Here’s an **updated README.md** version you can drop in right away:
-
-```markdown
 # Nummora – Personal Finance Tracker  
 🚀 A modern **full-stack** personal finance app with **Node.js + Express + MongoDB** backend and **React (Vite + TailwindCSS)** frontend.  
 
@@ -54,14 +50,12 @@ nummora/
 ## 🚀 Getting Started
 
 ### 1️⃣ Clone the repo
-```bash
 git clone https://github.com/<your-username>/<repo-name>.git
 cd <repo-name>
 ````
 
 ### 2️⃣ Backend Setup
 
-```bash
 cd backend
 npm install
 cp .env.example .env   # update MONGO_URI, JWT_SECRET, etc.
@@ -70,7 +64,6 @@ npm run dev
 
 ### 3️⃣ Frontend Setup
 
-```bash
 cd frontend
 npm install
 npm run dev
@@ -99,13 +92,30 @@ PORT=5000
 
 ---
 
-## 📜 License
+## 📜 MIT License
 
-MIT License – free to use and modify.
+Copyright (c) 2025 Göktuğ Mert Özdoğan
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ```
 
 ---
 
-👉 Do you want me to also add **screenshot placeholders** (so it looks more portfolio-ready on GitHub) or keep it lean for now?
 ```
