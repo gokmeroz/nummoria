@@ -9,6 +9,7 @@ const accountSchema = new mongoose.Schema(
       type: String,
       enum: ["checking", "savings", "credit", "cash", "other"],
       required: true,
+      default: "checking",
     },
     balance: { type: Number, required: true, default: 0 },
     currency: { type: String, required: true, default: "USD" },
