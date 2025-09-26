@@ -13,6 +13,7 @@ import IncomesScreen from "./pages/Income";
 import InvestmentsScreen from "./pages/Investments";
 import InvestmentPerformances from "./pages/InvestmentPerformances";
 import ReportsPage from "./pages/Reports";
+import SupportPage from "./pages/Support";
 
 export default function App() {
   function handleLogout() {
@@ -50,6 +51,7 @@ export default function App() {
             path="/investments/performance"
             element={<InvestmentPerformances />}
           ></Route>
+          <Route path="/support" element={<SupportPage />}></Route>
           {/* add more: expenses, income, etc. */}
         </Route>
       </Route>
