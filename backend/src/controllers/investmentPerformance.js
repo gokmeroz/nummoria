@@ -1,6 +1,9 @@
 // NO hard import of yahoo-finance2 here.
 // import yahooFinance from "yahoo-finance2";
 import { Transaction } from "../models/transaction.js"; // or "../models/transactions.js" if that's your file
+import dotenv from "dotenv";
+
+console.log("[INVESTMENT/QUOTES] ENABLE_QUOTES =", process.env.ENABLE_QUOTES);
 
 function decimalsForCurrency(code) {
   const zero = new Set(["JPY", "KRW", "CLP", "VND"]);
@@ -12,15 +15,28 @@ function decimalsForCurrency(code) {
 
 // Optional flag to (re)enable quotes later without changing code
 const ENABLE_QUOTES = process.env.ENABLE_QUOTES === "true";
+// Evaluate env at call time so load order doesn't matter
+const quotesEnabled = () =>
+  String(process.env.ENABLE_QUOTES || "").toLowerCase() === "true";
 
 // Lazy/dynamic import so the server still runs if the package isn't installed
 async function fetchQuote(symbol) {
   if (!ENABLE_QUOTES) return null;
+  if (!quotesEnabled()) return false;
   try {
     const mod = await import("yahoo-finance2");
     const yf = mod.default || mod;
-    return await yf.quote(symbol);
-  } catch {
+    const q = await yf.quote(symbol);
+    if (!q?.regularMarketPrice) {
+      console.warn("[INVESTMENT/QUOTES] No price for", symbol, q?.currency);
+    }
+    return q;
+  } catch (e) {
+    console.error(
+      "[INVESTMENT/QUOTES] import/quote failed for",
+      symbol,
+      e?.message
+    );
     return null;
   }
 }
@@ -150,6 +166,7 @@ export async function getInvestmentPerformance(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+console.log("[INVESTMENT/QUOTES] enabled?", quotesEnabled());
 
 // (Alias export keeps other imports working)
 export const getInvestmentsPerformance = getInvestmentPerformance;

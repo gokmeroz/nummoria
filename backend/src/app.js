@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
+import "dotenv/config";
 
 import authRoutes from "./routes/auth.js";
 import meRoutes from "./routes/me.js";

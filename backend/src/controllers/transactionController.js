@@ -1,5 +1,7 @@
 // backend/src/controllers/transactionController.js
 import mongoose from "mongoose";
+import dotenv from "dotenv";
+
 // If your file is backend/src/models/transactions.js (plural), use that path:
 import { Transaction } from "../models/transaction.js"; // <- change to "../models/transactions.js" if that's your filename
 import { Category } from "../models/category.js";
@@ -10,6 +12,11 @@ const { ObjectId } = mongoose.Types;
 export async function getTransactions(req, res) {
   try {
     const filter = { userId: req.userId, isDeleted: { $ne: true } };
+
+    if (req.query.type) {
+      const allowed = ["income", "expense", "transfer", "investment"];
+      if (allowed.includes(req.query.type)) filter.type = req.query.type;
+    }
 
     if (req.query.accountId && ObjectId.isValid(req.query.accountId)) {
       filter.accountId = req.query.accountId;
@@ -135,6 +142,8 @@ export async function createTransaction(req, res) {
     const cleanTags = Array.isArray(tags)
       ? tags.filter((t) => typeof t === "string" && t.trim() !== "")
       : [];
+    const cur =
+      typeof currency === "string" ? currency.trim().toUpperCase() : currency;
 
     // Create
     const doc = await Transaction.create({
@@ -143,7 +152,7 @@ export async function createTransaction(req, res) {
       categoryId: categoryId || null,
       type,
       amountMinor,
-      currency,
+      currency: cur,
       date: new Date(date), // ensure Date
       description: description || null,
       notes: notes || null,
@@ -220,7 +229,7 @@ export async function updateTransaction(req, res) {
       if (typeof currency !== "string" || !currency.trim()) {
         return res.status(400).json({ error: "currency must be a string" });
       }
-      updates.currency = currency.trim();
+      updates.currency = currency.trim().toUpperCase();
     }
 
     if (date !== undefined) {
