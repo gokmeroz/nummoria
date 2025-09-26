@@ -1,6 +1,5 @@
 /* eslint-disable react-hooks/rules-of-hooks */
 /* eslint-disable no-unused-vars */
-// src/pages/incomes.jsx
 import React, {
   useEffect,
   useMemo,
@@ -10,7 +9,7 @@ import React, {
 } from "react";
 import api from "../lib/api";
 
-/* --------------------------- income-only categories --------------------------- */
+/* --------------------------- Income-only categories --------------------------- */
 const INCOME_CATEGORY_OPTIONS = [
   "Salary",
   "Rentals",
@@ -27,14 +26,10 @@ async function createIncomeCategory(name) {
 }
 
 /* ------------------------------ Locale control ------------------------------ */
-/* HERE CHANGED: force the date pickers to English.
-   - "en-US" => month-first UI
-   - "en-GB" => day-first UI
-*/
 const DATE_LANG = "en-US"; // change to "en-GB" if you prefer DD/MM/YYYY
 
 /* ---------------------------------- Screen ---------------------------------- */
-export default function incomesScreen({ accountId }) {
+export default function IncomeScreen({ accountId }) {
   // data
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -44,13 +39,10 @@ export default function incomesScreen({ accountId }) {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
-  //TODO THE FILTERING: unified search + filters
+  // search + filters
   const [q, setQ] = useState("");
-
-  // HERE CHANGED: store ISO strings from <input type="date"> (YYYY-MM-DD)
-  const [fStartISO, setFStartISO] = useState(""); // e.g. "2025-01-01"
-  const [fEndISO, setFEndISO] = useState(""); // e.g. "2025-12-31"
-
+  const [fStartISO, setFStartISO] = useState("");
+  const [fEndISO, setFEndISO] = useState("");
   const [fAccountId, setFAccountId] = useState("ALL");
   const [fCategoryId, setFCategoryId] = useState("ALL");
   const [fCurrency, setFCurrency] = useState("ALL");
@@ -58,21 +50,18 @@ export default function incomesScreen({ accountId }) {
   const [fMax, setFMax] = useState("");
   const [showFilters, setShowFilters] = useState(false);
 
-  // HERE CHANGED: sorting options
   const [sortKey, setSortKey] = useState("date_desc");
 
   // modal state (create / edit)
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
 
-  // form seeds for the modal (used as defaultValue only)
+  // form seeds (used as defaultValue only)
   const [form, setForm] = useState({
     amount: "",
     currency: "USD",
     date: new Date().toISOString().slice(0, 10),
     categoryId: "",
-    assetSymbol: "",
-    units: "",
     description: "",
     tagsCsv: "",
     accountId: "",
@@ -152,9 +141,7 @@ export default function incomesScreen({ accountId }) {
   }, [loadAll]);
 
   /* ------------------------------- Filtering -------------------------------- */
-  //TODO THE FILTERING: central filtering (always limit to income rows)
   const rows = useMemo(() => {
-    // HERE CHANGED: convert ISO strings to Date; end is inclusive to end-of-day
     const start = fStartISO ? new Date(`${fStartISO}T00:00:00`) : null;
     const end = fEndISO ? new Date(`${fEndISO}T23:59:59.999`) : null;
 
@@ -164,42 +151,33 @@ export default function incomesScreen({ accountId }) {
 
     const filtered = transactions.filter((t) => {
       if ((t.type || "") !== "income") return false;
-
-      // account
       if (fAccountId !== "ALL" && t.accountId !== fAccountId) return false;
-
-      // category
       if (fCategoryId !== "ALL" && t.categoryId !== fCategoryId) return false;
 
-      // currency
       const cur = t.currency || "USD";
       if (fCurrency !== "ALL" && cur !== fCurrency) return false;
 
-      // dates
       const dt = new Date(t.date);
       if (start && dt < start) return false;
       if (end && dt > end) return false;
 
-      // amount (major)
       const major =
         Number(t.amountMinor || 0) / Math.pow(10, decimalsForCurrency(cur));
       if (minNum !== null && major < minNum) return false;
       if (maxNum !== null && major > maxNum) return false;
 
-      // free text
       if (needle) {
         const cat = categoriesById.get(t.categoryId)?.name || "";
         const acc = accountsById.get(t.accountId)?.name || "";
         const hay = `${t.description || ""} ${t.notes || ""} ${cat} ${acc} ${(
           t.tags || []
-        ).join(" ")} ${(t.assetSymbol || "").toUpperCase()}`.toLowerCase();
+        ).join(" ")}`.toLowerCase();
         if (!hay.includes(needle)) return false;
       }
 
       return true;
     });
 
-    // HERE CHANGED: new sort engine
     filtered.sort((a, b) => {
       switch (sortKey) {
         case "date_asc":
@@ -222,10 +200,6 @@ export default function incomesScreen({ accountId }) {
             Math.pow(10, decimalsForCurrency(b.currency || "USD"));
           return aMaj - bMaj;
         }
-        case "symbol_asc":
-          return (a.assetSymbol || "").localeCompare(b.assetSymbol || "");
-        case "symbol_desc":
-          return (b.assetSymbol || "").localeCompare(a.assetSymbol || "");
         case "date_desc":
         default:
           return new Date(b.date) - new Date(a.date);
@@ -236,8 +210,8 @@ export default function incomesScreen({ accountId }) {
   }, [
     transactions,
     q,
-    fStartISO, // HERE CHANGED
-    fEndISO, // HERE CHANGED
+    fStartISO,
+    fEndISO,
     fAccountId,
     fCategoryId,
     fCurrency,
@@ -272,8 +246,6 @@ export default function incomesScreen({ accountId }) {
       currency: defaultCur,
       date: new Date().toISOString().slice(0, 10),
       categoryId: categories[0]?._id || "",
-      assetSymbol: "",
-      units: "",
       description: "",
       tagsCsv: "",
       accountId: defaultAccId,
@@ -288,8 +260,6 @@ export default function incomesScreen({ accountId }) {
       currency: tx.currency,
       date: new Date(tx.date).toISOString().slice(0, 10),
       categoryId: tx.categoryId || "",
-      assetSymbol: (tx.assetSymbol || "").toUpperCase(),
-      units: tx.units ?? "",
       description: tx.description || "",
       tagsCsv: (tx.tags || []).join(", "),
       accountId: tx.accountId || accountId || accounts[0]?._id || "",
@@ -329,9 +299,8 @@ export default function incomesScreen({ accountId }) {
     return (
       <div className="space-y-3 p-4 border-b bg-white">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">incomes</h1>
+          <h1 className="text-2xl font-bold">Income</h1>
 
-          {/* HERE CHANGED: Filters toggle + Sorting dropdown */}
           <div className="flex items-center gap-4">
             <button
               type="button"
@@ -339,7 +308,6 @@ export default function incomesScreen({ accountId }) {
               className="inline-flex items-center gap-1 text-[#4f772d] hover:text-[#3f5f24]"
               title="Show filters"
             >
-              {/* simple sliders icon */}
               <svg
                 className="w-4 h-4"
                 viewBox="0 0 24 24"
@@ -374,24 +342,20 @@ export default function incomesScreen({ accountId }) {
                 <option value="date_asc">Oldest</option>
                 <option value="amount_desc">Amount: High → Low</option>
                 <option value="amount_asc">Amount: Low → High</option>
-                <option value="symbol_asc">Symbol: A → Z</option>
-                <option value="symbol_desc">Symbol: Z → A</option>
               </select>
             </div>
           </div>
         </div>
 
-        {/*TODO THE FILTERING: unified search box */}
         <div className="flex gap-2">
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search symbol, description, notes, account, category or #tags"
+            placeholder="Search description, notes, account, category or #tags"
             className="flex-1 border rounded-lg px-3 py-2"
           />
         </div>
 
-        {/*TODO THE FILTERING: quick category chips feed fCategoryId */}
         <div className="flex flex-wrap gap-2">
           <Chip
             label="All categories"
@@ -408,7 +372,6 @@ export default function incomesScreen({ accountId }) {
           ))}
         </div>
 
-        {/* HERE CHANGED: collapsible filter panel with EN-native date pickers */}
         {showFilters && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-3 border rounded-xl bg-[#fafdf9]">
             <div className="flex flex-col gap-1">
@@ -442,12 +405,11 @@ export default function incomesScreen({ accountId }) {
               </select>
             </div>
 
-            {/* HERE CHANGED: native date picker in English */}
             <div className="flex flex-col gap-1">
               <label className="text-sm text-gray-600">From</label>
               <input
                 type="date"
-                lang={DATE_LANG} // <-- forces English UI, no Turkish text
+                lang={DATE_LANG}
                 value={fStartISO}
                 onChange={(e) => setFStartISO(e.target.value)}
                 className="border rounded-lg px-3 py-2"
@@ -459,7 +421,7 @@ export default function incomesScreen({ accountId }) {
               <label className="text-sm text-gray-600">To</label>
               <input
                 type="date"
-                lang={DATE_LANG} // <-- forces English UI, no Turkish text
+                lang={DATE_LANG}
                 value={fEndISO}
                 onChange={(e) => setFEndISO(e.target.value)}
                 className="border rounded-lg px-3 py-2"
@@ -499,8 +461,8 @@ export default function incomesScreen({ accountId }) {
                   setFAccountId("ALL");
                   setFCategoryId("ALL");
                   setFCurrency("ALL");
-                  setFStartISO(""); // HERE CHANGED
-                  setFEndISO(""); // HERE CHANGED
+                  setFStartISO("");
+                  setFEndISO("");
                   setFMin("");
                   setFMax("");
                 }}
@@ -640,23 +602,16 @@ export default function incomesScreen({ accountId }) {
     const catName =
       categories.find((c) => c._id === item.categoryId)?.name || "—";
     const accName = accountsById.get(item.accountId)?.name || "—";
-    const symbol = (item.assetSymbol || "").toUpperCase();
-    const units = item.units ?? null;
 
     return (
       <div className="p-4 border-b bg-white">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <div className="font-semibold">
-              {symbol ? `${symbol} • ${catName}` : catName}
-            </div>
+            <div className="font-semibold">{catName}</div>
             <div className="text-xs text-gray-500 mb-1">
               <span className="inline-block px-2 py-0.5 rounded-full border">
                 {accName}
               </span>
-              {units ? (
-                <span className="ml-2 text-gray-500">{units} units</span>
-              ) : null}
             </div>
             <div className="text-sm text-gray-600 truncate">
               {item.description || "No description"}
@@ -673,7 +628,7 @@ export default function incomesScreen({ accountId }) {
 
           <div className="text-right">
             <div className="font-bold">
-              -{minorToMajor(item.amountMinor, item.currency)} {item.currency}
+              {minorToMajor(item.amountMinor, item.currency)} {item.currency}
             </div>
             <div className="mt-2 flex justify-end">
               <button
@@ -699,13 +654,11 @@ export default function incomesScreen({ accountId }) {
 
   /* --------------------------------- Modal --------------------------------- */
   function IncomeModal() {
-    // Refs MUST be declared before any conditional return to satisfy hook rules
+    // Refs MUST be top-level in the component
     const amountRef = useRef(null);
     const currencyRef = useRef(null);
     const dateRef = useRef(null);
     const categoryRef = useRef(null);
-    const symbolRef = useRef(null);
-    const unitsRef = useRef(null);
     const descRef = useRef(null);
     const tagsRef = useRef(null);
     const accountRef = useRef(null);
@@ -717,8 +670,6 @@ export default function incomesScreen({ accountId }) {
       const currency = (currencyRef.current?.value ?? "USD").toUpperCase();
       const date = dateRef.current?.value ?? "";
       const categoryId = categoryRef.current?.value ?? "";
-      const assetSymbol = (symbolRef.current?.value ?? "").toUpperCase().trim();
-      const units = Number(unitsRef.current?.value ?? 0);
       const description = (descRef.current?.value ?? "").trim();
       const tagsCsv = tagsRef.current?.value ?? "";
       const pickedAccountId = accountRef.current?.value ?? "";
@@ -727,9 +678,6 @@ export default function incomesScreen({ accountId }) {
       if (Number.isNaN(amountMinor)) return window.alert("Invalid amount");
       if (!categoryId) return window.alert("Pick a category");
       if (!pickedAccountId) return window.alert("Pick an account");
-      if (!assetSymbol) return window.alert("Asset symbol required");
-      if (!units || Number.isNaN(units) || units <= 0)
-        return window.alert("Units must be a positive number");
 
       const payload = {
         accountId: pickedAccountId,
@@ -738,8 +686,6 @@ export default function incomesScreen({ accountId }) {
         amountMinor,
         currency,
         date: new Date(date).toISOString(),
-        assetSymbol,
-        units,
         description: description || null,
         tags: tagsCsv
           .split(",")
@@ -798,7 +744,7 @@ export default function incomesScreen({ accountId }) {
 
           <div className="flex gap-3">
             <div className="space-y-1 w-full">
-              <label className="font-semibold text-sm">Total Cost</label>
+              <label className="font-semibold text-sm">Amount</label>
               <input
                 ref={amountRef}
                 defaultValue={form.amount}
@@ -819,35 +765,13 @@ export default function incomesScreen({ accountId }) {
             </div>
           </div>
 
-          <div className="flex gap-3">
-            <div className="space-y-1 w-full">
-              <label className="font-semibold text-sm">Asset Symbol</label>
-              <input
-                ref={symbolRef}
-                defaultValue={form.assetSymbol}
-                placeholder="e.g., AAPL, BTC-USD, VOO"
-                className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
-                onBlur={(e) => (e.target.value = e.target.value.toUpperCase())}
-              />
-            </div>
-            <div className="space-y-1 w-36">
-              <label className="font-semibold text-sm">Units</label>
-              <input
-                ref={unitsRef}
-                defaultValue={form.units}
-                placeholder="e.g., 2.5"
-                inputMode="decimal"
-                className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
-              />
-            </div>
-          </div>
-
           <div className="space-y-1 w-full">
             <label className="font-semibold text-sm">Date</label>
             <input
               ref={dateRef}
               defaultValue={form.date}
-              placeholder="YYYY-MM-DD"
+              type="date"
+              lang={DATE_LANG}
               className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
             />
           </div>
@@ -884,7 +808,7 @@ export default function incomesScreen({ accountId }) {
             <input
               ref={tagsRef}
               defaultValue={form.tagsCsv}
-              placeholder="long-term, dividend"
+              placeholder="bonus, freelance"
               className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
             />
           </div>
@@ -926,7 +850,6 @@ export default function incomesScreen({ accountId }) {
     <div className="min-h-[100dvh] bg-[#f8faf8]">
       <Header />
 
-      {/* Step 1: Manage categories (income-only) */}
       <CategoryManager />
 
       {err ? (
@@ -935,10 +858,9 @@ export default function incomesScreen({ accountId }) {
         </div>
       ) : null}
 
-      {/* Step 2: Use those categories to add/list incomes */}
       {rows.length === 0 ? (
         <div className="p-6 text-center text-gray-600">
-          No incomes found. Add your first one or adjust filters.
+          No income found. Add your first one or adjust filters.
         </div>
       ) : (
         <div>
@@ -951,25 +873,3 @@ export default function incomesScreen({ accountId }) {
     </div>
   );
 }
-/**const EXPENSE_CATEGORY_OPTIONS = [
-  "Rent",
-  "Housing Payments & Maintenance",
-  "Debt Payments",
-  "Transportation",
-  "Health & Medical",
-  "Utilities",
-  "Groceries",
-  "Dining Out",
-  "Education",
-  "Miscellaneous",
-  "Entertainment",
-  "Travel",
-  "Gifts & Donations",
-  "Personal Care",
-  "Shopping",
-  "Subscriptions",
-  "Taxes",
-  "Insurance",
-  "Business Expenses",
-  "Other Expense",
-]; */

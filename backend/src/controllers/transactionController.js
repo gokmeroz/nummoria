@@ -1,14 +1,50 @@
 // backend/src/controllers/transactionController.js
 import mongoose from "mongoose";
-import dotenv from "dotenv";
-
-// If your file is backend/src/models/transactions.js (plural), use that path:
-import { Transaction } from "../models/transaction.js"; // <- change to "../models/transactions.js" if that's your filename
+import { Transaction } from "../models/transaction.js";
 import { Category } from "../models/category.js";
+import { Account } from "../models/account.js";
 
 const { ObjectId } = mongoose.Types;
 
-/** GET /transactions */
+/* ------------------------------ Helpers ----------------------------------- */
+function normalizeCurrency(cur) {
+  return typeof cur === "string" ? cur.trim().toUpperCase() : cur;
+}
+
+function deltaFor(type, amountMinor) {
+  const abs = Math.abs(Number(amountMinor) || 0);
+  switch (type) {
+    case "income":
+      return +abs; // inflow
+    case "expense":
+    case "investment":
+      return -abs; // outflow
+    case "transfer":
+      throw new Error("Transfer handling not implemented on this endpoint");
+    default:
+      throw new Error("Unsupported type");
+  }
+}
+
+async function getAccountOrThrow({ accountId, userId }) {
+  const acct = await Account.findOne({
+    _id: accountId,
+    userId,
+    isDeleted: { $ne: true },
+  }).select("_id currency balance");
+  if (!acct) throw new Error("Account not found");
+  return acct;
+}
+
+async function incBalanceOrThrow({ accountId, userId, delta }) {
+  const res = await Account.updateOne(
+    { _id: accountId, userId, isDeleted: { $ne: true } },
+    { $inc: { balance: delta } }
+  );
+  if (res.matchedCount === 0) throw new Error("Account not found");
+}
+
+/* --------------------------------- GETs ----------------------------------- */
 export async function getTransactions(req, res) {
   try {
     const filter = { userId: req.userId, isDeleted: { $ne: true } };
@@ -17,7 +53,6 @@ export async function getTransactions(req, res) {
       const allowed = ["income", "expense", "transfer", "investment"];
       if (allowed.includes(req.query.type)) filter.type = req.query.type;
     }
-
     if (req.query.accountId && ObjectId.isValid(req.query.accountId)) {
       filter.accountId = req.query.accountId;
     }
@@ -32,7 +67,6 @@ export async function getTransactions(req, res) {
   }
 }
 
-/** GET /transactions/:id */
 export async function getTransactionById(req, res) {
   try {
     const { id } = req.params;
@@ -56,12 +90,12 @@ export async function getTransactionById(req, res) {
   }
 }
 
-/** POST /transactions */
+/* --------------------------------- CREATE --------------------------------- */
 export async function createTransaction(req, res) {
   try {
     const {
       accountId,
-      categoryId, // optional for transfer/investment
+      categoryId, // optional for investment
       type, // "income" | "expense" | "transfer" | "investment"
       amountMinor,
       currency,
@@ -73,33 +107,27 @@ export async function createTransaction(req, res) {
       units,
     } = req.body;
 
-    // Basic required fields
+    // Basic validation
     if (!accountId || !type || currency == null || date == null) {
-      return res.status(400).json({
-        error: "accountId, type, currency, and date are required",
-      });
+      return res
+        .status(400)
+        .json({ error: "accountId, type, currency, and date are required" });
     }
-
-    // amountMinor must be a number (can be 0)
-    if (typeof amountMinor !== "number" || Number.isNaN(amountMinor)) {
-      return res.status(400).json({ error: "amountMinor must be a number" });
-    }
-
-    // ObjectId validation
     if (!mongoose.Types.ObjectId.isValid(accountId)) {
       return res.status(400).json({ error: "Invalid accountId" });
     }
     if (categoryId && !mongoose.Types.ObjectId.isValid(categoryId)) {
       return res.status(400).json({ error: "Invalid categoryId" });
     }
-
-    // Type validation
     const allowedTypes = ["income", "expense", "transfer", "investment"];
     if (!allowedTypes.includes(type)) {
       return res.status(400).json({ error: "Invalid type" });
     }
+    if (typeof amountMinor !== "number" || Number.isNaN(amountMinor)) {
+      return res.status(400).json({ error: "amountMinor must be a number" });
+    }
 
-    // Enforce type ↔ category.kind consistency (if category provided)
+    // Category ↔ type consistency (if provided)
     if (categoryId) {
       const cat = await Category.findOne({
         _id: categoryId,
@@ -108,11 +136,7 @@ export async function createTransaction(req, res) {
       })
         .select("kind")
         .lean();
-
-      if (!cat) {
-        return res.status(400).json({ error: "Category not found" });
-      }
-      // For income/expense/investment, category.kind must match type
+      if (!cat) return res.status(400).json({ error: "Category not found" });
       if (
         ["income", "expense", "investment"].includes(type) &&
         cat.kind !== type
@@ -138,39 +162,71 @@ export async function createTransaction(req, res) {
       }
     }
 
-    // Normalize tags
+    // Normalize
     const cleanTags = Array.isArray(tags)
       ? tags.filter((t) => typeof t === "string" && t.trim() !== "")
       : [];
-    const cur =
-      typeof currency === "string" ? currency.trim().toUpperCase() : currency;
+    const cur = normalizeCurrency(currency);
+    const when = new Date(date);
 
-    // Create
-    const doc = await Transaction.create({
-      userId: req.userId, // from requireAuth middleware
-      accountId,
-      categoryId: categoryId || null,
-      type,
-      amountMinor,
-      currency: cur,
-      date: new Date(date), // ensure Date
-      description: description || null,
-      notes: notes || null,
-      tags: cleanTags,
-      assetSymbol: assetSymbol
-        ? String(assetSymbol).toUpperCase().trim()
-        : null,
-      units: typeof units === "number" ? units : null,
-      isDeleted: false,
-    });
+    // Load account and verify currency
+    const acct = await getAccountOrThrow({ accountId, userId: req.userId });
+    const acctCur = normalizeCurrency(acct.currency || "");
+    if (acctCur !== cur) {
+      return res.status(400).json({
+        error: `Currency mismatch: account is ${acctCur}, transaction is ${cur}. (FX not supported yet)`,
+      });
+    }
 
-    return res.status(201).json(doc.toObject());
+    // Compute delta; apply balance first, then create doc. Roll back if doc create fails.
+    const abs = Math.abs(amountMinor);
+    const delta = deltaFor(type, abs);
+
+    try {
+      if (delta !== 0) {
+        await incBalanceOrThrow({ accountId, userId: req.userId, delta });
+      }
+
+      const doc = await Transaction.create({
+        userId: req.userId,
+        accountId,
+        categoryId: categoryId || null,
+        type,
+        amountMinor: abs, // store positive
+        currency: cur,
+        date: when,
+        description: description || null,
+        notes: notes || null,
+        tags: cleanTags,
+        assetSymbol: assetSymbol
+          ? String(assetSymbol).toUpperCase().trim()
+          : null,
+        units: typeof units === "number" ? units : null,
+        isDeleted: false,
+      });
+
+      return res.status(201).json(doc.toObject());
+    } catch (innerErr) {
+      // rollback balance if tx create failed
+      if (delta !== 0) {
+        try {
+          await incBalanceOrThrow({
+            accountId,
+            userId: req.userId,
+            delta: -delta,
+          });
+        } catch {
+          // swallow rollback error to not mask the original error
+        }
+      }
+      throw innerErr;
+    }
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(400).json({ error: err.message || "Create failed" });
   }
 }
 
-/** PUT/PATCH /transactions/:id */
+/* --------------------------------- UPDATE --------------------------------- */
 export async function updateTransaction(req, res) {
   try {
     const { id } = req.params;
@@ -178,6 +234,17 @@ export async function updateTransaction(req, res) {
       return res.status(400).json({ error: "Invalid transaction id" });
     }
 
+    // Load current tx (must exist and not deleted)
+    const current = await Transaction.findOne({
+      _id: id,
+      userId: req.userId,
+      isDeleted: { $ne: true },
+    }).lean();
+    if (!current) {
+      return res.status(404).json({ error: "Transaction not found" });
+    }
+
+    // Build next state from inputs
     const {
       accountId,
       categoryId,
@@ -192,44 +259,42 @@ export async function updateTransaction(req, res) {
       units,
     } = req.body;
 
-    const updates = {};
+    const next = { ...current };
 
-    // Optional ObjectId fields
     if (accountId !== undefined) {
       if (!mongoose.Types.ObjectId.isValid(accountId)) {
         return res.status(400).json({ error: "Invalid accountId" });
       }
-      updates.accountId = accountId;
+      next.accountId = accountId;
     }
 
     if (categoryId !== undefined) {
       if (categoryId !== null && !mongoose.Types.ObjectId.isValid(categoryId)) {
         return res.status(400).json({ error: "Invalid categoryId" });
       }
-      updates.categoryId = categoryId === null ? null : categoryId;
+      next.categoryId = categoryId === null ? null : categoryId;
     }
 
-    // Optional enums / primitives
     if (type !== undefined) {
       const allowed = ["income", "expense", "transfer", "investment"];
       if (!allowed.includes(type)) {
         return res.status(400).json({ error: "Invalid type" });
       }
-      updates.type = type;
+      next.type = type;
     }
 
     if (amountMinor !== undefined) {
       if (typeof amountMinor !== "number" || Number.isNaN(amountMinor)) {
         return res.status(400).json({ error: "amountMinor must be a number" });
       }
-      updates.amountMinor = amountMinor;
+      next.amountMinor = Math.abs(amountMinor);
     }
 
     if (currency !== undefined) {
       if (typeof currency !== "string" || !currency.trim()) {
         return res.status(400).json({ error: "currency must be a string" });
       }
-      updates.currency = currency.trim().toUpperCase();
+      next.currency = normalizeCurrency(currency);
     }
 
     if (date !== undefined) {
@@ -237,18 +302,18 @@ export async function updateTransaction(req, res) {
       if (Number.isNaN(d.getTime())) {
         return res.status(400).json({ error: "Invalid date" });
       }
-      updates.date = d;
+      next.date = d;
     }
 
     if (description !== undefined) {
-      updates.description =
+      next.description =
         typeof description === "string" && description.trim() !== ""
           ? description
           : null;
     }
 
     if (notes !== undefined) {
-      updates.notes =
+      next.notes =
         typeof notes === "string" && notes.trim() !== "" ? notes : null;
     }
 
@@ -258,21 +323,19 @@ export async function updateTransaction(req, res) {
           .status(400)
           .json({ error: "tags must be an array of strings" });
       }
-      const cleanTags = tags
+      next.tags = tags
         .filter((t) => typeof t === "string")
         .map((t) => t.trim())
         .filter((t) => t.length > 0);
-      updates.tags = cleanTags;
     }
 
-    // NEW: allow updating assetSymbol & units
     if (assetSymbol !== undefined) {
       if (assetSymbol !== null && typeof assetSymbol !== "string") {
         return res
           .status(400)
           .json({ error: "assetSymbol must be a string or null" });
       }
-      updates.assetSymbol =
+      next.assetSymbol =
         assetSymbol === null ? null : String(assetSymbol).toUpperCase().trim();
     }
 
@@ -285,106 +348,194 @@ export async function updateTransaction(req, res) {
           .status(400)
           .json({ error: "units must be a number or null" });
       }
-      updates.units = units;
+      next.units = units;
     }
 
-    if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ error: "No updatable fields provided" });
-    }
-
-    // We may need to validate final state (type/category/asset fields)
-    const needCurrentFetch =
-      updates.type !== undefined ||
-      updates.categoryId !== undefined ||
-      updates.assetSymbol !== undefined ||
-      updates.units !== undefined;
-
-    if (needCurrentFetch) {
-      const current = await Transaction.findOne({
-        _id: id,
+    // Category ↔ type check (if category present)
+    if (next.categoryId) {
+      const cat = await Category.findOne({
+        _id: next.categoryId,
         userId: req.userId,
         isDeleted: { $ne: true },
       })
-        .select("type categoryId assetSymbol units")
+        .select("kind")
         .lean();
+      if (!cat) return res.status(400).json({ error: "Category not found" });
+      if (
+        ["income", "expense", "investment"].includes(next.type) &&
+        cat.kind !== next.type
+      ) {
+        return res.status(400).json({
+          error: `Category kind (${cat.kind}) does not match transaction type (${next.type})`,
+        });
+      }
+    }
 
-      if (!current) {
+    // Investment sanity
+    if (next.type === "investment") {
+      if (!next.assetSymbol || !String(next.assetSymbol).trim()) {
+        return res
+          .status(400)
+          .json({ error: "assetSymbol is required for investment" });
+      }
+      if (
+        typeof next.units !== "number" ||
+        Number.isNaN(next.units) ||
+        next.units === 0
+      ) {
+        return res
+          .status(400)
+          .json({ error: "units must be a non-zero number for investment" });
+      }
+    }
+
+    // Defaults if not provided
+    next.currency = normalizeCurrency(next.currency || current.currency);
+    next.amountMinor =
+      typeof next.amountMinor === "number"
+        ? Math.abs(next.amountMinor)
+        : Math.abs(current.amountMinor);
+
+    // Load accounts and validate currencies
+    const oldAcct = await getAccountOrThrow({
+      accountId: current.accountId,
+      userId: req.userId,
+    });
+    const newAcct = await getAccountOrThrow({
+      accountId: next.accountId,
+      userId: req.userId,
+    });
+
+    const oldCur = normalizeCurrency(oldAcct.currency || "");
+    const newCur = normalizeCurrency(newAcct.currency || "");
+    if (oldCur !== normalizeCurrency(current.currency || "")) {
+      return res.status(400).json({
+        error: `Data integrity: stored tx currency ${current.currency} != account currency ${oldCur}`,
+      });
+    }
+    if (newCur !== next.currency) {
+      return res.status(400).json({
+        error: `Currency mismatch: account is ${newCur}, transaction is ${next.currency}. (FX not supported yet)`,
+      });
+    }
+
+    // Compute balance deltas
+    const oldDelta = deltaFor(current.type, current.amountMinor);
+    const newDelta = deltaFor(next.type, next.amountMinor);
+
+    // Apply balance changes with manual rollback if something fails
+    const sameAccount = String(oldAcct._id) === String(newAcct._id);
+    try {
+      if (sameAccount) {
+        const net = newDelta - oldDelta;
+        if (net !== 0) {
+          await incBalanceOrThrow({
+            accountId: oldAcct._id,
+            userId: req.userId,
+            delta: net,
+          });
+        }
+      } else {
+        if (oldDelta !== 0) {
+          await incBalanceOrThrow({
+            accountId: oldAcct._id,
+            userId: req.userId,
+            delta: -oldDelta, // revert old
+          });
+        }
+        try {
+          if (newDelta !== 0) {
+            await incBalanceOrThrow({
+              accountId: newAcct._id,
+              userId: req.userId,
+              delta: newDelta, // apply new
+            });
+          }
+        } catch (e2) {
+          // rollback old revert
+          if (oldDelta !== 0) {
+            try {
+              await incBalanceOrThrow({
+                accountId: oldAcct._id,
+                userId: req.userId,
+                delta: +oldDelta,
+              });
+            } catch {}
+          }
+          throw e2;
+        }
+      }
+
+      // Persist the transaction changes
+      const updated = await Transaction.findOneAndUpdate(
+        { _id: id, userId: req.userId, isDeleted: { $ne: true } },
+        {
+          $set: {
+            accountId: next.accountId,
+            categoryId: next.categoryId ?? null,
+            type: next.type,
+            amountMinor: Math.abs(next.amountMinor),
+            currency: next.currency,
+            date: next.date ?? current.date,
+            description: next.description ?? null,
+            notes: next.notes ?? null,
+            tags: next.tags ?? [],
+            assetSymbol: next.assetSymbol ?? null,
+            units: next.units ?? null,
+          },
+        },
+        { new: true, runValidators: true }
+      ).lean();
+
+      if (!updated) {
+        // rollback balances if doc update somehow failed
+        if (sameAccount) {
+          const net = newDelta - oldDelta;
+          if (net !== 0) {
+            try {
+              await incBalanceOrThrow({
+                accountId: oldAcct._id,
+                userId: req.userId,
+                delta: -net,
+              });
+            } catch {}
+          }
+        } else {
+          // rollback both sides
+          if (newDelta !== 0) {
+            try {
+              await incBalanceOrThrow({
+                accountId: newAcct._id,
+                userId: req.userId,
+                delta: -newDelta,
+              });
+            } catch {}
+          }
+          if (oldDelta !== 0) {
+            try {
+              await incBalanceOrThrow({
+                accountId: oldAcct._id,
+                userId: req.userId,
+                delta: +oldDelta,
+              });
+            } catch {}
+          }
+        }
         return res.status(404).json({ error: "Transaction not found" });
       }
 
-      const finalType = updates.type ?? current.type;
-      const finalCategoryId =
-        updates.categoryId === undefined
-          ? current.categoryId
-          : updates.categoryId;
-
-      // Category.kind must match type for income/expense/investment
-      if (finalCategoryId) {
-        const cat = await Category.findOne({
-          _id: finalCategoryId,
-          userId: req.userId,
-          isDeleted: { $ne: true },
-        })
-          .select("kind")
-          .lean();
-
-        if (!cat) {
-          return res.status(400).json({ error: "Category not found" });
-        }
-        if (
-          ["income", "expense", "investment"].includes(finalType) &&
-          cat.kind !== finalType
-        ) {
-          return res.status(400).json({
-            error: `Category kind (${cat.kind}) does not match transaction type (${finalType})`,
-          });
-        }
-      }
-
-      // Investment-specific sanity: if final type is investment, ensure symbol + non-zero units
-      if (finalType === "investment") {
-        const finalSymbol =
-          updates.assetSymbol === undefined
-            ? current.assetSymbol
-            : updates.assetSymbol;
-        const finalUnits =
-          updates.units === undefined ? current.units : updates.units;
-
-        if (!finalSymbol || !String(finalSymbol).trim()) {
-          return res
-            .status(400)
-            .json({ error: "assetSymbol is required for investment" });
-        }
-        if (
-          typeof finalUnits !== "number" ||
-          Number.isNaN(finalUnits) ||
-          finalUnits === 0
-        ) {
-          return res
-            .status(400)
-            .json({ error: "units must be a non-zero number for investment" });
-        }
-      }
+      return res.status(200).json(updated);
+    } catch (errApply) {
+      return res
+        .status(400)
+        .json({ error: errApply.message || "Update failed" });
     }
-
-    // Perform update
-    const updated = await Transaction.findOneAndUpdate(
-      { _id: id, userId: req.userId, isDeleted: { $ne: true } },
-      { $set: updates },
-      { new: true, runValidators: true }
-    ).lean();
-
-    if (!updated) {
-      return res.status(404).json({ error: "Transaction not found" });
-    }
-
-    return res.status(200).json(updated);
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(400).json({ error: err.message || "Update failed" });
   }
 }
 
-/** DELETE /transactions/:id (soft) */
+/* --------------------------------- DELETE --------------------------------- */
 export async function softDeleteTransaction(req, res) {
   try {
     const { id } = req.params;
@@ -392,25 +543,68 @@ export async function softDeleteTransaction(req, res) {
       return res.status(400).json({ error: "Invalid transaction id" });
     }
 
-    const updated = await Transaction.findOneAndUpdate(
-      { _id: id, userId: req.userId, isDeleted: { $ne: true } },
-      { $set: { isDeleted: true } },
-      { new: true, lean: true }
-    );
+    const tx = await Transaction.findOne({
+      _id: id,
+      userId: req.userId,
+      isDeleted: { $ne: true },
+    })
+      .select("_id accountId type amountMinor currency")
+      .lean();
 
-    if (!updated) {
+    if (!tx) {
       return res
         .status(404)
         .json({ error: "Transaction not found or already deleted" });
     }
 
-    return res.status(200).json({ message: "Transaction soft-deleted", id });
+    const acct = await getAccountOrThrow({
+      accountId: tx.accountId,
+      userId: req.userId,
+    });
+
+    const acctCur = normalizeCurrency(acct.currency || "");
+    const txCur = normalizeCurrency(tx.currency || "");
+    if (acctCur !== txCur) {
+      return res.status(400).json({
+        error: `Currency mismatch: account is ${acctCur}, transaction is ${txCur}`,
+      });
+    }
+
+    const revert = -deltaFor(tx.type, tx.amountMinor);
+
+    try {
+      if (revert !== 0) {
+        await incBalanceOrThrow({
+          accountId: acct._id,
+          userId: req.userId,
+          delta: revert,
+        });
+      }
+      await Transaction.updateOne(
+        { _id: tx._id },
+        { $set: { isDeleted: true } }
+      );
+      return res.status(200).json({ message: "Transaction soft-deleted", id });
+    } catch (applyErr) {
+      // rollback balance if marking as deleted failed
+      if (revert !== 0) {
+        try {
+          await incBalanceOrThrow({
+            accountId: acct._id,
+            userId: req.userId,
+            delta: -revert,
+          });
+        } catch {}
+      }
+      return res
+        .status(400)
+        .json({ error: applyErr.message || "Delete failed" });
+    }
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(400).json({ error: err.message || "Delete failed" });
   }
 }
 
-/** DELETE /transactions/:id/hard */
 export async function hardDeleteTransaction(req, res) {
   try {
     const { id } = req.params;
@@ -418,15 +612,52 @@ export async function hardDeleteTransaction(req, res) {
       return res.status(400).json({ error: "Invalid transaction id" });
     }
 
+    const tx = await Transaction.findOne({
+      _id: id,
+      userId: req.userId,
+    })
+      .select("_id accountId type amountMinor currency isDeleted")
+      .lean();
+
+    if (!tx) return res.status(404).json({ error: "Transaction not found" });
+
+    // Only revert if it wasn't soft-deleted already
+    if (tx.isDeleted !== true) {
+      const acct = await getAccountOrThrow({
+        accountId: tx.accountId,
+        userId: req.userId,
+      });
+      const acctCur = normalizeCurrency(acct.currency || "");
+      const txCur = normalizeCurrency(tx.currency || "");
+      if (acctCur !== txCur) {
+        return res.status(400).json({
+          error: `Currency mismatch: account is ${acctCur}, transaction is ${txCur}`,
+        });
+      }
+      const revert = -deltaFor(tx.type, tx.amountMinor);
+      if (revert !== 0) {
+        try {
+          await incBalanceOrThrow({
+            accountId: acct._id,
+            userId: req.userId,
+            delta: revert,
+          });
+        } catch (e) {
+          return res
+            .status(400)
+            .json({ error: e.message || "Balance revert failed" });
+        }
+      }
+    }
+
     const result = await Transaction.deleteOne({ _id: id, userId: req.userId });
     if (result.deletedCount === 0) {
       return res.status(404).json({ error: "Transaction not found" });
     }
-
     return res
       .status(200)
       .json({ message: "Transaction permanently deleted", id });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(400).json({ error: err.message || "Hard delete failed" });
   }
 }

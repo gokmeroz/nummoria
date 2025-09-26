@@ -3,7 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
 import "dotenv/config";
-
+import marketRouter from "./routes/marketRoutes.js";
 import authRoutes from "./routes/auth.js";
 import meRoutes from "./routes/me.js";
 import accountRoutes from "./routes/accountRoutes.js";
@@ -22,7 +22,7 @@ app.use("/me", meRoutes); // User profile routes
 app.use("/accounts", accountRoutes); // Account management routes
 app.use("/categories", categoryRoutes); // Category management routes
 app.use("/transactions", transactionRoutes); // Transaction management routes
-app.use("/investments", investmentPerformance);
+app.use("/investments", investmentPerformance, marketRouter);
 //Basic health check route
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: Date.now() });
