@@ -1,5 +1,6 @@
 // backend/src/controllers/transactionController.js
 import mongoose from "mongoose";
+import crypto from "crypto";
 import { Transaction } from "../models/transaction.js";
 import { Category } from "../models/category.js";
 import { Account } from "../models/account.js";
@@ -9,6 +10,12 @@ const { ObjectId } = mongoose.Types;
 /* ------------------------------ Helpers ----------------------------------- */
 function normalizeCurrency(cur) {
   return typeof cur === "string" ? cur.trim().toUpperCase() : cur;
+}
+
+function startOfUTC(date) {
+  const d = new Date(date);
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
 }
 
 function deltaFor(type, amountMinor) {
@@ -107,6 +114,47 @@ function computeNextRunAt(prev, rule) {
   if (rule.endDate && next > new Date(rule.endDate)) return null;
 
   return next;
+}
+
+/* ------------- Stable key so identical templates aren't saved twice -------- */
+function makeTemplateKey({
+  userId,
+  accountId,
+  categoryId,
+  type,
+  amountMinor,
+  currency,
+  description,
+  tags,
+  recurrence,
+}) {
+  const payload = {
+    userId: String(userId),
+    accountId: String(accountId),
+    categoryId: categoryId ? String(categoryId) : "",
+    type,
+    amountMinor: Math.abs(Number(amountMinor) || 0),
+    currency: normalizeCurrency(currency),
+    description: (description || "").trim(),
+    tags: Array.isArray(tags) ? [...tags].sort() : [],
+    frequency: recurrence.frequency,
+    interval: recurrence.interval || 1,
+    byWeekday: Array.isArray(recurrence.byWeekday)
+      ? [...recurrence.byWeekday].sort()
+      : [],
+    byMonthDay: recurrence.byMonthDay || null,
+    startDate: recurrence.startDate
+      ? startOfUTC(recurrence.startDate).toISOString()
+      : "",
+    endDate: recurrence.endDate
+      ? startOfUTC(recurrence.endDate).toISOString()
+      : "",
+    autopost: recurrence.autopost || "post",
+  };
+  return crypto
+    .createHash("sha1")
+    .update(JSON.stringify(payload))
+    .digest("hex");
 }
 
 /* --------------------------------- GETs ----------------------------------- */
@@ -278,6 +326,30 @@ export async function createTransaction(req, res) {
       };
       rule.nextRunAt = computeNextRunAt(null, rule);
 
+      // -------- de-dupe by stable key --------
+      rule.key = makeTemplateKey({
+        userId: req.userId,
+        accountId,
+        categoryId: categoryId || null,
+        type,
+        amountMinor,
+        currency: cur,
+        description,
+        tags: cleanTags,
+        recurrence: rule,
+      });
+
+      const existing = await Transaction.findOne({
+        userId: req.userId,
+        isDeleted: { $ne: true },
+        "recurrence.isTemplate": true,
+        "recurrence.key": rule.key,
+      }).lean();
+
+      if (existing) {
+        return res.status(200).json(existing);
+      }
+
       const templateDoc = await Transaction.create({
         userId: req.userId,
         accountId,
@@ -328,7 +400,10 @@ export async function createTransaction(req, res) {
         // if client sends recurrence.parentId explicitly for a manual instance:
         recurrence:
           recurrence && recurrence.parentId
-            ? { parentId: recurrence.parentId }
+            ? {
+                parentId: recurrence.parentId,
+                scheduledFor: startOfUTC(when),
+              }
             : undefined,
       });
 
@@ -545,8 +620,6 @@ export async function updateTransaction(req, res) {
         if (!rule.autopost) rule.autopost = "post";
 
         // Recompute nextRunAt if anchors/frequency changed
-        const anchor =
-          rule.lastRunAt || rule.startDate || next.date || current.date;
         rule.nextRunAt = computeNextRunAt(rule.lastRunAt || null, rule) ?? null;
 
         next.recurrence = rule;
@@ -671,6 +744,9 @@ export async function updateTransaction(req, res) {
         setPayload["recurrence"] = {
           ...(current.recurrence || {}),
           parentId: recurrence.parentId,
+          scheduledFor:
+            (current.recurrence && current.recurrence.scheduledFor) ||
+            startOfUTC(next.date ?? current.date),
         };
       }
 
@@ -883,15 +959,28 @@ export async function hardDeleteTransaction(req, res) {
 /* ------------------------- Recurrence Materializer ------------------------ */
 /**
  * POST /transactions/recurrence/run
- * Body: { horizon?: ISODate, aheadDays?: number }
- * - Creates due instances for templates with nextRunAt <= (horizon || now)+aheadDays
+ * Body: { horizon?: ISODate, aheadDays?: number, aheadMonths?: number }
+ * - Creates due instances for templates with nextRunAt <= horizon
+ *   Idempotent: de-dupes per (template, scheduledFor)
  */
 export async function runRecurrences(req, res) {
   try {
     const userId = req.userId;
-    const horizon = req.body.horizon ? new Date(req.body.horizon) : new Date();
+
+    // Build horizon (prefer months if provided)
+    let horizon = req.body.horizon ? new Date(req.body.horizon) : new Date();
+    const aheadMonths = Number(req.body.aheadMonths || 0);
     const aheadDays = Number(req.body.aheadDays || 0);
-    if (aheadDays > 0) horizon.setDate(horizon.getDate() + aheadDays);
+
+    if (!Number.isNaN(aheadMonths) && aheadMonths > 0) {
+      const h = new Date(horizon);
+      h.setMonth(h.getMonth() + aheadMonths);
+      horizon = h;
+    } else if (!Number.isNaN(aheadDays) && aheadDays > 0) {
+      const h = new Date(horizon);
+      h.setDate(h.getDate() + aheadDays);
+      horizon = h;
+    }
 
     const templates = await Transaction.find({
       userId,
@@ -917,73 +1006,91 @@ export async function runRecurrences(req, res) {
         .select("_id currency")
         .lean();
 
-      if (!acct) {
-        // skip if account missing
-        continue;
-      }
+      if (!acct) continue;
       if (
         normalizeCurrency(acct.currency || "") !==
         normalizeCurrency(t.currency || "")
       ) {
-        // skip on currency mismatch
         continue;
       }
 
-      const when = new Date(t.recurrence.nextRunAt);
-      const instance = {
-        userId: t.userId,
-        accountId: t.accountId,
-        categoryId: t.categoryId || null,
-        type: t.type,
-        amountMinor: Math.abs(t.amountMinor),
-        currency: normalizeCurrency(t.currency),
-        date: when,
-        description: t.description || null,
-        notes: t.notes || null,
-        tags: Array.isArray(t.tags) ? t.tags : [],
-        assetSymbol: t.assetSymbol || null,
-        units: typeof t.units === "number" ? t.units : null,
-        isDeleted: false,
-        recurrence: { parentId: t._id },
-      };
+      // Generate as many as needed up to horizon; de-dupe per day
+      let due = new Date(t.recurrence.nextRunAt);
+      let lastRun = null;
 
-      const shouldPost = (t.recurrence.autopost || "post") === "post";
-      const delta = shouldPost ? deltaFor(t.type, instance.amountMinor) : 0;
+      while (due <= horizon) {
+        const scheduledFor = startOfUTC(due);
 
-      try {
-        if (delta !== 0) {
-          await incBalanceOrThrow({
-            accountId: instance.accountId,
-            userId: instance.userId,
-            delta,
-          });
-        }
-        const createdDoc = await Transaction.create(instance);
-        created.push(createdDoc.toObject());
+        // de-dupe check
+        const exists = await Transaction.exists({
+          userId: t.userId,
+          isDeleted: { $ne: true },
+          "recurrence.parentId": t._id,
+          "recurrence.scheduledFor": scheduledFor,
+        });
 
-        // advance template’s nextRunAt
-        const next = computeNextRunAt(t.recurrence.nextRunAt, t.recurrence);
-        await Transaction.updateOne(
-          { _id: t._id },
-          {
-            $set: {
-              "recurrence.lastRunAt": when,
-              "recurrence.nextRunAt": next,
-            },
-          }
-        );
-      } catch (e) {
-        // rollback if instance creation failed after balance
-        if (delta !== 0) {
+        if (!exists) {
+          const instance = {
+            userId: t.userId,
+            accountId: t.accountId,
+            categoryId: t.categoryId || null,
+            type: t.type,
+            amountMinor: Math.abs(t.amountMinor),
+            currency: normalizeCurrency(t.currency),
+            date: due,
+            description: t.description || null,
+            notes: t.notes || null,
+            tags: Array.isArray(t.tags) ? t.tags : [],
+            assetSymbol: t.assetSymbol || null,
+            units: typeof t.units === "number" ? t.units : null,
+            isDeleted: false,
+            recurrence: { parentId: t._id, scheduledFor },
+          };
+
+          const shouldPost = (t.recurrence.autopost || "post") === "post";
+          const delta = shouldPost ? deltaFor(t.type, instance.amountMinor) : 0;
+
           try {
-            await incBalanceOrThrow({
-              accountId: instance.accountId,
-              userId: instance.userId,
-              delta: -delta,
-            });
-          } catch {}
+            if (delta !== 0) {
+              await incBalanceOrThrow({
+                accountId: instance.accountId,
+                userId: instance.userId,
+                delta,
+              });
+            }
+            const createdDoc = await Transaction.create(instance);
+            created.push(createdDoc.toObject());
+            lastRun = new Date(due);
+          } catch (e) {
+            // rollback if instance creation failed after balance
+            if (delta !== 0) {
+              try {
+                await incBalanceOrThrow({
+                  accountId: instance.accountId,
+                  userId: instance.userId,
+                  delta: -delta,
+                });
+              } catch {}
+            }
+          }
         }
+
+        // advance to next scheduled occurrence
+        const next = computeNextRunAt(due, t.recurrence);
+        if (!next) break;
+        due = next;
       }
+
+      // Persist nextRunAt to the first future due; record lastRunAt if we posted any
+      await Transaction.updateOne(
+        { _id: t._id },
+        {
+          $set: {
+            "recurrence.lastRunAt": lastRun || t.recurrence.lastRunAt || null,
+            "recurrence.nextRunAt": due, // 'due' is now the first not-yet-run time
+          },
+        }
+      );
     }
 
     return res.status(200).json({ createdCount: created.length, created });

@@ -36,9 +36,15 @@ const recurrenceRuleSchema = new mongoose.Schema(
     // autopost behavior
     autopost: {
       type: String,
-      enum: ["post", "preview"], // post -> create instance immediately; preview -> only surface as suggestion (no balance)
+      enum: ["post", "preview"], // post -> apply balance; preview -> don't apply
       default: "post",
     },
+
+    // ----------- De-dupe helpers -----------
+    // For templates: stable identity so identical rules aren't saved twice
+    key: { type: String, index: true },
+    // For instances: the due day this instance represents (UTC midnight)
+    scheduledFor: { type: Date, index: true },
   },
   { _id: false }
 );
@@ -75,12 +81,45 @@ const transactionSchema = new mongoose.Schema(
   { timestamps: { createdAt: "createdAt", updatedAt: false } }
 );
 
-/* Helpful compound indexes */
+/* Helpful indexes */
 transactionSchema.index({
   "recurrence.isTemplate": 1,
   userId: 1,
   isDeleted: 1,
 });
 transactionSchema.index({ "recurrence.parentId": 1, userId: 1, isDeleted: 1 });
+
+/* Uniqueness:
+   - Prevent identical templates per user
+   - Prevent duplicate instances for the same (template, scheduledFor)
+*/
+transactionSchema.index(
+  { userId: 1, "recurrence.isTemplate": 1, "recurrence.key": 1, isDeleted: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      "recurrence.isTemplate": true,
+      "recurrence.key": { $exists: true, $ne: null },
+      isDeleted: { $ne: true },
+    },
+  }
+);
+
+transactionSchema.index(
+  {
+    userId: 1,
+    "recurrence.parentId": 1,
+    "recurrence.scheduledFor": 1,
+    isDeleted: 1,
+  },
+  {
+    unique: true,
+    partialFilterExpression: {
+      "recurrence.parentId": { $exists: true, $ne: null },
+      "recurrence.scheduledFor": { $exists: true, $ne: null },
+      isDeleted: { $ne: true },
+    },
+  }
+);
 
 export const Transaction = mongoose.model("Transaction", transactionSchema);

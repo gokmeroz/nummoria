@@ -1,3 +1,5 @@
+/* eslint-disable no-undef */
+/* eslint-disable no-empty */
 /* eslint-disable react-hooks/rules-of-hooks */
 /* eslint-disable no-unused-vars */
 import React, {
@@ -43,6 +45,17 @@ async function createExpenseCategory(name) {
 
 /* ------------------------------ Locale control ------------------------------ */
 const DATE_LANG = "en-US";
+
+/* ----------------------------- Weekday helpers ------------------------------ */
+const WEEKDAY_OPTS = [
+  { label: "Sun", val: 0 },
+  { label: "Mon", val: 1 },
+  { label: "Tue", val: 2 },
+  { label: "Wed", val: 3 },
+  { label: "Thu", val: 4 },
+  { label: "Fri", val: 5 },
+  { label: "Sat", val: 6 },
+];
 
 /* ---------------------------------- Screen ---------------------------------- */
 export default function ExpensesScreen({ accountId }) {
@@ -168,6 +181,9 @@ export default function ExpensesScreen({ accountId }) {
     const filtered = transactions.filter((t) => {
       if ((t.type || "") !== "expense") return false;
 
+      // Hide recurrence templates from the list; show only real instances
+      if (t.recurrence && t.recurrence.isTemplate === true) return false;
+
       if (fAccountId !== "ALL" && t.accountId !== fAccountId) return false;
       if (fCategoryId !== "ALL" && t.categoryId !== fCategoryId) return false;
 
@@ -185,6 +201,7 @@ export default function ExpensesScreen({ accountId }) {
 
       if (needle) {
         const cat = categoriesById.get(t.categoryId)?.name || "";
+        the;
         const acc = accountsById.get(t.accountId)?.name || "";
         const hay = `${t.description || ""} ${t.notes || ""} ${cat} ${acc} ${(
           t.tags || []
@@ -288,7 +305,11 @@ export default function ExpensesScreen({ accountId }) {
     if (!window.confirm("Delete expense?")) return;
     try {
       await api.delete(`/transactions/${tx._id}`);
-      setTransactions((prev) => prev.filter((t) => t._id !== tx._id));
+      // robust compare + server refresh (keeps totals/filters right)
+      setTransactions((prev) =>
+        prev.filter((t) => String(t._id) !== String(tx._id))
+      );
+      await loadAll();
     } catch (e) {
       window.alert(e?.response?.data?.error || e.message || "Error");
     }
@@ -312,6 +333,15 @@ export default function ExpensesScreen({ accountId }) {
   }
 
   /* --------------------------------- Header -------------------------------- */
+  async function runRecurring() {
+    try {
+      await api.post("/transactions/recurrence/run", { aheadDays: 7 });
+      await loadAll();
+    } catch (e) {
+      window.alert(e?.response?.data?.error || e.message || "Run failed");
+    }
+  }
+
   function Header() {
     return (
       <div className="space-y-3 p-4 border-b bg-white">
@@ -524,6 +554,14 @@ export default function ExpensesScreen({ accountId }) {
           >
             Refresh
           </button>
+          <button
+            type="button"
+            onClick={runRecurring}
+            className="px-3 py-2 rounded-xl border"
+            title="Materialize upcoming recurring expenses (7 days)"
+          >
+            Run recurring (7 days)
+          </button>
         </div>
       </div>
     );
@@ -619,12 +657,20 @@ export default function ExpensesScreen({ accountId }) {
     const catName =
       categories.find((c) => c._id === item.categoryId)?.name || "—";
     const accName = accountsById.get(item.accountId)?.name || "—";
+    const isRecurringInstance = !!(item.recurrence && item.recurrence.parentId);
 
     return (
       <div className="p-4 border-b bg-white">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <div className="font-semibold">{catName}</div>
+            <div className="font-semibold flex items-center gap-2">
+              <span>{catName}</span>
+              {isRecurringInstance && (
+                <span className="text-[11px] px-2 py-0.5 rounded-full border border-dashed text-[#2f5d1d]">
+                  Recurring
+                </span>
+              )}
+            </div>
             <div className="text-xs text-gray-500 mb-1">
               <span className="inline-block px-2 py-0.5 rounded-full border">
                 {accName}
@@ -680,7 +726,24 @@ export default function ExpensesScreen({ accountId }) {
     const tagsRef = useRef(null);
     const accountRef = useRef(null);
 
+    // Recurrence UI state
+    const [repeatOn, setRepeatOn] = useState(false);
+    const [frequency, setFrequency] = useState("none"); // none|daily|weekly|monthly|yearly
+    const [interval, setInterval] = useState(1);
+    const [startDate, setStartDate] = useState(form.date);
+    const [byMonthDay, setByMonthDay] = useState("");
+    const [byWeekday, setByWeekday] = useState([]); // array of numbers 0..6
+    const [autopost, setAutopost] = useState("post"); // post|preview
+    // Option B: end by date
+    const [endISO, setEndISO] = useState(""); // YYYY-MM-DD
+
     if (!modalOpen) return null;
+
+    function toggleWeekday(val) {
+      setByWeekday((prev) =>
+        prev.includes(val) ? prev.filter((v) => v !== val) : [...prev, val]
+      );
+    }
 
     const submitFromRefs = async () => {
       const amount = amountRef.current?.value ?? "";
@@ -710,17 +773,55 @@ export default function ExpensesScreen({ accountId }) {
           .filter((s) => s.length > 0),
       };
 
+      // Recurrence template branch (Option B adds endDate)
+      if (repeatOn && frequency !== "none") {
+        const rule = {
+          isTemplate: true,
+          frequency,
+          interval: Math.max(1, Number(interval || 1)),
+          startDate: new Date(startDate || date).toISOString(),
+          autopost,
+        };
+        if (frequency === "monthly" && byMonthDay) {
+          const n = Number(byMonthDay);
+          if (Number.isNaN(n) || n < 1 || n > 31)
+            return window.alert("byMonthDay must be 1..31");
+          rule.byMonthDay = n;
+        }
+        if (frequency === "weekly" && byWeekday.length > 0) {
+          rule.byWeekday = byWeekday.slice().sort();
+        }
+        // ---- Option B: fixed end date ----
+        if (endISO) {
+          const d = new Date(endISO);
+          if (Number.isNaN(d.getTime()))
+            return window.alert("Invalid end date");
+          rule.endDate = d.toISOString(); // inclusive stop on backend side
+        }
+        payload.recurrence = rule;
+      }
+
       try {
         if (!editing) {
           const { data } = await api.post("/transactions", payload);
-          setTransactions((prev) => [data, ...prev]);
+
+          // If a template was created, best-effort: materialize due now
+          if (data?.recurrence?.isTemplate === true) {
+            try {
+              await api.post("/transactions/recurrence/run", { aheadDays: 0 });
+            } catch {}
+            await loadAll();
+          } else {
+            setTransactions((prev) => [data, ...prev]);
+          }
         } else {
+          // Editing an existing instance
           const { data } = await api.put(
             `/transactions/${editing._id}`,
             payload
           );
           setTransactions((prev) =>
-            prev.map((t) => (t._id === data._id ? data : t))
+            prev.map((t) => (String(t._id) === String(data._id) ? data : t))
           );
         }
         setModalOpen(false);
@@ -829,6 +930,142 @@ export default function ExpensesScreen({ accountId }) {
               className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
             />
           </div>
+
+          {/* --------------------------- Recurrence UI --------------------------- */}
+          {!editing && (
+            <div className="mt-2 border-t pt-3">
+              <div className="flex items-center justify-between">
+                <div className="font-semibold">Repeat</div>
+                <label className="inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={repeatOn}
+                    onChange={(e) => setRepeatOn(e.target.checked)}
+                  />
+                  <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-[#4f772d] relative">
+                    <div className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition peer-checked:translate-x-5" />
+                  </div>
+                </label>
+              </div>
+
+              {repeatOn && (
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-sm text-gray-600">Frequency</label>
+                    <select
+                      className="w-full border rounded-lg px-3 py-2 bg-white"
+                      value={frequency}
+                      onChange={(e) => setFrequency(e.target.value)}
+                    >
+                      <option value="none">—</option>
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                      <option value="yearly">Yearly</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-sm text-gray-600">Every</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={interval}
+                      onChange={(e) => setInterval(e.target.value)}
+                      className="w-full border rounded-lg px-3 py-2 bg-white"
+                      placeholder="e.g., 1"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-sm text-gray-600">Start date</label>
+                    <input
+                      type="date"
+                      lang={DATE_LANG}
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="w-full border rounded-lg px-3 py-2 bg-white"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-sm text-gray-600">Autopost</label>
+                    <select
+                      className="w-full border rounded-lg px-3 py-2 bg-white"
+                      value={autopost}
+                      onChange={(e) => setAutopost(e.target.value)}
+                    >
+                      <option value="post">Post automatically</option>
+                      <option value="preview">Preview only</option>
+                    </select>
+                  </div>
+
+                  {frequency === "monthly" && (
+                    <div className="space-y-1 md:col-span-2">
+                      <label className="text-sm text-gray-600">
+                        On day of month
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={31}
+                        value={byMonthDay}
+                        onChange={(e) => setByMonthDay(e.target.value)}
+                        className="w-full border rounded-lg px-3 py-2 bg-white"
+                        placeholder="1..31"
+                      />
+                      <div className="text-xs text-gray-500">
+                        We’ll clamp to the last day for shorter months.
+                      </div>
+                    </div>
+                  )}
+
+                  {frequency === "weekly" && (
+                    <div className="space-y-1 md:col-span-2">
+                      <label className="text-sm text-gray-600">
+                        Days of week
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {WEEKDAY_OPTS.map((w) => (
+                          <button
+                            type="button"
+                            key={w.val}
+                            onClick={() => toggleWeekday(w.val)}
+                            className={`px-3 py-1.5 rounded-full border text-sm ${
+                              byWeekday.includes(w.val)
+                                ? "border-[#4f772d] bg-[#e8f5e9] text-[#2f5d1d]"
+                                : "border-gray-300 bg-white text-gray-800"
+                            }`}
+                          >
+                            {w.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Option B: End date */}
+                  <div className="space-y-1 md:col-span-2">
+                    <label className="text-sm text-gray-600">
+                      End date (inclusive)
+                    </label>
+                    <input
+                      type="date"
+                      lang={DATE_LANG}
+                      value={endISO}
+                      onChange={(e) => setEndISO(e.target.value)}
+                      className="w-full border rounded-lg px-3 py-2 bg-white"
+                      placeholder="YYYY-MM-DD"
+                    />
+                    <div className="text-xs text-gray-500">
+                      The series will stop once a due date is after this day.
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex gap-3 justify-end pt-2">
             <button
