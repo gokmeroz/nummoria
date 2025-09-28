@@ -7,6 +7,7 @@ import {
   updateTransaction,
   softDeleteTransaction,
   hardDeleteTransaction,
+  runRecurrences,
 } from "../controllers/transactionController.js";
 
 const router = express.Router();
@@ -19,4 +20,5 @@ router.post("/", createTransaction);
 router.put("/:id", updateTransaction);
 router.delete("/:id", softDeleteTransaction); // Soft delete
 router.delete("/:id/hard", hardDeleteTransaction); // Hard delete
+router.post("/recurrences/run", runRecurrences); // Endpoint to trigger recurrence processing
 export default router;

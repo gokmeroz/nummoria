@@ -44,6 +44,71 @@ async function incBalanceOrThrow({ accountId, userId, delta }) {
   if (res.matchedCount === 0) throw new Error("Account not found");
 }
 
+/* -------------------- Recurrence date utilities --------------------------- */
+function addInterval(date, { frequency, interval = 1 }) {
+  const d = new Date(date);
+  switch (frequency) {
+    case "daily":
+      d.setDate(d.getDate() + interval);
+      break;
+    case "weekly":
+      d.setDate(d.getDate() + 7 * interval);
+      break;
+    case "monthly": {
+      const day = d.getDate();
+      const targetMonth = d.getMonth() + interval;
+      d.setMonth(targetMonth);
+      // JS auto-clamps when original day doesn't exist in new month
+      if (d.getDate() < day) {
+        // already clamped
+      }
+      break;
+    }
+    case "yearly":
+      d.setFullYear(d.getFullYear() + interval);
+      break;
+  }
+  return d;
+}
+
+function computeNextRunAt(prev, rule) {
+  if (!rule || rule.frequency === "none") return null;
+
+  // initial seed
+  if (!prev) {
+    const seed = rule.startDate ? new Date(rule.startDate) : new Date();
+    return seed;
+  }
+
+  // advance by interval
+  let next = addInterval(prev, rule);
+
+  // monthly: pin to specific day if provided
+  if (rule.frequency === "monthly" && rule.byMonthDay) {
+    const y = next.getFullYear();
+    const m = next.getMonth();
+    const maxDay = new Date(y, m + 1, 0).getDate();
+    next.setDate(Math.min(rule.byMonthDay, maxDay));
+  }
+
+  // weekly: snap forward to nearest allowed weekday
+  if (
+    rule.frequency === "weekly" &&
+    Array.isArray(rule.byWeekday) &&
+    rule.byWeekday.length > 0
+  ) {
+    const desired = new Set(rule.byWeekday);
+    while (!desired.has(next.getDay())) {
+      next.setDate(next.getDate() + 1);
+    }
+  }
+
+  // end bounds
+  if (rule.endDate && next > new Date(rule.endDate)) return null;
+
+  return next;
+}
+
 /* --------------------------------- GETs ----------------------------------- */
 export async function getTransactions(req, res) {
   try {
@@ -58,6 +123,16 @@ export async function getTransactions(req, res) {
     }
     if (req.query.categoryId && ObjectId.isValid(req.query.categoryId)) {
       filter.categoryId = req.query.categoryId;
+    }
+
+    // Optional filters for recurrence
+    if (req.query.isTemplate === "true") {
+      filter["recurrence.isTemplate"] = true;
+    } else if (req.query.isTemplate === "false") {
+      filter["recurrence.isTemplate"] = { $ne: true };
+    }
+    if (req.query.parentId && ObjectId.isValid(req.query.parentId)) {
+      filter["recurrence.parentId"] = req.query.parentId;
     }
 
     const transactions = await Transaction.find(filter).lean();
@@ -105,6 +180,7 @@ export async function createTransaction(req, res) {
       tags,
       assetSymbol,
       units,
+      recurrence, // optional
     } = req.body;
 
     // Basic validation
@@ -178,7 +254,53 @@ export async function createTransaction(req, res) {
       });
     }
 
-    // Compute delta; apply balance first, then create doc. Roll back if doc create fails.
+    const isTemplate =
+      recurrence &&
+      recurrence.isTemplate === true &&
+      recurrence.frequency &&
+      recurrence.frequency !== "none";
+
+    // TEMPLATES: create rule row only (no balance impact)
+    if (isTemplate) {
+      const rule = {
+        isTemplate: true,
+        parentId: null,
+        frequency: recurrence.frequency,
+        interval: Math.max(1, Number(recurrence.interval || 1)),
+        startDate: recurrence.startDate ? new Date(recurrence.startDate) : when,
+        endDate: recurrence.endDate ? new Date(recurrence.endDate) : undefined,
+        maxOccurrences: recurrence.maxOccurrences,
+        byMonthDay: recurrence.byMonthDay,
+        byWeekday: Array.isArray(recurrence.byWeekday)
+          ? recurrence.byWeekday
+          : undefined,
+        autopost: recurrence.autopost || "post",
+      };
+      rule.nextRunAt = computeNextRunAt(null, rule);
+
+      const templateDoc = await Transaction.create({
+        userId: req.userId,
+        accountId,
+        categoryId: categoryId || null,
+        type,
+        amountMinor: Math.abs(amountMinor), // copied to instances later
+        currency: cur,
+        date: when, // anchor
+        description: description || null,
+        notes: notes || null,
+        tags: cleanTags,
+        assetSymbol: assetSymbol
+          ? String(assetSymbol).toUpperCase().trim()
+          : null,
+        units: typeof units === "number" ? units : null,
+        isDeleted: false,
+        recurrence: rule,
+      });
+
+      return res.status(201).json(templateDoc.toObject());
+    }
+
+    // ONE-OFF (or generated instance created manually): affects balance
     const abs = Math.abs(amountMinor);
     const delta = deltaFor(type, abs);
 
@@ -203,20 +325,27 @@ export async function createTransaction(req, res) {
           : null,
         units: typeof units === "number" ? units : null,
         isDeleted: false,
+        // if client sends recurrence.parentId explicitly for a manual instance:
+        recurrence:
+          recurrence && recurrence.parentId
+            ? { parentId: recurrence.parentId }
+            : undefined,
       });
 
       return res.status(201).json(doc.toObject());
     } catch (innerErr) {
       // rollback balance if tx create failed
-      if (delta !== 0) {
+      const abs2 = Math.abs(amountMinor);
+      const d2 = deltaFor(type, abs2);
+      if (d2 !== 0) {
         try {
           await incBalanceOrThrow({
             accountId,
             userId: req.userId,
-            delta: -delta,
+            delta: -d2,
           });
         } catch {
-          // swallow rollback error to not mask the original error
+          // swallow rollback error
         }
       }
       throw innerErr;
@@ -244,7 +373,6 @@ export async function updateTransaction(req, res) {
       return res.status(404).json({ error: "Transaction not found" });
     }
 
-    // Build next state from inputs
     const {
       accountId,
       categoryId,
@@ -257,6 +385,7 @@ export async function updateTransaction(req, res) {
       tags,
       assetSymbol,
       units,
+      recurrence, // optional update
     } = req.body;
 
     const next = { ...current };
@@ -396,6 +525,62 @@ export async function updateTransaction(req, res) {
         ? Math.abs(next.amountMinor)
         : Math.abs(current.amountMinor);
 
+    // If current row is a TEMPLATE: no balance math; just update fields + rule.
+    const isCurrentTemplate =
+      current.recurrence && current.recurrence.isTemplate === true;
+
+    if (isCurrentTemplate) {
+      // Validate and rebuild rule if recurrence provided
+      if (recurrence !== undefined) {
+        const rule = {
+          ...current.recurrence,
+          ...recurrence,
+        };
+
+        // Normalize fields
+        if (rule.startDate) rule.startDate = new Date(rule.startDate);
+        if (rule.endDate) rule.endDate = new Date(rule.endDate);
+        rule.interval = Math.max(1, Number(rule.interval || 1));
+        if (!rule.frequency) rule.frequency = "none";
+        if (!rule.autopost) rule.autopost = "post";
+
+        // Recompute nextRunAt if anchors/frequency changed
+        const anchor =
+          rule.lastRunAt || rule.startDate || next.date || current.date;
+        rule.nextRunAt = computeNextRunAt(rule.lastRunAt || null, rule) ?? null;
+
+        next.recurrence = rule;
+      }
+
+      const updated = await Transaction.findOneAndUpdate(
+        { _id: id, userId: req.userId, isDeleted: { $ne: true } },
+        {
+          $set: {
+            accountId: next.accountId,
+            categoryId: next.categoryId ?? null,
+            type: next.type,
+            amountMinor: Math.abs(next.amountMinor),
+            currency: next.currency,
+            date: next.date ?? current.date,
+            description: next.description ?? null,
+            notes: next.notes ?? null,
+            tags: next.tags ?? [],
+            assetSymbol: next.assetSymbol ?? null,
+            units: next.units ?? null,
+            recurrence: next.recurrence ?? current.recurrence,
+          },
+        },
+        { new: true, runValidators: true }
+      ).lean();
+
+      if (!updated) {
+        return res.status(404).json({ error: "Transaction not found" });
+      }
+      return res.status(200).json(updated);
+    }
+
+    // Otherwise: INSTANCE or ONE-OFF -> proceed with balance math
+
     // Load accounts and validate currencies
     const oldAcct = await getAccountOrThrow({
       accountId: current.accountId,
@@ -467,23 +652,31 @@ export async function updateTransaction(req, res) {
       }
 
       // Persist the transaction changes
+      const setPayload = {
+        accountId: next.accountId,
+        categoryId: next.categoryId ?? null,
+        type: next.type,
+        amountMinor: Math.abs(next.amountMinor),
+        currency: next.currency,
+        date: next.date ?? current.date,
+        description: next.description ?? null,
+        notes: next.notes ?? null,
+        tags: next.tags ?? [],
+        assetSymbol: next.assetSymbol ?? null,
+        units: next.units ?? null,
+      };
+
+      // Allow linking instance to a template (optional)
+      if (recurrence && recurrence.parentId) {
+        setPayload["recurrence"] = {
+          ...(current.recurrence || {}),
+          parentId: recurrence.parentId,
+        };
+      }
+
       const updated = await Transaction.findOneAndUpdate(
         { _id: id, userId: req.userId, isDeleted: { $ne: true } },
-        {
-          $set: {
-            accountId: next.accountId,
-            categoryId: next.categoryId ?? null,
-            type: next.type,
-            amountMinor: Math.abs(next.amountMinor),
-            currency: next.currency,
-            date: next.date ?? current.date,
-            description: next.description ?? null,
-            notes: next.notes ?? null,
-            tags: next.tags ?? [],
-            assetSymbol: next.assetSymbol ?? null,
-            units: next.units ?? null,
-          },
-        },
+        { $set: setPayload },
         { new: true, runValidators: true }
       ).lean();
 
@@ -548,13 +741,24 @@ export async function softDeleteTransaction(req, res) {
       userId: req.userId,
       isDeleted: { $ne: true },
     })
-      .select("_id accountId type amountMinor currency")
+      .select("_id accountId type amountMinor currency recurrence")
       .lean();
 
     if (!tx) {
       return res
         .status(404)
         .json({ error: "Transaction not found or already deleted" });
+    }
+
+    // If template: just stop future generations; do not revert any balances
+    if (tx.recurrence && tx.recurrence.isTemplate === true) {
+      await Transaction.updateOne(
+        { _id: tx._id },
+        { $set: { isDeleted: true } }
+      );
+      return res
+        .status(200)
+        .json({ message: "Template soft-deleted", id, template: true });
     }
 
     const acct = await getAccountOrThrow({
@@ -616,10 +820,24 @@ export async function hardDeleteTransaction(req, res) {
       _id: id,
       userId: req.userId,
     })
-      .select("_id accountId type amountMinor currency isDeleted")
+      .select("_id accountId type amountMinor currency isDeleted recurrence")
       .lean();
 
     if (!tx) return res.status(404).json({ error: "Transaction not found" });
+
+    // Templates: just remove, no balance impact
+    if (tx.recurrence && tx.recurrence.isTemplate === true) {
+      const result = await Transaction.deleteOne({
+        _id: id,
+        userId: req.userId,
+      });
+      if (result.deletedCount === 0) {
+        return res.status(404).json({ error: "Transaction not found" });
+      }
+      return res
+        .status(200)
+        .json({ message: "Template permanently deleted", id, template: true });
+    }
 
     // Only revert if it wasn't soft-deleted already
     if (tx.isDeleted !== true) {
@@ -659,5 +877,117 @@ export async function hardDeleteTransaction(req, res) {
       .json({ message: "Transaction permanently deleted", id });
   } catch (err) {
     return res.status(400).json({ error: err.message || "Hard delete failed" });
+  }
+}
+
+/* ------------------------- Recurrence Materializer ------------------------ */
+/**
+ * POST /transactions/recurrence/run
+ * Body: { horizon?: ISODate, aheadDays?: number }
+ * - Creates due instances for templates with nextRunAt <= (horizon || now)+aheadDays
+ */
+export async function runRecurrences(req, res) {
+  try {
+    const userId = req.userId;
+    const horizon = req.body.horizon ? new Date(req.body.horizon) : new Date();
+    const aheadDays = Number(req.body.aheadDays || 0);
+    if (aheadDays > 0) horizon.setDate(horizon.getDate() + aheadDays);
+
+    const templates = await Transaction.find({
+      userId,
+      isDeleted: { $ne: true },
+      "recurrence.isTemplate": true,
+      "recurrence.frequency": { $ne: "none" },
+      "recurrence.nextRunAt": { $lte: horizon },
+    })
+      .select(
+        "_id userId accountId categoryId type amountMinor currency description notes tags assetSymbol units date recurrence"
+      )
+      .lean();
+
+    const created = [];
+
+    for (const t of templates) {
+      // ensure account & currency are valid
+      const acct = await Account.findOne({
+        _id: t.accountId,
+        userId: t.userId,
+        isDeleted: { $ne: true },
+      })
+        .select("_id currency")
+        .lean();
+
+      if (!acct) {
+        // skip if account missing
+        continue;
+      }
+      if (
+        normalizeCurrency(acct.currency || "") !==
+        normalizeCurrency(t.currency || "")
+      ) {
+        // skip on currency mismatch
+        continue;
+      }
+
+      const when = new Date(t.recurrence.nextRunAt);
+      const instance = {
+        userId: t.userId,
+        accountId: t.accountId,
+        categoryId: t.categoryId || null,
+        type: t.type,
+        amountMinor: Math.abs(t.amountMinor),
+        currency: normalizeCurrency(t.currency),
+        date: when,
+        description: t.description || null,
+        notes: t.notes || null,
+        tags: Array.isArray(t.tags) ? t.tags : [],
+        assetSymbol: t.assetSymbol || null,
+        units: typeof t.units === "number" ? t.units : null,
+        isDeleted: false,
+        recurrence: { parentId: t._id },
+      };
+
+      const shouldPost = (t.recurrence.autopost || "post") === "post";
+      const delta = shouldPost ? deltaFor(t.type, instance.amountMinor) : 0;
+
+      try {
+        if (delta !== 0) {
+          await incBalanceOrThrow({
+            accountId: instance.accountId,
+            userId: instance.userId,
+            delta,
+          });
+        }
+        const createdDoc = await Transaction.create(instance);
+        created.push(createdDoc.toObject());
+
+        // advance template’s nextRunAt
+        const next = computeNextRunAt(t.recurrence.nextRunAt, t.recurrence);
+        await Transaction.updateOne(
+          { _id: t._id },
+          {
+            $set: {
+              "recurrence.lastRunAt": when,
+              "recurrence.nextRunAt": next,
+            },
+          }
+        );
+      } catch (e) {
+        // rollback if instance creation failed after balance
+        if (delta !== 0) {
+          try {
+            await incBalanceOrThrow({
+              accountId: instance.accountId,
+              userId: instance.userId,
+              delta: -delta,
+            });
+          } catch {}
+        }
+      }
+    }
+
+    return res.status(200).json({ createdCount: created.length, created });
+  } catch (err) {
+    return res.status(400).json({ error: err.message || "Run failed" });
   }
 }
