@@ -22,9 +22,6 @@ export default function App() {
     localStorage.removeItem("token");
     window.location.href = "/login";
   }
-  const me = {
-    name: localStorage.getItem("name") || "",
-  };
 
   const myDefaultUserId = localStorage.getItem("defaultId");
   return (
@@ -35,7 +32,7 @@ export default function App() {
 
       {/* Protected routes inside Layout */}
       <Route element={<Guard />}>
-        <Route element={<Layout me={me} onLogout={handleLogout} />}>
+        <Route element={<Layout onLogout={handleLogout} />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/user" element={<UserPage />} />
           <Route

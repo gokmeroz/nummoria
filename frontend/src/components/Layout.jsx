@@ -1,8 +1,33 @@
+/* eslint-disable no-unused-vars */
 // frontend/src/components/Layout.jsx
+import { useEffect, useState } from "react";
+import api from "../lib/api";
+
 import { Link, Outlet } from "react-router-dom";
 import Footer from "./Footer";
 
-export default function Layout({ me, onLogout }) {
+export default function Layout({ onLogout }) {
+  const [me, setMe] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    async function fetchMe() {
+      try {
+        const { data } = await api.get("/me"); // backend route
+        setMe(data);
+      } catch (e) {
+        setErr(e.response?.data?.error || "Failed to fetch user");
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchMe();
+  }, []);
+
+  if (loading) return <div className="p-4">Loading...</div>;
+  if (err) return <div className="p-4 text-red-500">{err}</div>;
+
   return (
     <div className="min-h-dvh flex flex-col">
       {/* NAVBAR */}
