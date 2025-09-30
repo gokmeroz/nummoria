@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars */
+/* eslint-disable no-undef */
 import { Routes, Route } from "react-router-dom";
 import Guard from "./components/Guard";
 import Layout from "./components/Layout";
@@ -20,8 +22,10 @@ export default function App() {
     localStorage.removeItem("token");
     window.location.href = "/login";
   }
+  const me = {
+    name: localStorage.getItem("name") || "",
+  };
 
-  const me = { name: "Göktuğ Mert Özdoğan" }; // later fetch from /me
   const myDefaultUserId = localStorage.getItem("defaultId");
   return (
     <Routes>

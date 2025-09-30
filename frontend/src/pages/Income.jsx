@@ -1,3 +1,4 @@
+/* eslint-disable no-empty */
 /* eslint-disable react-hooks/rules-of-hooks */
 /* eslint-disable no-unused-vars */
 import React, {
@@ -26,7 +27,22 @@ async function createIncomeCategory(name) {
 }
 
 /* ------------------------------ Locale control ------------------------------ */
-const DATE_LANG = "en-US"; // change to "en-GB" if you prefer DD/MM/YYYY
+const DATE_LANG = "en-US";
+
+/* ----------------------------- Date helpers -------------------------------- */
+function startOfUTC(dateLike) {
+  const d = new Date(dateLike);
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+}
+function fmtDateUTC(dateLike) {
+  const d = new Date(dateLike);
+  return d.toLocaleDateString(DATE_LANG, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
 
 /* ---------------------------------- Screen ---------------------------------- */
 export default function IncomeScreen({ accountId }) {
@@ -51,6 +67,7 @@ export default function IncomeScreen({ accountId }) {
   const [showFilters, setShowFilters] = useState(false);
 
   const [sortKey, setSortKey] = useState("date_desc");
+  const [showUpcoming, setShowUpcoming] = useState(false);
 
   // modal state (create / edit)
   const [modalOpen, setModalOpen] = useState(false);
@@ -61,6 +78,7 @@ export default function IncomeScreen({ accountId }) {
     amount: "",
     currency: "USD",
     date: new Date().toISOString().slice(0, 10),
+    nextDate: "", // NEW
     categoryId: "",
     description: "",
     tagsCsv: "",
@@ -86,7 +104,7 @@ export default function IncomeScreen({ accountId }) {
     return (minor / Math.pow(10, decimals)).toFixed(decimals);
   }
   const fmtMoney = (minor, cur = "USD") =>
-    new Intl.NumberFormat(undefined, {
+    new Intl.NumberFormat(DATE_LANG, {
       style: "currency",
       currency: cur || "USD",
     }).format((minor || 0) / Math.pow(10, decimalsForCurrency(cur || "USD")));
@@ -119,7 +137,7 @@ export default function IncomeScreen({ accountId }) {
       setLoading(true);
       setErr("");
       const [txRes, catRes, accRes] = await Promise.all([
-        api.get("/transactions"),
+        api.get("/transactions", { params: { type: "income" } }),
         api.get("/categories"),
         api.get("/accounts"),
       ]);
@@ -142,8 +160,8 @@ export default function IncomeScreen({ accountId }) {
 
   /* ------------------------------- Filtering -------------------------------- */
   const rows = useMemo(() => {
-    const start = fStartISO ? new Date(`${fStartISO}T00:00:00`) : null;
-    const end = fEndISO ? new Date(`${fEndISO}T23:59:59.999`) : null;
+    const start = fStartISO ? new Date(`${fStartISO}T00:00:00.000Z`) : null;
+    const end = fEndISO ? new Date(`${fEndISO}T23:59:59.999Z`) : null;
 
     const minNum = fMin !== "" ? Number(fMin) : null; // major
     const maxNum = fMax !== "" ? Number(fMax) : null; // major
@@ -151,8 +169,10 @@ export default function IncomeScreen({ accountId }) {
 
     const filtered = transactions.filter((t) => {
       if ((t.type || "") !== "income") return false;
-      if (fAccountId !== "ALL" && t.accountId !== fAccountId) return false;
-      if (fCategoryId !== "ALL" && t.categoryId !== fCategoryId) return false;
+      if (fAccountId !== "ALL" && String(t.accountId) !== String(fAccountId))
+        return false;
+      if (fCategoryId !== "ALL" && String(t.categoryId) !== String(fCategoryId))
+        return false;
 
       const cur = t.currency || "USD";
       if (fCurrency !== "ALL" && cur !== fCurrency) return false;
@@ -226,13 +246,108 @@ export default function IncomeScreen({ accountId }) {
   const totals = useMemo(() => {
     const byCur = {};
     for (const t of rows) {
-      byCur[t.currency] = (byCur[t.currency] || 0) + Number(t.amountMinor || 0);
+      const cur = t.currency || "USD";
+      byCur[cur] = (byCur[cur] || 0) + Number(t.amountMinor || 0);
     }
     return Object.entries(byCur).map(([cur, minor]) => ({
       cur,
-      major: minorToMajor(minor, cur),
+      major: (Number(minor) / Math.pow(10, decimalsForCurrency(cur))).toFixed(
+        decimalsForCurrency(cur)
+      ),
     }));
   }, [rows]);
+
+  /* --------------------------- Upcoming (planned) --------------------------- */
+  const upcoming = useMemo(() => {
+    const today = startOfUTC(new Date());
+    const keyOf = (t) =>
+      [
+        t.accountId,
+        t.categoryId,
+        t.type,
+        t.amountMinor,
+        t.currency,
+        startOfUTC(t.date).toISOString(),
+        (t.description || "").trim(),
+      ].join("|");
+
+    // Actual future rows from DB
+    const map = new Map();
+    for (const t of transactions) {
+      if (t.type !== "income") continue;
+      const dt = new Date(t.date);
+      if (dt > today) {
+        map.set(keyOf(t), { ...t, __kind: "actual" });
+      }
+    }
+
+    // Virtual rows from nextDate (not yet added)
+    for (const t of transactions) {
+      if (t.type !== "income" || !t.nextDate) continue;
+      const nd = new Date(t.nextDate);
+      if (nd <= today) continue;
+
+      const v = {
+        ...t,
+        _id: `virtual-${t._id}`,
+        date: nd.toISOString(),
+        __kind: "virtual",
+        __parentId: t._id,
+      };
+      const k = keyOf(v);
+      if (!map.has(k)) map.set(k, v);
+    }
+
+    // Apply filters
+    const arr = Array.from(map.values()).filter((t) => {
+      if (fAccountId !== "ALL" && String(t.accountId) !== String(fAccountId))
+        return false;
+      if (fCategoryId !== "ALL" && String(t.categoryId) !== String(fCategoryId))
+        return false;
+      const cur = t.currency || "USD";
+      if (fCurrency !== "ALL" && cur !== fCurrency) return false;
+
+      const minNum = fMin !== "" ? Number(fMin) : null;
+      const maxNum = fMax !== "" ? Number(fMax) : null;
+      const major =
+        Number(t.amountMinor || 0) / Math.pow(10, decimalsForCurrency(cur));
+      if (minNum !== null && major < minNum) return false;
+      if (maxNum !== null && major > maxNum) return false;
+
+      const needle = q.trim().toLowerCase();
+      if (needle) {
+        const cat = categoriesById.get(t.categoryId)?.name || "";
+        const acc = accountsById.get(t.accountId)?.name || "";
+        const hay = `${t.description || ""} ${t.notes || ""} ${cat} ${acc} ${(
+          t.tags || []
+        ).join(" ")}`.toLowerCase();
+        if (!hay.includes(needle)) return false;
+      }
+
+      const start = fStartISO ? new Date(`${fStartISO}T00:00:00.000Z`) : null;
+      const end = fEndISO ? new Date(`${fEndISO}T23:59:59.999Z`) : null;
+      const dt = new Date(t.date);
+      if (start && dt < start) return false;
+      if (end && dt > end) return false;
+
+      return true;
+    });
+
+    arr.sort((a, b) => new Date(a.date) - new Date(b.date));
+    return arr;
+  }, [
+    transactions,
+    q,
+    fStartISO,
+    fEndISO,
+    fAccountId,
+    fCategoryId,
+    fCurrency,
+    fMin,
+    fMax,
+    categoriesById,
+    accountsById,
+  ]);
 
   /* --------------------------------- CRUD Tx -------------------------------- */
   function openCreate() {
@@ -245,10 +360,27 @@ export default function IncomeScreen({ accountId }) {
       amount: "",
       currency: defaultCur,
       date: new Date().toISOString().slice(0, 10),
+      nextDate: "", // NEW
       categoryId: categories[0]?._id || "",
       description: "",
       tagsCsv: "",
       accountId: defaultAccId,
+    });
+    setModalOpen(true);
+  }
+
+  // Seed "create" from a planned row (virtual)
+  function openCreateSeed(seed) {
+    setEditing(null);
+    setForm({
+      amount: minorToMajor(seed.amountMinor, seed.currency),
+      currency: seed.currency,
+      date: new Date(seed.date).toISOString().slice(0, 10),
+      nextDate: "", // do not auto-chain
+      categoryId: seed.categoryId || "",
+      description: seed.description || "",
+      tagsCsv: (seed.tags || []).join(", "),
+      accountId: seed.accountId || accountId || accounts[0]?._id || "",
     });
     setModalOpen(true);
   }
@@ -259,6 +391,9 @@ export default function IncomeScreen({ accountId }) {
       amount: minorToMajor(tx.amountMinor, tx.currency),
       currency: tx.currency,
       date: new Date(tx.date).toISOString().slice(0, 10),
+      nextDate: tx.nextDate
+        ? new Date(tx.nextDate).toISOString().slice(0, 10)
+        : "", // NEW
       categoryId: tx.categoryId || "",
       description: tx.description || "",
       tagsCsv: (tx.tags || []).join(", "),
@@ -271,7 +406,10 @@ export default function IncomeScreen({ accountId }) {
     if (!window.confirm("Delete income?")) return;
     try {
       await api.delete(`/transactions/${tx._id}`);
-      setTransactions((prev) => prev.filter((t) => t._id !== tx._id));
+      setTransactions((prev) =>
+        prev.filter((t) => String(t._id) !== String(tx._id))
+      );
+      await loadAll();
     } catch (e) {
       window.alert(e?.response?.data?.error || e.message || "Error");
     }
@@ -301,7 +439,19 @@ export default function IncomeScreen({ accountId }) {
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Income</h1>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setShowUpcoming((v) => !v)}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border"
+              title="Show upcoming (planned / future) income"
+            >
+              <span>Upcoming</span>
+              <span className="text-xs rounded-full px-2 py-0.5 bg-[#e8f5e9] text-[#2f5d1d] border">
+                {upcoming.length}
+              </span>
+            </button>
+
             <button
               type="button"
               onClick={() => setShowFilters((v) => !v)}
@@ -597,17 +747,189 @@ export default function IncomeScreen({ accountId }) {
     );
   }
 
+  /* --------------------------------- Upcoming ------------------------------- */
+  function UpcomingPanel() {
+    if (!showUpcoming) return null;
+
+    async function addVirtual(v) {
+      try {
+        const { data } = await api.post("/transactions", {
+          accountId: v.accountId,
+          categoryId: v.categoryId,
+          type: "income",
+          amountMinor: v.amountMinor,
+          currency: v.currency,
+          date: new Date(v.date).toISOString(),
+          description: v.description || null,
+          tags: v.tags || [],
+        });
+
+        // Clear parent's nextDate so it no longer appears as virtual
+        if (v.__kind === "virtual" && v.__parentId) {
+          try {
+            await api.put(`/transactions/${v.__parentId}`, { nextDate: null });
+          } catch {}
+        }
+
+        const createdArr = Array.isArray(data?.created) ? data.created : [data];
+        setTransactions((prev) => [...createdArr, ...prev]);
+        await loadAll();
+      } catch (e) {
+        window.alert(e?.response?.data?.error || e.message || "Add failed");
+      }
+    }
+
+    async function deleteOne(item) {
+      if (item.__kind === "virtual") {
+        try {
+          await api.put(`/transactions/${item.__parentId}`, { nextDate: null });
+          await loadAll();
+        } catch (e) {
+          window.alert(
+            e?.response?.data?.error || e.message || "Delete failed"
+          );
+        }
+      } else {
+        await softDelete(item);
+      }
+    }
+
+    return (
+      <div className="m-4 p-4 border rounded-xl bg-white">
+        <div className="flex items-center justify-between mb-3">
+          <div className="font-semibold">
+            Upcoming income ({upcoming.length})
+          </div>
+          <button
+            type="button"
+            className="text-sm underline"
+            onClick={() => setShowUpcoming(false)}
+          >
+            Close
+          </button>
+        </div>
+
+        {upcoming.length === 0 ? (
+          <div className="text-gray-600 text-sm">
+            Nothing upcoming within your filters.
+          </div>
+        ) : (
+          <div className="divide-y">
+            {upcoming.map((u) => {
+              const catName =
+                categories.find((c) => c._id === u.categoryId)?.name || "—";
+              const accName = accountsById.get(u.accountId)?.name || "—";
+              const badge =
+                u.__kind === "virtual" ? (
+                  <span className="text-[11px] px-2 py-0.5 rounded-full border border-dashed text-[#2f5d1d]">
+                    Planned (not added)
+                  </span>
+                ) : (
+                  <span className="text-[11px] px-2 py-0.5 rounded-full border text-gray-600">
+                    In database
+                  </span>
+                );
+
+              return (
+                <div
+                  key={u._id}
+                  className="py-3 flex items-start justify-between gap-4"
+                >
+                  <div className="min-w-0">
+                    <div className="font-semibold flex items-center gap-2">
+                      <span>{catName}</span>
+                      {badge}
+                    </div>
+                    <div className="text-xs text-gray-500 mb-1">
+                      <span className="inline-block px-2 py-0.5 rounded-full border">
+                        {accName}
+                      </span>
+                    </div>
+                    <div className="text-sm text-gray-600 truncate">
+                      {u.description || "No description"}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      Scheduled: {fmtDateUTC(u.date)}
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <div className="font-bold">
+                      {minorToMajor(u.amountMinor, u.currency)} {u.currency}
+                    </div>
+                    <div className="mt-2 flex flex-wrap justify-end gap-2">
+                      {u.__kind === "virtual" ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => addVirtual(u)}
+                            className="px-3 py-1 rounded-lg bg-[#4f772d] text-white"
+                          >
+                            Add
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openCreateSeed(u)}
+                            className="px-3 py-1 border rounded-lg"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteOne(u)}
+                            className="px-3 py-1 border rounded-lg text-red-700 border-red-200"
+                          >
+                            Delete
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => openEdit(u)}
+                            className="px-3 py-1 border rounded-lg"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteOne(u)}
+                            className="px-3 py-1 border rounded-lg text-red-700 border-red-200"
+                          >
+                            Delete
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   /* --------------------------------- Rows ---------------------------------- */
   function Row({ item }) {
     const catName =
       categories.find((c) => c._id === item.categoryId)?.name || "—";
     const accName = accountsById.get(item.accountId)?.name || "—";
+    const isFuture = new Date(item.date) > startOfUTC(new Date());
 
     return (
       <div className="p-4 border-b bg-white">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <div className="font-semibold">{catName}</div>
+            <div className="font-semibold flex items-center gap-2">
+              <span>{catName}</span>
+              {isFuture && (
+                <span className="text-[11px] px-2 py-0.5 rounded-full border border-dashed text-[#2f5d1d]">
+                  Upcoming
+                </span>
+              )}
+            </div>
             <div className="text-xs text-gray-500 mb-1">
               <span className="inline-block px-2 py-0.5 rounded-full border">
                 {accName}
@@ -616,9 +938,7 @@ export default function IncomeScreen({ accountId }) {
             <div className="text-sm text-gray-600 truncate">
               {item.description || "No description"}
             </div>
-            <div className="text-xs text-gray-400">
-              {new Date(item.date).toLocaleDateString()}
-            </div>
+            <div className="text-xs text-gray-400">{fmtDateUTC(item.date)}</div>
             {item.tags?.length ? (
               <div className="text-sm text-[#90a955] mt-1">
                 #{item.tags.join("  #")}
@@ -658,6 +978,7 @@ export default function IncomeScreen({ accountId }) {
     const amountRef = useRef(null);
     const currencyRef = useRef(null);
     const dateRef = useRef(null);
+    const nextDateRef = useRef(null); // NEW
     const categoryRef = useRef(null);
     const descRef = useRef(null);
     const tagsRef = useRef(null);
@@ -669,6 +990,7 @@ export default function IncomeScreen({ accountId }) {
       const amount = amountRef.current?.value ?? "";
       const currency = (currencyRef.current?.value ?? "USD").toUpperCase();
       const date = dateRef.current?.value ?? "";
+      const nextDate = nextDateRef.current?.value ?? ""; // NEW
       const categoryId = categoryRef.current?.value ?? "";
       const description = (descRef.current?.value ?? "").trim();
       const tagsCsv = tagsRef.current?.value ?? "";
@@ -693,20 +1015,26 @@ export default function IncomeScreen({ accountId }) {
           .filter((s) => s.length > 0),
       };
 
+      if (nextDate) payload.nextDate = new Date(nextDate).toISOString();
+
       try {
         if (!editing) {
           const { data } = await api.post("/transactions", payload);
-          setTransactions((prev) => [data, ...prev]);
+          const createdArr = Array.isArray(data?.created)
+            ? data.created
+            : [data];
+          setTransactions((prev) => [...createdArr, ...prev]);
         } else {
           const { data } = await api.put(
             `/transactions/${editing._id}`,
             payload
           );
           setTransactions((prev) =>
-            prev.map((t) => (t._id === data._id ? data : t))
+            prev.map((t) => (String(t._id) === String(data._id) ? data : t))
           );
         }
         setModalOpen(false);
+        await loadAll();
       } catch (e) {
         window.alert(e?.response?.data?.error || e.message || "Error");
       }
@@ -774,6 +1102,24 @@ export default function IncomeScreen({ accountId }) {
               lang={DATE_LANG}
               className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
             />
+          </div>
+
+          <div className="space-y-1 w-full">
+            <label className="font-semibold text-sm">
+              Next date (optional)
+            </label>
+            <input
+              ref={nextDateRef}
+              defaultValue={form.nextDate || ""}
+              type="date"
+              lang={DATE_LANG}
+              className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
+              placeholder="YYYY-MM-DD"
+            />
+            <div className="text-xs text-gray-500">
+              If set, this shows up under{" "}
+              <span className="font-semibold">Upcoming</span> as a planned item.
+            </div>
           </div>
 
           <div className="space-y-1 w-full">
@@ -849,6 +1195,8 @@ export default function IncomeScreen({ accountId }) {
   return (
     <div className="min-h-[100dvh] bg-[#f8faf8]">
       <Header />
+
+      <UpcomingPanel />
 
       <CategoryManager />
 

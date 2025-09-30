@@ -1,3 +1,4 @@
+/* eslint-disable no-empty */
 /* eslint-disable no-unused-vars */
 // src/pages/Investments.jsx
 import React, {
@@ -29,11 +30,22 @@ async function createInvestmentCategory(name) {
 }
 
 /* ------------------------------ Locale control ------------------------------ */
-/* HERE CHANGED: force the date pickers to English.
-   - "en-US" => month-first UI
-   - "en-GB" => day-first UI
-*/
-const DATE_LANG = "en-US"; // change to "en-GB" if you prefer DD/MM/YYYY
+const DATE_LANG = "en-US";
+
+/* ----------------------------- Date helpers -------------------------------- */
+function startOfUTC(dateLike) {
+  const d = new Date(dateLike);
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+}
+function fmtDateUTC(dateLike) {
+  const d = new Date(dateLike);
+  return d.toLocaleDateString(DATE_LANG, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
 
 /* ---------------------------------- Screen ---------------------------------- */
 export default function InvestmentsScreen({ accountId }) {
@@ -46,13 +58,10 @@ export default function InvestmentsScreen({ accountId }) {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
-  //TODO THE FILTERING: unified search + filters
+  // search + filters
   const [q, setQ] = useState("");
-
-  // HERE CHANGED: store ISO strings from <input type="date"> (YYYY-MM-DD)
-  const [fStartISO, setFStartISO] = useState(""); // e.g. "2025-01-01"
-  const [fEndISO, setFEndISO] = useState(""); // e.g. "2025-12-31"
-
+  const [fStartISO, setFStartISO] = useState("");
+  const [fEndISO, setFEndISO] = useState("");
   const [fAccountId, setFAccountId] = useState("ALL");
   const [fCategoryId, setFCategoryId] = useState("ALL");
   const [fCurrency, setFCurrency] = useState("ALL");
@@ -60,8 +69,8 @@ export default function InvestmentsScreen({ accountId }) {
   const [fMax, setFMax] = useState("");
   const [showFilters, setShowFilters] = useState(false);
 
-  // HERE CHANGED: sorting options
   const [sortKey, setSortKey] = useState("date_desc");
+  const [showUpcoming, setShowUpcoming] = useState(false);
 
   // modal state (create / edit)
   const [modalOpen, setModalOpen] = useState(false);
@@ -72,6 +81,7 @@ export default function InvestmentsScreen({ accountId }) {
     amount: "",
     currency: "USD",
     date: new Date().toISOString().slice(0, 10),
+    nextDate: "", // NEW
     categoryId: "",
     assetSymbol: "",
     units: "",
@@ -99,7 +109,7 @@ export default function InvestmentsScreen({ accountId }) {
     return (minor / Math.pow(10, decimals)).toFixed(decimals);
   }
   const fmtMoney = (minor, cur = "USD") =>
-    new Intl.NumberFormat(undefined, {
+    new Intl.NumberFormat(DATE_LANG, {
       style: "currency",
       currency: cur || "USD",
     }).format((minor || 0) / Math.pow(10, decimalsForCurrency(cur || "USD")));
@@ -132,7 +142,7 @@ export default function InvestmentsScreen({ accountId }) {
       setLoading(true);
       setErr("");
       const [txRes, catRes, accRes] = await Promise.all([
-        api.get("/transactions"),
+        api.get("/transactions", { params: { type: "investment" } }),
         api.get("/categories"),
         api.get("/accounts"),
       ]);
@@ -154,11 +164,9 @@ export default function InvestmentsScreen({ accountId }) {
   }, [loadAll]);
 
   /* ------------------------------- Filtering -------------------------------- */
-  //TODO THE FILTERING: central filtering (always limit to investment rows)
   const rows = useMemo(() => {
-    // HERE CHANGED: convert ISO strings to Date; end is inclusive to end-of-day
-    const start = fStartISO ? new Date(`${fStartISO}T00:00:00`) : null;
-    const end = fEndISO ? new Date(`${fEndISO}T23:59:59.999`) : null;
+    const start = fStartISO ? new Date(`${fStartISO}T00:00:00.000Z`) : null;
+    const end = fEndISO ? new Date(`${fEndISO}T23:59:59.999Z`) : null;
 
     const minNum = fMin !== "" ? Number(fMin) : null; // major
     const maxNum = fMax !== "" ? Number(fMax) : null; // major
@@ -167,28 +175,23 @@ export default function InvestmentsScreen({ accountId }) {
     const filtered = transactions.filter((t) => {
       if ((t.type || "") !== "investment") return false;
 
-      // account
-      if (fAccountId !== "ALL" && t.accountId !== fAccountId) return false;
+      if (fAccountId !== "ALL" && String(t.accountId) !== String(fAccountId))
+        return false;
+      if (fCategoryId !== "ALL" && String(t.categoryId) !== String(fCategoryId))
+        return false;
 
-      // category
-      if (fCategoryId !== "ALL" && t.categoryId !== fCategoryId) return false;
-
-      // currency
       const cur = t.currency || "USD";
       if (fCurrency !== "ALL" && cur !== fCurrency) return false;
 
-      // dates
       const dt = new Date(t.date);
       if (start && dt < start) return false;
       if (end && dt > end) return false;
 
-      // amount (major)
       const major =
         Number(t.amountMinor || 0) / Math.pow(10, decimalsForCurrency(cur));
       if (minNum !== null && major < minNum) return false;
       if (maxNum !== null && major > maxNum) return false;
 
-      // free text
       if (needle) {
         const cat = categoriesById.get(t.categoryId)?.name || "";
         const acc = accountsById.get(t.accountId)?.name || "";
@@ -201,7 +204,6 @@ export default function InvestmentsScreen({ accountId }) {
       return true;
     });
 
-    // HERE CHANGED: new sort engine
     filtered.sort((a, b) => {
       switch (sortKey) {
         case "date_asc":
@@ -238,8 +240,8 @@ export default function InvestmentsScreen({ accountId }) {
   }, [
     transactions,
     q,
-    fStartISO, // HERE CHANGED
-    fEndISO, // HERE CHANGED
+    fStartISO,
+    fEndISO,
     fAccountId,
     fCategoryId,
     fCurrency,
@@ -262,6 +264,100 @@ export default function InvestmentsScreen({ accountId }) {
     }));
   }, [rows]);
 
+  /* --------------------------- Upcoming (planned) --------------------------- */
+  const upcoming = useMemo(() => {
+    const today = startOfUTC(new Date());
+    const keyOf = (t) =>
+      [
+        t.accountId,
+        t.categoryId,
+        t.type,
+        t.amountMinor,
+        t.currency,
+        (t.assetSymbol || "").toUpperCase(),
+        t.units ?? "",
+        startOfUTC(t.date).toISOString(),
+        (t.description || "").trim(),
+      ].join("|");
+
+    // Actual future rows from DB
+    const map = new Map();
+    for (const t of transactions) {
+      if (t.type !== "investment") continue;
+      const dt = new Date(t.date);
+      if (dt > today) {
+        map.set(keyOf(t), { ...t, __kind: "actual" });
+      }
+    }
+
+    // Virtual rows from nextDate (not yet added)
+    for (const t of transactions) {
+      if (t.type !== "investment" || !t.nextDate) continue;
+      const nd = new Date(t.nextDate);
+      if (nd <= today) continue;
+
+      const v = {
+        ...t,
+        _id: `virtual-${t._id}`,
+        date: nd.toISOString(),
+        __kind: "virtual",
+        __parentId: t._id,
+      };
+      const k = keyOf(v);
+      if (!map.has(k)) map.set(k, v);
+    }
+
+    // Apply filters
+    const arr = Array.from(map.values()).filter((t) => {
+      if (fAccountId !== "ALL" && String(t.accountId) !== String(fAccountId))
+        return false;
+      if (fCategoryId !== "ALL" && String(t.categoryId) !== String(fCategoryId))
+        return false;
+      const cur = t.currency || "USD";
+      if (fCurrency !== "ALL" && cur !== fCurrency) return false;
+
+      const minNum = fMin !== "" ? Number(fMin) : null;
+      const maxNum = fMax !== "" ? Number(fMax) : null;
+      const major =
+        Number(t.amountMinor || 0) / Math.pow(10, decimalsForCurrency(cur));
+      if (minNum !== null && major < minNum) return false;
+      if (maxNum !== null && major > maxNum) return false;
+
+      const needle = q.trim().toLowerCase();
+      if (needle) {
+        const cat = categoriesById.get(t.categoryId)?.name || "";
+        const acc = accountsById.get(t.accountId)?.name || "";
+        const hay = `${t.description || ""} ${t.notes || ""} ${cat} ${acc} ${(
+          t.tags || []
+        ).join(" ")} ${(t.assetSymbol || "").toUpperCase()}`.toLowerCase();
+        if (!hay.includes(needle)) return false;
+      }
+
+      const start = fStartISO ? new Date(`${fStartISO}T00:00:00.000Z`) : null;
+      const end = fEndISO ? new Date(`${fEndISO}T23:59:59.999Z`) : null;
+      const dt = new Date(t.date);
+      if (start && dt < start) return false;
+      if (end && dt > end) return false;
+
+      return true;
+    });
+
+    arr.sort((a, b) => new Date(a.date) - new Date(b.date));
+    return arr;
+  }, [
+    transactions,
+    q,
+    fStartISO,
+    fEndISO,
+    fAccountId,
+    fCategoryId,
+    fCurrency,
+    fMin,
+    fMax,
+    categoriesById,
+    accountsById,
+  ]);
+
   /* --------------------------------- CRUD Tx -------------------------------- */
   function openCreate() {
     const defaultAccId = accountId || accounts[0]?._id || "";
@@ -273,6 +369,7 @@ export default function InvestmentsScreen({ accountId }) {
       amount: "",
       currency: defaultCur,
       date: new Date().toISOString().slice(0, 10),
+      nextDate: "",
       categoryId: categories[0]?._id || "",
       assetSymbol: "",
       units: "",
@@ -283,12 +380,33 @@ export default function InvestmentsScreen({ accountId }) {
     setModalOpen(true);
   }
 
+  // Seed "create" from a planned row (virtual)
+  function openCreateSeed(seed) {
+    setEditing(null);
+    setForm({
+      amount: minorToMajor(seed.amountMinor, seed.currency),
+      currency: seed.currency,
+      date: new Date(seed.date).toISOString().slice(0, 10),
+      nextDate: "",
+      categoryId: seed.categoryId || "",
+      assetSymbol: (seed.assetSymbol || "").toUpperCase(),
+      units: seed.units ?? "",
+      description: seed.description || "",
+      tagsCsv: (seed.tags || []).join(", "),
+      accountId: seed.accountId || accountId || accounts[0]?._id || "",
+    });
+    setModalOpen(true);
+  }
+
   function openEdit(tx) {
     setEditing(tx);
     setForm({
       amount: minorToMajor(tx.amountMinor, tx.currency),
       currency: tx.currency,
       date: new Date(tx.date).toISOString().slice(0, 10),
+      nextDate: tx.nextDate
+        ? new Date(tx.nextDate).toISOString().slice(0, 10)
+        : "",
       categoryId: tx.categoryId || "",
       assetSymbol: (tx.assetSymbol || "").toUpperCase(),
       units: tx.units ?? "",
@@ -303,7 +421,10 @@ export default function InvestmentsScreen({ accountId }) {
     if (!window.confirm("Delete investment?")) return;
     try {
       await api.delete(`/transactions/${tx._id}`);
-      setTransactions((prev) => prev.filter((t) => t._id !== tx._id));
+      setTransactions((prev) =>
+        prev.filter((t) => String(t._id) !== String(tx._id))
+      );
+      await loadAll();
     } catch (e) {
       window.alert(e?.response?.data?.error || e.message || "Error");
     }
@@ -333,15 +454,25 @@ export default function InvestmentsScreen({ accountId }) {
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Investments</h1>
 
-          {/* HERE CHANGED: Filters toggle + Sorting dropdown */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setShowUpcoming((v) => !v)}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border"
+              title="Show upcoming (planned / future) investments"
+            >
+              <span>Upcoming</span>
+              <span className="text-xs rounded-full px-2 py-0.5 bg-[#e8f5e9] text-[#2f5d1d] border">
+                {upcoming.length}
+              </span>
+            </button>
+
             <button
               type="button"
               onClick={() => setShowFilters((v) => !v)}
               className="inline-flex items-center gap-1 text-[#4f772d] hover:text-[#3f5f24]"
               title="Show filters"
             >
-              {/* simple sliders icon */}
               <svg
                 className="w-4 h-4"
                 viewBox="0 0 24 24"
@@ -383,7 +514,6 @@ export default function InvestmentsScreen({ accountId }) {
           </div>
         </div>
 
-        {/*TODO THE FILTERING: unified search box */}
         <div className="flex gap-2">
           <input
             value={q}
@@ -393,7 +523,6 @@ export default function InvestmentsScreen({ accountId }) {
           />
         </div>
 
-        {/*TODO THE FILTERING: quick category chips feed fCategoryId */}
         <div className="flex flex-wrap gap-2">
           <Chip
             label="All categories"
@@ -410,7 +539,6 @@ export default function InvestmentsScreen({ accountId }) {
           ))}
         </div>
 
-        {/* HERE CHANGED: collapsible filter panel with EN-native date pickers */}
         {showFilters && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-3 border rounded-xl bg-[#fafdf9]">
             <div className="flex flex-col gap-1">
@@ -444,12 +572,11 @@ export default function InvestmentsScreen({ accountId }) {
               </select>
             </div>
 
-            {/* HERE CHANGED: native date picker in English */}
             <div className="flex flex-col gap-1">
               <label className="text-sm text-gray-600">From</label>
               <input
                 type="date"
-                lang={DATE_LANG} // <-- forces English UI, no Turkish text
+                lang={DATE_LANG}
                 value={fStartISO}
                 onChange={(e) => setFStartISO(e.target.value)}
                 className="border rounded-lg px-3 py-2"
@@ -461,7 +588,7 @@ export default function InvestmentsScreen({ accountId }) {
               <label className="text-sm text-gray-600">To</label>
               <input
                 type="date"
-                lang={DATE_LANG} // <-- forces English UI, no Turkish text
+                lang={DATE_LANG}
                 value={fEndISO}
                 onChange={(e) => setFEndISO(e.target.value)}
                 className="border rounded-lg px-3 py-2"
@@ -501,8 +628,8 @@ export default function InvestmentsScreen({ accountId }) {
                   setFAccountId("ALL");
                   setFCategoryId("ALL");
                   setFCurrency("ALL");
-                  setFStartISO(""); // HERE CHANGED
-                  setFEndISO(""); // HERE CHANGED
+                  setFStartISO("");
+                  setFEndISO("");
                   setFMin("");
                   setFMax("");
                 }}
@@ -551,7 +678,7 @@ export default function InvestmentsScreen({ accountId }) {
           <a
             href="/investments/performance"
             className="px-3 py-2 rounded-xl border"
-            style={{ borderColor: secondary, color: main }}
+            style={{ borderColor: secondary, color: "white", background: main }}
           >
             VIEW MARKET
           </a>
@@ -645,6 +772,177 @@ export default function InvestmentsScreen({ accountId }) {
     );
   }
 
+  /* --------------------------------- Upcoming ------------------------------- */
+  function UpcomingPanel() {
+    if (!showUpcoming) return null;
+
+    async function addVirtual(v) {
+      try {
+        const { data } = await api.post("/transactions", {
+          accountId: v.accountId,
+          categoryId: v.categoryId,
+          type: "investment",
+          amountMinor: v.amountMinor,
+          currency: v.currency,
+          date: new Date(v.date).toISOString(),
+          assetSymbol: v.assetSymbol,
+          units: v.units,
+          description: v.description || null,
+          tags: v.tags || [],
+        });
+
+        if (v.__kind === "virtual" && v.__parentId) {
+          try {
+            await api.put(`/transactions/${v.__parentId}`, { nextDate: null });
+          } catch {}
+        }
+
+        const createdArr = Array.isArray(data?.created) ? data.created : [data];
+        setTransactions((prev) => [...createdArr, ...prev]);
+        await loadAll();
+      } catch (e) {
+        window.alert(e?.response?.data?.error || e.message || "Add failed");
+      }
+    }
+
+    async function deleteOne(item) {
+      if (item.__kind === "virtual") {
+        try {
+          await api.put(`/transactions/${item.__parentId}`, { nextDate: null });
+          await loadAll();
+        } catch (e) {
+          window.alert(
+            e?.response?.data?.error || e.message || "Delete failed"
+          );
+        }
+      } else {
+        await softDelete(item);
+      }
+    }
+
+    return (
+      <div className="m-4 p-4 border rounded-xl bg-white">
+        <div className="flex items-center justify-between mb-3">
+          <div className="font-semibold">
+            Upcoming investments ({upcoming.length})
+          </div>
+          <button
+            type="button"
+            className="text-sm underline"
+            onClick={() => setShowUpcoming(false)}
+          >
+            Close
+          </button>
+        </div>
+
+        {upcoming.length === 0 ? (
+          <div className="text-gray-600 text-sm">
+            Nothing upcoming within your filters.
+          </div>
+        ) : (
+          <div className="divide-y">
+            {upcoming.map((u) => {
+              const catName =
+                categories.find((c) => c._id === u.categoryId)?.name || "—";
+              const accName = accountsById.get(u.accountId)?.name || "—";
+              const badge =
+                u.__kind === "virtual" ? (
+                  <span className="text-[11px] px-2 py-0.5 rounded-full border border-dashed text-[#2f5d1d]">
+                    Planned (not added)
+                  </span>
+                ) : (
+                  <span className="text-[11px] px-2 py-0.5 rounded-full border text-gray-600">
+                    In database
+                  </span>
+                );
+              const symbol = (u.assetSymbol || "").toUpperCase();
+
+              return (
+                <div
+                  key={u._id}
+                  className="py-3 flex items-start justify-between gap-4"
+                >
+                  <div className="min-w-0">
+                    <div className="font-semibold flex items-center gap-2">
+                      <span>{symbol ? `${symbol} • ${catName}` : catName}</span>
+                      {badge}
+                    </div>
+                    <div className="text-xs text-gray-500 mb-1">
+                      <span className="inline-block px-2 py-0.5 rounded-full border">
+                        {accName}
+                      </span>
+                      {u.units ? (
+                        <span className="ml-2 text-gray-500">
+                          {u.units} units
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="text-sm text-gray-600 truncate">
+                      {u.description || "No description"}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      Scheduled: {fmtDateUTC(u.date)}
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <div className="font-bold">
+                      -{minorToMajor(u.amountMinor, u.currency)} {u.currency}
+                    </div>
+                    <div className="mt-2 flex flex-wrap justify-end gap-2">
+                      {u.__kind === "virtual" ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => addVirtual(u)}
+                            className="px-3 py-1 rounded-lg bg-[#4f772d] text-white"
+                          >
+                            Add
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openCreateSeed(u)}
+                            className="px-3 py-1 border rounded-lg"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteOne(u)}
+                            className="px-3 py-1 border rounded-lg text-red-700 border-red-200"
+                          >
+                            Delete
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => openEdit(u)}
+                            className="px-3 py-1 border rounded-lg"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteOne(u)}
+                            className="px-3 py-1 border rounded-lg text-red-700 border-red-200"
+                          >
+                            Delete
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   /* --------------------------------- Rows ---------------------------------- */
   function Row({ item }) {
     const catName =
@@ -652,13 +950,19 @@ export default function InvestmentsScreen({ accountId }) {
     const accName = accountsById.get(item.accountId)?.name || "—";
     const symbol = (item.assetSymbol || "").toUpperCase();
     const units = item.units ?? null;
+    const isFuture = new Date(item.date) > startOfUTC(new Date());
 
     return (
       <div className="p-4 border-b bg-white">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <div className="font-semibold">
-              {symbol ? `${symbol} • ${catName}` : catName}
+            <div className="font-semibold flex items-center gap-2">
+              <span>{symbol ? `${symbol} • ${catName}` : catName}</span>
+              {isFuture && (
+                <span className="text-[11px] px-2 py-0.5 rounded-full border border-dashed text-[#2f5d1d]">
+                  Upcoming
+                </span>
+              )}
             </div>
             <div className="text-xs text-gray-500 mb-1">
               <span className="inline-block px-2 py-0.5 rounded-full border">
@@ -671,9 +975,7 @@ export default function InvestmentsScreen({ accountId }) {
             <div className="text-sm text-gray-600 truncate">
               {item.description || "No description"}
             </div>
-            <div className="text-xs text-gray-400">
-              {new Date(item.date).toLocaleDateString()}
-            </div>
+            <div className="text-xs text-gray-400">{fmtDateUTC(item.date)}</div>
             {item.tags?.length ? (
               <div className="text-sm text-[#90a955] mt-1">
                 #{item.tags.join("  #")}
@@ -709,10 +1011,10 @@ export default function InvestmentsScreen({ accountId }) {
 
   /* --------------------------------- Modal --------------------------------- */
   function InvestmentModal() {
-    // Refs MUST be declared before any conditional return to satisfy hook rules
     const amountRef = useRef(null);
     const currencyRef = useRef(null);
     const dateRef = useRef(null);
+    const nextDateRef = useRef(null); // NEW
     const categoryRef = useRef(null);
     const symbolRef = useRef(null);
     const unitsRef = useRef(null);
@@ -726,6 +1028,7 @@ export default function InvestmentsScreen({ accountId }) {
       const amount = amountRef.current?.value ?? "";
       const currency = (currencyRef.current?.value ?? "USD").toUpperCase();
       const date = dateRef.current?.value ?? "";
+      const nextDate = nextDateRef.current?.value ?? ""; // NEW
       const categoryId = categoryRef.current?.value ?? "";
       const assetSymbol = (symbolRef.current?.value ?? "").toUpperCase().trim();
       const units = Number(unitsRef.current?.value ?? 0);
@@ -757,20 +1060,26 @@ export default function InvestmentsScreen({ accountId }) {
           .filter((s) => s.length > 0),
       };
 
+      if (nextDate) payload.nextDate = new Date(nextDate).toISOString();
+
       try {
         if (!editing) {
           const { data } = await api.post("/transactions", payload);
-          setTransactions((prev) => [data, ...prev]);
+          const createdArr = Array.isArray(data?.created)
+            ? data.created
+            : [data];
+          setTransactions((prev) => [...createdArr, ...prev]);
         } else {
           const { data } = await api.put(
             `/transactions/${editing._id}`,
             payload
           );
           setTransactions((prev) =>
-            prev.map((t) => (t._id === data._id ? data : t))
+            prev.map((t) => (String(t._id) === String(data._id) ? data : t))
           );
         }
         setModalOpen(false);
+        await loadAll();
       } catch (e) {
         window.alert(e?.response?.data?.error || e.message || "Error");
       }
@@ -857,9 +1166,28 @@ export default function InvestmentsScreen({ accountId }) {
             <input
               ref={dateRef}
               defaultValue={form.date}
-              placeholder="YYYY-MM-DD"
+              type="date"
+              lang={DATE_LANG}
               className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
             />
+          </div>
+
+          <div className="space-y-1 w-full">
+            <label className="font-semibold text-sm">
+              Next date (optional)
+            </label>
+            <input
+              ref={nextDateRef}
+              defaultValue={form.nextDate || ""}
+              type="date"
+              lang={DATE_LANG}
+              className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
+              placeholder="YYYY-MM-DD"
+            />
+            <div className="text-xs text-gray-500">
+              If set, this shows up under{" "}
+              <span className="font-semibold">Upcoming</span> as a planned item.
+            </div>
           </div>
 
           <div className="space-y-1 w-full">
@@ -936,6 +1264,8 @@ export default function InvestmentsScreen({ accountId }) {
     <div className="min-h-[100dvh] bg-[#f8faf8]">
       <Header />
 
+      <UpcomingPanel />
+
       {/* Step 1: Manage categories (investment-only) */}
       <CategoryManager />
 
@@ -961,9 +1291,3 @@ export default function InvestmentsScreen({ accountId }) {
     </div>
   );
 }
-/**const INCOME_CATEGORY_OPTIONS = [
-  "Salary",
-  "Rentals",
-  "Business Income & Freelance",
-  "Other Income",
-]; */

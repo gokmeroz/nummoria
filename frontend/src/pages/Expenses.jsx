@@ -38,24 +38,23 @@ const EXPENSE_CATEGORY_OPTIONS = [
 const main = "#4f772d";
 const secondary = "#90a955";
 
-// Keep kind lowercase to match API/DB
-async function createExpenseCategory(name) {
-  return api.post("/categories", { name, kind: "expense" });
-}
-
 /* ------------------------------ Locale control ------------------------------ */
 const DATE_LANG = "en-US";
 
-/* ----------------------------- Weekday helpers ------------------------------ */
-const WEEKDAY_OPTS = [
-  { label: "Sun", val: 0 },
-  { label: "Mon", val: 1 },
-  { label: "Tue", val: 2 },
-  { label: "Wed", val: 3 },
-  { label: "Thu", val: 4 },
-  { label: "Fri", val: 5 },
-  { label: "Sat", val: 6 },
-];
+/* ----------------------------- Date helpers -------------------------------- */
+function startOfUTC(dateLike) {
+  const d = new Date(dateLike);
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+}
+function fmtDateUTC(dateLike) {
+  const d = new Date(dateLike);
+  return d.toLocaleDateString(DATE_LANG, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
 
 /* ---------------------------------- Screen ---------------------------------- */
 export default function ExpensesScreen({ accountId }) {
@@ -80,16 +79,18 @@ export default function ExpensesScreen({ accountId }) {
   const [showFilters, setShowFilters] = useState(false);
 
   const [sortKey, setSortKey] = useState("date_desc");
+  const [showUpcoming, setShowUpcoming] = useState(false);
 
   // modal state (create / edit)
   const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState(null);
+  const [editing, setEditing] = useState(null); // if null => create
 
   // form seeds
   const [form, setForm] = useState({
     amount: "",
     currency: "USD",
     date: new Date().toISOString().slice(0, 10),
+    nextDate: "", // NEW
     categoryId: "",
     description: "",
     tagsCsv: "",
@@ -115,7 +116,7 @@ export default function ExpensesScreen({ accountId }) {
     return (minor / Math.pow(10, decimals)).toFixed(decimals);
   }
   const fmtMoney = (minor, cur = "USD") =>
-    new Intl.NumberFormat(undefined, {
+    new Intl.NumberFormat(DATE_LANG, {
       style: "currency",
       currency: cur || "USD",
     }).format((minor || 0) / Math.pow(10, decimalsForCurrency(cur || "USD")));
@@ -148,7 +149,7 @@ export default function ExpensesScreen({ accountId }) {
       setLoading(true);
       setErr("");
       const [txRes, catRes, accRes] = await Promise.all([
-        api.get("/transactions"),
+        api.get("/transactions", { params: { type: "expense" } }),
         api.get("/categories"),
         api.get("/accounts"),
       ]);
@@ -171,8 +172,8 @@ export default function ExpensesScreen({ accountId }) {
 
   /* ------------------------------- Filtering -------------------------------- */
   const rows = useMemo(() => {
-    const start = fStartISO ? new Date(`${fStartISO}T00:00:00`) : null;
-    const end = fEndISO ? new Date(`${fEndISO}T23:59:59.999`) : null;
+    const start = fStartISO ? new Date(`${fStartISO}T00:00:00.000Z`) : null;
+    const end = fEndISO ? new Date(`${fEndISO}T23:59:59.999Z`) : null;
 
     const minNum = fMin !== "" ? Number(fMin) : null;
     const maxNum = fMax !== "" ? Number(fMax) : null;
@@ -181,11 +182,10 @@ export default function ExpensesScreen({ accountId }) {
     const filtered = transactions.filter((t) => {
       if ((t.type || "") !== "expense") return false;
 
-      // Hide recurrence templates from the list; show only real instances
-      if (t.recurrence && t.recurrence.isTemplate === true) return false;
-
-      if (fAccountId !== "ALL" && t.accountId !== fAccountId) return false;
-      if (fCategoryId !== "ALL" && t.categoryId !== fCategoryId) return false;
+      if (fAccountId !== "ALL" && String(t.accountId) !== String(fAccountId))
+        return false;
+      if (fCategoryId !== "ALL" && String(t.categoryId) !== String(fCategoryId))
+        return false;
 
       const cur = t.currency || "USD";
       if (fCurrency !== "ALL" && cur !== fCurrency) return false;
@@ -201,7 +201,6 @@ export default function ExpensesScreen({ accountId }) {
 
       if (needle) {
         const cat = categoriesById.get(t.categoryId)?.name || "";
-        the;
         const acc = accountsById.get(t.accountId)?.name || "";
         const hay = `${t.description || ""} ${t.notes || ""} ${cat} ${acc} ${(
           t.tags || []
@@ -260,13 +259,108 @@ export default function ExpensesScreen({ accountId }) {
   const totals = useMemo(() => {
     const byCur = {};
     for (const t of rows) {
-      byCur[t.currency] = (byCur[t.currency] || 0) + Number(t.amountMinor || 0);
+      const cur = t.currency || "USD";
+      byCur[cur] = (byCur[cur] || 0) + Number(t.amountMinor || 0);
     }
     return Object.entries(byCur).map(([cur, minor]) => ({
       cur,
-      major: minorToMajor(minor, cur),
+      major: (Number(minor) / Math.pow(10, decimalsForCurrency(cur))).toFixed(
+        decimalsForCurrency(cur)
+      ),
     }));
   }, [rows]);
+
+  /* --------------------------- Upcoming (planned) --------------------------- */
+  const upcoming = useMemo(() => {
+    const today = startOfUTC(new Date());
+    const keyOf = (t) =>
+      [
+        t.accountId,
+        t.categoryId,
+        t.type,
+        t.amountMinor,
+        t.currency,
+        startOfUTC(t.date).toISOString(),
+        (t.description || "").trim(),
+      ].join("|");
+
+    // Actual future rows from DB
+    const map = new Map();
+    for (const t of transactions) {
+      if (t.type !== "expense") continue;
+      const dt = new Date(t.date);
+      if (dt > today) {
+        map.set(keyOf(t), { ...t, __kind: "actual" });
+      }
+    }
+
+    // Virtual rows from nextDate (not yet added)
+    for (const t of transactions) {
+      if (t.type !== "expense" || !t.nextDate) continue;
+      const nd = new Date(t.nextDate);
+      if (nd <= today) continue;
+
+      const v = {
+        ...t,
+        _id: `virtual-${t._id}`,
+        date: nd.toISOString(),
+        __kind: "virtual",
+        __parentId: t._id,
+      };
+      const k = keyOf(v);
+      if (!map.has(k)) map.set(k, v);
+    }
+
+    // Apply current filters to upcoming list too
+    const arr = Array.from(map.values()).filter((t) => {
+      if (fAccountId !== "ALL" && String(t.accountId) !== String(fAccountId))
+        return false;
+      if (fCategoryId !== "ALL" && String(t.categoryId) !== String(fCategoryId))
+        return false;
+      const cur = t.currency || "USD";
+      if (fCurrency !== "ALL" && cur !== fCurrency) return false;
+
+      const minNum = fMin !== "" ? Number(fMin) : null;
+      const maxNum = fMax !== "" ? Number(fMax) : null;
+      const major =
+        Number(t.amountMinor || 0) / Math.pow(10, decimalsForCurrency(cur));
+      if (minNum !== null && major < minNum) return false;
+      if (maxNum !== null && major > maxNum) return false;
+
+      const needle = q.trim().toLowerCase();
+      if (needle) {
+        const cat = categoriesById.get(t.categoryId)?.name || "";
+        const acc = accountsById.get(t.accountId)?.name || "";
+        const hay = `${t.description || ""} ${t.notes || ""} ${cat} ${acc} ${(
+          t.tags || []
+        ).join(" ")}`.toLowerCase();
+        if (!hay.includes(needle)) return false;
+      }
+      // Respect date filter window if set
+      const start = fStartISO ? new Date(`${fStartISO}T00:00:00.000Z`) : null;
+      const end = fEndISO ? new Date(`${fEndISO}T23:59:59.999Z`) : null;
+      const dt = new Date(t.date);
+      if (start && dt < start) return false;
+      if (end && dt > end) return false;
+
+      return true;
+    });
+
+    arr.sort((a, b) => new Date(a.date) - new Date(b.date));
+    return arr;
+  }, [
+    transactions,
+    q,
+    fStartISO,
+    fEndISO,
+    fAccountId,
+    fCategoryId,
+    fCurrency,
+    fMin,
+    fMax,
+    categoriesById,
+    accountsById,
+  ]);
 
   /* --------------------------------- CRUD Tx -------------------------------- */
   function openCreate() {
@@ -279,10 +373,27 @@ export default function ExpensesScreen({ accountId }) {
       amount: "",
       currency: defaultCur,
       date: new Date().toISOString().slice(0, 10),
+      nextDate: "", // NEW
       categoryId: categories[0]?._id || "",
       description: "",
       tagsCsv: "",
       accountId: defaultAccId,
+    });
+    setModalOpen(true);
+  }
+
+  // Seed a "create" from an existing row (useful for virtual upcoming -> Edit)
+  function openCreateSeed(seed) {
+    setEditing(null);
+    setForm({
+      amount: minorToMajor(seed.amountMinor, seed.currency),
+      currency: seed.currency,
+      date: new Date(seed.date).toISOString().slice(0, 10),
+      nextDate: "", // do not chain unless user sets it
+      categoryId: seed.categoryId || "",
+      description: seed.description || "",
+      tagsCsv: (seed.tags || []).join(", "),
+      accountId: seed.accountId || accountId || accounts[0]?._id || "",
     });
     setModalOpen(true);
   }
@@ -293,6 +404,9 @@ export default function ExpensesScreen({ accountId }) {
       amount: minorToMajor(tx.amountMinor, tx.currency),
       currency: tx.currency,
       date: new Date(tx.date).toISOString().slice(0, 10),
+      nextDate: tx.nextDate
+        ? new Date(tx.nextDate).toISOString().slice(0, 10)
+        : "", // NEW
       categoryId: tx.categoryId || "",
       description: tx.description || "",
       tagsCsv: (tx.tags || []).join(", "),
@@ -305,7 +419,6 @@ export default function ExpensesScreen({ accountId }) {
     if (!window.confirm("Delete expense?")) return;
     try {
       await api.delete(`/transactions/${tx._id}`);
-      // robust compare + server refresh (keeps totals/filters right)
       setTransactions((prev) =>
         prev.filter((t) => String(t._id) !== String(tx._id))
       );
@@ -333,22 +446,25 @@ export default function ExpensesScreen({ accountId }) {
   }
 
   /* --------------------------------- Header -------------------------------- */
-  async function runRecurring() {
-    try {
-      await api.post("/transactions/recurrence/run", { aheadDays: 7 });
-      await loadAll();
-    } catch (e) {
-      window.alert(e?.response?.data?.error || e.message || "Run failed");
-    }
-  }
-
   function Header() {
     return (
       <div className="space-y-3 p-4 border-b bg-white">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <h1 className="text-2xl font-bold">Expenses</h1>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowUpcoming((v) => !v)}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border"
+              title="Show upcoming (planned / future) expenses"
+            >
+              <span>Upcoming</span>
+              <span className="text-xs rounded-full px-2 py-0.5 bg-[#e8f5e9] text-[#2f5d1d] border">
+                {upcoming.length}
+              </span>
+            </button>
+
             <button
               type="button"
               onClick={() => setShowFilters((v) => !v)}
@@ -554,20 +670,16 @@ export default function ExpensesScreen({ accountId }) {
           >
             Refresh
           </button>
-          <button
-            type="button"
-            onClick={runRecurring}
-            className="px-3 py-2 rounded-xl border"
-            title="Materialize upcoming recurring expenses (7 days)"
-          >
-            Run recurring (7 days)
-          </button>
         </div>
       </div>
     );
   }
 
   /* ----------------------------- Category Manager ---------------------------- */
+  async function createExpenseCategory(name) {
+    return api.post("/categories", { name, kind: "expense" });
+  }
+
   function CategoryManager() {
     const [selected, setSelected] = useState(EXPENSE_CATEGORY_OPTIONS[0]);
     const [busy, setBusy] = useState(false);
@@ -652,12 +764,177 @@ export default function ExpensesScreen({ accountId }) {
     );
   }
 
+  /* --------------------------------- Upcoming ------------------------------- */
+  function UpcomingPanel() {
+    if (!showUpcoming) return null;
+
+    async function addVirtual(v) {
+      // Create the upcoming copy
+      try {
+        const { data } = await api.post("/transactions", {
+          accountId: v.accountId,
+          categoryId: v.categoryId,
+          type: "expense",
+          amountMinor: v.amountMinor,
+          currency: v.currency,
+          date: new Date(v.date).toISOString(),
+          description: v.description || null,
+          tags: v.tags || [],
+        });
+
+        // Clear parent's nextDate so it no longer appears as virtual
+        if (v.__kind === "virtual" && v.__parentId) {
+          try {
+            await api.put(`/transactions/${v.__parentId}`, { nextDate: null });
+          } catch {}
+        }
+
+        const createdArr = Array.isArray(data?.created) ? data.created : [data];
+        setTransactions((prev) => [...createdArr, ...prev]);
+        await loadAll();
+      } catch (e) {
+        window.alert(e?.response?.data?.error || e.message || "Add failed");
+      }
+    }
+
+    async function deleteOne(item) {
+      if (item.__kind === "virtual") {
+        try {
+          await api.put(`/transactions/${item.__parentId}`, { nextDate: null });
+          await loadAll();
+        } catch (e) {
+          window.alert(
+            e?.response?.data?.error || e.message || "Delete failed"
+          );
+        }
+      } else {
+        await softDelete(item);
+      }
+    }
+
+    return (
+      <div className="m-4 p-4 border rounded-xl bg-white">
+        <div className="flex items-center justify-between mb-3">
+          <div className="font-semibold">
+            Upcoming expenses ({upcoming.length})
+          </div>
+          <button
+            type="button"
+            className="text-sm underline"
+            onClick={() => setShowUpcoming(false)}
+          >
+            Close
+          </button>
+        </div>
+
+        {upcoming.length === 0 ? (
+          <div className="text-gray-600 text-sm">
+            Nothing upcoming within your filters.
+          </div>
+        ) : (
+          <div className="divide-y">
+            {upcoming.map((u) => {
+              const catName =
+                categories.find((c) => c._id === u.categoryId)?.name || "—";
+              const accName = accountsById.get(u.accountId)?.name || "—";
+              const badge =
+                u.__kind === "virtual" ? (
+                  <span className="text-[11px] px-2 py-0.5 rounded-full border border-dashed text-[#2f5d1d]">
+                    Planned (not added)
+                  </span>
+                ) : (
+                  <span className="text-[11px] px-2 py-0.5 rounded-full border text-gray-600">
+                    In database
+                  </span>
+                );
+
+              return (
+                <div
+                  key={u._id}
+                  className="py-3 flex items-start justify-between gap-4"
+                >
+                  <div className="min-w-0">
+                    <div className="font-semibold flex items-center gap-2">
+                      <span>{catName}</span>
+                      {badge}
+                    </div>
+                    <div className="text-xs text-gray-500 mb-1">
+                      <span className="inline-block px-2 py-0.5 rounded-full border">
+                        {accName}
+                      </span>
+                    </div>
+                    <div className="text-sm text-gray-600 truncate">
+                      {u.description || "No description"}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      Scheduled: {fmtDateUTC(u.date)}
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <div className="font-bold">
+                      -{minorToMajor(u.amountMinor, u.currency)} {u.currency}
+                    </div>
+                    <div className="mt-2 flex flex-wrap justify-end gap-2">
+                      {u.__kind === "virtual" ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => addVirtual(u)}
+                            className="px-3 py-1 rounded-lg bg-[#4f772d] text-white"
+                          >
+                            Add
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openCreateSeed(u)}
+                            className="px-3 py-1 border rounded-lg"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteOne(u)}
+                            className="px-3 py-1 border rounded-lg text-red-700 border-red-200"
+                          >
+                            Delete
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => openEdit(u)}
+                            className="px-3 py-1 border rounded-lg"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteOne(u)}
+                            className="px-3 py-1 border rounded-lg text-red-700 border-red-200"
+                          >
+                            Delete
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   /* --------------------------------- Rows ---------------------------------- */
   function Row({ item }) {
     const catName =
       categories.find((c) => c._id === item.categoryId)?.name || "—";
     const accName = accountsById.get(item.accountId)?.name || "—";
-    const isRecurringInstance = !!(item.recurrence && item.recurrence.parentId);
+    const isFuture = new Date(item.date) > startOfUTC(new Date());
 
     return (
       <div className="p-4 border-b bg-white">
@@ -665,9 +942,9 @@ export default function ExpensesScreen({ accountId }) {
           <div className="min-w-0">
             <div className="font-semibold flex items-center gap-2">
               <span>{catName}</span>
-              {isRecurringInstance && (
+              {isFuture && (
                 <span className="text-[11px] px-2 py-0.5 rounded-full border border-dashed text-[#2f5d1d]">
-                  Recurring
+                  Upcoming
                 </span>
               )}
             </div>
@@ -679,9 +956,7 @@ export default function ExpensesScreen({ accountId }) {
             <div className="text-sm text-gray-600 truncate">
               {item.description || "No description"}
             </div>
-            <div className="text-xs text-gray-400">
-              {new Date(item.date).toLocaleDateString()}
-            </div>
+            <div className="text-xs text-gray-400">{fmtDateUTC(item.date)}</div>
             {item.tags?.length ? (
               <div className="text-sm text-[#90a955] mt-1">
                 #{item.tags.join("  #")}
@@ -693,11 +968,11 @@ export default function ExpensesScreen({ accountId }) {
             <div className="font-bold">
               -{minorToMajor(item.amountMinor, item.currency)} {item.currency}
             </div>
-            <div className="mt-2 flex justify-end">
+            <div className="mt-2 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => openEdit(item)}
-                className="px-3 py-1 border rounded-lg mr-2"
+                className="px-3 py-1 border rounded-lg"
               >
                 Edit
               </button>
@@ -717,38 +992,22 @@ export default function ExpensesScreen({ accountId }) {
 
   /* --------------------------------- Modal --------------------------------- */
   function ExpenseModal() {
-    // Refs MUST be declared before any conditional return
     const amountRef = useRef(null);
     const currencyRef = useRef(null);
     const dateRef = useRef(null);
+    const nextDateRef = useRef(null); // NEW
     const categoryRef = useRef(null);
     const descRef = useRef(null);
     const tagsRef = useRef(null);
     const accountRef = useRef(null);
 
-    // Recurrence UI state
-    const [repeatOn, setRepeatOn] = useState(false);
-    const [frequency, setFrequency] = useState("none"); // none|daily|weekly|monthly|yearly
-    const [interval, setInterval] = useState(1);
-    const [startDate, setStartDate] = useState(form.date);
-    const [byMonthDay, setByMonthDay] = useState("");
-    const [byWeekday, setByWeekday] = useState([]); // array of numbers 0..6
-    const [autopost, setAutopost] = useState("post"); // post|preview
-    // Option B: end by date
-    const [endISO, setEndISO] = useState(""); // YYYY-MM-DD
-
     if (!modalOpen) return null;
-
-    function toggleWeekday(val) {
-      setByWeekday((prev) =>
-        prev.includes(val) ? prev.filter((v) => v !== val) : [...prev, val]
-      );
-    }
 
     const submitFromRefs = async () => {
       const amount = amountRef.current?.value ?? "";
       const currency = (currencyRef.current?.value ?? "USD").toUpperCase();
       const date = dateRef.current?.value ?? "";
+      const nextDate = nextDateRef.current?.value ?? ""; // NEW
       const categoryId = categoryRef.current?.value ?? "";
       const description = (descRef.current?.value ?? "").trim();
       const tagsCsv = tagsRef.current?.value ?? "";
@@ -773,49 +1032,16 @@ export default function ExpensesScreen({ accountId }) {
           .filter((s) => s.length > 0),
       };
 
-      // Recurrence template branch (Option B adds endDate)
-      if (repeatOn && frequency !== "none") {
-        const rule = {
-          isTemplate: true,
-          frequency,
-          interval: Math.max(1, Number(interval || 1)),
-          startDate: new Date(startDate || date).toISOString(),
-          autopost,
-        };
-        if (frequency === "monthly" && byMonthDay) {
-          const n = Number(byMonthDay);
-          if (Number.isNaN(n) || n < 1 || n > 31)
-            return window.alert("byMonthDay must be 1..31");
-          rule.byMonthDay = n;
-        }
-        if (frequency === "weekly" && byWeekday.length > 0) {
-          rule.byWeekday = byWeekday.slice().sort();
-        }
-        // ---- Option B: fixed end date ----
-        if (endISO) {
-          const d = new Date(endISO);
-          if (Number.isNaN(d.getTime()))
-            return window.alert("Invalid end date");
-          rule.endDate = d.toISOString(); // inclusive stop on backend side
-        }
-        payload.recurrence = rule;
-      }
+      if (nextDate) payload.nextDate = new Date(nextDate).toISOString();
 
       try {
         if (!editing) {
           const { data } = await api.post("/transactions", payload);
-
-          // If a template was created, best-effort: materialize due now
-          if (data?.recurrence?.isTemplate === true) {
-            try {
-              await api.post("/transactions/recurrence/run", { aheadDays: 0 });
-            } catch {}
-            await loadAll();
-          } else {
-            setTransactions((prev) => [data, ...prev]);
-          }
+          const createdArr = Array.isArray(data?.created)
+            ? data.created
+            : [data];
+          setTransactions((prev) => [...createdArr, ...prev]);
         } else {
-          // Editing an existing instance
           const { data } = await api.put(
             `/transactions/${editing._id}`,
             payload
@@ -825,6 +1051,7 @@ export default function ExpensesScreen({ accountId }) {
           );
         }
         setModalOpen(false);
+        await loadAll();
       } catch (e) {
         window.alert(e?.response?.data?.error || e.message || "Error");
       }
@@ -868,6 +1095,8 @@ export default function ExpensesScreen({ accountId }) {
                 defaultValue={form.amount}
                 placeholder="e.g., 120.00"
                 inputMode="decimal"
+                type="number"
+                step="0.01"
                 className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
               />
             </div>
@@ -892,6 +1121,24 @@ export default function ExpensesScreen({ accountId }) {
               lang={DATE_LANG}
               className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
             />
+          </div>
+
+          <div className="space-y-1 w-full">
+            <label className="font-semibold text-sm">
+              Next date (optional)
+            </label>
+            <input
+              ref={nextDateRef}
+              defaultValue={form.nextDate || ""}
+              type="date"
+              lang={DATE_LANG}
+              className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
+              placeholder="YYYY-MM-DD"
+            />
+            <div className="text-xs text-gray-500">
+              If set, this shows up under{" "}
+              <span className="font-semibold">Upcoming</span> as a planned item.
+            </div>
           </div>
 
           <div className="space-y-1 w-full">
@@ -931,142 +1178,6 @@ export default function ExpensesScreen({ accountId }) {
             />
           </div>
 
-          {/* --------------------------- Recurrence UI --------------------------- */}
-          {!editing && (
-            <div className="mt-2 border-t pt-3">
-              <div className="flex items-center justify-between">
-                <div className="font-semibold">Repeat</div>
-                <label className="inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="sr-only peer"
-                    checked={repeatOn}
-                    onChange={(e) => setRepeatOn(e.target.checked)}
-                  />
-                  <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-[#4f772d] relative">
-                    <div className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition peer-checked:translate-x-5" />
-                  </div>
-                </label>
-              </div>
-
-              {repeatOn && (
-                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-sm text-gray-600">Frequency</label>
-                    <select
-                      className="w-full border rounded-lg px-3 py-2 bg-white"
-                      value={frequency}
-                      onChange={(e) => setFrequency(e.target.value)}
-                    >
-                      <option value="none">—</option>
-                      <option value="daily">Daily</option>
-                      <option value="weekly">Weekly</option>
-                      <option value="monthly">Monthly</option>
-                      <option value="yearly">Yearly</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-sm text-gray-600">Every</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={interval}
-                      onChange={(e) => setInterval(e.target.value)}
-                      className="w-full border rounded-lg px-3 py-2 bg-white"
-                      placeholder="e.g., 1"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-sm text-gray-600">Start date</label>
-                    <input
-                      type="date"
-                      lang={DATE_LANG}
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className="w-full border rounded-lg px-3 py-2 bg-white"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-sm text-gray-600">Autopost</label>
-                    <select
-                      className="w-full border rounded-lg px-3 py-2 bg-white"
-                      value={autopost}
-                      onChange={(e) => setAutopost(e.target.value)}
-                    >
-                      <option value="post">Post automatically</option>
-                      <option value="preview">Preview only</option>
-                    </select>
-                  </div>
-
-                  {frequency === "monthly" && (
-                    <div className="space-y-1 md:col-span-2">
-                      <label className="text-sm text-gray-600">
-                        On day of month
-                      </label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={31}
-                        value={byMonthDay}
-                        onChange={(e) => setByMonthDay(e.target.value)}
-                        className="w-full border rounded-lg px-3 py-2 bg-white"
-                        placeholder="1..31"
-                      />
-                      <div className="text-xs text-gray-500">
-                        We’ll clamp to the last day for shorter months.
-                      </div>
-                    </div>
-                  )}
-
-                  {frequency === "weekly" && (
-                    <div className="space-y-1 md:col-span-2">
-                      <label className="text-sm text-gray-600">
-                        Days of week
-                      </label>
-                      <div className="flex flex-wrap gap-2">
-                        {WEEKDAY_OPTS.map((w) => (
-                          <button
-                            type="button"
-                            key={w.val}
-                            onClick={() => toggleWeekday(w.val)}
-                            className={`px-3 py-1.5 rounded-full border text-sm ${
-                              byWeekday.includes(w.val)
-                                ? "border-[#4f772d] bg-[#e8f5e9] text-[#2f5d1d]"
-                                : "border-gray-300 bg-white text-gray-800"
-                            }`}
-                          >
-                            {w.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Option B: End date */}
-                  <div className="space-y-1 md:col-span-2">
-                    <label className="text-sm text-gray-600">
-                      End date (inclusive)
-                    </label>
-                    <input
-                      type="date"
-                      lang={DATE_LANG}
-                      value={endISO}
-                      onChange={(e) => setEndISO(e.target.value)}
-                      className="w-full border rounded-lg px-3 py-2 bg-white"
-                      placeholder="YYYY-MM-DD"
-                    />
-                    <div className="text-xs text-gray-500">
-                      The series will stop once a due date is after this day.
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
           <div className="flex gap-3 justify-end pt-2">
             <button
               type="button"
@@ -1103,6 +1214,8 @@ export default function ExpensesScreen({ accountId }) {
   return (
     <div className="min-h-[100dvh] bg-[#f8faf8]">
       <Header />
+
+      <UpcomingPanel />
 
       <CategoryManager />
 
