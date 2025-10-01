@@ -2,8 +2,9 @@
 import { useEffect, useMemo, useState } from "react";
 import Footer from "../components/Footer";
 import api from "../lib/api";
+import HeroSlider from "../components/HeroSlider";
 
-/* ----------------------- money helpers (minor → major) ---------------------- */
+/* money utils */
 function decimalsForCurrency(code) {
   const zero = new Set(["JPY", "KRW", "CLP", "VND"]);
   const three = new Set(["BHD", "IQD", "JOD", "KWD", "OMR", "TND"]);
@@ -16,12 +17,11 @@ function minorToMajorNumber(minor, currency) {
   return minor / Math.pow(10, d);
 }
 
-/* --------------------- hook: this month's expense total --------------------- */
+/* hooks */
 function useMonthlyExpenseTotal(baseCurrency) {
-  const [tx, setTx] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
+  const [tx, setTx] = useState([]),
+    [loading, setLoading] = useState(true),
+    [error, setError] = useState("");
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -44,12 +44,10 @@ function useMonthlyExpenseTotal(baseCurrency) {
       mounted = false;
     };
   }, []);
-
   const totalMajor = useMemo(() => {
     if (!baseCurrency) return 0;
-
     const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1); // first day 00:00
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
     const end = new Date(
       now.getFullYear(),
       now.getMonth() + 1,
@@ -58,25 +56,22 @@ function useMonthlyExpenseTotal(baseCurrency) {
       59,
       59,
       999
-    ); // last day 23:59:59
-
+    );
     let sumMinor = 0;
     for (const t of tx) {
       if (t.type !== "expense") continue;
-      if (t.currency !== baseCurrency) continue; // simple same-currency sum
+      if (t.currency !== baseCurrency) continue;
       const d = new Date(t.date);
       if (d >= start && d <= end) sumMinor += t.amountMinor;
     }
     return minorToMajorNumber(sumMinor, baseCurrency);
   }, [tx, baseCurrency]);
-
   return { totalMajor, loading, error };
 }
 function useMonthlyIncomeTotal(baseCurrency) {
-  const [tx, setTx] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
+  const [tx, setTx] = useState([]),
+    [loading, setLoading] = useState(true),
+    [error, setError] = useState("");
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -99,12 +94,10 @@ function useMonthlyIncomeTotal(baseCurrency) {
       mounted = false;
     };
   }, []);
-
   const totalMajor = useMemo(() => {
     if (!baseCurrency) return 0;
-
     const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1); // first day 00:00
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
     const end = new Date(
       now.getFullYear(),
       now.getMonth() + 1,
@@ -113,25 +106,22 @@ function useMonthlyIncomeTotal(baseCurrency) {
       59,
       59,
       999
-    ); // last day 23:59:59
-
+    );
     let sumMinor = 0;
     for (const t of tx) {
       if (t.type !== "income") continue;
-      if (t.currency !== baseCurrency) continue; // simple same-currency sum
+      if (t.currency !== baseCurrency) continue;
       const d = new Date(t.date);
       if (d >= start && d <= end) sumMinor += t.amountMinor;
     }
     return minorToMajorNumber(sumMinor, baseCurrency);
   }, [tx, baseCurrency]);
-
   return { totalMajor, loading, error };
 }
 function useMonthlyInvestmentTotal(baseCurrency) {
-  const [tx, setTx] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
+  const [tx, setTx] = useState([]),
+    [loading, setLoading] = useState(true),
+    [error, setError] = useState("");
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -154,12 +144,10 @@ function useMonthlyInvestmentTotal(baseCurrency) {
       mounted = false;
     };
   }, []);
-
   const totalMajor = useMemo(() => {
     if (!baseCurrency) return 0;
-
     const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1); // first day 00:00
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
     const end = new Date(
       now.getFullYear(),
       now.getMonth() + 1,
@@ -168,25 +156,22 @@ function useMonthlyInvestmentTotal(baseCurrency) {
       59,
       59,
       999
-    ); // last day 23:59:59
-
+    );
     let sumMinor = 0;
     for (const t of tx) {
       if (t.type !== "investment") continue;
-      if (t.currency !== baseCurrency) continue; // simple same-currency sum
+      if (t.currency !== baseCurrency) continue;
       const d = new Date(t.date);
       if (d >= start && d <= end) sumMinor += t.amountMinor;
     }
     return minorToMajorNumber(sumMinor, baseCurrency);
   }, [tx, baseCurrency]);
-
   return { totalMajor, loading, error };
 }
 
 export default function Dashboard() {
   const [me, setMe] = useState(null);
   const [err, setErr] = useState("");
-
   useEffect(() => {
     api
       .get("/me")
@@ -197,77 +182,82 @@ export default function Dashboard() {
   const main = "#4f772d";
   const secondary = "#90a955";
 
-  // monthly expenses (live)
   const {
     totalMajor: monthlyExpense,
     loading: expLoading,
     error: expErr,
   } = useMonthlyExpenseTotal(me?.baseCurrency || "USD");
-  //monthly income (live)
   const {
     totalMajor: monthlyIncome,
     loading: incLoading,
     error: incErr,
   } = useMonthlyIncomeTotal(me?.baseCurrency || "USD");
-  //monthly investments (live)
   const {
     totalMajor: monthlyInvestments,
     loading: invLoading,
     error: invErr,
   } = useMonthlyInvestmentTotal(me?.baseCurrency || "USD");
 
+  /* Slides */
+  const slides = [
+    {
+      image: "../../src/assets/investmentMeme.gif",
+      alt: "Finance background",
+      title: "See it. Track it.",
+      subtitle:
+        "Real-time visibility into your cash flow, spending, and investments — all in one place. Stay compliant with your own rules and never miss a beat.",
+      ctas: [
+        { label: "GET ADVICE", href: "/ai/financial-advice" },
+        { label: "VIEW REPORTS", href: "/reports" },
+      ],
+      card: { main, secondary },
+      dim: false,
+    },
+    {
+      image:
+        "https://images.unsplash.com/photo-1553729784-e91953dec042?w=1920&q=80&auto=format&fit=crop",
+      alt: "Charts and analytics",
+      title: "A clear picture of your money — instantly",
+      subtitle:
+        "Track expenses, monitor income, and keep an eye on investments.",
+      ctas: [{ label: "Open Dashboard", href: "/reports" }],
+      dim: true,
+    },
+    {
+      image:
+        "https://images.unsplash.com/photo-1554224155-1696413565d3?w=1920&q=80&auto=format&fit=crop",
+      alt: "Wallet & receipts",
+      title: "Control your spending",
+      subtitle: "Categorize, filter by date, and export with one click.",
+      ctas: [{ label: "Go to Expenses", href: "/expenses" }],
+      dim: true,
+    },
+    {
+      image:
+        "https://images.unsplash.com/photo-1517148815978-75f6acaaf32c?w=1920&q=80&auto=format&fit=crop",
+      alt: "Stock market display",
+      title: "Invest with clarity",
+      subtitle: "Positions, P&L, and performance in one clean view.",
+      ctas: [{ label: "View Investments", href: "/investments/performance" }],
+      dim: true,
+    },
+  ];
+
+  // If your navbar is fixed and ~64px tall, set topOffset=64 below.
   return (
     <div className="min-h-dvh bg-white">
-      {/* Hero */}
-      <section className="relative">
-        <div
-          className="h-[360px] md:h-[460px] bg-center bg-cover"
-          style={{ backgroundImage: "url('/hero.jpg')" }}
+      {/* FULL-BLEED HERO */}
+      <section className="relative w-screen">
+        <HeroSlider
+          slides={slides}
+          fullscreen
+          topOffset={64} // adjust if your header height differs (or 0 if not fixed)
+          className="rounded-none"
         />
-        {/* Overlay card */}
-        <div className="absolute inset-0 flex items-center">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 w-full">
-            <div className="max-w-xl bg-white/90 backdrop-blur rounded shadow-md p-6 md:p-8">
-              <h1
-                className="text-3xl md:text-4xl font-bold leading-tight"
-                style={{ color: main }}
-              >
-                See it. Track it.
-              </h1>
-              <p className="mt-3 text-gray-700">
-                Real-time visibility into your cash flow, spending, and
-                investments — all in one place. Stay compliant with your own
-                rules and never miss a beat.
-              </p>
-
-              <div className="mt-6 flex flex-wrap items-center gap-3">
-                <a
-                  href="/ai/financial-advice"
-                  className="px-5 py-2.5 rounded font-semibold text-white transition"
-                  style={{ backgroundColor: main }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.backgroundColor = secondary)
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.backgroundColor = main)
-                  }
-                >
-                  GET ADVICE
-                </a>
-                <a
-                  href="/reports"
-                  className="px-5 py-2.5 rounded font-semibold border"
-                  style={{ borderColor: main, color: main }}
-                >
-                  VIEW REPORTS
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
       </section>
-      {/* Social proof / stats */}
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10 md:py-14">
+
+      {/* Content */}
+      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12 md:py-16">
         <h2
           className="text-2xl md:text-3xl font-semibold text-center"
           style={{ color: main }}
@@ -279,7 +269,6 @@ export default function Dashboard() {
           keep an eye on investments with Nummora. Export, share, and automate.
         </p>
 
-        {/* KPI cards */}
         <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
           <StatCard
             title="This Month's Expenses"
@@ -323,93 +312,7 @@ export default function Dashboard() {
         {invErr && (
           <div className="text-red-600 mt-2 text-center">{invErr}</div>
         )}
-
-        {/* {me && (
-          <div
-            className="mt-8 rounded border bg-white p-5 shadow-sm max-w-3xl mx-auto"
-            style={{ borderColor: secondary }}
-          >
-            <h3 className="font-semibold mb-3" style={{ color: main }}>
-              Profile
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-              <div>
-                <span className="font-medium" style={{ color: main }}>
-                  Name:
-                </span>{" "}
-                {me.name}
-              </div>
-              <div>
-                <span className="font-medium" style={{ color: main }}>
-                  Email:
-                </span>{" "}
-                {me.email}
-              </div>
-              <div>
-                <span className="font-medium" style={{ color: main }}>
-                  Base currency:
-                </span>{" "}
-                {me.baseCurrency}
-              </div>
-              <div>
-                <span className="font-medium" style={{ color: main }}>
-                  TZ:
-                </span>{" "}
-                {me.tz}
-              </div>
-            </div>
-          </div>
-        )} */}
       </section>
-      {/* <Footer
-        main={main}
-        secondary={secondary}
-        brand={{ name: "Nummora", tagline: "A clearer way to see your money." }}
-        socials={{
-          x: "https://x.com/yourhandle",
-          github: "https://github.com/yourorg",
-          linkedin: "https://www.linkedin.com/company/yourorg",
-        }}
-      />{" "} */}
-      <section className="bg-gray-50 border-t">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-gray-700">
-            Ready to dive deeper into your finances?
-          </p>
-          <div className="flex items-center gap-3">
-            <a
-              href="/expenses"
-              className="px-4 py-2 rounded text-white transition"
-              style={{ backgroundColor: main }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.backgroundColor = secondary)
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.backgroundColor = main)
-              }
-            >
-              Go to Expenses
-            </a>
-            <a
-              href="/investments"
-              className="px-4 py-2 rounded border"
-              style={{ borderColor: main, color: main }}
-            >
-              View Investments
-            </a>
-          </div>
-        </div>
-      </section>
-      {/* <Footer
-        main={main}
-        secondary={secondary}
-        brand={{ name: "Nummora", tagline: "A clearer way to see your money." }}
-        socials={{
-          x: "https://x.com/yourhandle",
-          github: "https://github.com/yourorg",
-          linkedin: "https://www.linkedin.com/company/yourorg",
-        }}
-      /> */}
     </div>
   );
 }
@@ -429,7 +332,7 @@ function StatCard({ title, value, main, secondary }) {
   );
 }
 
-/** currency helper (safe fallback) */
+/** currency helper */
 function formatCurrency(n, currency = "USD") {
   try {
     return new Intl.NumberFormat(undefined, {
