@@ -6,9 +6,9 @@ const SLIDE_INTERVAL_MS = 6000;
 
 /**
  * Props:
- * - slides: array (same as before)
+ * - slides: array (title, subtitle, image, ctas[], card?: { main, secondary }, dim?: boolean)
  * - className: extra classes for the outer <section>
- * - fullscreen: boolean → if true, the slider fills the viewport (minus topOffset)
+ * - fullscreen: boolean → if true, fills viewport height minus topOffset
  * - topOffset: number → pixels to subtract for fixed nav height (default 0)
  */
 export default function HeroSlider({
@@ -117,10 +117,11 @@ export default function HeroSlider({
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
         const active = el.querySelector("[data-active='true'] .js-parallax");
-        if (active)
+        if (active) {
           active.style.transform = `translate(${dx * 10}px, ${
             dy * 8
           }px) scale(1.06)`;
+        }
       });
     };
     const reset = () => {
@@ -137,14 +138,16 @@ export default function HeroSlider({
 
   if (!slides.length) return null;
 
-  // dynamic height if fullscreen
+  // Height logic (fix): default = 75dvh; if fullscreen, use calc(100dvh - topOffset)
   const sliderStyle = fullscreen
-    ? { height: "75dvh", minHeight: "40px" } // HERE CHANGED
-    : { height: `calc(100dvh - ${topOffset || 0}px)` };
+    ? { height: `calc(100dvh - ${topOffset || 0}px)`, minHeight: "480px" }
+    : { height: "75dvh", minHeight: "480px" };
+
   return (
     <section
       ref={rootRef}
-      className={`relative w-full overflow-hidden h-[75vh] min-h-[480px] ${className}`}
+      style={sliderStyle}
+      className={`relative w-full overflow-hidden rounded-3xl ${className}`}
       aria-roledescription="carousel"
       aria-label="Featured content"
       onMouseEnter={pause}
@@ -158,62 +161,126 @@ export default function HeroSlider({
             <li
               key={i}
               data-active={active ? "true" : "false"}
-              className={`absolute inset-0 transition-opacity duration-700 ease-in-out
-                     ${active ? "opacity-100" : "opacity-0"}`}
+              className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
+                active ? "opacity-100" : "opacity-0"
+              }`}
+              aria-hidden={active ? "false" : "true"}
             >
               {/* background */}
               <img
                 src={s.image}
-                alt={s.alt || ""}
-                className="h-full w-full object-cover"
+                alt={s.alt || s.title || ""}
+                className="js-parallax h-full w-full object-cover"
+                loading={i === 0 ? "eager" : "lazy"}
+                fetchpriority={i === 0 ? "high" : undefined}
               />
+              {/* subtle contrast helpers */}
+              <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-black/10 to-black/35" />
+              {s.dim && <div className="absolute inset-0 bg-black/20" />}
 
-              {/* overlay text */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-center text-white px-4">
-                  <h2 className="text-4xl md:text-6xl font-bold">{s.title}</h2>
-                  {s.subtitle && (
-                    <p className="mt-3 text-lg md:text-xl">{s.subtitle}</p>
-                  )}
-                  {!!s.ctas?.length && (
-                    <div className="mt-6 flex flex-wrap justify-center gap-3">
-                      {s.ctas.map((c, idx) => (
-                        <a
-                          key={idx}
-                          href={c.href}
-                          className="px-5 py-2.5 rounded bg-white/80 text-black font-semibold hover:bg-white transition"
-                        >
-                          {c.label}
-                        </a>
-                      ))}
+              {/* overlay content */}
+              {s.card ? (
+                // CARD MODE — your original white box + CTAs (left/center area)
+                <div className="absolute inset-0 flex items-center">
+                  <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 w-full">
+                    <div className="max-w-xl bg-white/85 backdrop-blur-md rounded-2xl shadow-lg p-6 md:p-8 ring-1 ring-black/5">
+                      <h2
+                        className="text-3xl md:text-4xl font-bold leading-tight"
+                        style={{ color: s.card.main }}
+                      >
+                        {s.title}
+                      </h2>
+                      {s.subtitle && (
+                        <p className="mt-3 text-gray-700">{s.subtitle}</p>
+                      )}
+                      {!!s.ctas?.length && (
+                        <div className="mt-6 flex flex-wrap items-center gap-3">
+                          {s.ctas.map((c, idx) => (
+                            <a
+                              key={idx}
+                              href={c.href}
+                              className={
+                                idx === 0
+                                  ? "px-5 py-2.5 rounded font-semibold text-white transition"
+                                  : "px-5 py-2.5 rounded font-semibold border"
+                              }
+                              style={
+                                idx === 0
+                                  ? { backgroundColor: s.card.main }
+                                  : {
+                                      borderColor: s.card.main,
+                                      color: s.card.main,
+                                    }
+                              }
+                              onMouseEnter={(e) => {
+                                if (idx === 0 && s.card?.secondary)
+                                  e.currentTarget.style.backgroundColor =
+                                    s.card.secondary;
+                              }}
+                              onMouseLeave={(e) => {
+                                if (idx === 0)
+                                  e.currentTarget.style.backgroundColor =
+                                    s.card.main;
+                              }}
+                            >
+                              {c.label}
+                            </a>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                // MINIMAL MODE — centered text + optional CTAs (no box)
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="text-center text-white px-4">
+                    <h2 className="text-4xl md:text-6xl font-bold">
+                      {s.title}
+                    </h2>
+                    {s.subtitle && (
+                      <p className="mt-3 text-lg md:text-xl text-white/90">
+                        {s.subtitle}
+                      </p>
+                    )}
+                    {!!s.ctas?.length && (
+                      <div className="mt-6 flex flex-wrap justify-center gap-3">
+                        {s.ctas.map((c, idx) => (
+                          <a
+                            key={idx}
+                            href={c.href}
+                            className="px-5 py-2.5 rounded bg-white/80 text-black font-semibold hover:bg-white transition"
+                          >
+                            {c.label}
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </li>
           );
         })}
       </ul>
 
-      {/* arrows */}
+      {/* arrows (subtle) */}
       <button
         onClick={prev}
         aria-label="Previous slide"
-        className="absolute left-4 top-1/2 -translate-y-1/2
-               text-white/70 hover:text-white text-3xl font-light"
+        className="absolute left-4 top-1/2 -translate-y-1/2 text-white/70 hover:text-white text-3xl font-light"
       >
         ‹
       </button>
       <button
         onClick={next}
         aria-label="Next slide"
-        className="absolute right-4 top-1/2 -translate-y-1/2
-               text-white/70 hover:text-white text-3xl font-light"
+        className="absolute right-4 top-1/2 -translate-y-1/2 text-white/70 hover:text-white text-3xl font-light"
       >
         ›
       </button>
 
-      {/* dots */}
+      {/* dots (thin pills) */}
       <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-2">
         {slides.map((_, i) => (
           <button
@@ -221,12 +288,9 @@ export default function HeroSlider({
             onClick={() => goTo(i)}
             aria-label={`Go to slide ${i + 1}`}
             aria-current={i === index ? "true" : "false"}
-            className={`h-1 w-6 rounded-full transition-colors
-                   ${
-                     i === index
-                       ? "bg-white/80"
-                       : "bg-white/30 hover:bg-white/50"
-                   }`}
+            className={`h-1 w-6 rounded-full transition-colors ${
+              i === index ? "bg-white/80" : "bg-white/30 hover:bg-white/50"
+            }`}
           />
         ))}
       </div>

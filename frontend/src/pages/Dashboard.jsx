@@ -201,7 +201,7 @@ export default function Dashboard() {
   /* Slides */
   const slides = [
     {
-      image: "../../src/assets/investmentMeme.gif",
+      image: "../../src/assets/see_it_track_it_1.avif",
       alt: "Finance background",
       title: "See it. Track it.",
       subtitle:
@@ -241,6 +241,14 @@ export default function Dashboard() {
       ctas: [{ label: "View Investments", href: "/investments/performance" }],
       dim: true,
     },
+    {
+      image: "https://images.unsplash.com/photo-1550547660-d9450f859349",
+      alt: "Hamburger meal display",
+      title: "Want fries with that?",
+      subtitle: "Check out our new AI based advicer if it is healthy for ya!.",
+      ctas: [{ label: "AI Financial Mentor", href: "/ai/financial-helper" }],
+      dim: true,
+    },
   ];
 
   // If your navbar is fixed and ~64px tall, set topOffset=64 below.
@@ -248,12 +256,7 @@ export default function Dashboard() {
     <div className="min-h-dvh bg-white">
       {/* FULL-BLEED HERO */}
       <section className="relative w-screen">
-        <HeroSlider
-          slides={slides}
-          fullscreen
-          topOffset={64} // adjust if your header height differs (or 0 if not fixed)
-          className="rounded-none"
-        />
+        <HeroSlider slides={slides} minHeight={480} className="rounded-none" />
       </section>
 
       {/* Content */}
