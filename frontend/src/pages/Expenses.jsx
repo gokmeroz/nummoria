@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-labels */
 /* eslint-disable no-undef */
 /* eslint-disable no-empty */
 /* eslint-disable react-hooks/rules-of-hooks */
@@ -47,6 +48,22 @@ function startOfUTC(dateLike) {
   d.setUTCHours(0, 0, 0, 0);
   return d;
 }
+function startOfMonthUTC(dateLike) {
+  const d = new Date(dateLike);
+  return startOfUTC(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)));
+}
+function endOfMonthUTC(dateLike) {
+  const d = new Date(dateLike);
+  return new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0, 23, 59, 59, 999)
+  );
+}
+function addMonthsUTC(dateLike, n) {
+  const d = new Date(dateLike);
+  return new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, d.getUTCDate())
+  );
+}
 function fmtDateUTC(dateLike) {
   const d = new Date(dateLike);
   return d.toLocaleDateString(DATE_LANG, {
@@ -90,7 +107,7 @@ export default function ExpensesScreen({ accountId }) {
     amount: "",
     currency: "USD",
     date: new Date().toISOString().slice(0, 10),
-    nextDate: "", // NEW
+    nextDate: "",
     categoryId: "",
     description: "",
     tagsCsv: "",
@@ -173,6 +190,8 @@ export default function ExpensesScreen({ accountId }) {
   /* ------------------------------- Filtering -------------------------------- */
   const rows = useMemo(() => {
     const start = fStartISO ? new Date(`${fStartISO}T00:00:00.000Z`) : null;
+    theEnd: {
+    }
     const end = fEndISO ? new Date(`${fEndISO}T23:59:59.999Z`) : null;
 
     const minNum = fMin !== "" ? Number(fMin) : null;
@@ -362,6 +381,89 @@ export default function ExpensesScreen({ accountId }) {
     accountsById,
   ]);
 
+  /* --------- Insights (KPIs + charts; reflects current filters) ----- */
+  const { statsCurrency, kpis, monthCats, pieData, noteMixedCurrency } =
+    useMemo(() => {
+      // pick a working currency for stats
+      const chosen =
+        fCurrency !== "ALL" ? fCurrency : rows[0]?.currency || "USD";
+
+      const filteredByCur = rows.filter((r) =>
+        chosen ? r.currency === chosen : true
+      );
+
+      const now = new Date();
+      const thisStart = startOfMonthUTC(now);
+      const thisEnd = endOfMonthUTC(now);
+      const lastStart = startOfMonthUTC(addMonthsUTC(now, -1));
+      const lastEnd = endOfMonthUTC(addMonthsUTC(now, -1));
+
+      const minorSum = (arr) =>
+        arr.reduce((acc, t) => acc + Number(t.amountMinor || 0), 0);
+
+      const within = (arr, s, e) =>
+        arr.filter((t) => {
+          const d = new Date(t.date);
+          return d >= s && d <= e;
+        });
+
+      const thisMonth = within(filteredByCur, thisStart, thisEnd);
+      const lastMonth = within(filteredByCur, lastStart, lastEnd);
+
+      // Yearly average: average of monthly totals (current year to current month)
+      const monthsPassed = now.getUTCMonth() + 1;
+      let yearMinor = 0;
+      for (let m = 0; m < monthsPassed; m++) {
+        const s = startOfMonthUTC(
+          new Date(Date.UTC(now.getUTCFullYear(), m, 1))
+        );
+        const e = endOfMonthUTC(new Date(Date.UTC(now.getUTCFullYear(), m, 1)));
+        yearMinor += minorSum(within(filteredByCur, s, e));
+      }
+
+      const k = {
+        last: minorSum(lastMonth),
+        this: minorSum(thisMonth),
+        yearlyAvg: monthsPassed ? Math.round(yearMinor / monthsPassed) : 0,
+      };
+
+      // This month by category (ALL categories)
+      const catMap = new Map();
+      for (const t of thisMonth) {
+        const key = t.categoryId || "—";
+        catMap.set(key, (catMap.get(key) || 0) + Number(t.amountMinor || 0));
+      }
+      const monthCats = Array.from(catMap.entries())
+        .map(([cid, minor]) => ({
+          name: categoriesById.get(cid)?.name || "—",
+          minor,
+        }))
+        .sort((a, b) => b.minor - a.minor); // no slice()
+
+      // Pie: distribution by category for filtered range
+      const pieMap = new Map();
+      for (const t of filteredByCur) {
+        const key = t.categoryId || "—";
+        pieMap.set(key, (pieMap.get(key) || 0) + Number(t.amountMinor || 0));
+      }
+      const total = Array.from(pieMap.values()).reduce((a, b) => a + b, 0) || 1;
+      const pieData = Array.from(pieMap.entries())
+        .map(([cid, minor]) => ({
+          name: categoriesById.get(cid)?.name || "—",
+          minor,
+          pct: minor / total,
+        }))
+        .sort((a, b) => b.minor - a.minor);
+
+      return {
+        statsCurrency: chosen,
+        kpis: k,
+        monthCats,
+        pieData,
+        noteMixedCurrency: fCurrency === "ALL",
+      };
+    }, [rows, fCurrency, categoriesById]);
+
   /* --------------------------------- CRUD Tx -------------------------------- */
   function openCreate() {
     const defaultAccId = accountId || accounts[0]?._id || "";
@@ -373,7 +475,7 @@ export default function ExpensesScreen({ accountId }) {
       amount: "",
       currency: defaultCur,
       date: new Date().toISOString().slice(0, 10),
-      nextDate: "", // NEW
+      nextDate: "",
       categoryId: categories[0]?._id || "",
       description: "",
       tagsCsv: "",
@@ -389,7 +491,7 @@ export default function ExpensesScreen({ accountId }) {
       amount: minorToMajor(seed.amountMinor, seed.currency),
       currency: seed.currency,
       date: new Date(seed.date).toISOString().slice(0, 10),
-      nextDate: "", // do not chain unless user sets it
+      nextDate: "",
       categoryId: seed.categoryId || "",
       description: seed.description || "",
       tagsCsv: (seed.tags || []).join(", "),
@@ -406,7 +508,7 @@ export default function ExpensesScreen({ accountId }) {
       date: new Date(tx.date).toISOString().slice(0, 10),
       nextDate: tx.nextDate
         ? new Date(tx.nextDate).toISOString().slice(0, 10)
-        : "", // NEW
+        : "",
       categoryId: tx.categoryId || "",
       description: tx.description || "",
       tagsCsv: (tx.tags || []).join(", "),
@@ -442,6 +544,191 @@ export default function ExpensesScreen({ accountId }) {
       >
         {label}
       </button>
+    );
+  }
+
+  /* -------- Mini Charts (pure SVG) -------- */
+  function BarChart({ data, currency }) {
+    const pad = 36;
+    const perBar = 60; // px per category
+    const width = Math.max(540, pad * 2 + data.length * perBar);
+    const height = 240;
+    const max = Math.max(1, ...data.map((d) => d.minor));
+    const bw = (width - pad * 2) / Math.max(1, data.length);
+    const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => Math.round(t * max));
+
+    return (
+      <div className="overflow-x-auto">
+        <svg
+          width={width}
+          height={height}
+          className="rounded-xl border bg-white"
+        >
+          {/* gridlines */}
+          {ticks.map((val, i) => {
+            const y = height - pad - (val / max) * (height - pad * 2);
+            return (
+              <g key={i}>
+                <line x1={pad} y1={y} x2={width - pad} y2={y} stroke="#eee" />
+                <text
+                  x={pad - 8}
+                  y={y + 4}
+                  textAnchor="end"
+                  fontSize="11"
+                  fill="#8a8a8a"
+                >
+                  {fmtMoney(val, currency)}
+                </text>
+              </g>
+            );
+          })}
+          {/* x-axis */}
+          <line
+            x1={pad}
+            y1={height - pad}
+            x2={width - pad}
+            y2={height - pad}
+            stroke="#ddd"
+          />
+          {/* bars */}
+          {data.map((d, i) => {
+            const h = (d.minor / max) * (height - pad * 2);
+            const x = pad + i * bw + bw * 0.18;
+            const y = height - pad - h;
+            const w = bw * 0.64;
+            return (
+              <g key={i}>
+                <rect
+                  x={x}
+                  y={y}
+                  width={w}
+                  height={h}
+                  rx="8"
+                  ry="8"
+                  fill={secondary}
+                  opacity="0.95"
+                >
+                  <title>{`${d.name}: ${fmtMoney(d.minor, currency)}`}</title>
+                </rect>
+                <text
+                  x={x + w / 2}
+                  y={height - pad + 18}
+                  textAnchor="middle"
+                  fontSize="12"
+                  fill="#555"
+                >
+                  {d.name.length > 12 ? d.name.slice(0, 12) + "…" : d.name}
+                </text>
+                <text
+                  x={x + w / 2}
+                  y={y - 6}
+                  textAnchor="middle"
+                  fontSize="12"
+                  fill="#222"
+                  fontWeight="600"
+                >
+                  {fmtMoney(d.minor, currency)}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    );
+  }
+
+  function PieChart({ data, currency }) {
+    const size = 320,
+      r = 120,
+      hole = 62,
+      cx = size / 2,
+      cy = size / 2;
+    const total = Math.max(
+      1,
+      data.reduce((a, d) => a + d.minor, 0)
+    );
+    let angle = -Math.PI / 2;
+
+    const segs = data.map((d, i) => {
+      const a0 = angle;
+      const a1 = angle + (d.minor / total) * Math.PI * 2;
+      angle = a1;
+      const large = a1 - a0 > Math.PI ? 1 : 0;
+      const x0 = cx + r * Math.cos(a0);
+      const y0 = cy + r * Math.sin(a0);
+      const x1 = cx + r * Math.cos(a1);
+      const y1 = cy + r * Math.sin(a1);
+
+      const xi0 = cx + hole * Math.cos(a0);
+      const yi0 = cy + hole * Math.sin(a0);
+      const xi1 = cx + hole * Math.cos(a1);
+      const yi1 = cy + hole * Math.sin(a1);
+
+      const path = [
+        `M ${x0} ${y0}`,
+        `A ${r} ${r} 0 ${large} 1 ${x1} ${y1}`,
+        `L ${xi1} ${yi1}`,
+        `A ${hole} ${hole} 0 ${large} 0 ${xi0} ${yi0}`,
+        "Z",
+      ].join(" ");
+
+      return {
+        d,
+        path,
+        color: `hsl(${(i * 36) % 360} 65% 58%)`,
+        pct: d.pct ?? d.minor / total,
+      };
+    });
+
+    return (
+      <div className="flex items-start gap-6">
+        <svg width={size} height={size} className="border rounded-xl bg-white">
+          {segs.map((s, i) => (
+            <g key={i}>
+              <path d={s.path} fill={s.color} stroke="#fff" strokeWidth="1.5">
+                <title>{`${s.d.name}: ${fmtMoney(
+                  s.d.minor,
+                  currency
+                )} (${Math.round(s.pct * 100)}%)`}</title>
+              </path>
+            </g>
+          ))}
+          <circle cx={cx} cy={cy} r={hole - 6} fill="#fff" />
+          <text x={cx} y={cy - 4} textAnchor="middle" fontSize="13" fill="#666">
+            Total
+          </text>
+          <text
+            x={cx}
+            y={cy + 16}
+            textAnchor="middle"
+            fontSize="14"
+            fill="#111"
+            fontWeight="700"
+          >
+            {fmtMoney(total, currency)}
+          </text>
+        </svg>
+
+        <div className="text-sm space-y-2 min-w-[200px]">
+          {data.map((s, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <span
+                className="inline-block w-3.5 h-3.5 rounded-sm"
+                style={{ background: `hsl(${(i * 36) % 360} 65% 58%)` }}
+              />
+              <span className="truncate max-w-[150px]" title={s.name}>
+                {s.name}
+              </span>
+              <span className="ml-auto font-medium">
+                {fmtMoney(s.minor, currency)}
+              </span>
+              <span className="ml-1 text-xs text-gray-500">
+                {Math.round((s.pct ?? 0) * 100)}%
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
     );
   }
 
@@ -769,7 +1056,6 @@ export default function ExpensesScreen({ accountId }) {
     if (!showUpcoming) return null;
 
     async function addVirtual(v) {
-      // Create the upcoming copy
       try {
         const { data } = await api.post("/transactions", {
           accountId: v.accountId,
@@ -782,7 +1068,6 @@ export default function ExpensesScreen({ accountId }) {
           tags: v.tags || [],
         });
 
-        // Clear parent's nextDate so it no longer appears as virtual
         if (v.__kind === "virtual" && v.__parentId) {
           try {
             await api.put(`/transactions/${v.__parentId}`, { nextDate: null });
@@ -995,7 +1280,7 @@ export default function ExpensesScreen({ accountId }) {
     const amountRef = useRef(null);
     const currencyRef = useRef(null);
     const dateRef = useRef(null);
-    const nextDateRef = useRef(null); // NEW
+    const nextDateRef = useRef(null);
     const categoryRef = useRef(null);
     const descRef = useRef(null);
     const tagsRef = useRef(null);
@@ -1007,7 +1292,7 @@ export default function ExpensesScreen({ accountId }) {
       const amount = amountRef.current?.value ?? "";
       const currency = (currencyRef.current?.value ?? "USD").toUpperCase();
       const date = dateRef.current?.value ?? "";
-      const nextDate = nextDateRef.current?.value ?? ""; // NEW
+      const nextDate = nextDateRef.current?.value ?? "";
       const categoryId = categoryRef.current?.value ?? "";
       const description = (descRef.current?.value ?? "").trim();
       const tagsCsv = tagsRef.current?.value ?? "";
@@ -1214,9 +1499,7 @@ export default function ExpensesScreen({ accountId }) {
   return (
     <div className="min-h-[100dvh] bg-[#f8faf8]">
       <Header />
-
       <UpcomingPanel />
-
       <CategoryManager />
 
       {err ? (
@@ -1225,17 +1508,95 @@ export default function ExpensesScreen({ accountId }) {
         </div>
       ) : null}
 
-      {rows.length === 0 ? (
-        <div className="p-6 text-center text-gray-600">
-          No expenses found. Add your first one or adjust filters.
+      {/* === TWO-PANE LAYOUT 50/50 WITH VERTICAL DIVIDER === */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1px_1fr] gap-4 mx-4">
+        {/* Left: list */}
+        <div className="rounded-xl overflow-hidden border">
+          {rows.length === 0 ? (
+            <div className="p-6 text-center text-gray-600">
+              No expenses found. Add your first one or adjust filters.
+            </div>
+          ) : (
+            <div>
+              {rows.map((item) => (
+                <Row key={item._id} item={item} />
+              ))}
+            </div>
+          )}
         </div>
-      ) : (
-        <div>
-          {rows.map((item) => (
-            <Row key={item._id} item={item} />
-          ))}
-        </div>
-      )}
+
+        {/* Vertical divider */}
+        <div className="hidden lg:block border-l border-gray-300" />
+
+        {/* Right: Insights */}
+        <aside className="lg:sticky lg:top-20 min-w-0 h-max space-y-4">
+          <div className="p-4 bg-white border rounded-xl">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold">Insights</h2>
+              <span className="text-xs px-2 py-0.5 rounded-full border text-gray-600">
+                {(fCurrency !== "ALL" ? fCurrency : rows[0]?.currency) || "—"}
+              </span>
+            </div>
+            {noteMixedCurrency && (
+              <div className="mt-2 text-xs text-gray-500">
+                KPIs/Charts are calculated in{" "}
+                <span className="font-medium">{statsCurrency}</span>. Pick a
+                currency in Filters to switch.
+              </div>
+            )}
+
+            {/* KPIs */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+              <div className="p-3 rounded-lg border bg-[#fafdf9]">
+                <div className="text-xs text-gray-600">Last Month</div>
+                <div className="text-xl font-bold">
+                  {fmtMoney(kpis.last, statsCurrency)}
+                </div>
+              </div>
+              <div className="p-3 rounded-lg border bg-[#fafdf9]">
+                <div className="text-xs text-gray-600">This Month</div>
+                <div className="text-xl font-bold">
+                  {fmtMoney(kpis.this, statsCurrency)}
+                </div>
+              </div>
+              <div className="p-3 rounded-lg border bg-[#fafdf9]">
+                <div className="text-xs text-gray-600">Yearly Average</div>
+                <div className="text-xl font-bold">
+                  {fmtMoney(kpis.yearlyAvg, statsCurrency)}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Bar: this month by category (ALL) */}
+          <div className="p-4 bg-white border rounded-xl">
+            <div className="flex items-center justify-between mb-2">
+              <div className="font-semibold">This Month by Category</div>
+              <div className="text-xs text-gray-500">
+                {monthCats.length} categories
+              </div>
+            </div>
+            {monthCats.length ? (
+              <BarChart data={monthCats} currency={statsCurrency} />
+            ) : (
+              <div className="text-sm text-gray-500">
+                No data for this month.
+              </div>
+            )}
+          </div>
+
+          {/* Pie: distribution (filtered range) */}
+          <div className="p-4 bg-white border rounded-xl">
+            <div className="font-semibold mb-2">Category Distribution</div>
+            {pieData.length ? (
+              <PieChart data={pieData} currency={statsCurrency} />
+            ) : (
+              <div className="text-sm text-gray-500">No data to visualize.</div>
+            )}
+          </div>
+        </aside>
+      </div>
+
       <ExpenseModal />
     </div>
   );
