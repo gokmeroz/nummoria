@@ -19,7 +19,14 @@ export async function getMe(req, res) {
 export async function updateMe(req, res) {
   try {
     const updates = {};
-    const whitelist = ["name", "email", "profession", "tz", "baseCurrency"];
+    const whitelist = [
+      "name",
+      "email",
+      "profession",
+      "tz",
+      "baseCurrency",
+      "avatarUrl",
+    ];
     for (const key of whitelist) {
       if (req.body[key] !== undefined) updates[key] = req.body[key];
     }

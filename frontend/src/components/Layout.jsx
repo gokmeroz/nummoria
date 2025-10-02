@@ -64,11 +64,20 @@ export default function Layout({ onLogout }) {
               Logout
             </button>
             <Link to="/user" className="flex items-center gap-2 text-sm">
-              <div
-                className="w-9 h-9 rounded-full grid place-items-center text-white font-semibold"
-                style={{ backgroundColor: "#4f772d" }}
-              >
-                {me?.name ? me.name[0]?.toUpperCase() : "U"}
+              <div className="w-9 h-9 rounded-full overflow-hidden">
+                {me?.avatarUrl ? (
+                  <img
+                    src={me.avatarUrl}
+                    alt="User Avatar"
+                    className="h-9 w-9 object-cover"
+                  />
+                ) : (
+                  <img
+                    src="../src/assets/avatar.jpg"
+                    alt="Default Avatar"
+                    className="h-9 w-9 object-cover"
+                  />
+                )}
               </div>
               <span className="hidden sm:block text-gray-700">
                 {me?.name || "User"}

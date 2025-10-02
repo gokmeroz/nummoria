@@ -13,6 +13,7 @@ const userSchema = new mongoose.Schema(
     profession: { type: String },
     tz: { type: String, default: "UTC" },
     baseCurrency: { type: String, default: "USD" },
+    avatarUrl: { type: String, default: null },
   },
   { timestamps: { createdAt: "createdAt", updatedAt: false } }
 );

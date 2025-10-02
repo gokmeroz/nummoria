@@ -1,6 +1,12 @@
+/* eslint-disable no-unused-vars */
+/* eslint-disable no-redeclare */
+/* eslint-disable no-undef */
+/* eslint-disable no-empty */
 // src/pages/User.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import api from "../lib/api";
+// HERE CHANGED: import fallback avatar via bundler (reliable path in Vite)
+import defaultAvatar from "../assets/avatar.jpg";
 
 const ACCOUNT_TYPES = ["checking", "savings", "credit", "cash", "other"];
 const CURRENCIES = ["USD", "EUR", "TRY", "GBP"];
@@ -12,13 +18,17 @@ export default function UserPage() {
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
 
+  // avatar upload
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const fileRef = useRef(null);
+
   // profile fields
   const [name, setName] = useState("");
   const [profession, setProfession] = useState("");
   const [baseCurrency, setBaseCurrency] = useState("");
   const [tz, setTz] = useState("");
 
-  // accounts state
+  // accounts
   const [accounts, setAccounts] = useState([]);
   const [accErr, setAccErr] = useState("");
   const [accBusy, setAccBusy] = useState(false);
@@ -27,6 +37,14 @@ export default function UserPage() {
 
   const main = "#4f772d";
   const secondary = "#90a955";
+
+  // HERE CHANGED: cache-bust with avatarVersion/updatedAt and robust fallback
+  const avatarVersion = me?.avatarVersion || me?.updatedAt || 0;
+  const avatarSrc = me?.avatarUrl
+    ? `${me.avatarUrl}${
+        me.avatarUrl.includes("?") ? "&" : "?"
+      }v=${encodeURIComponent(avatarVersion)}`
+    : defaultAvatar;
 
   useEffect(() => {
     (async () => {
@@ -43,7 +61,7 @@ export default function UserPage() {
         setBaseCurrency(meData?.baseCurrency || "USD");
         setTz(meData?.tz || "UTC");
         setAccounts(
-          Array.isArray(accs) ? accs.filter((a) => !a.isDeleted) : []
+          (Array.isArray(accs) ? accs : []).filter((a) => !a.isDeleted)
         );
       } catch (e) {
         setErr(e.response?.data?.error || "Failed to load profile");
@@ -57,7 +75,9 @@ export default function UserPage() {
     try {
       setAccErr("");
       const { data } = await api.get("/accounts");
-      setAccounts(Array.isArray(data) ? data.filter((a) => !a.isDeleted) : []);
+      setAccounts(
+        (Array.isArray(data) ? data : []).filter((a) => !a.isDeleted)
+      );
     } catch (e) {
       setAccErr(e.response?.data?.error || "Failed to load accounts");
     }
@@ -75,12 +95,132 @@ export default function UserPage() {
         baseCurrency,
         tz,
       });
-      setMe(data);
+      // merge so we don't drop avatar fields
+      setMe((prev) => ({ ...(prev || {}), ...(data || {}) }));
       setMsg("Profile updated");
     } catch (e) {
       setErr(e.response?.data?.error || "Failed to update profile");
     } finally {
       setSaving(false);
+    }
+  }
+
+  // --- Avatar uploading (POST /me/avatar) ---
+  function extractErr(e) {
+    const status = e?.response?.status;
+    const msg =
+      e?.response?.data?.error ||
+      e?.response?.data?.message ||
+      e?.message ||
+      "Unknown error";
+    return { status, msg };
+  }
+
+  // HERE CHANGED: ensure toBlob polyfill safety & compress
+  async function compressImage(file, maxW = 1024, maxH = 1024, quality = 0.85) {
+    const img = document.createElement("img");
+    const blobUrl = URL.createObjectURL(file);
+    await new Promise((res, rej) => {
+      img.onload = res;
+      img.onerror = rej;
+      img.src = blobUrl;
+    });
+    let { width, height } = img;
+    const ratio = Math.min(maxW / width, maxH / height, 1);
+    width = Math.round(width * ratio);
+    height = Math.round(height * ratio);
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0, width, height);
+    URL.revokeObjectURL(blobUrl);
+
+    // Safari/older toBlob fallback
+    const blob = await new Promise((res) => {
+      if (canvas.toBlob) {
+        canvas.toBlob(res, "image/jpeg", quality);
+      } else {
+        const dataUrl = canvas.toDataURL("image/jpeg", quality);
+        const byteString = atob(dataUrl.split(",")[1]);
+        const mimeString = dataUrl.split(",")[0].split(":")[1].split(";")[0];
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteString.length; i++)
+          ia[i] = byteString.charCodeAt(i);
+        res(new Blob([ab], { type: mimeString }));
+      }
+    });
+
+    return new File([blob], file.name.replace(/\.\w+$/, ".jpg"), {
+      type: "image/jpeg",
+      lastModified: Date.now(),
+    });
+  }
+
+  // HERE CHANGED: robust upload with optimistic preview + error fallback
+  async function uploadAvatar(file) {
+    if (!file) return;
+    if (!file.type?.startsWith?.("image/")) {
+      setErr("Please select an image file.");
+      return;
+    }
+
+    let workFile = file;
+    // compress >600KB
+    if (file.size > 600 * 1024) {
+      try {
+        workFile = await compressImage(file);
+      } catch {
+        workFile = file; // fallback
+      }
+    }
+
+    setUploadingAvatar(true);
+    setErr("");
+    setMsg("");
+
+    // optimistic preview (object URL) — will be replaced by final URL once upload succeeds
+    const previewUrl = URL.createObjectURL(workFile);
+    setMe((prev) => ({
+      ...(prev || {}),
+      avatarUrl: previewUrl,
+      avatarVersion: Date.now(),
+    }));
+
+    try {
+      const fd = new FormData();
+      // IMPORTANT: field name must match backend. Keep 'avatar'.
+      fd.append("avatar", workFile, workFile.name || "avatar.jpg");
+
+      const { data } = await api.post("/me/avatar", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+        withCredentials: true, // in case your backend uses cookies
+      });
+
+      // Expect backend to return { avatarUrl, avatarVersion? }
+      setMe((prev) => ({
+        ...(prev || {}),
+        ...(data || {}),
+        avatarVersion: data?.avatarVersion ?? Date.now(),
+      }));
+      setMsg("Profile photo updated");
+    } catch (e) {
+      const { status, msg: m } = extractErr(e);
+      setErr(`Upload failed (${status || "?"}): ${m}`);
+
+      // revert optimistic preview to previous or fallback
+      setMe((prev) => ({
+        ...(prev || {}),
+        avatarUrl:
+          prev?.avatarUrl && !prev.avatarUrl.startsWith("blob:")
+            ? prev.avatarUrl
+            : undefined,
+        avatarVersion: Date.now(),
+      }));
+    } finally {
+      setUploadingAvatar(false);
+      if (fileRef.current) fileRef.current.value = "";
     }
   }
 
@@ -135,7 +275,7 @@ export default function UserPage() {
       {/* CONTENT */}
       <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 -mt-12 md:-mt-16 pb-12">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left: Profile form + Accounts manager */}
+          {/* Left: form + accounts */}
           <div className="lg:col-span-2 space-y-6">
             {/* Profile form */}
             <div
@@ -304,7 +444,7 @@ export default function UserPage() {
             </div>
           </div>
 
-          {/* Right: Profile card */}
+          {/* Right: Profile card with avatar edit */}
           <div>
             <div
               className="relative bg-white rounded-xl shadow border overflow-hidden"
@@ -317,14 +457,73 @@ export default function UserPage() {
                 }}
               />
               <div className="px-5 pb-5">
-                <div className="-mt-12 mb-3">
-                  <div
-                    className="w-24 h-24 rounded-full ring-4 ring-white grid place-items-center text-white text-2xl font-bold shadow"
-                    style={{ backgroundColor: main }}
+                <div className="-mt-12 mb-3 relative inline-block">
+                  {avatarSrc ? (
+                    <img
+                      key={String(avatarVersion)}
+                      src={avatarSrc}
+                      alt="Avatar"
+                      className="w-24 h-24 rounded-full ring-4 ring-white object-cover shadow"
+                      // HERE CHANGED: hard fallback if URL 404s/CORS breaks
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = defaultAvatar;
+                        // keep state clean so future uploads refresh
+                        setMe((prev) => ({
+                          ...(prev || {}),
+                          avatarUrl: undefined,
+                          avatarVersion: Date.now(),
+                        }));
+                      }}
+                    />
+                  ) : (
+                    <div
+                      className="w-24 h-24 rounded-full ring-4 ring-white grid place-items-center text-white text-2xl font-bold shadow"
+                      style={{ backgroundColor: main }}
+                    >
+                      {initials}
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => fileRef.current?.click()}
+                    disabled={uploadingAvatar}
+                    className="absolute -right-1 -bottom-1 p-2 rounded-full bg-white shadow ring-1 ring-black/10 hover:bg-gray-50 disabled:opacity-60"
+                    title="Edit photo"
                   >
-                    {initials}
-                  </div>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="w-4 h-4"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3l2-3h8l2 3h3a2 2 0 0 1 2 2z" />
+                      <circle cx="12" cy="13" r="4" />
+                    </svg>
+                  </button>
+
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => uploadAvatar(e.target.files?.[0])}
+                  />
                 </div>
+                {uploadingAvatar && (
+                  <div className="text-xs text-gray-500 mt-1">
+                    Uploading photo…
+                  </div>
+                )}
+                {err && <div className="text-sm text-red-600 mt-1">{err}</div>}
+                {msg && (
+                  <div className="text-sm text-[#4f772d] mt-1">{msg}</div>
+                )}
 
                 <div className="flex items-center justify-between">
                   <div>
@@ -334,6 +533,11 @@ export default function UserPage() {
                     <div className="text-sm text-gray-500">
                       {me?.profession || "Add your profession"}
                     </div>
+                    {uploadingAvatar && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        Uploading photo…
+                      </div>
+                    )}
                   </div>
                 </div>
 

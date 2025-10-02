@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
+import path from "path";
 import "dotenv/config";
 import marketRouter from "./routes/marketRoutes.js";
 import authRoutes from "./routes/auth.js";
@@ -31,4 +32,12 @@ app.get("/health", (req, res) => {
 app.get("/me", (req, res) => {
   res.send("My Page...\n This site is under construction");
 });
+// app.js / server.js
+app.use(
+  "/uploads",
+  express.static(path.join(process.cwd(), "uploads"), {
+    maxAge: "365d", // long cache; we bust via ?v=
+  })
+);
+
 export default app; // Export the app for use in server.js

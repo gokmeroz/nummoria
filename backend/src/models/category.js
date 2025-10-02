@@ -10,6 +10,7 @@ const categorySchema = new mongoose.Schema(
         "Salary",
         "Rentals",
         "Business Income & Freelance",
+        "Dividends",
         "Other Income",
         "Stock Market",
         "Crypto Currency Exchange",

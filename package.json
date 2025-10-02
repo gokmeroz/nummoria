@@ -2,6 +2,7 @@
   "dependencies": {
     "jspdf": "^2.5.2",
     "jspdf-autotable": "^3.8.4",
+    "multer": "^2.0.2",
     "recharts": "^3.2.1",
     "yahoo-finance2": "^2.13.3"
   }
