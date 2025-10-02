@@ -15,6 +15,7 @@ const INCOME_CATEGORY_OPTIONS = [
   "Salary",
   "Rentals",
   "Business Income & Freelance",
+  "Dividends",
   "Other Income",
 ];
 

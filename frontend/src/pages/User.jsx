@@ -5,7 +5,6 @@
 // src/pages/User.jsx
 import { useEffect, useRef, useState } from "react";
 import api from "../lib/api";
-// HERE CHANGED: import fallback avatar via bundler (reliable path in Vite)
 import defaultAvatar from "../assets/avatar.jpg";
 
 const ACCOUNT_TYPES = ["checking", "savings", "credit", "cash", "other"];
@@ -38,7 +37,7 @@ export default function UserPage() {
   const main = "#4f772d";
   const secondary = "#90a955";
 
-  // HERE CHANGED: cache-bust with avatarVersion/updatedAt and robust fallback
+  // Cache-bust avatar to avoid stale CDN/browser cache
   const avatarVersion = me?.avatarVersion || me?.updatedAt || 0;
   const avatarSrc = me?.avatarUrl
     ? `${me.avatarUrl}${
@@ -95,7 +94,6 @@ export default function UserPage() {
         baseCurrency,
         tz,
       });
-      // merge so we don't drop avatar fields
       setMe((prev) => ({ ...(prev || {}), ...(data || {}) }));
       setMsg("Profile updated");
     } catch (e) {
@@ -105,7 +103,6 @@ export default function UserPage() {
     }
   }
 
-  // --- Avatar uploading (POST /me/avatar) ---
   function extractErr(e) {
     const status = e?.response?.status;
     const msg =
@@ -116,49 +113,7 @@ export default function UserPage() {
     return { status, msg };
   }
 
-  // HERE CHANGED: ensure toBlob polyfill safety & compress
-  async function compressImage(file, maxW = 1024, maxH = 1024, quality = 0.85) {
-    const img = document.createElement("img");
-    const blobUrl = URL.createObjectURL(file);
-    await new Promise((res, rej) => {
-      img.onload = res;
-      img.onerror = rej;
-      img.src = blobUrl;
-    });
-    let { width, height } = img;
-    const ratio = Math.min(maxW / width, maxH / height, 1);
-    width = Math.round(width * ratio);
-    height = Math.round(height * ratio);
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(img, 0, 0, width, height);
-    URL.revokeObjectURL(blobUrl);
-
-    // Safari/older toBlob fallback
-    const blob = await new Promise((res) => {
-      if (canvas.toBlob) {
-        canvas.toBlob(res, "image/jpeg", quality);
-      } else {
-        const dataUrl = canvas.toDataURL("image/jpeg", quality);
-        const byteString = atob(dataUrl.split(",")[1]);
-        const mimeString = dataUrl.split(",")[0].split(":")[1].split(";")[0];
-        const ab = new ArrayBuffer(byteString.length);
-        const ia = new Uint8Array(ab);
-        for (let i = 0; i < byteString.length; i++)
-          ia[i] = byteString.charCodeAt(i);
-        res(new Blob([ab], { type: mimeString }));
-      }
-    });
-
-    return new File([blob], file.name.replace(/\.\w+$/, ".jpg"), {
-      type: "image/jpeg",
-      lastModified: Date.now(),
-    });
-  }
-
-  // HERE CHANGED: robust upload with optimistic preview + error fallback
+  // ===== RAW UPLOAD: no compression, no size checks =====
   async function uploadAvatar(file) {
     if (!file) return;
     if (!file.type?.startsWith?.("image/")) {
@@ -166,22 +121,12 @@ export default function UserPage() {
       return;
     }
 
-    let workFile = file;
-    // compress >600KB
-    if (file.size > 600 * 1024) {
-      try {
-        workFile = await compressImage(file);
-      } catch {
-        workFile = file; // fallback
-      }
-    }
-
     setUploadingAvatar(true);
     setErr("");
     setMsg("");
 
-    // optimistic preview (object URL) — will be replaced by final URL once upload succeeds
-    const previewUrl = URL.createObjectURL(workFile);
+    // Instant preview (replaced by server URL on success)
+    const previewUrl = URL.createObjectURL(file);
     setMe((prev) => ({
       ...(prev || {}),
       avatarUrl: previewUrl,
@@ -190,15 +135,18 @@ export default function UserPage() {
 
     try {
       const fd = new FormData();
-      // IMPORTANT: field name must match backend. Keep 'avatar'.
-      fd.append("avatar", workFile, workFile.name || "avatar.jpg");
+      // Send under several common field names to match various backends
+      fd.append("avatar", file, file.name || "avatar");
+      fd.append("file", file, file.name || "avatar");
+      fd.append("photo", file, file.name || "avatar");
+      fd.append("image", file, file.name || "avatar");
 
       const { data } = await api.post("/me/avatar", fd, {
         headers: { "Content-Type": "multipart/form-data" },
-        withCredentials: true, // in case your backend uses cookies
+        withCredentials: true,
       });
 
-      // Expect backend to return { avatarUrl, avatarVersion? }
+      // Expecting server to return { avatarUrl, avatarVersion? }
       setMe((prev) => ({
         ...(prev || {}),
         ...(data || {}),
@@ -209,11 +157,11 @@ export default function UserPage() {
       const { status, msg: m } = extractErr(e);
       setErr(`Upload failed (${status || "?"}): ${m}`);
 
-      // revert optimistic preview to previous or fallback
+      // Revert preview to prior (or fallback) to avoid keeping a blob URL
       setMe((prev) => ({
         ...(prev || {}),
         avatarUrl:
-          prev?.avatarUrl && !prev.avatarUrl.startsWith("blob:")
+          prev && prev.avatarUrl && !String(prev.avatarUrl).startsWith("blob:")
             ? prev.avatarUrl
             : undefined,
         avatarVersion: Date.now(),
@@ -464,11 +412,9 @@ export default function UserPage() {
                       src={avatarSrc}
                       alt="Avatar"
                       className="w-24 h-24 rounded-full ring-4 ring-white object-cover shadow"
-                      // HERE CHANGED: hard fallback if URL 404s/CORS breaks
                       onError={(e) => {
                         e.currentTarget.onerror = null;
                         e.currentTarget.src = defaultAvatar;
-                        // keep state clean so future uploads refresh
                         setMe((prev) => ({
                           ...(prev || {}),
                           avatarUrl: undefined,
@@ -533,11 +479,6 @@ export default function UserPage() {
                     <div className="text-sm text-gray-500">
                       {me?.profession || "Add your profession"}
                     </div>
-                    {uploadingAvatar && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        Uploading photo…
-                      </div>
-                    )}
                   </div>
                 </div>
 

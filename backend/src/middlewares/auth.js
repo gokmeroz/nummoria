@@ -1,15 +1,22 @@
+// backend/src/middlewares/auth.js
 import jwt from "jsonwebtoken";
 
 export function requireAuth(req, res, next) {
-  const hdr = req.headers.authorization || ""; // Get the Authorization header from the request, default to empty string if missing
-  const token = hdr.startsWith("Bearer ") ? hdr.slice(7) : null; // Extract the token if the header starts with 'Bearer ', else set to null
-  if (!token) return res.status(401).json({ error: "Missing token" }); // If no token is found, respond with 401 Unauthorized
-
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET); // Verify the token using the secret key, get the payload if valid
-    req.userId = payload.id; // Attach the user ID from the payload to the request object
-    next(); // Call the next middleware or route handler
-  } catch {
-    res.status(401).json({ error: "Invalid/expired token" }); // If verification fails, respond with 401 Unauthorized
+    const header = req.headers.authorization || "";
+    const token = header.startsWith("Bearer ")
+      ? header.slice(7)
+      : req.cookies?.token || null;
+
+    if (!token) return res.status(401).json({ error: "No token" });
+
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    // Accept any of these just in case your token uses a different claim
+    req.userId = payload.userId || payload.id || payload._id;
+    if (!req.userId) return res.status(401).json({ error: "Invalid token" });
+
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: "Unauthorized" });
   }
 }
