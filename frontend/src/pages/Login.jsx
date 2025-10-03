@@ -17,6 +17,15 @@ export default function Login() {
   const [signErr, setSignErr] = useState("");
   const [signLoading, setSignLoading] = useState(false);
 
+  // social state
+  const [socialLoading, setSocialLoading] = useState("");
+  const [socialErr, setSocialErr] = useState("");
+
+  // Build absolute API URL for redirects (works in dev/prod)
+  const API_BASE =
+    (api?.defaults?.baseURL || "").replace(/\/+$/, "") ||
+    window.location.origin;
+
   async function onLogin(e) {
     e.preventDefault();
     setLoginErr("");
@@ -69,6 +78,21 @@ export default function Login() {
       setSignErr(e.response?.data?.error || "Registration failed");
     } finally {
       setSignLoading(false);
+    }
+  }
+
+  // Kick off OAuth with provider (backend handles callback + session)
+  function startSocial(provider) {
+    try {
+      setSocialErr("");
+      setSocialLoading(provider);
+      // Optional: let backend know where to send us after success
+      const next = encodeURIComponent(`${window.location.origin}/`);
+      const url = `${API_BASE}/auth/${provider}?next=${next}`;
+      window.location.href = url;
+    } catch (err) {
+      setSocialErr(`Could not start social sign-in. Please try again: ${err}`);
+      setSocialLoading("");
     }
   }
 
@@ -143,30 +167,97 @@ export default function Login() {
               Create Account
             </h2>
 
-            <div className="mt-5 flex items-center gap-3">
-              <button
-                type="button"
-                className="w-9 h-9 rounded-full border flex items-center justify-center"
-              >
-                f
-              </button>
-              <button
-                type="button"
-                className="w-9 h-9 rounded-full border flex items-center justify-center"
-              >
-                G+
-              </button>
-              <button
-                type="button"
-                className="w-9 h-9 rounded-full border flex items-center justify-center"
-              >
-                in
-              </button>
-            </div>
+            {/* Social providers */}
+            <div className="mt-5">
+              {socialErr && (
+                <div className="text-sm text-red-600 mb-3">{socialErr}</div>
+              )}
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  aria-label="Continue with Google"
+                  title="Continue with Google"
+                  className="w-9 h-9 rounded-full border flex items-center justify-center"
+                  disabled={!!socialLoading}
+                  onClick={() => {
+                    setSocialLoading(true);
+                    const apiUrl =
+                      import.meta.env.VITE_API_URL || "http://localhost:4000";
+                    window.location.href = `${apiUrl}/auth/google?next=/`;
+                  }}
+                >
+                  {/* {socialLoading ? "…" : "G"} */}
 
-            <p className="mt-4 text-gray-500 text-sm">
-              or use your email for registration:
-            </p>
+                  {/* Google G */}
+                  <svg width="20" height="20" viewBox="0 0 48 48">
+                    <path
+                      fill="#FFC107"
+                      d="M43.6 20.5H42V20H24v8h11.3C33.7 32.6 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.7 1.1 7.8 3l5.7-5.7C33.9 6.3 29.2 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 19.3-8.8 19.3-20c0-1.3-.1-2.5-.7-3.5z"
+                    />
+                    <path
+                      fill="#FF3D00"
+                      d="M6.3 14.7l6.6 4.8C14.5 16 18.9 12 24 12c3 0 5.7 1.1 7.8 3l5.7-5.7C33.9 6.3 29.2 4 24 4 16.2 4 9.4 8.4 6.3 14.7z"
+                    />
+                    <path
+                      fill="#4CAF50"
+                      d="M24 44c5.2 0 9.9-1.9 13.5-5.1l-6.2-5c-2 1.4-4.7 2.2-7.3 2.2-5.3 0-9.7-3.4-11.3-8.1l-6.6 5.1C9.4 39.6 16.2 44 24 44z"
+                    />
+                    <path
+                      fill="#1976D2"
+                      d="M43.6 20.5H42V20H24v8h11.3c-1.1 3.6-4.5 6-8.3 6-5.3 0-9.7-3.4-11.3-8.1l-6.6 5.1C9.4 39.6 16.2 44 24 44c8.6 0 19.3-6.2 19.3-20 0-1.3-.1-2.5-.7-3.5z"
+                    />
+                  </svg>
+                </button>
+
+                <button
+                  type="button"
+                  aria-label="Continue with Facebook"
+                  title="Continue with Facebook"
+                  className="w-10 h-10 rounded-full border flex items-center justify-center hover:bg-gray-50 disabled:opacity-60"
+                  disabled={!!socialLoading}
+                  onClick={() => startSocial("facebook")}
+                >
+                  {/* Facebook f */}
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="#1877F2"
+                  >
+                    <path d="M22 12.06C22 6.48 17.52 2 11.94 2S2 6.48 2 12.06C2 17.06 5.66 21.2 10.44 22v-7.03H7.9v-2.9h2.54V9.86c0-2.5 1.49-3.88 3.77-3.88 1.09 0 2.22.2 2.22.2v2.45h-1.25c-1.23 0-1.62.77-1.62 1.56v1.86h2.76l-.44 2.9h-2.32V22C18.34 21.2 22 17.06 22 12.06z" />
+                  </svg>
+                </button>
+
+                <button
+                  type="button"
+                  aria-label="Continue with LinkedIn"
+                  title="Continue with LinkedIn"
+                  className="w-10 h-10 rounded-full border flex items-center justify-center hover:bg-gray-50 disabled:opacity-60"
+                  disabled={!!socialLoading}
+                  onClick={() => startSocial("linkedin")}
+                >
+                  {/* LinkedIn in */}
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="#0A66C2"
+                  >
+                    <path d="M4.98 3.5C4.98 4.88 3.88 6 2.5 6S0 4.88 0 3.5 1.12 1 2.5 1s2.48 1.12 2.48 2.5zM.5 8.5h4V23h-4V8.5zM8.5 8.5h3.8v1.98h.05c.53-1 1.82-2.06 3.75-2.06 4.01 0 4.75 2.64 4.75 6.06V23h-4v-6.58c0-1.57-.03-3.6-2.2-3.6-2.2 0-2.53 1.72-2.53 3.49V23h-4V8.5z" />
+                  </svg>
+                </button>
+
+                {socialLoading && (
+                  <span className="text-sm text-gray-500">
+                    Redirecting to {socialLoading}…
+                  </span>
+                )}
+              </div>
+
+              <p className="mt-4 text-gray-500 text-sm">
+                or use your email for registration:
+              </p>
+            </div>
 
             <form onSubmit={onSignup} className="mt-4 space-y-4">
               {signErr && <div className="text-sm text-red-600">{signErr}</div>}
@@ -209,6 +300,18 @@ export default function Login() {
               >
                 {signLoading ? "Creating..." : "SIGN UP"}
               </button>
+
+              <div className="text-xs text-gray-500 text-center">
+                By continuing you agree to our{" "}
+                <a className="underline" href="/terms">
+                  Terms
+                </a>{" "}
+                and{" "}
+                <a className="underline" href="/privacy">
+                  Privacy Policy
+                </a>
+                .
+              </div>
 
               <div className="text-sm text-gray-600">
                 Already have an account?{" "}

@@ -5,7 +5,7 @@
 // src/pages/User.jsx
 import { useEffect, useRef, useState } from "react";
 import api from "../lib/api";
-import defaultAvatar from "../assets/avatar.jpg";
+import defaultAvatar from "../../src/assets/Spiderman.jpeg";
 
 const ACCOUNT_TYPES = ["checking", "savings", "credit", "cash", "other"];
 const CURRENCIES = ["USD", "EUR", "TRY", "GBP"];

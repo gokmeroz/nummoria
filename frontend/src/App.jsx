@@ -16,6 +16,7 @@ import InvestmentsScreen from "./pages/Investments";
 import InvestmentPerformances from "./pages/InvestmentPerformances";
 import ReportsPage from "./pages/Reports";
 import SupportPage from "./pages/Support";
+import OAuthCallback from "./pages/OAuthCallback";
 
 export default function App() {
   function handleLogout() {
@@ -53,6 +54,8 @@ export default function App() {
             element={<InvestmentPerformances />}
           ></Route>
           <Route path="/support" element={<SupportPage />}></Route>
+          <Route path="/oauth-callback" element={<OAuthCallback />} />
+
           {/* add more: expenses, income, etc. */}
         </Route>
       </Route>

@@ -73,7 +73,7 @@ export default function Layout({ onLogout }) {
                   />
                 ) : (
                   <img
-                    src="../src/assets/avatar.jpg"
+                    src="../src/assets/Spiderman.jpeg"
                     alt="Default Avatar"
                     className="h-9 w-9 object-cover"
                   />
