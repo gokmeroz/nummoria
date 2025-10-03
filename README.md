@@ -69,7 +69,7 @@ npm run dev
 ### URLS:
 -**Frontend** → http://localhost:5173
 -**Backend** → http://localhost:4000
-
+---
 ## 📂 Project Structure
 nummora/
 ├── backend/
@@ -87,7 +87,7 @@ nummora/
 │   │   └── App.jsx
 │   └── index.html
 └── README.md
-
+---
 ## 📜 MIT License
 
 Copyright (c) 2025 Göktuğ Mert Özdoğan
