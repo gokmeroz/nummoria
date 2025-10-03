@@ -72,21 +72,25 @@ npm run dev
 ---
 ## 📂 Project Structure
 nummora/
-├── backend/
-│   ├── src/
-│   │   ├── models/        # Database schemas
-│   │   ├── controllers/   # API controllers
-│   │   ├── routes/        # Express routes
-│   │   └── lib/           # Middleware & helpers
-│   └── server.js
-├── frontend/
-│   ├── src/
-│   │   ├── pages/         # React pages (Login, Dashboard, Investments…)
-│   │   ├── components/    # Reusable UI components
-│   │   ├── lib/           # API client & utilities
-│   │   └── App.jsx
-│   └── index.html
-└── README.md
+├── backend/ # Express + MongoDB API
+│ ├── src/
+│ │ ├── models/ # Database schemas (User, Account, Transaction, Investment…)
+│ │ ├── controllers/ # API controllers (auth, accounts, tx, reports…)
+│ │ ├── routes/ # Express routes (auth, accounts, transactions…)
+│ │ └── lib/ # Middleware & helpers (auth, error handling)
+│ └── server.js # App entry point
+│
+├── frontend/ # React (Vite + TailwindCSS)
+│ ├── src/
+│ │ ├── pages/ # Screens (Login, Dashboard, Expenses, Investments, Reports…)
+│ │ ├── components/ # Reusable UI components (Header, Footer, Charts…)
+│ │ ├── lib/ # API client (axios instance), utilities
+│ │ └── App.jsx # Root component
+│ └── index.html
+│
+├── .env.example # Example environment config
+├── README.md # Project documentation
+└── LICENSE # MIT license
 ---
 ## 📜 MIT License
 
