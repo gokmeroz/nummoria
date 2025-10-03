@@ -55,21 +55,20 @@ It’s built for clarity, control, and insights — with support for multi-curre
 ## 🚀 Getting Started
 
 ### 1. Clone the repo
-```bash
 git clone https://github.com/gokmeroz/nummora.git
 cd nummora
-2️⃣ Backend Setup
+### 2. Backend Setup
 cd backend
 npm install
 cp .env.example .env   # update MONGO_URI, JWT_SECRET, etc.
 npm run dev
-3️⃣ Frontend Setup
+### Frontend Setup
 cd frontend
 npm install
 npm run dev
-
-Frontend → http://localhost:5173
-Backend → http://localhost:4000
+### URLS:
+-**Frontend** → http://localhost:5173
+-**Backend** → http://localhost:4000
 
 ## 📂 Project Structure
 nummora/
