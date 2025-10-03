@@ -71,6 +71,7 @@ npm run dev
 -**Backend** → http://localhost:4000
 ---
 ## 📂 Project Structure
+```
 nummora/
 ├── backend/ # Express + MongoDB API
 │ ├── src/
@@ -91,6 +92,7 @@ nummora/
 ├── .env.example # Example environment config
 ├── README.md # Project documentation
 └── LICENSE # MIT license
+```
 ---
 ## 📜 MIT License
 
