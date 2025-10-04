@@ -5,7 +5,7 @@ import helmet from "helmet";
 import morgan from "morgan";
 import path from "path";
 import "dotenv/config";
-
+import cookieParser from "cookie-parser";
 import marketRouter from "./routes/marketRoutes.js";
 import authRoutes from "./routes/auth.js";
 import meRoutes from "./routes/me.js";
@@ -15,6 +15,8 @@ import transactionRoutes from "./routes/transactionRoutes.js";
 import investmentPerformance from "./routes/investmentPerformance.js";
 
 const app = express();
+
+app.use(cookieParser());
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

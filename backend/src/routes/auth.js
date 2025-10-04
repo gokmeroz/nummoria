@@ -6,6 +6,10 @@ import {
   resetPassword,
   googleStart,
   googleCallback,
+  twitterCallback,
+  twitterStart,
+  githubStart,
+  githubCallback,
 } from "../controllers/authController.js";
 
 const router = express.Router();
@@ -18,5 +22,13 @@ router.post("/reset-password", resetPassword);
 // Google OAuth
 router.get("/google", googleStart);
 router.get("/google/callback", googleCallback);
+
+// Twitter OAuth
+router.get("/twitter", twitterStart);
+router.get("/twitter/callback", twitterCallback);
+
+// Github OAuth
+router.get("/github", githubStart);
+router.get("/github/callback", githubCallback);
 
 export default router;

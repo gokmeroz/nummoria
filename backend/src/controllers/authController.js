@@ -3,6 +3,59 @@ import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import { User } from "../models/user.js";
 
+/* ─────────────────────────── Config & Helpers ─────────────────────────── */
+
+const FRONTEND_URL_RAW = process.env.FRONTEND_URL || "http://localhost:5173";
+// ensure no trailing slash to avoid `//oauth-callback`
+const FRONTEND_URL = FRONTEND_URL_RAW.replace(/\/+$/, "");
+const IS_DEV = process.env.NODE_ENV !== "production";
+const { JWT_SECRET } = process.env;
+
+// Google env
+const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI } =
+  process.env;
+
+// Twitter (X) env
+const {
+  TWITTER_CLIENT_ID,
+  TWITTER_CLIENT_SECRET, // used when TWITTER_CLIENT_TYPE=confidential
+  TWITTER_REDIRECT_URI, // e.g., http://localhost:4000/auth/twitter/callback
+  TWITTER_CLIENT_TYPE, // "public" (default) or "confidential"
+} = process.env;
+// Github env
+const { GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GITHUB_REDIRECT_URI } =
+  process.env;
+// base64url helper (for PKCE)
+function base64url(buf) {
+  return Buffer.from(buf)
+    .toString("base64")
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+}
+function sha256ToBase64url(verifier) {
+  const hash = crypto.createHash("sha256").update(verifier).digest();
+  return base64url(hash);
+}
+
+// ensure `next` stays a relative path (prevents broken URLs or open redirects)
+function sanitizeNext(nextRaw) {
+  if (!nextRaw) return "/";
+  try {
+    // If a full URL was passed, collapse it to its path/query/hash
+    if (/^https?:\/\//i.test(nextRaw)) {
+      const u = new URL(nextRaw);
+      return (u.pathname || "/") + (u.search || "") + (u.hash || "");
+    }
+    // Normalize: must start with "/"
+    return nextRaw.startsWith("/") ? nextRaw : "/" + nextRaw;
+  } catch {
+    return "/";
+  }
+}
+
+/* ───────────────────────────── Local Auth ─────────────────────────────── */
+
 export async function register(req, res) {
   try {
     const { email, password, name, profession, role, tz, baseCurrency } =
@@ -51,21 +104,19 @@ export async function login(req, res) {
     if (!user.passwordHash) {
       return res.status(401).json({
         error:
-          "This account was created with Google. Please sign in with Google or set a password.",
+          "This account was created via social login. Please sign in with Google/Twitter or set a password.",
       });
     }
 
     const match = await bcrypt.compare(password, user.passwordHash);
     if (!match) return res.status(401).json({ error: "Invalid credentials" });
-    // Update last login
+
     user.lastLogin = new Date();
     await user.save();
-    // Generate JWT
-    const token = jwt.sign(
-      { id: user._id, email: user.email },
-      process.env.JWT_SECRET,
-      { expiresIn: "1h" } // short-lived access token
-    );
+
+    const token = jwt.sign({ id: user._id, email: user.email }, JWT_SECRET, {
+      expiresIn: "1h",
+    });
 
     res.json({
       token,
@@ -86,46 +137,9 @@ export async function login(req, res) {
     res.status(500).json({ error: err.message });
   }
 }
-// // POST /auth/request-password-reset
-// export async function forgotPassword(req, res) {
-//   try {
-//     const { email } = req.body;
-//     if (!email) {
-//       return res.status(400).json({ error: "Email is required" });
-//     }
-//     const user = await User.findOne({ email });
-//     if (!user) {
-//       // To prevent email enumeration, respond with success even if user not found
-//       return res.json({
-//         message:
-//           "If that email is registered, check your inbox for reset instructions.",
-//       });
-//     }
-//     const rawToken = crypto.randomBytes(32).toString("hex");
-//     const tokenHash = await bcrypt.hash(rawToken, 10);
-//     const expires = new Date(Date.now() + 30 * 60 * 1000); // 0.5 hour from now
 
-//     user.resetPasswordTokenHash = tokenHash;
-//     user.resetPasswordExpiresAt = expires;
-//     await user.save();
+/* ───────────────────────── Password Reset Flow ────────────────────────── */
 
-//     const resetUrl = `http://localhost:4000/reset-password?token=${rawToken}&email=${encodeURIComponent(
-//       email
-//     )}`;
-
-//     console.log(
-//       `Password reset requested for ${email}. Reset URL (valid for 30 mins): ${resetUrl}`
-//     );
-//   } catch (err) {
-//     res.status(500).json({ error: err.message });
-//   }
-// }
-// at top of file (or config)
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
-// const BACKEND_URL  = process.env.BACKEND_URL  || "http://localhost:3000"; // if needed
-const IS_DEV = process.env.NODE_ENV !== "production";
-
-// POST /auth/forgot-password
 export async function forgotPassword(req, res) {
   try {
     const { email } = req.body;
@@ -135,7 +149,7 @@ export async function forgotPassword(req, res) {
 
     const user = await User.findOne({ email });
 
-    // Always behave the same to avoid email enumeration
+    // behave the same to avoid enumeration
     if (!user) {
       return res.json({
         message:
@@ -143,7 +157,6 @@ export async function forgotPassword(req, res) {
       });
     }
 
-    // 1) create token & expiry
     const rawToken = crypto.randomBytes(32).toString("hex");
     const tokenHash = await bcrypt.hash(rawToken, 10);
     const expires = new Date(Date.now() + 30 * 60 * 1000); // 30 mins
@@ -152,7 +165,6 @@ export async function forgotPassword(req, res) {
     user.resetPasswordExpiresAt = expires;
     await user.save();
 
-    // 2) build a FRONTEND reset link (user should land on the React app)
     const resetUrl = `${FRONTEND_URL}/reset-password?token=${rawToken}&email=${encodeURIComponent(
       email
     )}`;
@@ -161,16 +173,11 @@ export async function forgotPassword(req, res) {
       `Password reset requested for ${email}. Reset URL (valid for 30 mins): ${resetUrl}`
     );
 
-    // 3) RESPOND IMMEDIATELY so the browser doesn't hang
-    // In dev we can also return `token` to allow instant redirect (your Option A).
     return res.json({
       message: "Reset link created",
-      resetUrl, // prod-friendly
-      ...(IS_DEV ? { token: rawToken } : {}), // dev-only convenience
+      resetUrl,
+      ...(IS_DEV ? { token: rawToken } : {}),
     });
-
-    // 4) OPTIONAL: send email async (do NOT await before responding)
-    // sendResetEmail(email, resetUrl).catch(err => console.error("Email error:", err));
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -196,7 +203,6 @@ export async function resetPassword(req, res) {
     const ok = await bcrypt.compare(token, user.resetPasswordTokenHash);
     if (!ok) return res.status(400).json({ error: "Invalid or expired token" });
 
-    // Update password
     user.passwordHash = await bcrypt.hash(newPassword, 10);
     user.resetPasswordTokenHash = null;
     user.resetPasswordExpiresAt = null;
@@ -207,18 +213,12 @@ export async function resetPassword(req, res) {
     res.status(500).json({ error: err.message });
   }
 }
-// ===== GOOGLE OAUTH =====
-const {
-  GOOGLE_CLIENT_ID,
-  GOOGLE_CLIENT_SECRET,
-  GOOGLE_REDIRECT_URI,
-  JWT_SECRET,
-} = process.env;
 
-// GET /auth/google
+/* ───────────────────────────── Google OAuth ────────────────────────────── */
+
 export async function googleStart(req, res) {
   try {
-    const state = encodeURIComponent(req.query.next || "/"); // optional next
+    const state = encodeURIComponent(sanitizeNext(req.query.next || "/")); // relative only
     const scope = ["openid", "email", "profile"].join(" ");
 
     const params = new URLSearchParams({
@@ -228,7 +228,7 @@ export async function googleStart(req, res) {
       scope,
       access_type: "offline",
       include_granted_scopes: "true",
-      prompt: "consent", // ensures refresh_token on each flow in dev
+      prompt: "consent", // ensures refresh_token in dev
       state,
     });
 
@@ -239,13 +239,11 @@ export async function googleStart(req, res) {
   }
 }
 
-// GET /auth/google/callback
 export async function googleCallback(req, res) {
   try {
     const { code, state } = req.query;
     if (!code) return res.status(400).json({ error: "Missing code" });
 
-    // 1) Exchange code for tokens
     const tokenParams = new URLSearchParams({
       client_id: GOOGLE_CLIENT_ID,
       client_secret: GOOGLE_CLIENT_SECRET,
@@ -268,12 +266,9 @@ export async function googleCallback(req, res) {
     const tokens = await tokenResp.json();
     const { access_token /*, id_token, refresh_token */ } = tokens;
 
-    // 2) Fetch user profile
     const userResp = await fetch(
       "https://openidconnect.googleapis.com/v1/userinfo",
-      {
-        headers: { Authorization: `Bearer ${access_token}` },
-      }
+      { headers: { Authorization: `Bearer ${access_token}` } }
     );
     if (!userResp.ok) {
       const t = await userResp.text();
@@ -282,7 +277,6 @@ export async function googleCallback(req, res) {
         .json({ error: "Userinfo fetch failed", details: t });
     }
     const profile = await userResp.json();
-    // profile: { sub, email, email_verified, name, given_name, family_name, picture, ... }
     const googleId = profile.sub;
     const email = (profile.email || "").toLowerCase();
 
@@ -290,11 +284,9 @@ export async function googleCallback(req, res) {
       return res.status(400).json({ error: "Google account has no email" });
     }
 
-    // 3) Find or create/link user
     let user = await User.findOne({ $or: [{ email }, { googleId }] });
 
     if (!user) {
-      // create new social user (no password required)
       user = await User.create({
         email,
         name: profile.name || "",
@@ -304,13 +296,11 @@ export async function googleCallback(req, res) {
         isActive: true,
       });
     } else {
-      // link account if needed, update basics
       let changed = false;
       if (!user.googleId) {
         user.googleId = googleId;
         changed = true;
       }
-      // keep name/avatar fresh (don’t overwrite if you don’t want to)
       if (profile.name && profile.name !== user.name) {
         user.name = profile.name;
         changed = true;
@@ -324,17 +314,338 @@ export async function googleCallback(req, res) {
       if (changed) await user.save();
     }
 
-    // 4) Issue your normal JWT (same shape as password login)
     const token = jwt.sign({ id: user._id, email: user.email }, JWT_SECRET, {
       expiresIn: "1h",
     });
 
-    // 5) Redirect back to your frontend with the token
-    //    Frontend should read it and store (like your email/password flow).
-    const next = state ? decodeURIComponent(state) : "/";
-    const redirectTo = `${FRONTEND_URL}/oauth-callback?provider=google&token=${encodeURIComponent(
-      token
-    )}&next=${encodeURIComponent(next)}`;
+    // build redirect: /oauth-callback?provider=google&token=...&next=/...
+    const next = sanitizeNext(state ? decodeURIComponent(state) : "/");
+    const usp = new URLSearchParams({ provider: "google", token });
+    if (next) usp.set("next", next);
+    const redirectTo = `${FRONTEND_URL}/oauth-callback?${usp.toString()}`;
+
+    return res.redirect(redirectTo);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+/* ───────────────────────────── Twitter OAuth ───────────────────────────── */
+
+export async function twitterStart(req, res) {
+  try {
+    const state = encodeURIComponent(sanitizeNext(req.query.next || "/")); // relative only
+
+    // PKCE
+    const code_verifier = base64url(crypto.randomBytes(64));
+    const code_challenge = sha256ToBase64url(code_verifier);
+
+    // store verifier short-lived in httpOnly cookie
+    res.cookie("tw_cv", code_verifier, {
+      httpOnly: true,
+      secure: !IS_DEV,
+      sameSite: "lax",
+      maxAge: 10 * 60 * 1000, // 10 min
+      path: "/",
+    });
+
+    const scope = [
+      "users.read",
+      "tweet.read",
+      "offline.access",
+      // "email.read", // only if your app is approved for email
+    ].join(" ");
+
+    const params = new URLSearchParams({
+      response_type: "code",
+      client_id: TWITTER_CLIENT_ID,
+      redirect_uri: TWITTER_REDIRECT_URI,
+      scope,
+      state,
+      code_challenge,
+      code_challenge_method: "S256",
+    });
+
+    const authUrl = `https://twitter.com/i/oauth2/authorize?${params.toString()}`;
+    return res.redirect(authUrl);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+export async function twitterCallback(req, res) {
+  try {
+    const { code, state } = req.query;
+    if (!code) return res.status(400).json({ error: "Missing code" });
+
+    const code_verifier = req.cookies?.tw_cv;
+    if (!code_verifier) {
+      return res
+        .status(400)
+        .json({ error: "Missing PKCE verifier (cookie expired)" });
+    }
+
+    const isConfidential =
+      (TWITTER_CLIENT_TYPE || "").toLowerCase() === "confidential";
+
+    // 1) Exchange code for tokens
+    const tokenParams = new URLSearchParams({
+      grant_type: "authorization_code",
+      client_id: TWITTER_CLIENT_ID, // keep even for confidential
+      code,
+      redirect_uri: TWITTER_REDIRECT_URI,
+      code_verifier,
+    });
+
+    const headers = { "Content-Type": "application/x-www-form-urlencoded" };
+    if (isConfidential) {
+      const basic = Buffer.from(
+        `${TWITTER_CLIENT_ID}:${TWITTER_CLIENT_SECRET}`
+      ).toString("base64");
+      headers.Authorization = `Basic ${basic}`;
+    }
+
+    const tokenResp = await fetch("https://api.twitter.com/2/oauth2/token", {
+      method: "POST",
+      headers,
+      body: tokenParams.toString(),
+    });
+
+    if (!tokenResp.ok) {
+      const t = await tokenResp.text();
+      return res
+        .status(400)
+        .json({ error: "Twitter token exchange failed", details: t });
+    }
+
+    const tokens = await tokenResp.json();
+    const { access_token /*, refresh_token, expires_in, scope, token_type */ } =
+      tokens;
+
+    // 2) Fetch Twitter user
+    const userResp = await fetch(
+      "https://api.twitter.com/2/users/me?user.fields=profile_image_url,name,username,verified,created_at",
+      { headers: { Authorization: `Bearer ${access_token}` } }
+    );
+
+    if (!userResp.ok) {
+      const t = await userResp.text();
+      return res
+        .status(400)
+        .json({ error: "Twitter user fetch failed", details: t });
+    }
+
+    const payload = await userResp.json();
+    const tw = payload?.data;
+    if (!tw?.id) {
+      return res.status(400).json({ error: "Twitter profile missing id" });
+    }
+
+    const twitterId = tw.id;
+    const username = tw.username || "";
+    const displayName = tw.name || username || "";
+    let avatarUrl = tw.profile_image_url || null;
+    if (avatarUrl) avatarUrl = avatarUrl.replace("_normal", "_400x400");
+
+    // Email is rarely available; synthesize a private, unique email for your DB
+    let email = null;
+    if (!email) {
+      const localName = username
+        ? `${username}+${twitterId}`
+        : `xuser_${twitterId}`;
+      email = `${localName}@x.local`.toLowerCase();
+    }
+
+    // 3) Find or create/link
+    let user = await User.findOne({ $or: [{ email }, { twitterId }] });
+
+    if (!user) {
+      user = await User.create({
+        email,
+        name: displayName,
+        twitterId,
+        avatarUrl,
+        lastLogin: new Date(),
+        isActive: true,
+      });
+    } else {
+      let changed = false;
+      if (!user.twitterId) {
+        user.twitterId = twitterId;
+        changed = true;
+      }
+      if (displayName && displayName !== user.name) {
+        user.name = displayName;
+        changed = true;
+      }
+      if (avatarUrl && avatarUrl !== user.avatarUrl) {
+        user.avatarUrl = avatarUrl;
+        changed = true;
+      }
+      user.lastLogin = new Date();
+      changed = true;
+      if (changed) await user.save();
+    }
+
+    // 4) Issue JWT (same as other flows)
+    const token = jwt.sign({ id: user._id, email: user.email }, JWT_SECRET, {
+      expiresIn: "1h",
+    });
+
+    // clear PKCE cookie
+    res.clearCookie("tw_cv", { path: "/" });
+
+    // 5) Redirect to SPA with token (safe qs build + sanitized next)
+    const next = sanitizeNext(state ? decodeURIComponent(state) : "/");
+    const usp = new URLSearchParams({ provider: "twitter", token });
+    if (next) usp.set("next", next);
+    const redirectTo = `${FRONTEND_URL}/oauth-callback?${usp.toString()}`;
+
+    return res.redirect(redirectTo);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+/* ───────────────────────────── GitHub OAuth ───────────────────────────── */
+
+export async function githubStart(req, res) {
+  try {
+    const state = encodeURIComponent(sanitizeNext(req.query.next || "/"));
+    const scope = ["read:user", "user:email"].join(" ");
+
+    const params = new URLSearchParams({
+      client_id: process.env.GITHUB_CLIENT_ID,
+      redirect_uri: process.env.GITHUB_REDIRECT_URI,
+      scope,
+      state,
+      allow_signup: "true",
+    });
+
+    const authUrl = `https://github.com/login/oauth/authorize?${params.toString()}`;
+    console.log("[GitHub] authorize URL =>", authUrl); // <— verify redirect_uri exactness
+    return res.redirect(authUrl);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+export async function githubCallback(req, res) {
+  try {
+    const { code, state } = req.query;
+    if (!code) return res.status(400).json({ error: "Missing code" });
+
+    // 1) Exchange code for token
+    const tokenParams = new URLSearchParams({
+      client_id: GITHUB_CLIENT_ID,
+      client_secret: GITHUB_CLIENT_SECRET,
+      code,
+      redirect_uri: GITHUB_REDIRECT_URI,
+    });
+
+    const tokenResp = await fetch(
+      "https://github.com/login/oauth/access_token",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Accept: "application/json",
+        },
+        body: tokenParams.toString(),
+      }
+    );
+
+    if (!tokenResp.ok) {
+      const t = await tokenResp.text();
+      return res
+        .status(400)
+        .json({ error: "GitHub token exchange failed", details: t });
+    }
+
+    const { access_token } = await tokenResp.json();
+    if (!access_token) {
+      return res.status(400).json({ error: "No access_token from GitHub" });
+    }
+
+    // 2) Fetch user profile
+    const ghUserResp = await fetch("https://api.github.com/user", {
+      headers: {
+        Authorization: `Bearer ${access_token}`,
+        Accept: "application/vnd.github+json",
+      },
+    });
+    if (!ghUserResp.ok) {
+      const t = await ghUserResp.text();
+      return res
+        .status(400)
+        .json({ error: "GitHub user fetch failed", details: t });
+    }
+    const ghUser = await ghUserResp.json();
+
+    // 3) Fetch emails (to get primary/verified)
+    const ghEmailResp = await fetch("https://api.github.com/user/emails", {
+      headers: {
+        Authorization: `Bearer ${access_token}`,
+        Accept: "application/vnd.github+json",
+      },
+    });
+
+    let email = null;
+    if (ghEmailResp.ok) {
+      const emails = await ghEmailResp.json();
+      const primary = emails?.find((e) => e.primary && e.verified)?.email;
+      email = (primary || emails?.[0]?.email || "").toLowerCase();
+    }
+
+    const githubId = String(ghUser.id);
+    const displayName = ghUser.name || ghUser.login || "";
+    const avatarUrl = ghUser.avatar_url || null;
+
+    // If email still missing (private email), synthesize one
+    const safeEmail = email || `ghuser_${githubId}@github.local`;
+
+    // 4) Upsert user
+    let user = await User.findOne({
+      $or: [{ email: safeEmail }, { githubId }],
+    });
+
+    if (!user) {
+      user = await User.create({
+        email: safeEmail,
+        name: displayName,
+        githubId,
+        avatarUrl,
+        lastLogin: new Date(),
+        isActive: true,
+      });
+    } else {
+      let changed = false;
+      if (!user.githubId) {
+        user.githubId = githubId;
+        changed = true;
+      }
+      if (displayName && displayName !== user.name) {
+        user.name = displayName;
+        changed = true;
+      }
+      if (avatarUrl && avatarUrl !== user.avatarUrl) {
+        user.avatarUrl = avatarUrl;
+        changed = true;
+      }
+      user.lastLogin = new Date();
+      changed = true;
+      if (changed) await user.save();
+    }
+
+    // 5) Issue JWT and redirect to SPA
+    const token = jwt.sign({ id: user._id, email: user.email }, JWT_SECRET, {
+      expiresIn: "1h",
+    });
+
+    const next = sanitizeNext(state ? decodeURIComponent(state) : "/");
+    const qs = new URLSearchParams({ provider: "github", token });
+    if (next) qs.set("next", next);
+    const redirectTo = `${FRONTEND_URL}/oauth-callback?${qs.toString()}`;
 
     return res.redirect(redirectTo);
   } catch (err) {

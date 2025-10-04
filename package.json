@@ -1,8 +1,12 @@
 {
   "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "express-session": "^1.18.2",
     "jspdf": "^2.5.2",
     "jspdf-autotable": "^3.8.4",
     "multer": "^2.0.2",
+    "passport": "^0.7.0",
+    "passport-twitter-oauth2": "^2.1.1",
     "recharts": "^3.2.1",
     "yahoo-finance2": "^2.13.3"
   }

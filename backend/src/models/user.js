@@ -7,7 +7,7 @@ const userSchema = new mongoose.Schema(
     passwordHash: {
       type: String,
       required: function () {
-        return !this.googleId && !this.facebookId && !this.linkedinId;
+        return !this.googleId && !this.twitterId && !this.githubId;
       },
       select: false, // optional: keep it out of queries by default
     },
@@ -22,8 +22,8 @@ const userSchema = new mongoose.Schema(
     avatarUrl: { type: String },
     // Social ids (optional)
     googleId: { type: String, index: true, sparse: true, unique: false },
-    facebookId: { type: String, index: true, sparse: true, unique: false },
-    linkedinId: { type: String, index: true, sparse: true, unique: false },
+    twitterId: { type: String, index: true, sparse: true, unique: false },
+    githubId: { type: String, index: true, sparse: true, unique: false },
   },
   { timestamps: { createdAt: "createdAt", updatedAt: false } }
 );

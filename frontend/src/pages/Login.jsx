@@ -211,39 +211,43 @@ export default function Login() {
 
                 <button
                   type="button"
-                  aria-label="Continue with Facebook"
-                  title="Continue with Facebook"
+                  aria-label="Continue with Twitter"
+                  title="Continue with Twitter"
                   className="w-10 h-10 rounded-full border flex items-center justify-center hover:bg-gray-50 disabled:opacity-60"
                   disabled={!!socialLoading}
-                  onClick={() => startSocial("facebook")}
+                  onClick={() => startSocial("twitter")}
                 >
-                  {/* Facebook f */}
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="#1877F2"
-                  >
-                    <path d="M22 12.06C22 6.48 17.52 2 11.94 2S2 6.48 2 12.06C2 17.06 5.66 21.2 10.44 22v-7.03H7.9v-2.9h2.54V9.86c0-2.5 1.49-3.88 3.77-3.88 1.09 0 2.22.2 2.22.2v2.45h-1.25c-1.23 0-1.62.77-1.62 1.56v1.86h2.76l-.44 2.9h-2.32V22C18.34 21.2 22 17.06 22 12.06z" />
+                  {/* Twitter/X X */}
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="black">
+                    <path d="M18.244 2H21.5l-7.42 8.49L22 22h-6.77l-5.3-6.97L4.77 22H1.5l7.92-9.05L2 2h6.91l4.79 6.39L18.244 2zm-2.37 18h2.11L8.21 4H6.01l9.864 16z" />
                   </svg>
                 </button>
 
                 <button
                   type="button"
-                  aria-label="Continue with LinkedIn"
-                  title="Continue with LinkedIn"
-                  className="w-10 h-10 rounded-full border flex items-center justify-center hover:bg-gray-50 disabled:opacity-60"
+                  aria-label="Continue with GitHub"
+                  title="Continue with GitHub"
+                  className="w-10 h-10 rounded-full border flex items-center justify-center hover:bg-gray-50 disabled:opacity-60 bg-black"
                   disabled={!!socialLoading}
-                  onClick={() => startSocial("linkedin")}
+                  onClick={() => startSocial("github")}
                 >
-                  {/* LinkedIn in */}
+                  {/* GitHub logo */}
                   <svg
+                    xmlns="http://www.w3.org/2000/svg"
                     width="18"
                     height="18"
                     viewBox="0 0 24 24"
-                    fill="#0A66C2"
+                    fill="white"
                   >
-                    <path d="M4.98 3.5C4.98 4.88 3.88 6 2.5 6S0 4.88 0 3.5 1.12 1 2.5 1s2.48 1.12 2.48 2.5zM.5 8.5h4V23h-4V8.5zM8.5 8.5h3.8v1.98h.05c.53-1 1.82-2.06 3.75-2.06 4.01 0 4.75 2.64 4.75 6.06V23h-4v-6.58c0-1.57-.03-3.6-2.2-3.6-2.2 0-2.53 1.72-2.53 3.49V23h-4V8.5z" />
+                    <path
+                      d="M12 .5C5.73.5.5 5.74.5 12.02c0 5.1 3.29 9.42 7.86 10.95.58.11.79-.25.79-.56 0-.28-.01-1.02-.02-2 
+      -3.2.7-3.88-1.54-3.88-1.54-.53-1.35-1.3-1.71-1.3-1.71-1.06-.72.08-.71.08-.71 1.17.08 
+      1.79 1.2 1.79 1.2 1.04 1.79 2.73 1.27 3.4.97.1-.76.41-1.27.75-1.56-2.55-.29-5.23-1.28-5.23-5.7 
+      0-1.26.45-2.29 1.2-3.1-.12-.29-.52-1.45.11-3.02 0 0 .97-.31 3.18 1.18a11.1 11.1 0 0 1 2.9-.39c.98 0 
+      1.96.13 2.9.39 2.2-1.49 3.17-1.18 3.17-1.18.63 1.57.23 2.73.11 3.02.75.81 1.2 1.84 1.2 3.1 
+      0 4.43-2.69 5.41-5.25 5.7.42.36.8 1.09.8 2.2 0 1.59-.01 2.87-.01 3.26 0 .31.21.68.8.56 
+      A10.52 10.52 0 0 0 23.5 12c0-6.28-5.23-11.5-11.5-11.5z"
+                    />
                   </svg>
                 </button>
 
