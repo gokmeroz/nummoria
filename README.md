@@ -10,7 +10,7 @@ It’s built for clarity, control, and insights — with support for multi-curre
 - 🔑 **Authentication**
   - Email + password login
   - Google OAuth (auto-login after signup)
-  - (Planned) Facebook & LinkedIn login
+  - Twitter/X & Github login
 - 👤 **User Profiles**
   - Name, profession, timezone, base currency
   - Profile photo upload
