@@ -1,5 +1,5 @@
 import React from "react";
-import logo from "../assets/nummora_logo.png";
+import logo from "../assets/nummoria_logo.png";
 
 // helper: build full URL from a handle or accept a full URL as-is
 function socialUrl(platform, value) {
@@ -20,7 +20,7 @@ function socialUrl(platform, value) {
 }
 
 export default function Footer({
-  brand = { name: "Nummora", tagline: "A clearer way to see your money." },
+  brand = { name: "Nummoria", tagline: "A clearer way to see your money." },
   main = "#4f772d",
   nav = {
     Product: [
@@ -73,7 +73,7 @@ export default function Footer({
             <div className="flex items-center gap-3">
               <img
                 src={logo}
-                alt="Nummora Logo"
+                alt="Nummoria Logo"
                 className="h-8 w-8 rounded-full object-contain"
               />
               <div>

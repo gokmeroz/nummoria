@@ -5,7 +5,7 @@ import Footer from "../components/Footer";
 
 export default function Login() {
   // login state
-  const [loginEmail, setLoginEmail] = useState("mert@nummora.com");
+  const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginErr, setLoginErr] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
@@ -131,7 +131,7 @@ export default function Login() {
                     className="mt-1 w-full rounded-lg px-3 py-2 bg-white text-gray-900 placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
-                    placeholder="you@nummora.com"
+                    placeholder="you@nummoria.com"
                     required
                   />
                 </div>
@@ -282,7 +282,7 @@ export default function Login() {
                   className="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#90a955]"
                   value={signEmail}
                   onChange={(e) => setSignEmail(e.target.value)}
-                  placeholder="you@nummora.com"
+                  placeholder="you@nummoria.com"
                   required
                 />
               </div>

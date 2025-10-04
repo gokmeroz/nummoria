@@ -1,6 +1,7 @@
 /* eslint-disable no-unused-vars */
 // components/HeroSlider.jsx
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 
 const SLIDE_INTERVAL_MS = 6000;
 
@@ -24,6 +25,7 @@ export default function HeroSlider({
   const rootRef = useRef(null);
   const startedAtRef = useRef(0);
   const pausedRef = useRef(false);
+  const navigate = useNavigate();
 
   const prefersReducedMotion = useMemo(
     () => window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches,
@@ -138,10 +140,20 @@ export default function HeroSlider({
 
   if (!slides.length) return null;
 
-  // Height logic (fix): default = 75dvh; if fullscreen, use calc(100dvh - topOffset)
+  // Height logic
   const sliderStyle = fullscreen
     ? { height: `calc(100dvh - ${topOffset || 0}px)`, minHeight: "480px" }
     : { height: "75dvh", minHeight: "480px" };
+
+  // helper for CTA navigation
+  function clickCTA(e, href) {
+    e.stopPropagation();
+    // prevent any default anchor nav if used
+    e.preventDefault?.();
+    if (!href) return;
+    if (href.startsWith("/")) navigate(href);
+    else window.location.assign(href);
+  }
 
   return (
     <section
@@ -166,24 +178,27 @@ export default function HeroSlider({
               }`}
               aria-hidden={active ? "false" : "true"}
             >
-              {/* background */}
+              {/* background (non-interactive) */}
               <img
                 src={s.image}
                 alt={s.alt || s.title || ""}
-                className="js-parallax h-full w-full object-cover"
+                className="js-parallax h-full w-full object-cover pointer-events-none select-none"
                 loading={i === 0 ? "eager" : "lazy"}
                 fetchpriority={i === 0 ? "high" : undefined}
+                draggable={false}
               />
-              {/* subtle contrast helpers */}
-              <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-black/10 to-black/35" />
-              {s.dim && <div className="absolute inset-0 bg-black/20" />}
+              {/* subtle contrast helpers — also non-interactive */}
+              <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-black/10 to-black/35 pointer-events-none" />
+              {s.dim && (
+                <div className="absolute inset-0 bg-black/20 pointer-events-none" />
+              )}
 
-              {/* overlay content */}
+              {/* overlay content (interactive) */}
               {s.card ? (
-                // CARD MODE — your original white box + CTAs (left/center area)
-                <div className="absolute inset-0 flex items-center">
+                // CARD MODE
+                <div className="absolute inset-0 flex items-center z-10 pointer-events-none">
                   <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 w-full">
-                    <div className="max-w-xl bg-white/85 backdrop-blur-md rounded-2xl shadow-lg p-6 md:p-8 ring-1 ring-black/5">
+                    <div className="max-w-xl bg-white/85 backdrop-blur-md rounded-2xl shadow-lg p-6 md:p-8 ring-1 ring-black/5 pointer-events-auto">
                       <h2
                         className="text-3xl md:text-4xl font-bold leading-tight"
                         style={{ color: s.card.main }}
@@ -196,9 +211,10 @@ export default function HeroSlider({
                       {!!s.ctas?.length && (
                         <div className="mt-6 flex flex-wrap items-center gap-3">
                           {s.ctas.map((c, idx) => (
-                            <a
+                            <button
                               key={idx}
-                              href={c.href}
+                              type="button"
+                              onClick={(e) => clickCTA(e, c.href)}
                               className={
                                 idx === 0
                                   ? "px-5 py-2.5 rounded font-semibold text-white transition"
@@ -224,7 +240,7 @@ export default function HeroSlider({
                               }}
                             >
                               {c.label}
-                            </a>
+                            </button>
                           ))}
                         </div>
                       )}
@@ -232,9 +248,9 @@ export default function HeroSlider({
                   </div>
                 </div>
               ) : (
-                // MINIMAL MODE — centered text + optional CTAs (no box)
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-center text-white px-4">
+                // MINIMAL MODE
+                <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+                  <div className="text-center text-white px-4 pointer-events-auto">
                     <h2 className="text-4xl md:text-6xl font-bold">
                       {s.title}
                     </h2>
@@ -246,13 +262,14 @@ export default function HeroSlider({
                     {!!s.ctas?.length && (
                       <div className="mt-6 flex flex-wrap justify-center gap-3">
                         {s.ctas.map((c, idx) => (
-                          <a
+                          <button
                             key={idx}
-                            href={c.href}
-                            className="px-5 py-2.5 rounded bg-white/80 text-black font-semibold hover:bg-white transition"
+                            type="button"
+                            onClick={(e) => clickCTA(e, c.href)}
+                            className="px-5 py-2.5 rounded bg-white/85 text-black font-semibold hover:bg-white transition"
                           >
                             {c.label}
-                          </a>
+                          </button>
                         ))}
                       </div>
                     )}
@@ -266,26 +283,35 @@ export default function HeroSlider({
 
       {/* arrows (subtle) */}
       <button
-        onClick={prev}
+        onClick={(e) => {
+          e.stopPropagation();
+          prev();
+        }}
         aria-label="Previous slide"
-        className="absolute left-4 top-1/2 -translate-y-1/2 text-white/70 hover:text-white text-3xl font-light"
+        className="absolute left-4 top-1/2 -translate-y-1/2 text-white/70 hover:text-white text-3xl font-light z-20"
       >
         ‹
       </button>
       <button
-        onClick={next}
+        onClick={(e) => {
+          e.stopPropagation();
+          next();
+        }}
         aria-label="Next slide"
-        className="absolute right-4 top-1/2 -translate-y-1/2 text-white/70 hover:text-white text-3xl font-light"
+        className="absolute right-4 top-1/2 -translate-y-1/2 text-white/70 hover:text-white text-3xl font-light z-20"
       >
         ›
       </button>
 
       {/* dots (thin pills) */}
-      <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-2">
+      <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-2 z-20">
         {slides.map((_, i) => (
           <button
             key={i}
-            onClick={() => goTo(i)}
+            onClick={(e) => {
+              e.stopPropagation();
+              goTo(i);
+            }}
             aria-label={`Go to slide ${i + 1}`}
             aria-current={i === index ? "true" : "false"}
             className={`h-1 w-6 rounded-full transition-colors ${

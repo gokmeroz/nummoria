@@ -17,6 +17,8 @@ import InvestmentPerformances from "./pages/InvestmentPerformances";
 import ReportsPage from "./pages/Reports";
 import SupportPage from "./pages/Support";
 import OAuthCallback from "./pages/OAuthCallback";
+import Goodbye from "./pages/GoodBye";
+import FinancialHelper from "./pages/FinancialAdvisor";
 
 export default function App() {
   function handleLogout() {
@@ -55,10 +57,12 @@ export default function App() {
           ></Route>
           <Route path="/support" element={<SupportPage />}></Route>
           <Route path="/oauth-callback" element={<OAuthCallback />} />
+          <Route path="/ai/financial-helper" element={<FinancialHelper />} />
 
           {/* add more: expenses, income, etc. */}
         </Route>
       </Route>
+      <Route path="/goodbye" element={<Goodbye />} />
 
       <Route path="*" element={<ErrorPage />} />
       {/* <Route path="/error" element={<Footer />} /> */}

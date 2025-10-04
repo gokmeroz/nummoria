@@ -71,8 +71,8 @@ export default function SupportPage() {
         <div className="mx-auto max-w-6xl px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img
-              src="../src/assets/nummora_logo.png"
-              alt="Nummora Logo"
+              src="../src/assets/nummoria_logo.png"
+              alt="Nummoria Logo"
               className="h-8 w-8"
             />
             <h1
@@ -82,8 +82,8 @@ export default function SupportPage() {
               Support
             </h1>
             <img
-              src="../src/assets/nummora_logo.png"
-              alt="Nummora Logo"
+              src="../src/assets/nummoria_logo.png"
+              alt="Nummoria Logo"
               className="h-8 w-8"
             />
           </div>
@@ -101,9 +101,9 @@ export default function SupportPage() {
                 📧 Email:{" "}
                 <a
                   className="underline decoration-dotted"
-                  href="mailto:support@nummora.app"
+                  href="mailto:support@nummoria.app"
                 >
-                  support@nummora.app
+                  support@nummoria.app
                 </a>
               </li>
               <li>💬 In-app: use the form on this page</li>
@@ -111,11 +111,11 @@ export default function SupportPage() {
                 🛠 Status:{" "}
                 <a
                   className="underline decoration-dotted"
-                  href="https://status.nummora.app"
+                  href="https://status.nummoria.app"
                   target="_blank"
                   rel="noreferrer"
                 >
-                  status.nummora.app
+                  status.Nummoria.app
                 </a>
               </li>
             </ul>
@@ -276,7 +276,7 @@ export default function SupportPage() {
                   },
                   {
                     q: "Can I track multiple currencies?",
-                    a: "Yes. Nummora stores amounts in minor units and formats using your currency's decimals automatically.",
+                    a: "Yes. Nummoria stores amounts in minor units and formats using your currency's decimals automatically.",
                   },
                 ]}
               />

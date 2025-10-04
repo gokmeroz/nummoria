@@ -13,6 +13,7 @@ import accountRoutes from "./routes/accountRoutes.js";
 import categoryRoutes from "./routes/categoryRoutes.js";
 import transactionRoutes from "./routes/transactionRoutes.js";
 import investmentPerformance from "./routes/investmentPerformance.js";
+import financialHelperRoutes from "./routes/financialHelperRoutes.js";
 
 const app = express();
 
@@ -46,6 +47,7 @@ app.use("/accounts", accountRoutes);
 app.use("/categories", categoryRoutes);
 app.use("/transactions", transactionRoutes);
 app.use("/investments", investmentPerformance, marketRouter);
+app.use("/ai/financial-helper", financialHelperRoutes);
 
 app.get("/health", (req, res) =>
   res.json({ status: "ok", timestamp: Date.now() })

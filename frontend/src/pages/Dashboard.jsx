@@ -4,6 +4,9 @@ import Footer from "../components/Footer";
 import api from "../lib/api";
 import HeroSlider from "../components/HeroSlider";
 
+// ✅ import local assets instead of using ../../src/... strings
+import seeItImg from "../assets/see_it_track_it_1.avif";
+
 /* money utils */
 function decimalsForCurrency(code) {
   const zero = new Set(["JPY", "KRW", "CLP", "VND"]);
@@ -201,7 +204,7 @@ export default function Dashboard() {
   /* Slides */
   const slides = [
     {
-      image: "../../src/assets/see_it_track_it_1.avif",
+      image: seeItImg, // ✅ imported asset
       alt: "Finance background",
       title: "See it. Track it.",
       subtitle:
@@ -210,8 +213,8 @@ export default function Dashboard() {
         { label: "GET ADVICE", href: "/ai/financial-advice" },
         { label: "VIEW REPORTS", href: "/reports" },
       ],
-      card: { main, secondary },
-      dim: false,
+      // card: { main, secondary },
+      dim: true,
     },
     {
       image:
@@ -241,21 +244,25 @@ export default function Dashboard() {
       ctas: [{ label: "View Investments", href: "/investments/performance" }],
       dim: true,
     },
-    {
-      image: "https://images.unsplash.com/photo-1550547660-d9450f859349",
-      alt: "Hamburger meal display",
-      title: "Want fries with that?",
-      subtitle: "Check out our new AI based advicer if it is healthy for ya!.",
-      ctas: [{ label: "AI Financial Mentor", href: "/ai/financial-helper" }],
-      dim: true,
-    },
+
+    // ⚠️ This slide likely hijacked clicks if your HeroSlider has a slide-level onClick.
+    // Re-enable AFTER you confirm your HeroSlider doesn't attach a full-screen onClick.
+    // {
+    //   image: "https://images.unsplash.com/photo-1550547660-d9450f859349",
+    //   alt: "Hamburger meal display",
+    //   title: "Want fries with that?",
+    //   subtitle: "Check out our new AI based advicer if it is healthy for ya!.",
+    //   ctas: [{ label: "AI Financial Mentor", href: "/ai/financial-helper" }],
+    //   dim: true,
+    // },
   ];
 
-  // If your navbar is fixed and ~64px tall, set topOffset=64 below.
   return (
     <div className="min-h-dvh bg-white">
       {/* FULL-BLEED HERO */}
       <section className="relative w-screen">
+        {/* If your HeroSlider supports it, pass a flag to disable slide-level clicks */}
+        {/* <HeroSlider slides={slides} minHeight={480} className="rounded-none" disableSlideClick /> */}
         <HeroSlider slides={slides} minHeight={480} className="rounded-none" />
       </section>
 
@@ -269,7 +276,7 @@ export default function Dashboard() {
         </h2>
         <p className="mt-3 max-w-3xl mx-auto text-center text-gray-600">
           From students to growing teams: track expenses, monitor income, and
-          keep an eye on investments with Nummora. Export, share, and automate.
+          keep an eye on investments with Nummoria. Export, share, and automate.
         </p>
 
         <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -316,6 +323,8 @@ export default function Dashboard() {
           <div className="text-red-600 mt-2 text-center">{invErr}</div>
         )}
       </section>
+
+      <Footer />
     </div>
   );
 }

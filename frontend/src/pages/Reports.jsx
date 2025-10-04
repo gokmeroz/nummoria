@@ -5,10 +5,10 @@ import React, { useEffect, useMemo, useState, useCallback } from "react";
 import api from "../lib/api";
 
 // [BRAND] logo (Vite resolves this URL at build time)
-const logoUrl = new URL("../assets/nummora_logo.png", import.meta.url).href;
+const logoUrl = new URL("../assets/nummoria_logo.png", import.meta.url).href;
 
 // [BRAND] App name
-const APP_NAME = "Nummora";
+const APP_NAME = "Nummoria";
 
 /* ------------------------------ Money helpers ------------------------------ */
 // UI formatter (kept as-is; uses user's locale)

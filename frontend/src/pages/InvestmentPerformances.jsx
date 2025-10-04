@@ -323,8 +323,8 @@ export default function InvestmentPerformance() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <img
-              src="../src/assets/nummora_logo.png"
-              alt="Nummora Logo"
+              src="../src/assets/nummoria_logo.png"
+              alt="Nummoria Logo"
               className="h-8 w-8"
             />
             <h1
@@ -334,8 +334,8 @@ export default function InvestmentPerformance() {
               Investment Performance
             </h1>
             <img
-              src="../src/assets/nummora_logo.png"
-              alt="Nummora Logo"
+              src="../src/assets/nummoria_logo.png"
+              alt="Nummoria Logo"
               className="h-8 w-8"
             />
           </div>

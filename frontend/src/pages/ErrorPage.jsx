@@ -17,12 +17,12 @@ export default function ErrorPage() {
       {/* Header */}
       <div className="flex items-center gap-2 mb-6">
         <img
-          src="../src/assets/nummora_logo.png"
-          alt="Nummora Logo"
+          src="../src/assets/nummoria_logo.png"
+          alt="Nummoria Logo"
           className="h-8 w-8"
         />
         <span className="text-xl font-semibold" style={{ color: main }}>
-          Nummora
+          Nummoria
         </span>
       </div>
 
@@ -42,7 +42,7 @@ export default function ErrorPage() {
 
       {/* Footer */}
       <footer className="text-xs text-gray-400">
-        Nummora © {new Date().getFullYear()} ·{" "}
+        Nummoria © {new Date().getFullYear()} ·{" "}
         <div style={{ color: secondary }}>
           <a href="#" className="hover:underline">
             Help

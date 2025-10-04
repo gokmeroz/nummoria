@@ -34,6 +34,10 @@ export default function UserPage() {
   const [accModalOpen, setAccModalOpen] = useState(false);
   const [editingAcc, setEditingAcc] = useState(null);
 
+  // delete account UI state
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
   const main = "#4f772d";
   const secondary = "#90a955";
 
@@ -290,7 +294,7 @@ export default function UserPage() {
                   </Labeled>
                 </div>
 
-                <div className="pt-2">
+                <div className="pt-2 flex items-center gap-3">
                   <button
                     type="submit"
                     disabled={saving}
@@ -299,7 +303,54 @@ export default function UserPage() {
                   >
                     {saving ? "Saving…" : "Save changes"}
                   </button>
+
+                  <button
+                    type="button"
+                    disabled={deleting}
+                    onClick={() => setConfirmOpen(true)}
+                    className="px-4 py-2 rounded-lg font-semibold border border-red-600 text-red-700 hover:bg-red-50 disabled:opacity-60"
+                  >
+                    {deleting ? "Deleting…" : "Delete account"}
+                  </button>
                 </div>
+
+                {/* Confirm modal */}
+                {confirmOpen && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center">
+                    <div
+                      className="absolute inset-0 bg-black/40"
+                      onClick={() => setConfirmOpen(false)}
+                    />
+                    <div className="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+                      <h3 className="text-lg font-semibold mb-2">
+                        Delete your account?
+                      </h3>
+                      <p className="text-sm text-gray-600 mb-5">
+                        This is a <b>soft delete</b>. Your account will be
+                        deactivated and hidden. You can contact support to
+                        restore it.
+                      </p>
+                      <div className="flex justify-end gap-3">
+                        <button
+                          type="button"
+                          className="px-4 py-2 rounded-lg border hover:bg-gray-50"
+                          onClick={() => setConfirmOpen(false)}
+                          disabled={deleting}
+                        >
+                          No, keep it
+                        </button>
+                        <button
+                          type="button"
+                          className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-60"
+                          onClick={deleteMe}
+                          disabled={deleting}
+                        >
+                          Yes, delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </form>
             </div>
 
@@ -524,6 +575,22 @@ export default function UserPage() {
       )}
     </div>
   );
+  async function deleteMe() {
+    try {
+      setErr("");
+      setMsg("");
+      setDeleting(true);
+      await api.delete("/me"); // backend should soft-delete (isActive=false, deletedAt=now)
+      // clear session and redirect
+      localStorage.removeItem("token");
+      window.location.href = "/goodbye"; // or "/login"
+    } catch (e) {
+      setErr(e?.response?.data?.error || "Failed to delete account");
+      setConfirmOpen(false);
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   // ----- helpers: API actions -----
   async function saveAccount(payload) {

@@ -36,12 +36,12 @@ export default function Layout({ onLogout }) {
           {/* Logo + Brand */}
           <Link to="/" className="flex items-center gap-2">
             <img
-              src="../src/assets/nummora_logo.png"
-              alt="Nummora Logo"
+              src="../src/assets/nummoria_logo.png"
+              alt="Nummoria Logo"
               className="h-8 w-8"
             />
             <span className="font-semibold text-lg text-[#4f772d]">
-              Nummora
+              Nummoria
             </span>
           </Link>
 
