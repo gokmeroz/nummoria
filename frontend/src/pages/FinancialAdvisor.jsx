@@ -98,7 +98,7 @@ export default function FinancialHelper() {
 
   return (
     <div className="max-w-3xl mx-auto p-4 space-y-4">
-      <h1 className="text-2xl font-semibold">AI Financial Helper</h1>
+      <h1 className="text-2xl font-semibold">AI Financial Advisor</h1>
 
       {/* Tone selector (first-run) */}
       {askToneIfNeeded && (
@@ -109,13 +109,13 @@ export default function FinancialHelper() {
               className="px-3 py-1 rounded border"
               onClick={() => setTone("formal")}
             >
-              Formal
+              Like a financial advisor?
             </button>
             <button
               className="px-3 py-1 rounded border"
               onClick={() => setTone("buddy")}
             >
-              Buddy
+              Like your buddy next door?
             </button>
           </div>
         </div>
