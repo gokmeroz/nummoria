@@ -47,7 +47,14 @@ function normalizeAmount(s) {
 
 function csvToTxRows(buf) {
   const text = buf.toString("utf8");
-  const rows = parseCSV(text, { columns: true, skip_empty_lines: true });
+  const rows = parseCSV(text, {
+    columns: true,
+    skip_empty_lines: true,
+    // try common delimiters
+    delimiter: [",", ";", "\t", "|"],
+    relax_column_count: true,
+    relax_quotes: true,
+  });
   const out = [];
 
   for (const r of rows) {
@@ -295,13 +302,30 @@ export async function ingestPdf(req, res) {
       const contentText = (data.text || "").replace(/\u0000/g, "");
       if (!contentText.trim()) {
         return res.status(400).json({
-          error: "PDF has no extractable text",
-          details:
-            "Looks scanned/image-only. Export a text-based PDF or CSV from your bank.",
+          ok: false,
+          code: "PDF_NO_TEXT",
+          message:
+            "PDF has no extractable text (likely scanned). Export a text-based PDF or CSV.",
         });
       }
-      parsedTransactions = await simpleRegexExtract(contentText);
-      if (parsedTransactions.length === 0) note = "pdf_no_matches";
+
+      parsedTransactions = await parseTransactionsFromText(contentText, {
+        useLLMFallback: Boolean(process.env.OPENAI_API_KEY),
+      });
+      console.log("txCount:", parsedTransactions.length);
+      if (parsedTransactions.length)
+        console.log("firstTx:", parsedTransactions[0]);
+
+      // in ingestPdf, right after building parsedTransactions
+      if (!parsedTransactions.length) {
+        return res.status(422).json({
+          ok: false,
+          code: "NO_TRANSACTIONS",
+          message:
+            "We couldn't read any transactions from this file. Try your bank’s CSV export or another statement format.",
+          note,
+        });
+      }
     }
 
     const computedMetrics = computeMetrics(parsedTransactions);

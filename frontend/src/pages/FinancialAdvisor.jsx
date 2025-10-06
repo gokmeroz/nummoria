@@ -46,13 +46,17 @@ export default function FinancialHelper() {
         },
       ]);
     } catch (err) {
-      const data = err?.response?.data || {};
-      const msg = data.error || err.message || "Upload failed";
-      const details = data.details ? ` (${data.details})` : "";
-      setMessages((m) => [
-        ...m,
-        { role: "system", content: `Upload failed: ${msg}${details}` },
-      ]);
+      const code = err?.response?.data?.code;
+      const msg = err?.response?.data?.message || "Upload failed.";
+      if (code === "NO_TRANSACTIONS") {
+        showBanner(msg + " Tip: Export a CSV from your bank and upload that.");
+      } else if (code === "PDF_NO_TEXT") {
+        showBanner(
+          "This PDF is scanned/image-only. Please export a text-based PDF or CSV."
+        );
+      } else {
+        showBanner(msg);
+      }
     } finally {
       setUploading(false);
       setUploadPct(0);
@@ -109,7 +113,7 @@ export default function FinancialHelper() {
               className="px-3 py-1 rounded border"
               onClick={() => setTone("formal")}
             >
-              Like a financial advisor?
+              Like a financial helper?
             </button>
             <button
               className="px-3 py-1 rounded border"
@@ -167,6 +171,9 @@ export default function FinancialHelper() {
         />
         <button
           className="px-3 py-2 rounded bg-emerald-700 text-white"
+          // className="px-3 py-1 rounded-lg bg-[#4f772d] text-white"
+          //className="btn btn-success"
+          // className="w-full rounded-full border-2 border-white py-2 font-semibold hover:bg-white hover:text-[#4f772d] transition disabled:opacity-60"
           onClick={onSend}
           disabled={!tone}
         >

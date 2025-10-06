@@ -1020,7 +1020,7 @@ export default function IncomeScreen({ accountId }) {
           <button
             type="button"
             onClick={addOne}
-            disabled={busy}
+            disabled={busy} 
             className="px-4 py-2 rounded-lg bg-[#4f772d] text-white font-semibold disabled:opacity-60"
           >
             Add category

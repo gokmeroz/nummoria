@@ -21,20 +21,17 @@ function decimalsForCurrency(code) {
 }
 function minorToMajor(minor, currency = "USD") {
   const d = decimalsForCurrency(currency || "USD");
-  return (Number(minor || 0) / Math.pow(10, d)).toFixed(d);
+  return Number(Number(minor || 0) / Math.pow(10, d));
 }
 const fmtMoneyUI = (minor, cur = "USD") =>
   new Intl.NumberFormat(undefined, {
     style: "currency",
     currency: cur || "USD",
-  }).format(
-    Number(minor || 0) / Math.pow(10, decimalsForCurrency(cur || "USD"))
-  );
+  }).format(minorToMajor(minor, cur));
 
 // PDF-safe formatter (ASCII only, avoids NBSP & exotic symbols)
 const fmtMoneyPDF = (minor, cur = "USD") => {
-  const val =
-    Number(minor || 0) / Math.pow(10, decimalsForCurrency(cur || "USD"));
+  const val = minorToMajor(minor, cur);
   let s = new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: cur || "USD",
@@ -66,6 +63,25 @@ async function urlToDataURL(url) {
   });
 }
 
+// CSV helpers
+function csvEscape(v) {
+  const s = String(v ?? "");
+  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+function downloadBlob(filename, blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+    a.remove();
+  }, 0);
+}
+
 /* ---------------------------------- Page ---------------------------------- */
 function ReportsView() {
   // data
@@ -79,7 +95,7 @@ function ReportsView() {
   const [q, setQ] = useState("");
   const [downloading, setDownloading] = useState(false);
 
-  //TODO THE FILTERING: filter state (copy to other pages as needed)
+  // filter state
   const [fStart, setFStart] = useState(""); // YYYY-MM-DD
   const [fEnd, setFEnd] = useState(""); // YYYY-MM-DD
   const [fType, setFType] = useState("ALL"); // ALL | income | expense | investment
@@ -135,7 +151,6 @@ function ReportsView() {
   }, [transactions]);
 
   /* ------------------------------- Filtering -------------------------------- */
-  //TODO THE FILTERING: core filtering logic (copy to other pages and adapt)
   const rows = useMemo(() => {
     // Prepare date bounds (end is inclusive)
     const start = fStart ? new Date(`${fStart}T00:00:00`) : null;
@@ -167,8 +182,7 @@ function ReportsView() {
       if (end && dt > end) return false;
 
       // amount range (compare in MAJOR to be currency-agnostic)
-      const major =
-        Number(t.amountMinor || 0) / Math.pow(10, decimalsForCurrency(cur));
+      const major = minorToMajor(t.amountMinor, cur);
       if (minNum !== null && major < minNum) return false;
       if (maxNum !== null && major > maxNum) return false;
 
@@ -255,7 +269,6 @@ function ReportsView() {
       doc.line(margin, 90, pageWidth - margin, 90);
 
       // ---------- Optional: show active filters in PDF ----------
-      //TODO THE FILTERING: export the current filter chips to the PDF subtitle
       const activeFilters = [];
       if (fStart) activeFilters.push(`from ${fStart}`);
       if (fEnd) activeFilters.push(`to ${fEnd}`);
@@ -281,21 +294,19 @@ function ReportsView() {
         );
       }
 
-      // ---------- Table (dynamic widths that always fit) ----------
-      // Columns: Date, Account, Category, Type, Description, Amount
+      // ---------- Table ----------
       const colW = {
         date: 70,
         account: 95,
         category: 95,
         type: 55,
-        amount: 85, // keep amount readable
+        amount: 85,
       };
-      // whatever remains goes to Description
+      // const printable = pageWidth - margin * 2; // re-declare for clarity
       colW.desc =
         printable -
         (colW.date + colW.account + colW.category + colW.type + colW.amount);
 
-      // rows for PDF (ASCII-safe + clear sign formatting)
       const tableBody = rows.map((t) => {
         const date = new Date(t.date).toISOString().slice(0, 10);
         const acc = accountsById.get(t.accountId)?.name || "—";
@@ -316,7 +327,9 @@ function ReportsView() {
         ];
       });
 
-      autoTable(doc, {
+      // eslint-disable-next-line no-shadow
+      const { default: autoTableFn } = await import("jspdf-autotable"); // ensure name
+      autoTableFn(doc, {
         startY: 110 + (activeFilters.length ? 16 : 0),
         margin: { left: margin, right: margin },
         head: [
@@ -349,16 +362,13 @@ function ReportsView() {
             str,
             pageWidth - margin,
             doc.internal.pageSize.getHeight() - 18,
-            {
-              align: "right",
-            }
+            { align: "right" }
           );
         },
       });
 
       // ---------- Totals / Money Flow ----------
       let y = (doc.lastAutoTable?.finalY ?? 110) + 24;
-
       doc.setTextColor(0);
       doc.setFontSize(13);
       doc.text("Totals / Money Flow", margin, y);
@@ -373,12 +383,10 @@ function ReportsView() {
         const out = fmtMoneyPDF(outMinor, currency);
         const net = fmtMoneyPDF(netMinor, currency);
 
-        // ASCII-only line (no bullets)
         const prefix = `- ${currency}   Income: ${income}   Outflow: ${out}   Net: `;
         doc.setTextColor(0);
         doc.text(toPdfText(prefix), margin + 4, y);
 
-        // color the NET value only
         const netX = margin + 4 + doc.getTextWidth(toPdfText(prefix));
         if (netMinor >= 0) doc.setTextColor(34, 139, 34);
         else doc.setTextColor(200, 0, 0);
@@ -387,7 +395,6 @@ function ReportsView() {
         y += 18;
       });
 
-      // ---------- Save ----------
       const ts = new Date().toISOString().slice(0, 10);
       doc.save(`${APP_NAME}_Report_${ts}.pdf`);
     } catch (err) {
@@ -398,6 +405,29 @@ function ReportsView() {
     } finally {
       setDownloading(false);
     }
+  }
+
+  /* ------------------------------ CSV Generation ---------------------------- */
+  // Exports the *filtered* rows for direct use by the AI Agent.
+  // Headers chosen for your backend parser: Date, Description, Amount
+  function handleDownloadCsv() {
+    const ts = new Date().toISOString().slice(0, 10);
+    const headers = ["Date", "Description", "Amount"]; // backend looks for Date/Description/Amount
+    const lines = [headers.map(csvEscape).join(",")];
+
+    rows.forEach((t) => {
+      const date = new Date(t.date).toISOString().slice(0, 10);
+      // amount in MAJOR with sign: income positive, expense/investment negative
+      let amt = minorToMajor(t.amountMinor, t.currency);
+      if (t.type !== "income") amt = -Math.abs(amt);
+      const desc = t.description || "";
+      lines.push([date, desc, amt].map(csvEscape).join(","));
+    });
+
+    const blob = new Blob([lines.join("\n")], {
+      type: "text/csv;charset=utf-8",
+    });
+    downloadBlob(`${APP_NAME}_Report_${ts}.csv`, blob);
   }
 
   /* --------------------------------- Render --------------------------------- */
@@ -421,6 +451,14 @@ function ReportsView() {
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={handleDownloadCsv}
+              className="px-4 py-2 rounded-lg border border-[#4f772d] text-[#4f772d] font-semibold hover:bg-[#eef5ea]"
+              title="Download CSV for AI Agent"
+            >
+              Download CSV
+            </button>
+            <button
+              type="button"
               onClick={handleDownloadPdf}
               disabled={downloading}
               className="px-4 py-2 rounded-lg bg-[#4f772d] text-white font-semibold hover:bg-[#3f5f24] disabled:opacity-60"
@@ -442,7 +480,6 @@ function ReportsView() {
         </div>
 
         {/* ========================= FILTER BAR (reusable) ========================= */}
-        {/*TODO THE FILTERING: filter inputs UI (copy to other pages and adapt) */}
         <div className="mt-3 grid grid-cols-1 xl:grid-cols-6 gap-2">
           {/* Date range */}
           <div className="flex gap-2">
@@ -545,7 +582,6 @@ function ReportsView() {
           <button
             type="button"
             onClick={() => {
-              //TODO THE FILTERING: reset filters
               setFStart("");
               setFEnd("");
               setFType("ALL");
