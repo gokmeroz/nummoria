@@ -167,6 +167,9 @@ export default function FinancialHelper() {
           }
           value={input}
           onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") onSend();
+          }}
           disabled={!tone}
         />
         <button
