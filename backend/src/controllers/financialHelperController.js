@@ -25,6 +25,198 @@ const openai = process.env.OPENAI_API_KEY
   : null;
 
 const isDev = process.env.NODE_ENV !== "production";
+/* ------------------------- OFFLINE Q&A HELPERS ------------------------- */
+
+// Basic month-name map (EN + TR)
+const MONTHS = {
+  january: 1,
+  february: 2,
+  march: 3,
+  april: 4,
+  may: 5,
+  june: 6,
+  july: 7,
+  august: 8,
+  september: 9,
+  october: 10,
+  november: 11,
+  december: 12,
+  ocak: 1,
+  subat: 2,
+  şubat: 2,
+  mart: 3,
+  nisan: 4,
+  mayis: 5,
+  mayıs: 5,
+  haziran: 6,
+  temmuz: 7,
+  agustos: 8,
+  ağustos: 8,
+  eylul: 9,
+  eylül: 9,
+  ekim: 10,
+  kasim: 11,
+  kasım: 11,
+  aralik: 12,
+  aralık: 12,
+};
+
+function toISO(d) {
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 10);
+}
+
+function startOfMonth(date = new Date()) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+function endOfMonth(date = new Date()) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
+}
+function addMonths(date, delta) {
+  return new Date(date.getFullYear(), date.getMonth() + delta, 1);
+}
+
+function parseDateRangeFromQuery(q) {
+  if (!q) return null;
+  const s = q.toLowerCase();
+
+  // explicit YYYY-MM or YYYY-MM-DD ranges
+  const between =
+    /between\s+(\d{4}-\d{2}-\d{2})\s+(?:and|to)\s+(\d{4}-\d{2}-\d{2})/.exec(s);
+  if (between)
+    return {
+      start: new Date(between[1]),
+      end: new Date(between[2]),
+      label: `between ${between[1]} and ${between[2]}`,
+    };
+
+  const yyyymm = /(\d{4})[-\/\.](\d{1,2})/.exec(s);
+  if (yyyymm) {
+    const y = +yyyymm[1],
+      m = +yyyymm[2] - 1;
+    return {
+      start: new Date(y, m, 1),
+      end: endOfMonth(new Date(y, m, 1)),
+      label: `${y}-${String(m + 1).padStart(2, "0")}`,
+    };
+  }
+
+  // “august 2025”, “ağustos 2025”
+  const monthYear = new RegExp(
+    `(${Object.keys(MONTHS).join("|")})\\s*(\\d{4})`,
+    "i"
+  ).exec(s);
+  if (monthYear) {
+    const m = MONTHS[monthYear[1].toLowerCase()],
+      y = +monthYear[2];
+    return {
+      start: new Date(y, m - 1, 1),
+      end: endOfMonth(new Date(y, m - 1, 1)),
+      label: `${y}-${String(m).padStart(2, "0")}`,
+    };
+  }
+
+  // relative windows
+  if (/last\s+month|gecen\s+ay|geçen\s+ay/.test(s)) {
+    const start = startOfMonth(addMonths(new Date(), -1));
+    const end = endOfMonth(start);
+    return { start, end, label: "last month" };
+  }
+  if (/this\s+month|bu\s+ay/.test(s)) {
+    return {
+      start: startOfMonth(new Date()),
+      end: endOfMonth(new Date()),
+      label: "this month",
+    };
+  }
+  if (/last\s+30\s*days|son\s+30\s*g[uü]n/.test(s)) {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(end.getDate() - 30);
+    return { start, end, label: "last 30 days" };
+  }
+  if (/last\s+7\s*days|son\s+7\s*g[uü]n/.test(s)) {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(end.getDate() - 7);
+    return { start, end, label: "last 7 days" };
+  }
+  if (/yesterday|d[uü]n/.test(s)) {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return {
+      start: new Date(d.getFullYear(), d.getMonth(), d.getDate()),
+      end: new Date(
+        d.getFullYear(),
+        d.getMonth(),
+        d.getDate(),
+        23,
+        59,
+        59,
+        999
+      ),
+      label: "yesterday",
+    };
+  }
+
+  return null;
+}
+
+const CATEGORY_ALIASES = [
+  { key: "Groceries", re: /(grocery|market|migros|carrefour|a101|bim)/i },
+  {
+    key: "Dining",
+    re: /(restaurant|cafe|bar|yemek|yemeksepeti|getir yemek|trendyol yemek|food)/i,
+  },
+  { key: "Transport", re: /(uber|taxi|taksi|metro|bus|otob[uü]s)/i },
+  { key: "Rent", re: /(rent|kira)/i },
+  { key: "Utilities", re: /(fatura|bill|internet|electric|water|gas)/i },
+  {
+    key: "Investments",
+    re: /(invest|borsa|bist|fon|etf|btc|bitcoin|eth|avax|binance|hisse)/i,
+  },
+  { key: "Salary", re: /(salary|payroll|maa[sş]|[uü]cret)/i },
+];
+
+function detectCategoryFromQuery(q) {
+  if (!q) return null;
+  for (const { key, re } of CATEGORY_ALIASES) {
+    if (re.test(q)) return key;
+  }
+  return null;
+}
+
+function filterTx(
+  txs,
+  { start = null, end = null, type = null, category = null } = {}
+) {
+  return txs.filter((t) => {
+    const d = new Date(t.date);
+    if (start && d < start) return false;
+    if (end && d > end) return false;
+    if (type && (t.type || "").toLowerCase() !== type) return false;
+    if (category && (t.category || "Other") !== category) return false;
+    return true;
+  });
+}
+
+function sumAmounts(arr) {
+  return arr.reduce((a, b) => a + Number(b.amount || 0), 0);
+}
+
+function groupByCategory(arr) {
+  const m = {};
+  for (const t of arr) {
+    const k = t.category || "Other";
+    m[k] = (m[k] || 0) + Number(t.amount || 0);
+  }
+  return Object.entries(m).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+}
+
+function topN(arr, n) {
+  return arr.slice(0, n);
+}
 
 // ---------- HELPERS ----------
 function normalizeAmount(s) {
@@ -199,86 +391,294 @@ function normalizeDate(s) {
   return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
+/* ---------------------- OFFLINE, INTENT-AWARE ANSWERS ---------------------- */
+/* eslint-disable */
 function buildRuleBasedReply(ctx, tone, userMsg) {
+  const txs = ctx.parsedTransactions || [];
   const m = ctx.computedMetrics || {};
-  const sr = m.savingsRate ?? null; // %
-  const burn = m.monthlyBurn ?? null; // +
-  const stab = m.incomeStability ?? null; // %
-  const alloc = m.investmentAllocation ?? null; // %
+  const txCount = txs.length;
+  const bullet = "•";
+  const head = tone === "buddy" ? "Alright bro, here's the read:" : "Summary:";
+  const disclaimer =
+    tone === "buddy"
+      ? "This is educational, not licensed financial advice."
+      : "Note: Educational guidance, not licensed financial advice.";
+
+  // If no data, keep it simple and honest:
+  if (!txCount) {
+    return `${
+      tone === "buddy" ? "Heads up:" : "Note:"
+    } I don't see any transactions yet. Upload a CSV (preferred) or a text-based PDF so I can run the numbers.\n\n${disclaimer}`;
+  }
+
+  // -------------------- 1) Try to answer the user's question --------------------
+  const q = (userMsg || "").trim();
+  if (q) {
+    const range = parseDateRangeFromQuery(q);
+    const category = detectCategoryFromQuery(q);
+
+    // intent heuristics
+    const askSpend =
+      /(how much|ne kadar).*(spend|harca|gider)|total.*(spend|gider)|harcamam|giderim/i.test(
+        q
+      );
+    const askIncome =
+      /(how much|ne kadar).*(income|gelir)|total.*(income|gelir)|maa[sş]/i.test(
+        q
+      );
+    const askInvest =
+      /(how much|ne kadar).*(invest|yatır)|invest(ed|ment)|yat[ıi]r[ıi]m/i.test(
+        q
+      );
+    const askTopCats =
+      /(top|en [cç]ok).*(categories|kategoriler)|category breakdown|dağılım/i.test(
+        q
+      );
+    const askLargest =
+      /(largest|biggest|en b[uü]y[uü]k).*(expense|gider)/i.test(q);
+    const askBurn =
+      /(burn rate|monthly burn|ayl[ıi]k gider|ayl[ıi]k harcama)/i.test(q);
+    const askTrend = /(trend|ay baz[ıi]nda|month over month|m[oa]m)/i.test(q);
+
+    const start = range?.start || null;
+    const end = range?.end || null;
+    const label = range?.label || "selected period";
+
+    // SPEND by category or overall
+    if (askSpend) {
+      const base = filterTx(txs, { start, end, type: "expense", category });
+      const total = Math.abs(sumAmounts(base.filter((t) => t.amount < 0)));
+      const cnt = base.length;
+      const avg = cnt ? total / cnt : 0;
+      const catLine = category ? `${category} ` : "";
+      if (cnt) {
+        const lines = [
+          `${head}`,
+          `${bullet} ${catLine}spend in ${label}: ${total.toFixed(
+            2
+          )} (${cnt} tx, avg ${avg.toFixed(2)}).`,
+        ];
+        const byCat = groupByCategory(base).map(
+          ([k, v]) => `${k}: ${Math.abs(v).toFixed(2)}`
+        );
+        if (!category && byCat.length)
+          lines.push(`\nBreakdown: ${topN(byCat, 5).join(" • ")}`);
+        lines.push(`\n${disclaimer}`);
+        return lines.join("\n");
+      } else {
+        return `${head}\n${bullet} I don't see ${
+          category ? category + " " : ""
+        }expenses in ${label}. Try a wider range or upload a statement that includes expenses.\n\n${disclaimer}`;
+      }
+    }
+
+    // INCOME
+    if (askIncome) {
+      const base = filterTx(txs, { start, end, type: "income" });
+      const total = sumAmounts(base.filter((t) => t.amount > 0));
+      const cnt = base.length;
+      const avg = cnt ? total / cnt : 0;
+      if (cnt) {
+        return `${head}\n${bullet} Income in ${label}: ${total.toFixed(
+          2
+        )} (${cnt} tx, avg ${avg.toFixed(2)}).\n\n${disclaimer}`;
+      } else {
+        return `${head}\n${bullet} I don't see income in ${label}. If this seems wrong, upload a period covering payroll.\n\n${disclaimer}`;
+      }
+    }
+
+    // INVESTMENTS
+    if (askInvest) {
+      const base = filterTx(txs, { start, end, category: "Investments" });
+      const total = Math.abs(sumAmounts(base.filter((t) => t.amount !== 0)));
+      const cnt = base.length;
+      if (cnt) {
+        return `${head}\n${bullet} Investments in ${label}: ${total.toFixed(
+          2
+        )} (${cnt} tx).\n\n${disclaimer}`;
+      } else {
+        return `${head}\n${bullet} No investment transactions found in ${label}. Try a wider window or confirm category labels.\n\n${disclaimer}`;
+      }
+    }
+
+    // TOP CATEGORIES
+    if (askTopCats) {
+      const base = filterTx(txs, { start, end });
+      if (!base.length) {
+        return `${head}\n${bullet} No transactions in ${label}. Try a wider range.\n\n${disclaimer}`;
+      }
+      const byCat = groupByCategory(base).map(
+        ([k, v]) => `${k}: ${v.toFixed(2)}`
+      );
+      return `${head}\n${bullet} Top categories in ${label}: ${topN(
+        byCat,
+        5
+      ).join(" • ")}\n\n${disclaimer}`;
+    }
+
+    // LARGEST EXPENSES
+    if (askLargest) {
+      const base = filterTx(txs, { start, end, type: "expense" }).filter(
+        (t) => t.amount < 0
+      );
+      base.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
+      const top = topN(base, 5);
+      if (!top.length) {
+        return `${head}\n${bullet} I don't see expenses in ${label}.\n\n${disclaimer}`;
+      }
+      const list = top
+        .map(
+          (t) =>
+            `- ${toISO(new Date(t.date))} ${t.description || "—"} (${Math.abs(
+              t.amount
+            ).toFixed(2)})`
+        )
+        .join("\n");
+      return `${head}\nLargest expenses in ${label}:\n${list}\n\n${disclaimer}`;
+    }
+
+    // BURN RATE (monthly)
+    if (askBurn) {
+      // if a month window is given, use that; otherwise last month
+      let startM,
+        endM,
+        lbl = label;
+      if (start && end) {
+        startM = new Date(start.getFullYear(), start.getMonth(), 1);
+        endM = endOfMonth(startM);
+      } else {
+        startM = startOfMonth(addMonths(new Date(), -1));
+        endM = endOfMonth(startM);
+        lbl = "last month";
+      }
+      const exp = filterTx(txs, {
+        start: startM,
+        end: endM,
+        type: "expense",
+      }).filter((t) => t.amount < 0);
+      const burn = Math.abs(sumAmounts(exp));
+      const cnt = exp.length;
+      return `${head}\n${bullet} Monthly burn (${lbl}): ${burn.toFixed(2)} ${
+        cnt ? `(${cnt} tx)` : ``
+      }\n\n${disclaimer}`;
+    }
+
+    // TRENDS (month over month, last 3 months)
+    if (askTrend) {
+      const now = startOfMonth(new Date());
+      const m3 = [addMonths(now, -3), addMonths(now, -2), addMonths(now, -1)];
+      const lines = m3
+        .map((d) => {
+          const startM = d,
+            endM = endOfMonth(d);
+          const income = sumAmounts(
+            filterTx(txs, { start: startM, end: endM, type: "income" }).filter(
+              (t) => t.amount > 0
+            )
+          );
+          const expense = Math.abs(
+            sumAmounts(
+              filterTx(txs, {
+                start: startM,
+                end: endM,
+                type: "expense",
+              }).filter((t) => t.amount < 0)
+            )
+          );
+          const net = income - expense;
+          return `- ${startM.getFullYear()}-${String(
+            startM.getMonth() + 1
+          ).padStart(2, "0")}: income ${income.toFixed(
+            2
+          )} • out ${expense.toFixed(2)} • net ${net.toFixed(2)}`;
+        })
+        .join("\n");
+      return `${head}\nLast 3 months trend:\n${lines}\n\n${disclaimer}`;
+    }
+  }
+
+  // -------------------- 2) Fallback to generic summary if unknown --------------------
+  const sr = m.savingsRate ?? null;
+  const burn = m.monthlyBurn ?? null;
+  const stab = m.incomeStability ?? null;
+  const alloc = m.investmentAllocation ?? null;
   const risk = m.riskScore ?? null;
 
-  const topCats =
-    Object.entries(m.categoryBreakdown || {})
-      .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
-      .slice(0, 3)
-      .map(([k, v]) => `${k} (${Number(v).toFixed(2)})`)
-      .join(", ") || "n/a";
+  const topCatsArr = Object.entries(m.categoryBreakdown || {})
+    .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
+    .slice(0, 3)
+    .map(([k, v]) => `${k} (${Number(v).toFixed(2)})`);
+  const topCats = topCatsArr.length ? topCatsArr.join(", ") : "none";
 
-  const head = tone === "buddy" ? "Alright bro, here’s the read:" : "Summary:";
-  const bullet = tone === "buddy" ? "-" : "•";
   const recs = [];
-
-  if (sr !== null) {
+  if (typeof sr === "number") {
     if (sr < 15)
       recs.push(
         `Push savings rate toward 20%+. Start with +5% auto-transfer on payday.`
       );
+    else if (sr < 30)
+      recs.push(`Solid savings rate (${sr}%). Nudge +1% each quarter.`);
     else
       recs.push(
-        `Good savings rate (${sr}%). Keep it ≥20% and bump +1% quarterly.`
+        `Strong savings rate (${sr}%). Maintain ≥20% and review quarterly.`
       );
   }
-  if (burn !== null && burn > 0)
+  if (typeof burn === "number" && burn > 0) {
     recs.push(
-      `Monthly burn ~${burn.toFixed(
+      `Monthly burn ≈ ${burn.toFixed(
         2
-      )}. Cap Dining/Groceries/Transport with weekly limits + alerts.`
+      )}. Set weekly caps for Dining/Groceries/Transport and enable alerts.`
     );
-  if (stab !== null && stab < 70)
-    recs.push(
-      `Income stability ${stab}%. Build 3–6 month emergency fund before adding risk.`
-    );
-  if (alloc !== null) {
+  }
+  if (typeof alloc === "number") {
     if (alloc < 10)
       recs.push(
-        `Low investment allocation (${alloc}%). After EF, DCA into diversified ETFs.`
+        `Low investment allocation (${alloc}%). After 3–6 mo EF, DCA into diversified ETFs.`
       );
-    if (alloc > 60)
+    else if (alloc > 60)
       recs.push(
         `High allocation (${alloc}%). Ensure 3–6 months liquidity and rebalance.`
       );
+    else
+      recs.push(
+        `Investment allocation (${alloc}%). Rebalance quarterly to your target mix.`
+      );
   }
-  if (risk !== null) {
+  if (typeof stab === "number" && stab < 70) {
+    recs.push(
+      `Income stability ${stab}%. Build/maintain a 3–6 month emergency fund first.`
+    );
+  }
+  if (typeof risk === "number") {
     recs.push(
       risk < 55
-        ? `Risk score ${risk}/100 (aggressive). Trim high-vol bets; rebalance.`
-        : `Risk score ${risk}/100 (ok). Rebalance quarterly.`
+        ? `Risk score ${risk}/100 (riskier). Trim concentrated bets and rebalance.`
+        : `Risk score ${risk}/100 (okay). Rebalance quarterly.`
     );
   }
   if (!recs.length)
     recs.push(
-      `Upload a transactions PDF/CSV or ask a specific question for tailored steps.`
+      `Upload more months (CSV preferred) so I can give sharper, number-backed actions.`
     );
 
   const snap = [
-    sr !== null ? `Savings rate: ${sr}%` : null,
-    burn !== null ? `Monthly burn: ${burn.toFixed(2)}` : null,
-    stab !== null ? `Income stability: ${stab}%` : null,
-    alloc !== null ? `Investment allocation: ${alloc}%` : null,
-    risk !== null ? `Risk score: ${risk}/100` : null,
-    `Top categories: ${topCats}`,
+    typeof sr === "number" ? `Savings rate: ${sr}%` : null,
+    typeof burn === "number" ? `Monthly burn: ${burn.toFixed(2)}` : null,
+    typeof stab === "number" ? `Income stability: ${stab}%` : null,
+    typeof alloc === "number" ? `Investment allocation: ${alloc}%` : null,
+    typeof risk === "number" ? `Risk score: ${risk}/100` : null,
+    topCatsArr.length ? `Top categories: ${topCats}` : null,
+    `Transactions: ${txCount}`,
   ]
     .filter(Boolean)
     .join(" • ");
 
-  const disclaimer =
-    tone === "buddy"
-      ? `Heads up: this is educational, not licensed financial advice.`
-      : `Note: Educational guidance, not licensed financial advice.`;
+  return `${head}
+${recs.map((r) => `${bullet} ${r}`).join("\n")}
 
-  return `${head}\n${recs
-    .map((r) => `${bullet} ${r}`)
-    .join("\n")}\n\n${snap}\n\n${disclaimer}`;
+${snap}
+
+${disclaimer}`;
 }
 
 // ---------- CONTROLLERS ----------
