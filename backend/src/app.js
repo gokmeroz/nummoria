@@ -38,7 +38,14 @@ app.use(
 app.use(morgan("dev"));
 
 // Serve /uploads publicly (MUST be before routes)
-app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+app.use(
+  "/uploads",
+  express.static(path.join(process.cwd(), "uploads"), {
+    setHeaders(res) {
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    },
+  })
+);
 
 // Routes (mount each exactly once)
 app.use("/auth", authRoutes);

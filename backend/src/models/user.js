@@ -19,7 +19,9 @@ const userSchema = new mongoose.Schema(
     profession: { type: String },
     tz: { type: String, default: "UTC" },
     baseCurrency: { type: String, default: "USD" },
-    avatarUrl: { type: String },
+    avatarUrl: { type: String, default: undefined },
+    avatarVersion: { type: Number, default: 0 },
+
     // Social ids (optional)
     googleId: { type: String, index: true, sparse: true, unique: false },
     twitterId: { type: String, index: true, sparse: true, unique: false },

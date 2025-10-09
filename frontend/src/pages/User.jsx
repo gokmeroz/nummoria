@@ -2,10 +2,9 @@
 /* eslint-disable no-redeclare */
 /* eslint-disable no-undef */
 /* eslint-disable no-empty */
-// src/pages/User.jsx
+// frontend/src/pages/User.jsx
 import { useEffect, useRef, useState } from "react";
 import api from "../lib/api";
-import defaultAvatar from "../../src/assets/Spiderman.jpeg";
 
 const ACCOUNT_TYPES = ["checking", "savings", "credit", "cash", "other"];
 const CURRENCIES = ["USD", "EUR", "TRY", "GBP"];
@@ -20,6 +19,11 @@ export default function UserPage() {
   // avatar upload
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const fileRef = useRef(null);
+  const uploadIdRef = useRef(0); // prevent races
+
+  // Local avatar override (preview or final URL)
+  const [avatarOverride, setAvatarOverride] = useState(null); // { url, version }
+  const [avatarBroken, setAvatarBroken] = useState(false); // avoid DOM remove errors
 
   // profile fields
   const [name, setName] = useState("");
@@ -41,13 +45,50 @@ export default function UserPage() {
   const main = "#4f772d";
   const secondary = "#90a955";
 
-  // Cache-bust avatar to avoid stale CDN/browser cache
-  const avatarVersion = me?.avatarVersion || me?.updatedAt || 0;
-  const avatarSrc = me?.avatarUrl
-    ? `${me.avatarUrl}${
-        me.avatarUrl.includes("?") ? "&" : "?"
-      }v=${encodeURIComponent(avatarVersion)}`
-    : defaultAvatar;
+  // ---------------- Version-aware merge + local override ----------------
+  function mergeMe(patch) {
+    setMe((prev) => {
+      const next = { ...(prev || {}), ...(patch || {}) };
+
+      // Prefer newer avatarVersion
+      const prevVer = Number(prev?.avatarVersion || 0);
+      const patchVer = Number(patch?.avatarVersion || 0);
+      if (patchVer < prevVer) {
+        next.avatarVersion = prevVer;
+        if (prev?.avatarUrl) next.avatarUrl = prev.avatarUrl;
+      }
+
+      // If we have a local override and it's newer, keep it
+      if (
+        avatarOverride &&
+        Number(avatarOverride.version || 0) >= Number(next.avatarVersion || 0)
+      ) {
+        next.avatarUrl = avatarOverride.url;
+        next.avatarVersion = avatarOverride.version;
+      }
+
+      return next;
+    });
+  }
+
+  // Build avatar src from either override or server value. Never append ?v= to blob:
+  const effectiveUrl = avatarOverride?.url ?? me?.avatarUrl;
+  const effectiveVersion =
+    avatarOverride?.version ?? me?.avatarVersion ?? me?.updatedAt ?? 0;
+
+  const isBlob = effectiveUrl?.startsWith?.("blob:");
+  const avatarSrc =
+    effectiveUrl &&
+    (isBlob
+      ? effectiveUrl
+      : `${effectiveUrl}${
+          effectiveUrl.includes("?") ? "&" : "?"
+        }v=${encodeURIComponent(effectiveVersion)}`);
+
+  // Reset the "broken" flag whenever the avatar URL or version changes
+  useEffect(() => {
+    setAvatarBroken(false);
+  }, [effectiveUrl, effectiveVersion]);
 
   useEffect(() => {
     (async () => {
@@ -58,7 +99,10 @@ export default function UserPage() {
           api.get("/me"),
           api.get("/accounts"),
         ]);
-        setMe(meData);
+        if (meData?.avatarUrl)
+          meData.avatarUrl = absolutizeAvatarUrl(meData.avatarUrl);
+        mergeMe(meData || {});
+
         setName(meData?.name || "");
         setProfession(meData?.profession || "");
         setBaseCurrency(meData?.baseCurrency || "USD");
@@ -72,6 +116,7 @@ export default function UserPage() {
         setLoading(false);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function refreshAccounts() {
@@ -98,7 +143,7 @@ export default function UserPage() {
         baseCurrency,
         tz,
       });
-      setMe((prev) => ({ ...(prev || {}), ...(data || {}) }));
+      mergeMe(data || {});
       setMsg("Profile updated");
     } catch (e) {
       setErr(e.response?.data?.error || "Failed to update profile");
@@ -117,71 +162,192 @@ export default function UserPage() {
     return { status, msg };
   }
 
-  // ===== RAW UPLOAD: no compression, no size checks =====
+  // ===== helpers to auto-detect the correct upload path (avoid /users/me/avatar) =====
+  function absolutizeAvatarUrl(url) {
+    if (!url) return url;
+    // If backend accidentally sends relative, pin it to your Axios baseURL
+    if (url.startsWith("/uploads")) {
+      const base = api?.defaults?.baseURL?.replace(/\/+$/, "") || "";
+      return `${base}${url}`;
+    }
+    return url;
+  }
+
+  function describeAxiosError(e) {
+    const status = e?.response?.status;
+    const statusText = e?.response?.statusText;
+    const dataMsg =
+      e?.response?.data?.error ||
+      e?.response?.data?.message ||
+      (typeof e?.response?.data === "string" ? e.response.data : "");
+    const method = e?.config?.method?.toUpperCase?.();
+    const url = e?.config?.url;
+    const baseURL = e?.config?.baseURL || api?.defaults?.baseURL || "";
+    return { status, statusText, dataMsg, method, url, baseURL };
+  }
+
+  async function tryUploadEndpoints(file) {
+    // Only try the two valid patterns your app is likely using.
+    // Remove the bad `/users/me/avatar` to prevent noise.
+    const candidates = ["/me/avatar", "/api/me/avatar"];
+    const tried = [];
+    let lastErr = null;
+
+    for (const path of candidates) {
+      tried.push(path);
+      try {
+        const fd = new FormData();
+        fd.append("avatar", file, file.name || "avatar");
+        const res = await api.post(path, fd, {
+          headers: { "Content-Type": "multipart/form-data" },
+          withCredentials: true,
+        });
+        return { res, tried };
+      } catch (e) {
+        lastErr = e;
+        const status = e?.response?.status;
+        if (status !== 404 && status !== 405) {
+          e._tried = tried.slice();
+          throw e;
+        }
+      }
+    }
+    if (lastErr) {
+      lastErr._tried = tried;
+      throw lastErr;
+    }
+    throw new Error("All upload endpoints failed");
+  }
+
+  // ---------------- Avatar upload ----------------
+  const MAX_BYTES = 5 * 1024 * 1024;
+
   async function uploadAvatar(file) {
     if (!file) return;
     if (!file.type?.startsWith?.("image/")) {
       setErr("Please select an image file.");
+      fileRef.current && (fileRef.current.value = "");
+      return;
+    }
+    if (file.size > MAX_BYTES) {
+      setErr("Image is too large. Max 5MB.");
+      fileRef.current && (fileRef.current.value = "");
       return;
     }
 
+    const myUploadId = ++uploadIdRef.current;
     setUploadingAvatar(true);
     setErr("");
     setMsg("");
 
-    // Instant preview (replaced by server URL on success)
+    // Instant local preview & lock with override
     const previewUrl = URL.createObjectURL(file);
-    setMe((prev) => ({
-      ...(prev || {}),
-      avatarUrl: previewUrl,
-      avatarVersion: Date.now(),
-    }));
+    const previewVer = Date.now();
+    setAvatarOverride({ url: previewUrl, version: previewVer });
+    mergeMe({ avatarUrl: previewUrl, avatarVersion: previewVer });
 
     try {
-      const fd = new FormData();
-      // Send under several common field names to match various backends
-      fd.append("avatar", file, file.name || "avatar");
-      fd.append("file", file, file.name || "avatar");
-      fd.append("photo", file, file.name || "avatar");
-      fd.append("image", file, file.name || "avatar");
+      // 🔧 AUTO-DETECT the correct path and upload
+      const { res, tried } = await tryUploadEndpoints(file);
 
-      const { data } = await api.post("/me/avatar", fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-        withCredentials: true,
-      });
+      if (myUploadId !== uploadIdRef.current) return;
 
-      // Expecting server to return { avatarUrl, avatarVersion? }
-      setMe((prev) => ({
-        ...(prev || {}),
-        ...(data || {}),
-        avatarVersion: data?.avatarVersion ?? Date.now(),
-      }));
+      const data = res?.data || {};
+      const serverUrl = absolutizeAvatarUrl(data?.avatarUrl);
+      const serverVer = data?.avatarVersion ?? Date.now();
+      if (serverUrl) {
+        try {
+          URL.revokeObjectURL(previewUrl);
+        } catch {}
+        const final = { url: serverUrl, version: serverVer };
+        setAvatarOverride(final);
+        mergeMe({ avatarUrl: serverUrl, avatarVersion: serverVer });
+      } else {
+        // If backend doesn't send URL, refetch /me but keep override
+        try {
+          const { data: fresh } = await api.get("/me", {
+            params: { _: Date.now() },
+            withCredentials: true,
+          });
+          try {
+            URL.revokeObjectURL(previewUrl);
+          } catch {}
+          const ver = Math.max(
+            Number(fresh?.avatarVersion || 0),
+            Number(previewVer || 0)
+          );
+          const netUrl = fresh?.avatarUrl || previewUrl;
+          const final = { url: netUrl, version: ver };
+          setAvatarOverride(final);
+          mergeMe({ ...(fresh || {}), avatarUrl: netUrl, avatarVersion: ver });
+        } catch {
+          // keep preview; override ensures no revert
+        }
+      }
+
       setMsg("Profile photo updated");
     } catch (e) {
-      const { status, msg: m } = extractErr(e);
-      setErr(`Upload failed (${status || "?"}): ${m}`);
+      if (myUploadId !== uploadIdRef.current) return;
+      const info = describeAxiosError(e);
+      const triedNote = e?._tried?.length
+        ? `; tried: ${e._tried.join(", ")}`
+        : "";
+      setErr(
+        `Upload failed (${info.status || "?"}${
+          info.statusText ? " " + info.statusText : ""
+        }) at ${info.method || "POST"} ${info.url || "(unknown)"} (base ${
+          info.baseURL || "n/a"
+        }): ${info.dataMsg || "No server message"}${triedNote}`
+      );
 
-      // Revert preview to prior (or fallback) to avoid keeping a blob URL
-      setMe((prev) => ({
-        ...(prev || {}),
-        avatarUrl:
-          prev && prev.avatarUrl && !String(prev.avatarUrl).startsWith("blob:")
-            ? prev.avatarUrl
-            : undefined,
-        avatarVersion: Date.now(),
-      }));
+      // Revert override to previous network avatar if any, else clear
+      try {
+        URL.revokeObjectURL(previewUrl);
+      } catch {}
+      const priorUrl =
+        me?.avatarUrl && !String(me.avatarUrl).startsWith("blob:")
+          ? me.avatarUrl
+          : undefined;
+      const priorVer = Number(me?.avatarVersion || 0) || Date.now() - 1;
+
+      if (priorUrl) {
+        const final = { url: priorUrl, version: priorVer };
+        setAvatarOverride(final);
+        mergeMe({ avatarUrl: priorUrl, avatarVersion: priorVer });
+      } else {
+        setAvatarOverride(null);
+        mergeMe({ avatarUrl: undefined, avatarVersion: Date.now() });
+      }
     } finally {
       setUploadingAvatar(false);
       if (fileRef.current) fileRef.current.value = "";
     }
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-dvh grid place-items-center">
-        <div className="text-gray-600">Loading…</div>
-      </div>
-    );
+  async function removeAvatar() {
+    try {
+      setErr("");
+      setMsg("");
+      setUploadingAvatar(true);
+      // try both common delete endpoints as well
+      try {
+        await api.delete("/me/avatar", { withCredentials: true });
+      } catch (e) {
+        if (e?.response?.status === 404) {
+          await api.delete("/api/me/avatar", { withCredentials: true });
+        } else {
+          throw e;
+        }
+      }
+      setAvatarOverride({ url: undefined, version: Date.now() });
+      mergeMe({ avatarUrl: undefined, avatarVersion: Date.now() });
+      setMsg("Profile photo removed");
+    } catch (e) {
+      const { status, msg: m } = extractErr(e);
+      setErr(`Remove failed (${status || "?"}): ${m}`);
+    } finally {
+      setUploadingAvatar(false);
+    }
   }
 
   const initials =
@@ -191,6 +357,14 @@ export default function UserPage() {
       .join("")
       .slice(0, 2)
       .toUpperCase() || "U";
+
+  if (loading) {
+    return (
+      <div className="min-h-dvh grid place-items-center">
+        <div className="text-gray-600">Loading…</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-dvh bg-gray-50">
@@ -457,21 +631,13 @@ export default function UserPage() {
               />
               <div className="px-5 pb-5">
                 <div className="-mt-12 mb-3 relative inline-block">
-                  {avatarSrc ? (
+                  {avatarSrc && !avatarBroken ? (
                     <img
-                      key={String(avatarVersion)}
+                      key={String(effectiveVersion)}
                       src={avatarSrc}
                       alt="Avatar"
                       className="w-24 h-24 rounded-full ring-4 ring-white object-cover shadow"
-                      onError={(e) => {
-                        e.currentTarget.onerror = null;
-                        e.currentTarget.src = defaultAvatar;
-                        setMe((prev) => ({
-                          ...(prev || {}),
-                          avatarUrl: undefined,
-                          avatarVersion: Date.now(),
-                        }));
-                      }}
+                      onError={() => setAvatarBroken(true)}
                     />
                   ) : (
                     <div
@@ -541,6 +707,27 @@ export default function UserPage() {
               </div>
             </div>
 
+            <div className="flex items-center gap-3 mt-2">
+              <button
+                type="button"
+                onClick={removeAvatar}
+                disabled={uploadingAvatar}
+                className="text-xs underline text-gray-500 hover:text-gray-700 disabled:opacity-60"
+              >
+                Remove photo
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAvatarOverride(null);
+                  mergeMe({ avatarUrl: undefined, avatarVersion: Date.now() });
+                }}
+                className="text-xs underline text-gray-500 hover:text-gray-700"
+              >
+                Clear local override
+              </button>
+            </div>
+
             <div
               className="mt-6 bg-white rounded-xl shadow border p-5"
               style={{ borderColor: secondary }}
@@ -575,15 +762,15 @@ export default function UserPage() {
       )}
     </div>
   );
+
   async function deleteMe() {
     try {
       setErr("");
       setMsg("");
       setDeleting(true);
-      await api.delete("/me"); // backend should soft-delete (isActive=false, deletedAt=now)
-      // clear session and redirect
+      await api.delete("/me");
       localStorage.removeItem("token");
-      window.location.href = "/goodbye"; // or "/login"
+      window.location.href = "/goodbye";
     } catch (e) {
       setErr(e?.response?.data?.error || "Failed to delete account");
       setConfirmOpen(false);
