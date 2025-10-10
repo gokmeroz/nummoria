@@ -365,7 +365,6 @@ export default function UserPage() {
       </div>
     );
   }
-
   return (
     <div className="min-h-dvh bg-gray-50">
       {/* HERO */}
@@ -398,233 +397,251 @@ export default function UserPage() {
         </div>
       </section>
 
-      {/* CONTENT */}
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 -mt-12 md:-mt-16 pb-12">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left: form + accounts */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Profile form */}
-            <div
-              className="bg-white rounded-xl shadow border"
-              style={{ borderColor: secondary }}
-            >
-              <div className="px-5 py-4 border-b text-sm font-semibold text-gray-700 flex items-center justify-between">
-                <span>My account</span>
-                <span className="text-xs text-gray-500">Settings</span>
+      {/* PAGE CONTENT */}
+      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 -mt-12 md:-mt-16 pb-16">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+          {/* LEFT COLUMN */}
+          <div className="lg:col-span-2 space-y-12">
+            {/* ====== SECTION: EDIT PROFILE ====== */}
+            <div>
+              {/* Big section header */}
+              <div className="mb-3 flex items-center gap-3">
+                {/* <div className="h-8 w-2 rounded bg-emerald-600" /> */}
+                {/* <h2 className="text-lg font-extrabold tracking-wide text-emerald-800">
+                  EDIT PROFILE
+                </h2> */}
               </div>
 
-              <form onSubmit={saveProfile} className="p-5 space-y-4">
-                {msg && <div className="text-sm text-[#4f772d]">{msg}</div>}
-                {err && <div className="text-sm text-red-600">{err}</div>}
+              {/* Card */}
+              <div className="rounded-2xl bg-white shadow-md border-2 border-emerald-600 outline outline-2 outline-emerald-200/50 overflow-hidden">
+                <div className="px-180 py-3 bg-emerald-50 border-b-2 border-emerald-600 flex items-center justify-between">
+                  <span className="text-sm font-semibold text-emerald-800">
+                    Settings
+                  </span>
+                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Labeled label="Email address">
-                    <input
-                      className="w-full border rounded px-3 py-2 bg-gray-100 text-gray-600"
-                      value={me?.email || ""}
-                      readOnly
-                    />
-                  </Labeled>
+                <form onSubmit={saveProfile} className="p-5 space-y-4">
+                  {msg && <div className="text-sm text-emerald-700">{msg}</div>}
+                  {err && <div className="text-sm text-red-600">{err}</div>}
 
-                  <Labeled label="Name">
-                    <input
-                      className="w-full border rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#90a955]"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="Full name"
-                    />
-                  </Labeled>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Labeled label="Email address">
+                      <input
+                        className="w-full border rounded px-3 py-2 bg-gray-100 text-gray-600"
+                        value={me?.email || ""}
+                        readOnly
+                      />
+                    </Labeled>
 
-                  <Labeled label="Profession">
-                    <input
-                      className="w-full border rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#90a955]"
-                      value={profession}
-                      onChange={(e) => setProfession(e.target.value)}
-                      placeholder="e.g., Software Engineer"
-                    />
-                  </Labeled>
+                    <Labeled label="Name">
+                      <input
+                        className="w-full border rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#90a955]"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Full name"
+                      />
+                    </Labeled>
 
-                  <Labeled label="Time zone">
-                    <input
-                      className="w-full border rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#90a955]"
-                      value={tz}
-                      onChange={(e) => setTz(e.target.value)}
-                      placeholder="e.g., Europe/Istanbul"
-                    />
-                  </Labeled>
+                    <Labeled label="Profession">
+                      <input
+                        className="w-full border rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#90a955]"
+                        value={profession}
+                        onChange={(e) => setProfession(e.target.value)}
+                        placeholder="e.g., Software Engineer"
+                      />
+                    </Labeled>
 
-                  <Labeled label="Base currency">
-                    <select
-                      className="w-full border rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#90a955]"
-                      value={baseCurrency}
-                      onChange={(e) => setBaseCurrency(e.target.value)}
+                    <Labeled label="Time zone">
+                      <input
+                        className="w-full border rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#90a955]"
+                        value={tz}
+                        onChange={(e) => setTz(e.target.value)}
+                        placeholder="e.g., Europe/Istanbul"
+                      />
+                    </Labeled>
+
+                    <Labeled label="Base currency">
+                      <select
+                        className="w-full border rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#90a955]"
+                        value={baseCurrency}
+                        onChange={(e) => setBaseCurrency(e.target.value)}
+                      >
+                        {CURRENCIES.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
+                    </Labeled>
+                  </div>
+
+                  <div className="pt-2 flex items-center gap-3">
+                    <button
+                      type="submit"
+                      disabled={saving}
+                      className="px-5 py-2 rounded-lg text-white font-semibold transition disabled:opacity-60"
+                      style={{ backgroundColor: main }}
                     >
-                      {CURRENCIES.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
-                  </Labeled>
-                </div>
+                      {saving ? "Saving…" : "Save changes"}
+                    </button>
 
-                <div className="pt-2 flex items-center gap-3">
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="px-5 py-2 rounded-lg text-white font-semibold transition disabled:opacity-60"
-                    style={{ backgroundColor: main }}
-                  >
-                    {saving ? "Saving…" : "Save changes"}
-                  </button>
+                    <button
+                      type="button"
+                      disabled={deleting}
+                      onClick={() => setConfirmOpen(true)}
+                      className="px-4 py-2 rounded-lg font-semibold border border-red-600 text-red-700 hover:bg-red-50 disabled:opacity-60"
+                    >
+                      {deleting ? "Deleting…" : "Delete account"}
+                    </button>
+                  </div>
 
-                  <button
-                    type="button"
-                    disabled={deleting}
-                    onClick={() => setConfirmOpen(true)}
-                    className="px-4 py-2 rounded-lg font-semibold border border-red-600 text-red-700 hover:bg-red-50 disabled:opacity-60"
-                  >
-                    {deleting ? "Deleting…" : "Delete account"}
-                  </button>
-                </div>
-
-                {/* Confirm modal */}
-                {confirmOpen && (
-                  <div className="fixed inset-0 z-50 flex items-center justify-center">
-                    <div
-                      className="absolute inset-0 bg-black/40"
-                      onClick={() => setConfirmOpen(false)}
-                    />
-                    <div className="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-                      <h3 className="text-lg font-semibold mb-2">
-                        Delete your account?
-                      </h3>
-                      <p className="text-sm text-gray-600 mb-5">
-                        This is a <b>soft delete</b>. Your account will be
-                        deactivated and hidden. You can contact support to
-                        restore it.
-                      </p>
-                      <div className="flex justify-end gap-3">
-                        <button
-                          type="button"
-                          className="px-4 py-2 rounded-lg border hover:bg-gray-50"
-                          onClick={() => setConfirmOpen(false)}
-                          disabled={deleting}
-                        >
-                          No, keep it
-                        </button>
-                        <button
-                          type="button"
-                          className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-60"
-                          onClick={deleteMe}
-                          disabled={deleting}
-                        >
-                          Yes, delete
-                        </button>
+                  {confirmOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center">
+                      <div
+                        className="absolute inset-0 bg-black/40"
+                        onClick={() => setConfirmOpen(false)}
+                      />
+                      <div className="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+                        <h3 className="text-lg font-semibold mb-2">
+                          Delete your account?
+                        </h3>
+                        <p className="text-sm text-gray-600 mb-5">
+                          This is a <b>soft delete</b>. Your account will be
+                          deactivated and hidden. You can contact support to
+                          restore it.
+                        </p>
+                        <div className="flex justify-end gap-3">
+                          <button
+                            type="button"
+                            className="px-4 py-2 rounded-lg border hover:bg-gray-50"
+                            onClick={() => setConfirmOpen(false)}
+                            disabled={deleting}
+                          >
+                            No, keep it
+                          </button>
+                          <button
+                            type="button"
+                            className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-60"
+                            onClick={deleteMe}
+                            disabled={deleting}
+                          >
+                            Yes, delete
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
-              </form>
+                  )}
+                </form>
+              </div>
             </div>
 
-            {/* Accounts manager */}
-            <div
-              className="bg-white rounded-xl shadow border"
-              style={{ borderColor: secondary }}
-            >
-              <div className="px-5 py-4 border-b flex items-center justify-between">
-                <div className="font-semibold text-gray-700">
-                  Financial Accounts
-                </div>
-                <button
-                  onClick={() => {
-                    setEditingAcc(null);
-                    setAccModalOpen(true);
-                  }}
-                  className="px-3 py-1.5 rounded-lg text-white font-semibold"
-                  style={{ backgroundColor: main }}
-                >
-                  + Add account
-                </button>
+            {/* ====== SECTION: CONTENT ====== */}
+            <div>
+              {/* Big section header */}
+              <div className="mb-3 flex items-center gap-3">
+                {/* <div className="h-8 w-2 rounded bg-sky-600" /> */}
+                {/* <h2 className="text-lg font-extrabold tracking-wide text-sky-800">
+                  CONTENT
+                </h2> */}
               </div>
 
-              <div className="p-5">
-                {accErr && (
-                  <div className="mb-3 text-sm text-red-600">{accErr}</div>
-                )}
+              {/* Card */}
+              <div className="rounded-2xl bg-white shadow-md border-2 border-sky-600 outline outline-2 outline-sky-200/60 overflow-hidden">
+                <div className="px-5 py-3 bg-sky-50 border-b-2 border-sky-600 flex items-center justify-between">
+                  <span className="text-sm font-semibold text-sky-800">
+                    Accounts
+                  </span>
+                  <button
+                    onClick={() => {
+                      setEditingAcc(null);
+                      setAccModalOpen(true);
+                    }}
+                    className="px-3 py-1.5 rounded-lg text-white font-semibold"
+                    style={{ backgroundColor: main }}
+                  >
+                    + Add account
+                  </button>
+                </div>
 
-                {accounts.length === 0 ? (
-                  <div className="text-gray-600">
-                    No accounts yet. Click “Add account”.
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full text-sm">
-                      <thead className="text-left text-gray-600">
-                        <tr>
-                          <th className="py-2 pr-4">Name</th>
-                          <th className="py-2 pr-4">Type</th>
-                          <th className="py-2 pr-4">Currency</th>
-                          <th className="py-2 pr-4">Balance</th>
-                          <th className="py-2 pr-4">Institution</th>
-                          <th className="py-2 pr-4">Last4</th>
-                          <th className="py-2">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {accounts.map((a) => (
-                          <tr key={a._id} className="border-t">
-                            <td className="py-2 pr-4 font-medium">{a.name}</td>
-                            <td className="py-2 pr-4 capitalize">{a.type}</td>
-                            <td className="py-2 pr-4">{a.currency}</td>
-                            <td className="py-2 pr-4">
-                              {new Intl.NumberFormat(undefined, {
-                                style: "currency",
-                                currency: a.currency || "USD",
-                              }).format((a.balance || 0) / 100)}
-                            </td>
-                            <td className="py-2 pr-4">
-                              {a.institution || "—"}
-                            </td>
-                            <td className="py-2 pr-4">{a.last4 || "—"}</td>
-                            <td className="py-2">
-                              <div className="flex gap-2">
-                                <button
-                                  className="px-2 py-1 rounded border"
-                                  onClick={() => {
-                                    setEditingAcc(a);
-                                    setAccModalOpen(true);
-                                  }}
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  className="px-2 py-1 rounded border text-red-700 border-red-200"
-                                  onClick={() => deleteAccount(a)}
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            </td>
+                <div className="p-5">
+                  {accErr && (
+                    <div className="mb-3 text-sm text-red-600">{accErr}</div>
+                  )}
+
+                  {accounts.length === 0 ? (
+                    <div className="text-gray-600">
+                      No accounts yet. Click “Add account”.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-sm">
+                        <thead className="text-left text-gray-700 border-b">
+                          <tr>
+                            <th className="py-2 pr-4">Name</th>
+                            <th className="py-2 pr-4">Type</th>
+                            <th className="py-2 pr-4">Currency</th>
+                            <th className="py-2 pr-4">Balance</th>
+                            <th className="py-2 pr-4">Institution</th>
+                            <th className="py-2 pr-4">Last4</th>
+                            <th className="py-2">Actions</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {accounts.map((a) => (
+                            <tr key={a._id}>
+                              <td className="py-2 pr-4 font-medium">
+                                {a.name}
+                              </td>
+                              <td className="py-2 pr-4 capitalize">{a.type}</td>
+                              <td className="py-2 pr-4">{a.currency}</td>
+                              <td className="py-2 pr-4">
+                                {new Intl.NumberFormat(undefined, {
+                                  style: "currency",
+                                  currency: a.currency || "USD",
+                                }).format((a.balance || 0) / 100)}
+                              </td>
+                              <td className="py-2 pr-4">
+                                {a.institution || "—"}
+                              </td>
+                              <td className="py-2 pr-4">{a.last4 || "—"}</td>
+                              <td className="py-2">
+                                <div className="flex gap-2">
+                                  <button
+                                    className="px-2 py-1 rounded border"
+                                    onClick={() => {
+                                      setEditingAcc(a);
+                                      setAccModalOpen(true);
+                                    }}
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    className="px-2 py-1 rounded border text-red-700 border-red-200"
+                                    onClick={() => deleteAccount(a)}
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Right: Profile card with avatar edit */}
+          {/* RIGHT COLUMN */}
           <div>
             <div
               className="relative bg-white rounded-xl shadow border overflow-hidden"
               style={{ borderColor: secondary }}
             >
               <div
-                className="h-24"
+                className="h-24 shadow-inner"
                 style={{
                   background: `linear-gradient(120deg, ${main}, ${secondary})`,
                 }}
@@ -678,6 +695,7 @@ export default function UserPage() {
                     onChange={(e) => uploadAvatar(e.target.files?.[0])}
                   />
                 </div>
+
                 {uploadingAvatar && (
                   <div className="text-xs text-gray-500 mt-1">
                     Uploading photo…
@@ -707,27 +725,6 @@ export default function UserPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3 mt-2">
-              <button
-                type="button"
-                onClick={removeAvatar}
-                disabled={uploadingAvatar}
-                className="text-xs underline text-gray-500 hover:text-gray-700 disabled:opacity-60"
-              >
-                Remove photo
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setAvatarOverride(null);
-                  mergeMe({ avatarUrl: undefined, avatarVersion: Date.now() });
-                }}
-                className="text-xs underline text-gray-500 hover:text-gray-700"
-              >
-                Clear local override
-              </button>
-            </div>
-
             <div
               className="mt-6 bg-white rounded-xl shadow border p-5"
               style={{ borderColor: secondary }}
@@ -751,7 +748,6 @@ export default function UserPage() {
         </div>
       </section>
 
-      {/* Account modal */}
       {accModalOpen && (
         <AccountModal
           initial={editingAcc}

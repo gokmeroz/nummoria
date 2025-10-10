@@ -3,6 +3,8 @@
     "cookie-parser": "^1.4.7",
     "csv-parse": "^6.1.0",
     "express-session": "^1.18.2",
+    "framer-motion": "^12.23.24",
+    "global": "^4.4.0",
     "jspdf": "^2.5.2",
     "jspdf-autotable": "^3.8.4",
     "mongoose": "^8.19.0",

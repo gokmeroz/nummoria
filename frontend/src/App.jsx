@@ -19,6 +19,7 @@ import SupportPage from "./pages/Support";
 import OAuthCallback from "./pages/OAuthCallback";
 import Goodbye from "./pages/GoodBye";
 import FinancialHelper from "./pages/FinancialAdvisor";
+import About from "./pages/About";
 
 export default function App() {
   function handleLogout() {
@@ -65,6 +66,7 @@ export default function App() {
       <Route path="/goodbye" element={<Goodbye />} />
 
       <Route path="*" element={<ErrorPage />} />
+      <Route path="/about" element={<About />} />
       {/* <Route path="/error" element={<Footer />} /> */}
     </Routes>
   );
