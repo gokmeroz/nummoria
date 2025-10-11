@@ -24,6 +24,7 @@ import Docs from "./pages/Docs";
 import Contact from "./pages/Contact";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
+import Status from "./pages/Status";
 
 export default function App() {
   function handleLogout() {
@@ -73,6 +74,7 @@ export default function App() {
       <Route path="/contact" element={<Contact />} />,
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/terms" element={<Terms />} />
+      <Route path="/status" element={<Status />} />
       {/* <Route path="/error" element={<Footer />} /> */}
     </Routes>
   );
