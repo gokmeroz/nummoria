@@ -15,6 +15,7 @@ import transactionRoutes from "./routes/transactionRoutes.js";
 import investmentPerformance from "./routes/investmentPerformance.js";
 import financialHelperRoutes from "./routes/financialHelperRoutes.js";
 import statsRoutes from "./routes/stats.js";
+import contactRoutes from "./routes/contact.js";
 
 const app = express();
 
@@ -57,6 +58,7 @@ app.use("/transactions", transactionRoutes);
 app.use("/investments", investmentPerformance, marketRouter);
 app.use("/ai/financial-helper", financialHelperRoutes);
 app.use("/stats", statsRoutes);
+app.use("/contact", contactRoutes);
 
 app.get("/health", (req, res) =>
   res.json({ status: "ok", timestamp: Date.now() })
