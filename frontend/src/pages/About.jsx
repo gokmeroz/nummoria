@@ -85,7 +85,7 @@ export default function About() {
           </p>
           <div className="mt-6 flex flex-wrap gap-2.5">
             <a
-              href="/signup"
+              href="/"
               className="inline-flex items-center gap-2 rounded-xl bg-white/95 px-4 py-2.5 text-zinc-900 shadow hover:bg-white"
             >
               Get Started <span aria-hidden>→</span>
