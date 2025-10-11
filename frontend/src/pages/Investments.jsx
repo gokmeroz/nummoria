@@ -63,8 +63,118 @@ function fmtDateUTC(dateLike) {
   });
 }
 
+/* ---------------------------- Tiny Toast System ---------------------------- */
+function useToasts() {
+  const [toasts, setToasts] = useState([]);
+  const push = useCallback((t) => {
+    const id = Math.random().toString(36).slice(2);
+    const toast = { id, type: t.type || "info", msg: t.msg || String(t) };
+    setToasts((prev) => [...prev, toast]);
+    // auto-dismiss after 3.5s
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((x) => x.id !== id));
+    }, 3500);
+  }, []);
+  const remove = useCallback((id) => {
+    setToasts((prev) => prev.filter((x) => x.id !== id));
+  }, []);
+  return { toasts, push, remove };
+}
+
+function Toasts({ toasts, onClose }) {
+  const color = (type) => {
+    switch (type) {
+      case "success":
+        return "border-green-300 bg-green-50 text-green-900";
+      case "error":
+        return "border-red-300 bg-red-50 text-red-900";
+      case "warning":
+        return "border-yellow-300 bg-yellow-50 text-yellow-900";
+      default:
+        return "border-slate-300 bg-white text-slate-900";
+    }
+  };
+  return (
+    <div className="fixed bottom-4 right-4 z-[60] space-y-2 w-[92vw] max-w-sm">
+      {toasts.map((t) => (
+        <div
+          key={t.id}
+          className={`border rounded-xl shadow-md px-3 py-2 text-sm flex items-start gap-3 ${color(
+            t.type
+          )}`}
+        >
+          <div className="mt-0.5 font-medium capitalize">{t.type}</div>
+          <div className="flex-1">{t.msg}</div>
+          <button
+            className="opacity-60 hover:opacity-100"
+            onClick={() => onClose(t.id)}
+            title="Dismiss"
+          >
+            ×
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* -------------------------- Promise-based Confirm -------------------------- */
+function useConfirm() {
+  const [state, setState] = useState({
+    open: false,
+    message: "",
+    resolve: null,
+  });
+
+  const ask = useCallback((message) => {
+    return new Promise((resolve) => {
+      setState({ open: true, message, resolve });
+    });
+  }, []);
+
+  const onCancel = () => {
+    state.resolve?.(false);
+    setState((s) => ({ ...s, open: false, resolve: null }));
+  };
+  const onOk = () => {
+    state.resolve?.(true);
+    setState((s) => ({ ...s, open: false, resolve: null }));
+  };
+
+  const Dialog = () =>
+    !state.open ? null : (
+      <div className="fixed inset-0 z-[55] grid place-items-center bg-black/40">
+        <div className="w-full max-w-sm bg-white rounded-2xl p-5">
+          <div className="text-base font-semibold mb-2">Please confirm</div>
+          <div className="text-sm text-gray-700 mb-4">{state.message}</div>
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={onCancel}
+              className="px-3 py-1.5 border rounded-lg"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onOk}
+              className="px-3 py-1.5 rounded-lg text-white"
+              style={{ background: main }}
+            >
+              Confirm
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+
+  return { ask, ConfirmDialog: Dialog };
+}
+
 /* ---------------------------------- Screen ---------------------------------- */
 export default function InvestmentsScreen({ accountId }) {
+  // toasts & confirm
+  const { toasts, push, remove } = useToasts();
+  const { ask, ConfirmDialog } = useConfirm();
+
   // data
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -170,10 +280,14 @@ export default function InvestmentsScreen({ accountId }) {
       setAccounts((accRes.data || []).filter((a) => !a.isDeleted));
     } catch (e) {
       setErr(e?.response?.data?.error || e.message || "Failed to load data");
+      push({
+        type: "error",
+        msg: e?.response?.data?.error || e.message || "Failed to load data",
+      });
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [push]);
 
   useEffect(() => {
     loadAll();
@@ -465,15 +579,14 @@ export default function InvestmentsScreen({ accountId }) {
       date: new Date().toISOString().slice(0, 10),
       nextDate: "",
       categoryId: categories[0]?._id || "",
-      assetSymbol: "",
-      units: "",
+      assetSymbol: "", // <-- empty by default
+      units: "", // <-- empty by default
       description: "",
       tagsCsv: "",
       accountId: defaultAccId,
     });
     setModalOpen(true);
   }
-
   function openCreateSeed(seed) {
     setEditing(null);
     setForm({
@@ -482,8 +595,8 @@ export default function InvestmentsScreen({ accountId }) {
       date: new Date(seed.date).toISOString().slice(0, 10),
       nextDate: "",
       categoryId: seed.categoryId || "",
-      assetSymbol: (seed.assetSymbol || "").toUpperCase(),
-      units: seed.units ?? "",
+      assetSymbol: (seed.assetSymbol || "").toUpperCase(), // <-- keep or empty
+      units: seed.units ?? "", // <-- keep or empty
       description: seed.description || "",
       tagsCsv: (seed.tags || []).join(", "),
       accountId: seed.accountId || accountId || accounts[0]?._id || "",
@@ -501,8 +614,8 @@ export default function InvestmentsScreen({ accountId }) {
         ? new Date(tx.nextDate).toISOString().slice(0, 10)
         : "",
       categoryId: tx.categoryId || "",
-      assetSymbol: (tx.assetSymbol || "").toUpperCase(),
-      units: tx.units ?? "",
+      assetSymbol: (tx.assetSymbol || "").toUpperCase(), // <-- keep or empty
+      units: tx.units ?? "", // <-- keep or empty
       description: tx.description || "",
       tagsCsv: (tx.tags || []).join(", "),
       accountId: tx.accountId || accountId || accounts[0]?._id || "",
@@ -511,15 +624,20 @@ export default function InvestmentsScreen({ accountId }) {
   }
 
   async function softDelete(tx) {
-    if (!window.confirm("Delete investment?")) return;
+    const ok = await ask("Delete this investment?");
+    if (!ok) return;
     try {
       await api.delete(`/transactions/${tx._id}`);
       setTransactions((prev) =>
         prev.filter((t) => String(t._id) !== String(tx._id))
       );
       await loadAll();
+      push({ type: "success", msg: "Investment deleted." });
     } catch (e) {
-      window.alert(e?.response?.data?.error || e.message || "Error");
+      push({
+        type: "error",
+        msg: e?.response?.data?.error || e.message || "Delete failed",
+      });
     }
   }
 
@@ -966,23 +1084,29 @@ export default function InvestmentsScreen({ accountId }) {
       try {
         setBusy(true);
         if (existingNames.has(selected)) {
-          window.alert(`Category "${selected}" already exists.`);
+          push({ type: "info", msg: `Category "${selected}" already exists.` });
           return;
         }
         await createInvestmentCategory(selected);
         await loadAll();
+        push({ type: "success", msg: `Category "${selected}" created.` });
       } catch (e) {
-        window.alert(
-          e?.response?.data?.error || e.message || "Failed to create category"
-        );
+        push({
+          type: "error",
+          msg:
+            e?.response?.data?.error ||
+            e.message ||
+            "Failed to create category",
+        });
       } finally {
         setBusy(false);
       }
     }
 
     async function seedAll() {
+      const ok = await ask("Seed all standard investment categories?");
+      if (!ok) return;
       try {
-        if (!window.confirm("Seed all standard investment categories?")) return;
         setBusy(true);
         for (const name of INVESTMENT_CATEGORY_OPTIONS) {
           if (!existingNames.has(name)) {
@@ -990,8 +1114,12 @@ export default function InvestmentsScreen({ accountId }) {
           }
         }
         await loadAll();
+        push({ type: "success", msg: "Investment categories seeded." });
       } catch (e) {
-        window.alert(e?.response?.data?.error || e.message || "Seeding failed");
+        push({
+          type: "error",
+          msg: e?.response?.data?.error || e.message || "Seeding failed",
+        });
       } finally {
         setBusy(false);
       }
@@ -1069,20 +1197,30 @@ export default function InvestmentsScreen({ accountId }) {
         const createdArr = Array.isArray(data?.created) ? data.created : [data];
         setTransactions((prev) => [...createdArr, ...prev]);
         await loadAll();
+        push({ type: "success", msg: "Planned investment added." });
       } catch (e) {
-        window.alert(e?.response?.data?.error || e.message || "Add failed");
+        push({
+          type: "error",
+          msg: e?.response?.data?.error || e.message || "Add failed",
+        });
       }
     }
 
     async function deleteOne(item) {
       if (item.__kind === "virtual") {
+        const ok = await ask(
+          "Remove the planned date (nextDate) from its parent?"
+        );
+        if (!ok) return;
         try {
           await api.put(`/transactions/${item.__parentId}`, { nextDate: null });
           await loadAll();
+          push({ type: "success", msg: "Planned item removed." });
         } catch (e) {
-          window.alert(
-            e?.response?.data?.error || e.message || "Delete failed"
-          );
+          push({
+            type: "error",
+            msg: e?.response?.data?.error || e.message || "Delete failed",
+          });
         }
       } else {
         await softDelete(item);
@@ -1090,7 +1228,7 @@ export default function InvestmentsScreen({ accountId }) {
     }
 
     return (
-      <div className="m-4 p-4 border rounded-xl bg_white">
+      <div className="m-4 p-4 border rounded-xl bg-white">
         <div className="flex items-center justify-between mb-3">
           <div className="font-semibold">
             Upcoming investments ({upcoming.length})
@@ -1120,7 +1258,7 @@ export default function InvestmentsScreen({ accountId }) {
                     Planned (not added)
                   </span>
                 ) : (
-                  <span className="text_[11px] px-2 py-0.5 rounded-full border text-gray-600">
+                  <span className="text-[11px] px-2 py-0.5 rounded-full border text-gray-600">
                     In database
                   </span>
                 );
@@ -1129,7 +1267,7 @@ export default function InvestmentsScreen({ accountId }) {
               return (
                 <div
                   key={u._id}
-                  className="py-3 flex items-start justify_between gap-4"
+                  className="py-3 flex items-start justify-between gap-4"
                 >
                   <div className="min-w-0">
                     <div className="font-semibold flex items-center gap-2">
@@ -1299,20 +1437,52 @@ export default function InvestmentsScreen({ accountId }) {
       const date = dateRef.current?.value ?? "";
       const nextDate = nextDateRef.current?.value ?? "";
       const categoryId = categoryRef.current?.value ?? "";
-      const assetSymbol = (symbolRef.current?.value ?? "").toUpperCase().trim();
-      const units = Number(unitsRef.current?.value ?? 0);
+      const rawSymbol = (symbolRef.current?.value ?? "").toUpperCase().trim();
+      const rawUnitsStr = (unitsRef.current?.value ?? "").trim();
+      const rawUnits = rawUnitsStr === "" ? NaN : Number(rawUnitsStr);
       const description = (descRef.current?.value ?? "").trim();
       const tagsCsv = tagsRef.current?.value ?? "";
       const pickedAccountId = accountRef.current?.value ?? "";
 
       const amountMinor = majorToMinor(amount, currency);
-      if (Number.isNaN(amountMinor)) return window.alert("Invalid amount");
-      if (!categoryId) return window.alert("Pick a category");
-      if (!pickedAccountId) return window.alert("Pick an account");
-      if (!assetSymbol) return window.alert("Asset symbol required");
-      if (!units || Number.isNaN(units) || units <= 0)
-        return window.alert("Units must be a positive number");
+      if (Number.isNaN(amountMinor)) {
+        push({ type: "warning", msg: "Invalid amount." });
+        return;
+      }
+      if (!categoryId) {
+        push({ type: "warning", msg: "Pick a category." });
+        return;
+      }
+      if (!pickedAccountId) {
+        push({ type: "warning", msg: "Pick an account." });
+        return;
+      }
 
+      const category = categoriesById.get(categoryId);
+      const isStockOrCrypto =
+        !!category &&
+        (category.name === "Stock Market" ||
+          category.name === "Crypto Currency Exchange");
+
+      // Validate ONLY for Stock/Crypto
+      if (isStockOrCrypto) {
+        if (!rawSymbol) {
+          push({
+            type: "warning",
+            msg: "Asset symbol is required for this category.",
+          });
+          return;
+        }
+        if (!(Number.isFinite(rawUnits) && rawUnits > 0)) {
+          push({
+            type: "warning",
+            msg: "Units must be a positive number for this category.",
+          });
+          return;
+        }
+      }
+
+      // Base payload (without symbol/units)
       const payload = {
         accountId: pickedAccountId,
         categoryId,
@@ -1320,14 +1490,20 @@ export default function InvestmentsScreen({ accountId }) {
         amountMinor,
         currency,
         date: new Date(date).toISOString(),
-        assetSymbol,
-        units,
         description: description || null,
         tags: tagsCsv
           .split(",")
           .map((s) => s.trim())
           .filter((s) => s.length > 0),
       };
+
+      // Include symbol/units if required or provided
+      if (isStockOrCrypto || rawSymbol) {
+        payload.assetSymbol = rawSymbol;
+      }
+      if (isStockOrCrypto || (Number.isFinite(rawUnits) && rawUnits > 0)) {
+        payload.units = Number(rawUnits);
+      }
 
       if (nextDate) payload.nextDate = new Date(nextDate).toISOString();
 
@@ -1338,6 +1514,7 @@ export default function InvestmentsScreen({ accountId }) {
             ? data.created
             : [data];
           setTransactions((prev) => [...createdArr, ...prev]);
+          push({ type: "success", msg: "Investment added." });
         } else {
           const { data } = await api.put(
             `/transactions/${editing._id}`,
@@ -1346,11 +1523,15 @@ export default function InvestmentsScreen({ accountId }) {
           setTransactions((prev) =>
             prev.map((t) => (String(t._id) === String(data._id) ? data : t))
           );
+          push({ type: "success", msg: "Investment saved." });
         }
         setModalOpen(false);
         await loadAll();
       } catch (e) {
-        window.alert(e?.response?.data?.error || e.message || "Error");
+        push({
+          type: "error",
+          msg: e?.response?.data?.error || e.message || "Error",
+        });
       }
     };
 
@@ -1385,7 +1566,7 @@ export default function InvestmentsScreen({ accountId }) {
           </div>
 
           <div className="flex gap-3">
-            <div className="space-y-1 w-full">
+            <div className="space-y-1 w_full w-full">
               <label className="font-semibold text_sm">Total Cost</label>
               <input
                 ref={amountRef}
@@ -1630,6 +1811,9 @@ export default function InvestmentsScreen({ accountId }) {
         </aside>
       </div>
 
+      {/* Global UI helpers */}
+      <Toasts toasts={toasts} onClose={remove} />
+      <ConfirmDialog />
       <InvestmentModal />
     </div>
   );

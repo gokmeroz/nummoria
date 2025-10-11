@@ -57,6 +57,15 @@ async function incBalanceOrThrow({ accountId, userId, delta }) {
   if (res.matchedCount === 0) throw new Error("Account not found");
 }
 
+// stock/crypto gate
+function isStockOrCryptoCategory(catDoc) {
+  if (!catDoc) return false;
+  const n = String(catDoc.name || "")
+    .trim()
+    .toLowerCase();
+  return n === "stock market" || n === "crypto currency exchange";
+}
+
 /* --------------------------------- GETs ----------------------------------- */
 // GET /transactions?type=expense&accountId=...&categoryId=...&from=YYYY-MM-DD&to=YYYY-MM-DD&q=...
 export async function getTransactions(req, res) {
@@ -138,7 +147,7 @@ export async function createTransaction(req, res) {
       amountMinor,
       currency,
       date,
-      nextDate, // <--- NEW (optional)
+      nextDate,
       description,
       notes,
       tags,
@@ -167,37 +176,45 @@ export async function createTransaction(req, res) {
     }
 
     // Category ↔ type consistency (if provided)
+    let categoryDoc = null;
     if (categoryId) {
-      const cat = await Category.findOne({
+      categoryDoc = await Category.findOne({
         _id: categoryId,
         userId: req.userId,
         isDeleted: { $ne: true },
       })
-        .select("kind")
+        .select("name kind")
         .lean();
-      if (!cat) return res.status(400).json({ error: "Category not found" });
+      if (!categoryDoc)
+        return res.status(400).json({ error: "Category not found" });
       if (
         ["income", "expense", "investment"].includes(type) &&
-        cat.kind !== type
+        categoryDoc.kind !== type
       ) {
         return res.status(400).json({
-          error: `Category kind (${cat.kind}) does not match transaction type (${type})`,
+          error: `Category kind (${categoryDoc.kind}) does not match transaction type (${type})`,
         });
       }
     }
 
-    // Investment-specific validation
+    // Investment-specific validation (conditional)
     if (type === "investment") {
+      const requiresSymbolUnits = isStockOrCryptoCategory(categoryDoc);
       const sym = typeof assetSymbol === "string" ? assetSymbol.trim() : "";
-      if (!sym) {
-        return res
-          .status(400)
-          .json({ error: "assetSymbol is required for investment" });
-      }
-      if (typeof units !== "number" || Number.isNaN(units) || units === 0) {
-        return res
-          .status(400)
-          .json({ error: "units must be a non-zero number for investment" });
+      const unitsNum =
+        typeof units === "number" && !Number.isNaN(units) ? units : null;
+
+      if (requiresSymbolUnits) {
+        if (!sym) {
+          return res
+            .status(400)
+            .json({ error: "assetSymbol is required for stock/crypto" });
+        }
+        if (!(Number.isFinite(unitsNum) && unitsNum > 0)) {
+          return res
+            .status(400)
+            .json({ error: "units must be > 0 for stock/crypto" });
+        }
       }
     }
 
@@ -225,14 +242,18 @@ export async function createTransaction(req, res) {
       amountMinor: Math.abs(amountMinor),
       currency: cur,
       date: when,
-      nextDate: nextDate ? startOfUTC(nextDate) : undefined, // stored as metadata
+      nextDate: nextDate ? startOfUTC(nextDate) : undefined, // metadata only
       description: description || null,
       notes: notes || null,
       tags: cleanTags,
-      assetSymbol: assetSymbol
-        ? String(assetSymbol).toUpperCase().trim()
-        : null,
-      units: typeof units === "number" ? units : null,
+      assetSymbol:
+        typeof assetSymbol === "string" && assetSymbol.trim()
+          ? String(assetSymbol).toUpperCase().trim()
+          : null,
+      units:
+        typeof units === "number" && !Number.isNaN(units)
+          ? Number(units)
+          : null,
       isDeleted: false,
     };
 
@@ -249,7 +270,6 @@ export async function createTransaction(req, res) {
       const doc = await Transaction.create(baseDoc);
       created.push(doc.toObject());
     } catch (e) {
-      // roll back if balance applied
       if (delta !== 0) {
         try {
           await incBalanceOrThrow({
@@ -262,11 +282,10 @@ export async function createTransaction(req, res) {
       throw e;
     }
 
-    // 2) If nextDate provided: create a copy at nextDate (planned/future)
+    // 2) Optional future copy
     if (nextDate) {
       const plannedDate = startOfUTC(nextDate);
 
-      // De-dupe: avoid duplicate same-day copy
       const exists = await Transaction.exists({
         userId: req.userId,
         isDeleted: { $ne: true },
@@ -295,7 +314,7 @@ export async function createTransaction(req, res) {
           const copy = await Transaction.create({
             ...baseDoc,
             date: plannedDate,
-            nextDate: undefined, // do not chain by default
+            nextDate: undefined, // do not chain
           });
           created.push(copy.toObject());
         } catch (e2) {
@@ -308,7 +327,7 @@ export async function createTransaction(req, res) {
               });
             } catch {}
           }
-          // do not fail the whole request if the extra copy fails
+          // ignore extra-copy failure
         }
       }
     }
@@ -456,22 +475,52 @@ export async function updateTransaction(req, res) {
     }
 
     // Category ↔ type check (if category present)
+    let categoryDoc = null;
     if (next.categoryId) {
-      const cat = await Category.findOne({
+      categoryDoc = await Category.findOne({
         _id: next.categoryId,
         userId: req.userId,
         isDeleted: { $ne: true },
       })
-        .select("kind")
+        .select("name kind")
         .lean();
-      if (!cat) return res.status(400).json({ error: "Category not found" });
+      if (!categoryDoc)
+        return res.status(400).json({ error: "Category not found" });
       if (
         ["income", "expense", "investment"].includes(next.type) &&
-        cat.kind !== next.type
+        categoryDoc.kind !== next.type
       ) {
         return res.status(400).json({
-          error: `Category kind (${cat.kind}) does not match transaction type (${next.type})`,
+          error: `Category kind (${categoryDoc.kind}) does not match transaction type (${next.type})`,
         });
+      }
+    }
+
+    // Conditional investment constraints on UPDATE
+    if (next.type === "investment") {
+      const stockOrCrypto = isStockOrCryptoCategory(categoryDoc);
+      const sym =
+        next.assetSymbol != null ? String(next.assetSymbol).trim() : null;
+      const unitsNum =
+        next.units != null && !Number.isNaN(Number(next.units))
+          ? Number(next.units)
+          : null;
+
+      if (stockOrCrypto) {
+        if (!sym) {
+          return res
+            .status(400)
+            .json({ error: "assetSymbol is required for stock/crypto" });
+        }
+        if (!(Number.isFinite(unitsNum) && unitsNum > 0)) {
+          return res
+            .status(400)
+            .json({ error: "units must be > 0 for stock/crypto" });
+        }
+      } else {
+        // make sure non-stock categories can clear these fields
+        if (sym === "") next.assetSymbol = null;
+        if (next.units === "" || next.units === undefined) next.units = null;
       }
     }
 

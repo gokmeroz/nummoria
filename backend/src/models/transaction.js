@@ -30,8 +30,8 @@ const transactionSchema = new mongoose.Schema(
     tags: [{ type: String }],
 
     // investments (optional)
-    assetSymbol: { type: String, trim: true, index: true },
-    units: { type: Number },
+    assetSymbol: { type: String, trim: true, index: true, default: null },
+    units: { type: Number, default: null }, // positive decimal, e.g. 1.5
 
     // soft delete
     isDeleted: { type: Boolean, default: false, index: true },

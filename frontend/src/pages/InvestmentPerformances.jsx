@@ -39,6 +39,15 @@ function formatNumber(n, digits = 2) {
   }).format(n);
 }
 
+/** ---------- NEW: helper to exclude INV ---------- **/
+function isInvSymbol(sym) {
+  const s = String(sym || "")
+    .trim()
+    .toUpperCase();
+  // Exclude "INV" exactly or anything beginning with "INV-"/"INV "
+  return /^INV(\b|[-_])/i.test(s) || s === "INV";
+}
+
 /** ---------- NEW: Market Search widget ---------- **/
 function MarketSearch() {
   const [q, setQ] = useState("");
@@ -124,7 +133,7 @@ function MarketSearch() {
               <Stat
                 label="Price"
                 value={
-                  price != null
+                  typeof price === "number"
                     ? new Intl.NumberFormat("en-US", {
                         style: "currency",
                         currency: priceCur,
@@ -259,11 +268,7 @@ export default function InvestmentPerformance() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const anyQuotes = useMemo(
-    () => (data?.holdings || []).some((h) => typeof h.price === "number"),
-    [data]
-  );
-
+  /** Sort first, then filter out INV so toggling sort feels consistent */
   const holdingsSorted = useMemo(() => {
     const rows = [...(data?.holdings || [])];
     rows.sort((a, b) => {
@@ -288,6 +293,41 @@ export default function InvestmentPerformance() {
     });
     return rows;
   }, [data, sort]);
+
+  /** ---------- NEW: filtered rows (hide INV) ---------- */
+  const holdingsFiltered = useMemo(
+    () => holdingsSorted.filter((h) => !isInvSymbol(h.symbol)),
+    [holdingsSorted]
+  );
+
+  /** Use filtered rows for “anyQuotes” and empty-state logic */
+  const anyQuotes = useMemo(
+    () => holdingsFiltered.some((h) => typeof h.price === "number"),
+    [holdingsFiltered]
+  );
+
+  /** ---------- NEW: recompute totals from filtered rows ---------- */
+  const totalsFiltered = useMemo(() => {
+    const totals = {};
+    for (const h of holdingsFiltered) {
+      const cur = h.currency || "USD";
+      if (!totals[cur])
+        totals[cur] = { costMinor: 0, valueMinor: 0, plMinor: 0 };
+      totals[cur].costMinor += h.costMinor ?? 0;
+      // Only accumulate when present; if null/undefined, keep as null unless something already set
+      if (typeof h.valueMinor === "number") {
+        totals[cur].valueMinor += h.valueMinor;
+      } else {
+        totals[cur].valueMinor = totals[cur].valueMinor || null;
+      }
+      if (typeof h.plMinor === "number") {
+        totals[cur].plMinor += h.plMinor;
+      } else {
+        totals[cur].plMinor = totals[cur].plMinor || null;
+      }
+    }
+    return totals;
+  }, [holdingsFiltered]);
 
   function setSortKey(key) {
     setSort((s) =>
@@ -363,7 +403,7 @@ export default function InvestmentPerformance() {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
-        {/* ---------- NEW: Market Search ---------- */}
+        {/* ---------- Market Search ---------- */}
         <MarketSearch />
 
         {/* Notices */}
@@ -372,16 +412,16 @@ export default function InvestmentPerformance() {
             {err}
           </div>
         )}
-        {!err && !loading && !anyQuotes && (data.holdings?.length ?? 0) > 0 && (
+        {!err && !loading && !anyQuotes && holdingsFiltered.length > 0 && (
           <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 text-amber-700 p-3">
             Live quotes are disabled or unavailable. Value &amp; P/L shown as
             “—”.
           </div>
         )}
 
-        {/* Totals by currency */}
+        {/* Totals by currency (FILTERED) */}
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-          {Object.entries(data?.totals || {}).map(([cur, t]) => {
+          {Object.entries(totalsFiltered).map(([cur, t]) => {
             const hasVal = t.valueMinor !== null && t.valueMinor !== undefined;
             const hasPL = t.plMinor !== null && t.plMinor !== undefined;
             const plPositive = (t.plMinor ?? 0) > 0;
@@ -436,14 +476,14 @@ export default function InvestmentPerformance() {
               </div>
             );
           })}
-          {Object.keys(data?.totals || {}).length === 0 && !loading && (
+          {Object.keys(totalsFiltered).length === 0 && !loading && (
             <div className="text-gray-500">
               No totals yet — add investment transactions.
             </div>
           )}
         </section>
 
-        {/* Holdings table */}
+        {/* Holdings table (FILTERED) */}
         <section className="rounded-2xl border overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead className="bg-gray-50 text-gray-700">
@@ -483,7 +523,7 @@ export default function InvestmentPerformance() {
                 </tr>
               )}
 
-              {!loading && (data?.holdings?.length ?? 0) === 0 && (
+              {!loading && holdingsFiltered.length === 0 && (
                 <tr>
                   <td className="px-4 py-6 text-gray-500" colSpan={8}>
                     No holdings found. Add some <em>investment</em> transactions
@@ -493,7 +533,7 @@ export default function InvestmentPerformance() {
               )}
 
               {!loading &&
-                (data?.holdings || []).map((h, idx) => {
+                holdingsFiltered.map((h, idx) => {
                   const dec = decimalsForCurrency(h.currency);
                   const priceStr =
                     typeof h.price === "number"

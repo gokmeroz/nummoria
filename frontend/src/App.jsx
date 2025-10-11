@@ -22,6 +22,8 @@ import FinancialHelper from "./pages/FinancialAdvisor";
 import About from "./pages/About";
 import Docs from "./pages/Docs";
 import Contact from "./pages/Contact";
+import Privacy from "./pages/Privacy";
+import Terms from "./pages/Terms";
 
 export default function App() {
   function handleLogout() {
@@ -68,7 +70,9 @@ export default function App() {
       <Route path="*" element={<ErrorPage />} />
       <Route path="/about-us" element={<About />} />
       <Route path="/docs" element={<Docs />} />
-      <Route path="/contact" element={<Contact />} />
+      <Route path="/contact" element={<Contact />} />,
+      <Route path="/privacy" element={<Privacy />} />
+      <Route path="/terms" element={<Terms />} />
       {/* <Route path="/error" element={<Footer />} /> */}
     </Routes>
   );
