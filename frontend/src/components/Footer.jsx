@@ -29,7 +29,7 @@ export default function Footer({
       { label: "Investments", href: "/investments" },
     ],
     Company: [
-      { label: "About", href: "/about" },
+      { label: "About", href: "/about-us" },
       { label: "Contact", href: "/contact" },
     ],
     Legal: [

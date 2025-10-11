@@ -33,7 +33,6 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
-
       {/* Protected routes inside Layout */}
       <Route element={<Guard />}>
         <Route element={<Layout onLogout={handleLogout} />}>
@@ -64,9 +63,8 @@ export default function App() {
         </Route>
       </Route>
       <Route path="/goodbye" element={<Goodbye />} />
-
       <Route path="*" element={<ErrorPage />} />
-      <Route path="/about" element={<About />} />
+      <Route path="/about-us" element={<About />} />
       {/* <Route path="/error" element={<Footer />} /> */}
     </Routes>
   );

@@ -247,14 +247,14 @@ export default function Dashboard() {
 
     // ⚠️ This slide likely hijacked clicks if your HeroSlider has a slide-level onClick.
     // Re-enable AFTER you confirm your HeroSlider doesn't attach a full-screen onClick.
-    // {
-    //   image: "https://images.unsplash.com/photo-1550547660-d9450f859349",
-    //   alt: "Hamburger meal display",
-    //   title: "Want fries with that?",
-    //   subtitle: "Check out our new AI based advicer if it is healthy for ya!.",
-    //   ctas: [{ label: "AI Financial Mentor", href: "/ai/financial-helper" }],
-    //   dim: true,
-    // },
+    {
+      image: "https://images.unsplash.com/photo-1550547660-d9450f859349",
+      alt: "Hamburger meal display",
+      title: "Want fries with that?",
+      subtitle: "Check out our new AI based advicer if it is healthy for ya!.",
+      ctas: [{ label: "AI Financial Mentor", href: "/ai/financial-helper" }],
+      dim: true,
+    },
   ];
 
   return (
@@ -324,7 +324,7 @@ export default function Dashboard() {
         )}
       </section>
 
-      <Footer />
+      {/* <Footer /> */}
     </div>
   );
 }
