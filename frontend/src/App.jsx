@@ -63,8 +63,6 @@ export default function App() {
           <Route path="/support" element={<SupportPage />}></Route>
           <Route path="/oauth-callback" element={<OAuthCallback />} />
           <Route path="/ai/financial-helper" element={<FinancialHelper />} />
-
-          {/* add more: expenses, income, etc. */}
         </Route>
       </Route>
       <Route path="/goodbye" element={<Goodbye />} />
@@ -75,7 +73,6 @@ export default function App() {
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/terms" element={<Terms />} />
       <Route path="/status" element={<Status />} />
-      {/* <Route path="/error" element={<Footer />} /> */}
     </Routes>
   );
 }

@@ -94,7 +94,7 @@ export default function About() {
               href="/docs"
               className="inline-flex items-center gap-2 rounded-xl border border-white/60 bg-transparent px-4 py-2.5 text-white hover:bg-white/10"
             >
-              Read the Docs
+              Read the Documentation
             </a>
           </div>
         </div>
