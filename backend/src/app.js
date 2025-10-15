@@ -16,6 +16,7 @@ import investmentPerformance from "./routes/investmentPerformance.js";
 import financialHelperRoutes from "./routes/financialHelperRoutes.js";
 import statsRoutes from "./routes/stats.js";
 import contactRoutes from "./routes/contact.js";
+import ingestRoutes from "./routes/ingestRoutes.js";
 
 const app = express();
 
@@ -59,6 +60,7 @@ app.use("/investments", investmentPerformance, marketRouter);
 app.use("/ai/financial-helper", financialHelperRoutes);
 app.use("/stats", statsRoutes);
 app.use("/contact", contactRoutes);
+app.use("/ingest", ingestRoutes); // <-- this creates /ingest/csv and /ingest/pdf
 
 app.get("/health", (req, res) =>
   res.json({ status: "ok", timestamp: Date.now() })

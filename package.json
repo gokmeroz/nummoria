@@ -4,6 +4,7 @@
     "csv-parse": "^6.1.0",
     "express-session": "^1.18.2",
     "framer-motion": "^12.23.24",
+    "g": "^2.0.1",
     "global": "^4.4.0",
     "jspdf": "^2.5.2",
     "jspdf-autotable": "^3.8.4",
@@ -14,6 +15,7 @@
     "passport": "^0.7.0",
     "passport-twitter-oauth2": "^2.1.1",
     "pdf-parse": "^2.1.7",
+    "pdfjs-dist": "^5.4.296",
     "recharts": "^3.2.1",
     "yahoo-finance2": "^2.13.3"
   }

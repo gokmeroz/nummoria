@@ -1,7 +1,13 @@
 /* eslint-disable no-empty */
 /* eslint-disable no-unused-vars */
 // src/pages/Reports.jsx
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+  useCallback,
+  useRef,
+} from "react";
 import api from "../lib/api";
 
 // [BRAND] logo (Vite resolves this URL at build time)
@@ -9,6 +15,11 @@ const logoUrl = new URL("../assets/nummoria_logo.png", import.meta.url).href;
 
 // [BRAND] App name
 const APP_NAME = "Nummoria";
+
+/* ------------------------------ Ingest endpoints ------------------------------ */
+/* Update these if your backend uses different routes */
+const INGEST_CSV_ENDPOINT = "/ingest/csv";
+const INGEST_PDF_ENDPOINT = "/ingest/pdf";
 
 /* ------------------------------ Money helpers ------------------------------ */
 // UI formatter (kept as-is; uses user's locale)
@@ -94,6 +105,13 @@ function ReportsView() {
   const [err, setErr] = useState("");
   const [q, setQ] = useState("");
   const [downloading, setDownloading] = useState(false);
+
+  // import state
+  const [importingCsv, setImportingCsv] = useState(false);
+  const [importingPdf, setImportingPdf] = useState(false);
+  const [importMsg, setImportMsg] = useState("");
+  const csvInputRef = useRef(null);
+  const pdfInputRef = useRef(null);
 
   // filter state
   const [fStart, setFStart] = useState(""); // YYYY-MM-DD
@@ -238,6 +256,80 @@ function ReportsView() {
     });
   }, [rows]);
 
+  /* ------------------------------ File import ------------------------------- */
+  async function uploadFile(endpoint, file) {
+    const form = new FormData();
+    form.append("file", file);
+
+    // Optional: pass active filters as context for backend (comment out if not used)
+    // form.append("context", JSON.stringify({ fStart, fEnd, fType, fAccountId, fCategoryId, fCurrency }));
+
+    const res = await api.post(endpoint, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 5 * 60 * 1000, // 5 minutes for big PDFs
+    });
+    return res?.data || {};
+  }
+
+  function onPickCsv() {
+    setImportMsg("");
+    csvInputRef.current?.click();
+  }
+  function onPickPdf() {
+    setImportMsg("");
+    pdfInputRef.current?.click();
+  }
+
+  async function onCsvChosen(e) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-upload same filename
+    if (!file) return;
+    setImportingCsv(true);
+    try {
+      const data = await uploadFile(INGEST_CSV_ENDPOINT, file);
+      const added = Number(data?.inserted || data?.added || 0);
+      const skipped = Number(data?.skipped || 0);
+      setImportMsg(
+        `CSV imported: ${added} added${skipped ? `, ${skipped} skipped` : ""}.`
+      );
+      await loadAll();
+    } catch (ex) {
+      console.error("CSV import error:", ex);
+      setImportMsg(
+        ex?.response?.data?.error ||
+          ex.message ||
+          "CSV import failed. Check console for details."
+      );
+    } finally {
+      setImportingCsv(false);
+    }
+  }
+
+  async function onPdfChosen(e) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-upload same filename
+    if (!file) return;
+    setImportingPdf(true);
+    try {
+      const data = await uploadFile(INGEST_PDF_ENDPOINT, file);
+      const added = Number(data?.inserted || data?.added || 0);
+      const skipped = Number(data?.skipped || 0);
+      setImportMsg(
+        `PDF imported: ${added} added${skipped ? `, ${skipped} skipped` : ""}.`
+      );
+      await loadAll();
+    } catch (ex) {
+      console.error("PDF import error:", ex);
+      setImportMsg(
+        ex?.response?.data?.error ||
+          ex.message ||
+          "PDF import failed. Check console for details."
+      );
+    } finally {
+      setImportingPdf(false);
+    }
+  }
+
   /* ----------------------------- PDF Generation ----------------------------- */
   async function handleDownloadPdf() {
     if (downloading) return;
@@ -302,7 +394,6 @@ function ReportsView() {
         type: 55,
         amount: 85,
       };
-      // const printable = pageWidth - margin * 2; // re-declare for clarity
       colW.desc =
         printable -
         (colW.date + colW.account + colW.category + colW.type + colW.amount);
@@ -327,8 +418,7 @@ function ReportsView() {
         ];
       });
 
-      // eslint-disable-next-line no-shadow
-      const { default: autoTableFn } = await import("jspdf-autotable"); // ensure name
+      const { default: autoTableFn } = await import("jspdf-autotable");
       autoTableFn(doc, {
         startY: 110 + (activeFilters.length ? 16 : 0),
         margin: { left: margin, right: margin },
@@ -448,7 +538,45 @@ function ReportsView() {
             <img src={logoUrl} alt="logo" className="w-8 h-8 rounded" />
             <h1 className="text-2xl font-bold">Reports</h1>
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            {/* IMPORT */}
+            <button
+              type="button"
+              onClick={onPickCsv}
+              disabled={importingCsv || importingPdf}
+              className="px-4 py-2 rounded-lg border border-[#4f772d] text-[#4f772d] font-semibold hover:bg-[#eef5ea] disabled:opacity-60"
+              title="Import a CSV (bank export or Nummoria template)"
+            >
+              {importingCsv ? "Importing CSV…" : "Import CSV"}
+            </button>
+            <button
+              type="button"
+              onClick={onPickPdf}
+              disabled={importingCsv || importingPdf}
+              className="px-4 py-2 rounded-lg border border-[#4f772d] text-[#4f772d] font-semibold hover:bg-[#eef5ea] disabled:opacity-60"
+              title="Import a PDF statement (beta)"
+            >
+              {importingPdf ? "Importing PDF…" : "Import PDF"}
+            </button>
+
+            {/* Hidden file inputs */}
+            <input
+              ref={csvInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              onChange={onCsvChosen}
+              className="hidden"
+            />
+            <input
+              ref={pdfInputRef}
+              type="file"
+              accept="application/pdf,.pdf"
+              onChange={onPdfChosen}
+              className="hidden"
+            />
+
+            {/* DOWNLOAD */}
             <button
               type="button"
               onClick={handleDownloadCsv}
@@ -468,6 +596,18 @@ function ReportsView() {
             </button>
           </div>
         </div>
+
+        {/* Import status / errors */}
+        {importMsg && (
+          <div className="mt-2 text-sm text-[#2b5d1a] bg-[#eef5ea] px-3 py-2 rounded border border-[#cfe3c5]">
+            {importMsg}
+          </div>
+        )}
+        {err && (
+          <div className="mt-2 text-sm text-red-700 bg-red-50 px-3 py-2 rounded border border-red-200">
+            {err}
+          </div>
+        )}
 
         {/* Quick search */}
         <div className="mt-3 flex gap-2">
