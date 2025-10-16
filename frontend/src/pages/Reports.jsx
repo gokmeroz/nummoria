@@ -554,7 +554,7 @@ function ReportsView() {
               type="button"
               onClick={onPickPdf}
               disabled={importingCsv || importingPdf}
-              className="px-4 py-2 rounded-lg border border-[#4f772d] text-[#4f772d] font-semibold hover:bg-[#eef5ea] disabled:opacity-60"
+              className="px-4 py-2 rounded-lg bg-[#4f772d] text-white font-semibold hover:bg-[#3f5f24] disabled:opacity-60"
               title="Import a PDF statement (beta)"
             >
               {importingPdf ? "Importing PDF…" : "Import PDF"}
