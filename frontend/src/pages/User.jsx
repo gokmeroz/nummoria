@@ -26,6 +26,7 @@ export default function UserPage() {
   const [avatarBroken, setAvatarBroken] = useState(false); // avoid DOM remove errors
 
   // profile fields
+  const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [profession, setProfession] = useState("");
   const [baseCurrency, setBaseCurrency] = useState("");
@@ -102,7 +103,7 @@ export default function UserPage() {
         if (meData?.avatarUrl)
           meData.avatarUrl = absolutizeAvatarUrl(meData.avatarUrl);
         mergeMe(meData || {});
-
+        setEmail(meData?.email || "");
         setName(meData?.name || "");
         setProfession(meData?.profession || "");
         setBaseCurrency(meData?.baseCurrency || "USD");
@@ -138,6 +139,7 @@ export default function UserPage() {
     setSaving(true);
     try {
       const { data } = await api.put("/me", {
+        email,
         name,
         profession,
         baseCurrency,
@@ -427,9 +429,9 @@ export default function UserPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <Labeled label="Email address">
                       <input
-                        className="w-full border rounded px-3 py-2 bg-gray-100 text-gray-600"
-                        value={me?.email || ""}
-                        readOnly
+                        className="w-full border rounded px-3 py-2 outline-none focus:ring-2 focus:ring-[#90a955]"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
                       />
                     </Labeled>
 
@@ -828,6 +830,7 @@ function Stat({ label, value }) {
 }
 
 function AccountModal({ initial, onClose, onSubmit, busy }) {
+  const [email, setEmail] = useState(initial?.email || "");
   const [name, setName] = useState(initial?.name || "");
   const [type, setType] = useState(initial?.type || "checking");
   const [currency, setCurrency] = useState(initial?.currency || "USD");
