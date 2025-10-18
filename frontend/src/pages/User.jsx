@@ -370,7 +370,7 @@ export default function UserPage() {
   return (
     <div className="min-h-dvh bg-gray-50">
       {/* HERO */}
-      <section className="relative">
+      <section className="relative mb-10 md:mb-16">
         <div
           className="h-60 md:h-72 w-full bg-cover bg-center"
           style={{
