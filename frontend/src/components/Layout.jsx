@@ -5,11 +5,15 @@ import api from "../lib/api";
 
 import { Link, Outlet } from "react-router-dom";
 import Footer from "./Footer";
+const basic_avatarUrl = "../assets/basic_avatar.jpg";
 
 export default function Layout({ onLogout }) {
   const [me, setMe] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+
+  const main = "#4f772d";
+  const secondary = "#90a955";
 
   useEffect(() => {
     async function fetchMe() {
@@ -24,6 +28,14 @@ export default function Layout({ onLogout }) {
     }
     fetchMe();
   }, []);
+
+  const initials =
+    (me?.name || me?.email || "U")
+      .split(" ")
+      .map((p) => p[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "U";
 
   if (loading) return <div className="p-4">Loading...</div>;
   if (err) return <div className="p-4 text-red-500">{err}</div>;
@@ -72,11 +84,12 @@ export default function Layout({ onLogout }) {
                     className="h-9 w-9 object-cover"
                   />
                 ) : (
-                  <img
-                    src="../src/assets/Spiderman.jpeg"
-                    alt="Default Avatar"
-                    className="h-9 w-9 object-cover"
-                  />
+                  <div
+                    className="w-8 h-8 rounded-full ring-4 ring-white grid place-items-center text-white text-l font-bold shadow"
+                    style={{ backgroundColor: main }}
+                  >
+                    {initials}
+                  </div>
                 )}
               </div>
               <span className="hidden sm:block text-gray-700">
