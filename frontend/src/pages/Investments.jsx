@@ -1555,6 +1555,12 @@ export default function InvestmentsScreen({ accountId }) {
               ref={accountRef}
               defaultValue={defaultAccId}
               className="w-full border rounded-lg px-3 py-2 bg-white"
+              onChange={(e) => {
+                const acc = accounts.find((a) => a._id === e.target.value);
+                if (acc && currencyRef.current) {
+                  currencyRef.current.value = acc.currency; // auto-assign on pick
+                }
+              }}
             >
               <option value="">— Pick an account —</option>
               {accounts.map((a) => (
@@ -1564,7 +1570,7 @@ export default function InvestmentsScreen({ accountId }) {
               ))}
             </select>
           </div>
-
+          {/* Total Cost */}
           <div className="flex gap-3">
             <div className="space-y-1 w_full w-full">
               <label className="font-semibold text_sm">Total Cost</label>
@@ -1576,14 +1582,18 @@ export default function InvestmentsScreen({ accountId }) {
                 className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
               />
             </div>
+            {/* Currency */}
             <div className="space-y-1 w-28">
               <label className="font-semibold text-sm">Currency</label>
               <input
                 ref={currencyRef}
-                defaultValue={form.currency}
+                defaultValue={
+                  accounts.find((a) => a._id === defaultAccId)?.currency ||
+                  form.currency
+                }
                 maxLength={3}
+                readOnly // keep in sync with account; don't let user edit
                 className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
-                onBlur={(e) => (e.target.value = e.target.value.toUpperCase())}
               />
             </div>
           </div>
