@@ -4,6 +4,8 @@ import {
   login,
   forgotPassword,
   resetPassword,
+  verifyEmail,
+  resendCode,
   googleStart,
   googleCallback,
   twitterCallback,
@@ -19,6 +21,9 @@ router.post("/login", login);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
 
+//Email Verification
+router.post("/verify-email", verifyEmail);
+router.post("/resend-code", resendCode);
 // Google OAuth
 router.get("/google", googleStart);
 router.get("/google/callback", googleCallback);

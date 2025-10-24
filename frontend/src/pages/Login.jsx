@@ -1,5 +1,6 @@
+/* eslint-disable no-unused-vars */
 // src/pages/Login.jsx
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import api from "../lib/api";
 import Footer from "../components/Footer";
 
@@ -26,6 +27,36 @@ export default function Login() {
     (api?.defaults?.baseURL || "").replace(/\/+$/, "") ||
     window.location.origin;
 
+  // =============== NEW: email verification modal state ===============
+  const [showVerify, setShowVerify] = useState(false);
+  const [verifyEmail, setVerifyEmail] = useState(""); // which email to verify
+  const [code, setCode] = useState("");
+  const [verifyMsg, setVerifyMsg] = useState("");
+  const [verifyErr, setVerifyErr] = useState("");
+  const [verifying, setVerifying] = useState(false);
+  const [resending, setResending] = useState(false);
+  // const [devCode, setDevCode] = useState(""); // show devVerificationCode if backend returns it
+
+  const maskedEmail = useMemo(() => {
+    const email = verifyEmail?.trim();
+    if (!email) return "";
+    const [u, d] = email.split("@");
+    if (!d) return email;
+    const maskU =
+      u.length <= 2
+        ? u[0] + "*"
+        : u[0] + "*".repeat(Math.max(1, u.length - 2)) + u[u.length - 1];
+    return `${maskU}@${d}`;
+  }, [verifyEmail]);
+
+  // Lock scroll when modal open (nice touch)
+  useEffect(() => {
+    if (showVerify) document.body.style.overflow = "hidden";
+    else document.body.style.overflow = "";
+    return () => (document.body.style.overflow = "");
+  }, [showVerify]);
+
+  // ====================== LOGIN ======================
   async function onLogin(e) {
     e.preventDefault();
     setLoginErr("");
@@ -44,27 +75,84 @@ export default function Login() {
       }
       location.href = "/";
     } catch (e) {
-      setLoginErr(e.response?.data?.error || "Login failed");
+      const status = e.response?.status;
+      const errMsg = e.response?.data?.error || "Login failed";
+
+      // ⛔ Not verified → open modal instead of redirect
+      if (status === 403 && e.response?.data?.needsVerification) {
+        const email = (loginEmail || "").trim();
+        setVerifyEmail(email);
+        setShowVerify(true);
+        localStorage.setItem("pendingVerifyEmail", email);
+        setLoginLoading(false);
+        return;
+      }
+
+      setLoginErr(errMsg);
     } finally {
       setLoginLoading(false);
     }
   }
 
+  // ====================== SIGNUP ======================
   async function onSignup(e) {
     e.preventDefault();
     setSignErr("");
     setSignLoading(true);
     try {
-      await api.post("/auth/register", {
+      const { data } = await api.post("/auth/register", {
         name,
         email: signEmail,
         password: signPassword,
       });
 
-      // auto-login after register
+      // ✅ Immediately show the verify modal, no redirect.
+      const email = (signEmail || "").trim();
+      setVerifyEmail(email);
+      localStorage.setItem("pendingVerifyEmail", email);
+      // show dev code if backend returns it
+      // if (data?.devVerificationCode)
+      //   setDevCode(String(data.devVerificationCode));
+      setShowVerify(true);
+    } catch (e) {
+      setSignErr(e.response?.data?.error || "Registration failed");
+    } finally {
+      setSignLoading(false);
+    }
+  }
+
+  // ====================== SOCIAL ======================
+  function startSocial(provider) {
+    try {
+      setSocialErr("");
+      setSocialLoading(provider);
+      const next = encodeURIComponent(`${window.location.origin}/`);
+      const url = `${API_BASE}/auth/${provider}?next=${next}`;
+      window.location.href = url;
+    } catch (err) {
+      setSocialErr(`Could not start social sign-in. Please try again: ${err}`);
+      setSocialLoading("");
+    }
+  }
+
+  // =================== VERIFY HANDLERS (modal) ===================
+  async function onVerifySubmit(e) {
+    e.preventDefault();
+    if (!verifyEmail) return;
+    setVerifyErr("");
+    setVerifyMsg("");
+    setVerifying(true);
+    try {
+      await api.post("/auth/verify-email", {
+        email: verifyEmail,
+        code: code.trim(),
+      });
+      setVerifyMsg("Email verified! Signing you in…");
+
+      // Auto-login right after successful verification for smooth UX
       const { data } = await api.post("/auth/login", {
-        email: signEmail,
-        password: signPassword,
+        email: verifyEmail,
+        password: signPassword || loginPassword, // covers both flows
       });
 
       localStorage.setItem("token", data.token);
@@ -73,26 +161,34 @@ export default function Login() {
         localStorage.setItem("userEmail", data.user.email || "");
         localStorage.setItem("userName", data.user.name || "");
       }
+      localStorage.removeItem("pendingVerifyEmail");
       location.href = "/";
     } catch (e) {
-      setSignErr(e.response?.data?.error || "Registration failed");
+      setVerifyErr(
+        e.response?.data?.error ||
+          "Verification failed. Check the code and try again."
+      );
     } finally {
-      setSignLoading(false);
+      setVerifying(false);
     }
   }
 
-  // Kick off OAuth with provider (backend handles callback + session)
-  function startSocial(provider) {
+  async function onResendCode() {
+    if (!verifyEmail) return;
+    setVerifyErr("");
+    setVerifyMsg("");
+    setResending(true);
     try {
-      setSocialErr("");
-      setSocialLoading(provider);
-      // Optional: let backend know where to send us after success
-      const next = encodeURIComponent(`${window.location.origin}/`);
-      const url = `${API_BASE}/auth/${provider}?next=${next}`;
-      window.location.href = url;
-    } catch (err) {
-      setSocialErr(`Could not start social sign-in. Please try again: ${err}`);
-      setSocialLoading("");
+      const { data } = await api.post("/auth/resend-code", {
+        email: verifyEmail,
+      });
+      setVerifyMsg("A new verification code was sent.");
+      // if (data?.devVerificationCode)
+      //   setDevCode(String(data.devVerificationCode));
+    } catch (e) {
+      setVerifyErr(e.response?.data?.error || "Could not resend the code.");
+    } finally {
+      setResending(false);
     }
   }
 
@@ -186,8 +282,6 @@ export default function Login() {
                     window.location.href = `${apiUrl}/auth/google?next=/`;
                   }}
                 >
-                  {/* {socialLoading ? "…" : "G"} */}
-
                   {/* Google G */}
                   <svg width="20" height="20" viewBox="0 0 48 48">
                     <path
@@ -217,7 +311,6 @@ export default function Login() {
                   disabled={!!socialLoading}
                   onClick={() => startSocial("twitter")}
                 >
-                  {/* Twitter/X X */}
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="black">
                     <path d="M18.244 2H21.5l-7.42 8.49L22 22h-6.77l-5.3-6.97L4.77 22H1.5l7.92-9.05L2 2h6.91l4.79 6.39L18.244 2zm-2.37 18h2.11L8.21 4H6.01l9.864 16z" />
                   </svg>
@@ -231,7 +324,6 @@ export default function Login() {
                   disabled={!!socialLoading}
                   onClick={() => startSocial("github")}
                 >
-                  {/* GitHub logo */}
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     width="18"
@@ -239,15 +331,7 @@ export default function Login() {
                     viewBox="0 0 24 24"
                     fill="white"
                   >
-                    <path
-                      d="M12 .5C5.73.5.5 5.74.5 12.02c0 5.1 3.29 9.42 7.86 10.95.58.11.79-.25.79-.56 0-.28-.01-1.02-.02-2 
-      -3.2.7-3.88-1.54-3.88-1.54-.53-1.35-1.3-1.71-1.3-1.71-1.06-.72.08-.71.08-.71 1.17.08 
-      1.79 1.2 1.79 1.2 1.04 1.79 2.73 1.27 3.4.97.1-.76.41-1.27.75-1.56-2.55-.29-5.23-1.28-5.23-5.7 
-      0-1.26.45-2.29 1.2-3.1-.12-.29-.52-1.45.11-3.02 0 0 .97-.31 3.18 1.18a11.1 11.1 0 0 1 2.9-.39c.98 0 
-      1.96.13 2.9.39 2.2-1.49 3.17-1.18 3.17-1.18.63 1.57.23 2.73.11 3.02.75.81 1.2 1.84 1.2 3.1 
-      0 4.43-2.69 5.41-5.25 5.7.42.36.8 1.09.8 2.2 0 1.59-.01 2.87-.01 3.26 0 .31.21.68.8.56 
-      A10.52 10.52 0 0 0 23.5 12c0-6.28-5.23-11.5-11.5-11.5z"
-                    />
+                    <path d="M12 .5C5.73.5.5 5.74.5 12.02c0 5.1 3.29 9.42 7.86 10.95.58.11.79-.25.79-.56 0-.28-.01-1.02-.02-2 -3.2.7-3.88-1.54-3.88-1.54-.53-1.35-1.3-1.71-1.3-1.71-1.06-.72.08-.71.08-.71 1.17.08 1.79 1.2 1.79 1.2 1.04 1.79 2.73 1.27 3.4.97.1-.76.41-1.27.75-1.56-2.55-.29-5.23-1.28-5.23-5.7 0-1.26.45-2.29 1.2-3.1-.12-.29-.52-1.45.11-3.02 0 0 .97-.31 3.18 1.18a11.1 11.1 0 0 1 2.9-.39c.98 0 1.96.13 2.9.39 2.2-1.49 3.17-1.18 3.17-1.18.63 1.57.23 2.73.11 3.02.75.81 1.2 1.84 1.2 3.1 0 4.43-2.69 5.41-5.25 5.7.42.36.8 1.09.8 2.2 0 1.59-.01 2.87-.01 3.26 0 .31.21.68.8.56 A10.52 10.52 0 0 0 23.5 12c0-6.28-5.23-11.5-11.5-11.5z" />
                   </svg>
                 </button>
 
@@ -332,6 +416,91 @@ export default function Login() {
       <footer className="mt-auto w-full">
         <Footer fullBleed className="bg-white/70 backdrop-blur-sm" />
       </footer>
+
+      {/* ===================== VERIFY MODAL ===================== */}
+      {showVerify && (
+        <div
+          className="fixed inset-0 z-[100] grid place-items-center bg-black/60 p-4"
+          onMouseDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6">
+            <div className="flex items-start justify-between">
+              <h2 className="text-xl font-extrabold text-[#4f772d]">
+                Verify your email
+              </h2>
+              <button
+                className="text-gray-500 hover:text-gray-700"
+                onClick={() => setShowVerify(false)}
+                aria-label="Close"
+                title="Close"
+              >
+                ×
+              </button>
+            </div>
+
+            <p className="mt-1 text-gray-600">
+              We sent a 6-digit code to{" "}
+              <span className="font-medium">{maskedEmail}</span>.
+            </p>
+
+            {/* {devCode && (
+              <div className="mt-3 text-sm bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2 rounded">
+                <strong>DEV</strong> — demo code:{" "}
+                <span className="font-mono">{devCode}</span>
+              </div>
+            )} */}
+
+            <form onSubmit={onVerifySubmit} className="mt-5 space-y-4">
+              {verifyErr && (
+                <div className="text-sm bg-red-50 text-red-700 px-3 py-2 rounded">
+                  {verifyErr}
+                </div>
+              )}
+              {verifyMsg && (
+                <div className="text-sm bg-green-50 text-green-700 px-3 py-2 rounded">
+                  {verifyMsg}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm mb-1">Verification code</label>
+                <input
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  className="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#90a955]"
+                  placeholder="Enter 6-digit code"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Expires ~15 minutes after request.
+                </p>
+              </div>
+
+              <button
+                className="w-full bg-[#4f772d] text-white py-2 rounded-full font-semibold shadow-md hover:shadow-lg hover:bg-[#90a955] transition disabled:opacity-60"
+                disabled={verifying || !verifyEmail}
+              >
+                {verifying ? "Verifying…" : "Verify & Continue"}
+              </button>
+            </form>
+
+            <div className="mt-4 text-sm text-gray-600 flex items-center justify-between">
+              <span>Didn’t get the code?</span>
+              <button
+                onClick={onResendCode}
+                className="text-[#4f772d] underline disabled:opacity-60"
+                disabled={resending || !verifyEmail}
+              >
+                {resending ? "Resending…" : "Resend code"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

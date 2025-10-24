@@ -26,6 +26,12 @@ const userSchema = new mongoose.Schema(
     googleId: { type: String, index: true, sparse: true, unique: false },
     twitterId: { type: String, index: true, sparse: true, unique: false },
     githubId: { type: String, index: true, sparse: true, unique: false },
+
+    //Email verification
+    isEmailVerified: { type: Boolean, default: false },
+    emailVerificationCodeHash: { type: String, select: false },
+    emailVerificationExpiresAt: { type: Date, select: false },
+    emailVerifiedAt: Date,
   },
   { timestamps: { createdAt: "createdAt", updatedAt: false } }
 );

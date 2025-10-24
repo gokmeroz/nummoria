@@ -25,6 +25,7 @@ import Contact from "./pages/Contact";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import Status from "./pages/Status";
+import VerifyEmail from "./pages/VerifyEmail";
 
 export default function App() {
   function handleLogout() {
@@ -63,6 +64,7 @@ export default function App() {
           <Route path="/support" element={<SupportPage />}></Route>
           <Route path="/oauth-callback" element={<OAuthCallback />} />
           <Route path="/ai/financial-helper" element={<FinancialHelper />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
         </Route>
       </Route>
       <Route path="/goodbye" element={<Goodbye />} />
