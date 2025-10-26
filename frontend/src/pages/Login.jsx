@@ -464,7 +464,7 @@ export default function Login() {
               )}
 
               <div>
-                <label className="block text-sm mb-1">Verification code</label>
+                <label className="block text-sm mb-1">Verification Code</label>
                 <input
                   inputMode="numeric"
                   pattern="[0-9]*"
