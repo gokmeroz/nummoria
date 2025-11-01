@@ -4,8 +4,8 @@ import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
 import path from "path";
-import "dotenv/config";
 import cookieParser from "cookie-parser";
+
 import marketRouter from "./routes/marketRoutes.js";
 import authRoutes from "./routes/auth.js";
 import meRoutes from "./routes/me.js";
@@ -21,7 +21,6 @@ import ingestRoutes from "./routes/ingestRoutes.js";
 const app = express();
 
 app.use(cookieParser());
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -34,13 +33,12 @@ app.use(
 
 app.use(
   helmet({
-    crossOriginResourcePolicy: { policy: "cross-origin" }, // allow images from this origin
+    crossOriginResourcePolicy: { policy: "cross-origin" },
   })
 );
 
 app.use(morgan("dev"));
 
-// Serve /uploads publicly (MUST be before routes)
 app.use(
   "/uploads",
   express.static(path.join(process.cwd(), "uploads"), {
@@ -50,7 +48,7 @@ app.use(
   })
 );
 
-// Routes (mount each exactly once)
+// Routes
 app.use("/auth", authRoutes);
 app.use("/me", meRoutes);
 app.use("/accounts", accountRoutes);
@@ -60,13 +58,22 @@ app.use("/investments", investmentPerformance, marketRouter);
 app.use("/ai/financial-helper", financialHelperRoutes);
 app.use("/stats", statsRoutes);
 app.use("/contact", contactRoutes);
-app.use("/ingest", ingestRoutes); // <-- this creates /ingest/csv and /ingest/pdf
+app.use("/ingest", ingestRoutes);
 
 app.get("/health", (req, res) =>
   res.json({ status: "ok", timestamp: Date.now() })
 );
 
-// Centralized error handler (shows the real reason for 500s)
+// Quick debug endpoint to confirm OpenAI key presence
+app.get("/debug/openai", (req, res) => {
+  const k = process.env.OPENAI_API_KEY || "";
+  res.json({
+    hasKey: Boolean(k),
+    keyPreview: k ? `${k.slice(0, 7)}…${k.slice(-4)}` : null,
+    nodeEnv: process.env.NODE_ENV,
+  });
+});
+
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err);
   if (err?.code === "LIMIT_FILE_SIZE") {
