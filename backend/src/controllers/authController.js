@@ -1,33 +1,42 @@
+// backend/src/controllers/authController.js
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
-import nodemailer from "nodemailer"; // 🔵 ADDED
+import nodemailer from "nodemailer";
 import { User } from "../models/user.js";
 
-/* ─────────────────────────── Config & Helpers ─────────────────────────── */
+/* ─────────────────────────── Config & Flags ─────────────────────────── */
 
 const FRONTEND_URL_RAW = process.env.FRONTEND_URL || "http://localhost:5173";
 const FRONTEND_URL = FRONTEND_URL_RAW.replace(/\/+$/, "");
-const IS_DEV = process.env.NODE_ENV !== "production";
+
+const IS_DEV = process.env.NODE_ENV !== "production"; // define FIRST
+const IS_PROD = !IS_DEV;
+
 const { JWT_SECRET } = process.env;
 
-// Google env
+// Feature flags / dev helpers
+const SKIP_EMAIL_VERIFICATION =
+  String(process.env.AUTH_SKIP_EMAIL_VERIFICATION || "false") === "true"; // allow login without verifying (DEV only)
+const DEV_VERIFICATION_CODE = process.env.DEV_VERIFICATION_CODE || "000000"; // universal code in DEV if you want
+const FORCE_EMAIL_SEND =
+  String(process.env.FORCE_EMAIL_SEND || "false") === "true"; // actually send SMTP in dev
+const DEBUG_VERIFY = String(process.env.DEBUG_VERIFY || "false") === "true"; // include devVerificationCode in responses
+
+// OAuth env
 const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI } =
   process.env;
-
-// Twitter (X) env
 const {
   TWITTER_CLIENT_ID,
   TWITTER_CLIENT_SECRET,
   TWITTER_REDIRECT_URI,
   TWITTER_CLIENT_TYPE,
 } = process.env;
-
-// Github env
 const { GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GITHUB_REDIRECT_URI } =
   process.env;
 
-// base64url helper (for PKCE)
+/* ─────────────────────────── Small utils ────────────────────────────── */
+
 function base64url(buf) {
   return Buffer.from(buf)
     .toString("base64")
@@ -40,7 +49,6 @@ function sha256ToBase64url(verifier) {
   return base64url(hash);
 }
 
-// ensure `next` stays a relative path (prevents broken URLs or open redirects)
 function sanitizeNext(nextRaw) {
   if (!nextRaw) return "/";
   try {
@@ -54,7 +62,16 @@ function sanitizeNext(nextRaw) {
   }
 }
 
-/* ─────────────────────────── Mailer (no lib folder) ───────────────────── */
+function maskEmail(email = "") {
+  const [u, d] = String(email).split("@");
+  if (!d) return email;
+  if (!u || u.length <= 2) return `${(u || "").slice(0, 1)}*@${d}`;
+  return `${u[0]}${"*".repeat(Math.max(1, u.length - 2))}${
+    u[u.length - 1]
+  }@${d}`;
+}
+
+/* ─────────────────────────── Mailer (inline) ─────────────────────────── */
 
 const transporter = (() => {
   const url = process.env.SMTP_URL;
@@ -64,8 +81,9 @@ const transporter = (() => {
   const port = process.env.SMTP_PORT
     ? Number(process.env.SMTP_PORT)
     : undefined;
-  const secure = process.env.SMTP_SECURE === "true";
+  const secure = String(process.env.SMTP_SECURE || "false") === "true";
 
+  // If SMTP configured explicitly, use it.
   if (url || host) {
     return nodemailer.createTransport(
       url
@@ -79,17 +97,17 @@ const transporter = (() => {
     );
   }
 
-  // In production, fail hard if SMTP isn't configured
+  // In production we require SMTP
   if (IS_PROD) {
     throw new Error(
       "SMTP is required in production. Set SMTP_URL or SMTP_HOST/SMTP_USER/SMTP_PASS."
     );
   }
 
-  // Dev-only console fallback
+  // Dev-only console fallback (no actual emails)
   return {
     sendMail: async (opts) => {
-      console.log("[MAIL:DEV] (console fallback)", {
+      console.log("[MAIL:DEV-FALLBACK] Not sending real email.", {
         to: opts.to,
         subject: opts.subject,
         text: opts.text,
@@ -105,11 +123,9 @@ async function sendMail({ to, subject, text, html }) {
   return transporter.sendMail({ from: MAIL_FROM, to, subject, text, html });
 }
 
-/* ─────────────────────── Email verification helpers ───────────────────── */
+/* ───────────────────── Email verification helpers ───────────────────── */
 
-// 🔵 ADDED: generate a 6-digit code
 function makeVerificationCode() {
-  // 6 digits, zero-padded
   const n = Math.floor(Math.random() * 1_000_000);
   return String(n).padStart(6, "0");
 }
@@ -122,8 +138,7 @@ async function setNewEmailCode(user) {
   return code;
 }
 
-async function emailVerificationMessage({ email, code }) {
-  // Deep link so your FE can show a verify screen; still require POST verify on BE
+function buildVerifyEmailMessage({ email, code }) {
   const verifyUrl = `${FRONTEND_URL}/verify-email?email=${encodeURIComponent(
     email
   )}`;
@@ -141,7 +156,7 @@ async function emailVerificationMessage({ email, code }) {
   return { subject, text, html };
 }
 
-/* ───────────────────────────── Local Auth ─────────────────────────────── */
+/* ───────────────────────────── Local Auth ────────────────────────────── */
 
 export async function register(req, res) {
   try {
@@ -164,20 +179,30 @@ export async function register(req, res) {
       role,
       tz,
       baseCurrency,
-      isEmailVerified: false, // 🔵 ADDED
+      isEmailVerified: false,
     });
 
-    // 🔵 ADDED: create & send verification code
+    // Create code
     const code = await setNewEmailCode(user);
-    const { subject, text, html } = await emailVerificationMessage({
-      email: user.email,
-      code,
-    });
-    await sendMail({ to: user.email, subject, text, html });
 
-    // In dev, also reveal the code to assist testing
-    return res.json({
-      message: "Registration successful. Check your inbox for the code.",
+    // In dev with fake emails, don't actually send unless forced.
+    if (FORCE_EMAIL_SEND) {
+      const { subject, text, html } = buildVerifyEmailMessage({
+        email: user.email,
+        code,
+      });
+      await sendMail({ to: user.email, subject, text, html });
+    } else {
+      console.log("[VERIFY:DEV] Code for %s => %s", user.email, code);
+    }
+
+    return res.status(201).json({
+      message: "Registration successful.",
+      requiresEmailVerification: true,
+      maskedEmail: maskEmail(user.email),
+      ...(IS_DEV && DEBUG_VERIFY && !FORCE_EMAIL_SEND
+        ? { devVerificationCode: code }
+        : {}),
       user: {
         id: user._id,
         email: user.email,
@@ -210,13 +235,21 @@ export async function login(req, res) {
     const match = await bcrypt.compare(password, user.passwordHash);
     if (!match) return res.status(401).json({ error: "Invalid credentials" });
 
-    // 🔵 ADDED: block login until verified (only for local/password accounts)
+    // DEV bypass: let you login with test email without verifying
     if (!user.isEmailVerified) {
-      return res.status(403).json({
-        error: "Email not verified",
-        hint: "Please verify your email to continue. You can request a new code.",
-        needsVerification: true,
-      });
+      if (IS_DEV && SKIP_EMAIL_VERIFICATION) {
+        user.isEmailVerified = true;
+        user.emailVerifiedAt = new Date();
+        await user.save();
+      } else {
+        return res.status(403).json({
+          error: "Email not verified",
+          hint: "Please verify your email to continue. You can request a new code.",
+          reason: "UNVERIFIED",
+          maskedEmail: maskEmail(user.email),
+          needsVerification: true,
+        });
+      }
     }
 
     user.lastLogin = new Date();
@@ -247,9 +280,8 @@ export async function login(req, res) {
   }
 }
 
-/* ─────────────── NEW: Verify email & Resend code endpoints ────────────── */
+/* ─────────────── Verify email & Resend code endpoints ─────────────── */
 
-// POST /auth/verify-email { email, code }
 export async function verifyEmail(req, res) {
   try {
     const { email, code } = req.body;
@@ -259,14 +291,24 @@ export async function verifyEmail(req, res) {
     const user = await User.findOne({ email: email.toLowerCase() }).select(
       "+emailVerificationCodeHash +emailVerificationExpiresAt"
     );
-    if (
-      !user ||
-      !user.emailVerificationCodeHash ||
-      !user.emailVerificationExpiresAt
-    ) {
+    if (!user)
       return res.status(400).json({ error: "Invalid or expired code" });
+
+    // DEV backdoor: universal code
+    if (IS_DEV && code === DEV_VERIFICATION_CODE) {
+      user.isEmailVerified = true;
+      user.emailVerifiedAt = new Date();
+      user.emailVerificationCodeHash = null;
+      user.emailVerificationExpiresAt = null;
+      await user.save();
+      return res.json({ message: "Email verified successfully (DEV)" });
     }
-    if (user.emailVerificationExpiresAt < new Date()) {
+
+    if (
+      !user.emailVerificationCodeHash ||
+      !user.emailVerificationExpiresAt ||
+      user.emailVerificationExpiresAt < new Date()
+    ) {
       return res.status(400).json({ error: "Invalid or expired code" });
     }
 
@@ -285,7 +327,6 @@ export async function verifyEmail(req, res) {
   }
 }
 
-// POST /auth/resend-code { email }
 export async function resendCode(req, res) {
   try {
     const { email } = req.body;
@@ -301,21 +342,29 @@ export async function resendCode(req, res) {
     }
 
     const code = await setNewEmailCode(user);
-    const { subject, text, html } = await emailVerificationMessage({
-      email: user.email,
-      code,
-    });
-    await sendMail({ to: user.email, subject, text, html });
+
+    if (FORCE_EMAIL_SEND) {
+      const { subject, text, html } = buildVerifyEmailMessage({
+        email: user.email,
+        code,
+      });
+      await sendMail({ to: user.email, subject, text, html });
+    } else {
+      console.log("[VERIFY:DEV-RESEND] Code for %s => %s", user.email, code);
+    }
 
     return res.json({
       message: "A new verification code was sent.",
+      ...(IS_DEV && DEBUG_VERIFY && !FORCE_EMAIL_SEND
+        ? { devVerificationCode: code }
+        : {}),
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
 }
 
-/* ───────────────────────── Password Reset Flow ────────────────────────── */
+/* ───────────────────────── Password Reset Flow ───────────────────────── */
 
 export async function forgotPassword(req, res) {
   try {
@@ -387,7 +436,7 @@ export async function resetPassword(req, res) {
   }
 }
 
-/* ───────────────────────────── Google OAuth ────────────────────────────── */
+/* ───────────────────────────── Google OAuth ───────────────────────────── */
 
 export async function googleStart(req, res) {
   try {
@@ -467,7 +516,7 @@ export async function googleCallback(req, res) {
         avatarUrl: profile.picture || null,
         lastLogin: new Date(),
         isActive: true,
-        isEmailVerified: true, // 🔵 Mark verified via OAuth
+        isEmailVerified: true,
         emailVerifiedAt: new Date(),
       });
     } else {
@@ -508,11 +557,11 @@ export async function googleCallback(req, res) {
   }
 }
 
-/* ───────────────────────────── Twitter OAuth ───────────────────────────── */
+/* ───────────────────────────── Twitter OAuth ──────────────────────────── */
 
 export async function twitterStart(req, res) {
   try {
-    const state = encodeURIComponent(sanitizeNext(req.query.next || "/")); // relative only
+    const state = encodeURIComponent(sanitizeNext(req.query.next || "/"));
 
     const code_verifier = base64url(crypto.randomBytes(64));
     const code_challenge = sha256ToBase64url(code_verifier);
@@ -601,8 +650,7 @@ export async function twitterCallback(req, res) {
         .json({ error: "Twitter user fetch failed", details: t });
     }
 
-    const payload = await userResp.json();
-    const tw = payload?.data;
+    const tw = (await userResp.json())?.data;
     if (!tw?.id)
       return res.status(400).json({ error: "Twitter profile missing id" });
 
@@ -612,25 +660,24 @@ export async function twitterCallback(req, res) {
     let avatarUrl = tw.profile_image_url || null;
     if (avatarUrl) avatarUrl = avatarUrl.replace("_normal", "_400x400");
 
-    let email = null;
-    if (!email) {
-      const localName = username
-        ? `${username}+${twitterId}`
-        : `xuser_${twitterId}`;
-      email = `${localName}@x.local`.toLowerCase();
-    }
+    // Twitter often lacks email; synthesize a stable local one
+    const safeEmail = `${
+      (username || "xuser") + "+" + twitterId
+    }@x.local`.toLowerCase();
 
-    let user = await User.findOne({ $or: [{ email }, { twitterId }] });
+    let user = await User.findOne({
+      $or: [{ email: safeEmail }, { twitterId }],
+    });
 
     if (!user) {
       user = await User.create({
-        email,
+        email: safeEmail,
         name: displayName,
         twitterId,
         avatarUrl,
         lastLogin: new Date(),
         isActive: true,
-        isEmailVerified: true, // 🔵 mark as verified for social
+        isEmailVerified: true,
         emailVerifiedAt: new Date(),
       });
     } else {
@@ -673,7 +720,7 @@ export async function twitterCallback(req, res) {
   }
 }
 
-/* ───────────────────────────── GitHub OAuth ───────────────────────────── */
+/* ───────────────────────────── GitHub OAuth ──────────────────────────── */
 
 export async function githubStart(req, res) {
   try {
@@ -762,7 +809,9 @@ export async function githubCallback(req, res) {
     const displayName = ghUser.name || ghUser.login || "";
     const avatarUrl = ghUser.avatar_url || null;
 
-    const safeEmail = email || `ghuser_${githubId}@github.local`;
+    const safeEmail = (
+      email || `ghuser_${githubId}@github.local`
+    ).toLowerCase();
 
     let user = await User.findOne({
       $or: [{ email: safeEmail }, { githubId }],
@@ -776,7 +825,7 @@ export async function githubCallback(req, res) {
         avatarUrl,
         lastLogin: new Date(),
         isActive: true,
-        isEmailVerified: true, // 🔵 mark as verified for social
+        isEmailVerified: true,
         emailVerifiedAt: new Date(),
       });
     } else {

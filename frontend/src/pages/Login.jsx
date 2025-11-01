@@ -5,29 +5,30 @@ import api from "../lib/api";
 import Footer from "../components/Footer";
 
 export default function Login() {
-  // login state
+  // ───────────── login state ─────────────
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginErr, setLoginErr] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
+  const [loginReason, setLoginReason] = useState(""); // "UNVERIFIED" etc.
 
-  // signup state
+  // ───────────── signup state ────────────
   const [name, setName] = useState("");
   const [signEmail, setSignEmail] = useState("");
   const [signPassword, setSignPassword] = useState("");
   const [signErr, setSignErr] = useState("");
   const [signLoading, setSignLoading] = useState(false);
 
-  // social state
+  // ───────────── social state ────────────
   const [socialLoading, setSocialLoading] = useState("");
   const [socialErr, setSocialErr] = useState("");
 
-  // Build absolute API URL for redirects (works in dev/prod)
+  // Absolute API base for redirects
   const API_BASE =
     (api?.defaults?.baseURL || "").replace(/\/+$/, "") ||
     window.location.origin;
 
-  // =============== NEW: email verification modal state ===============
+  // =============== email verification modal state ===============
   const [showVerify, setShowVerify] = useState(false);
   const [verifyEmail, setVerifyEmail] = useState(""); // which email to verify
   const [code, setCode] = useState("");
@@ -35,7 +36,7 @@ export default function Login() {
   const [verifyErr, setVerifyErr] = useState("");
   const [verifying, setVerifying] = useState(false);
   const [resending, setResending] = useState(false);
-  // const [devCode, setDevCode] = useState(""); // show devVerificationCode if backend returns it
+  // const [devCode, setDevCode] = useState(""); // optional for dev
 
   const maskedEmail = useMemo(() => {
     const email = verifyEmail?.trim();
@@ -49,7 +50,7 @@ export default function Login() {
     return `${maskU}@${d}`;
   }, [verifyEmail]);
 
-  // Lock scroll when modal open (nice touch)
+  // Lock scroll when modal open
   useEffect(() => {
     if (showVerify) document.body.style.overflow = "hidden";
     else document.body.style.overflow = "";
@@ -60,7 +61,9 @@ export default function Login() {
   async function onLogin(e) {
     e.preventDefault();
     setLoginErr("");
+    setLoginReason("");
     setLoginLoading(true);
+
     try {
       const { data } = await api.post("/auth/login", {
         email: loginEmail,
@@ -76,14 +79,26 @@ export default function Login() {
       location.href = "/";
     } catch (e) {
       const status = e.response?.status;
-      const errMsg = e.response?.data?.error || "Login failed";
+      const body = e.response?.data || {};
+      const errMsg = body.error || "Login failed";
 
-      // ⛔ Not verified → open modal instead of redirect
-      if (status === 403 && e.response?.data?.needsVerification) {
+      // ⚠️ If account exists but is not verified:
+      // handle both shapes: {reason:'UNVERIFIED'} or {needsVerification:true}
+      if (
+        status === 403 &&
+        (body.reason === "UNVERIFIED" || body.needsVerification === true)
+      ) {
         const email = (loginEmail || "").trim();
-        setVerifyEmail(email);
-        setShowVerify(true);
-        localStorage.setItem("pendingVerifyEmail", email);
+        setVerifyEmail(email); // prepare resend/enter code
+        setLoginReason("UNVERIFIED");
+
+        // Prefer maskedEmail if backend provided it
+        const message = body.maskedEmail
+          ? `Your account isn't verified yet. Check your inbox (${body.maskedEmail}) or resend the code.`
+          : "Your account isn't verified yet. Check your inbox or resend the code.";
+
+        setLoginErr(message);
+        // 🚫 DO NOT auto-open the modal on login flow
         setLoginLoading(false);
         return;
       }
@@ -106,13 +121,12 @@ export default function Login() {
         password: signPassword,
       });
 
-      // ✅ Immediately show the verify modal, no redirect.
+      // After successful registration, open verify modal
       const email = (signEmail || "").trim();
       setVerifyEmail(email);
       localStorage.setItem("pendingVerifyEmail", email);
-      // show dev code if backend returns it
-      // if (data?.devVerificationCode)
-      //   setDevCode(String(data.devVerificationCode));
+
+      // if (data?.devVerificationCode) setDevCode(String(data.devVerificationCode));
       setShowVerify(true);
     } catch (e) {
       setSignErr(e.response?.data?.error || "Registration failed");
@@ -149,7 +163,7 @@ export default function Login() {
       });
       setVerifyMsg("Email verified! Signing you in…");
 
-      // Auto-login right after successful verification for smooth UX
+      // Auto-login right after successful verification
       const { data } = await api.post("/auth/login", {
         email: verifyEmail,
         password: signPassword || loginPassword, // covers both flows
@@ -183,8 +197,7 @@ export default function Login() {
         email: verifyEmail,
       });
       setVerifyMsg("A new verification code was sent.");
-      // if (data?.devVerificationCode)
-      //   setDevCode(String(data.devVerificationCode));
+      // if (data?.devVerificationCode) setDevCode(String(data.devVerificationCode));
     } catch (e) {
       setVerifyErr(e.response?.data?.error || "Could not resend the code.");
     } finally {
@@ -194,16 +207,15 @@ export default function Login() {
 
   return (
     <div className="relative min-h-dvh flex flex-col">
-      {/* 🔥 Background */}
+      {/* Background */}
       <img
         src="../../src/assets/loginAlt.jpg"
         alt="Background"
         className="absolute inset-0 w-full h-full object-cover -z-10"
       />
-      {/* Dark overlay for readability */}
       <div className="absolute inset-0 bg-black/50 -z-10" />
 
-      {/* ===== Main content (centered) ===== */}
+      {/* Main */}
       <main className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-5xl bg-white rounded-2xl shadow-xl overflow-hidden grid grid-cols-1 md:grid-cols-2">
           {/* Left: Sign in */}
@@ -218,8 +230,30 @@ export default function Login() {
                 {loginErr && (
                   <div className="text-sm bg-white/15 px-3 py-2 rounded">
                     {loginErr}
+                    {loginReason === "UNVERIFIED" && (
+                      <div className="mt-2 flex items-center gap-4">
+                        <button
+                          type="button"
+                          className="underline"
+                          onClick={() => onResendCode()}
+                          disabled={!verifyEmail}
+                          title="Resend verification code"
+                        >
+                          Resend code
+                        </button>
+                        <button
+                          type="button"
+                          className="underline"
+                          onClick={() => setShowVerify(true)}
+                          title="Enter code"
+                        >
+                          Enter code
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
+
                 <div>
                   <label className="text-sm">Email</label>
                   <input
@@ -412,7 +446,7 @@ export default function Login() {
         </div>
       </main>
 
-      {/* ===== Footer pinned to bottom, full-bleed ===== */}
+      {/* Footer */}
       <footer className="mt-auto w-full">
         <Footer fullBleed className="bg-white/70 backdrop-blur-sm" />
       </footer>

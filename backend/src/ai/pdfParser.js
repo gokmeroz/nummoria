@@ -1,6 +1,10 @@
 /* eslint-disable */
 import OpenAI from "openai";
-const openai2 = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+// Make key optional; fall back gracefully to regex-only
+const openai2 = process.env.OPENAI_API_KEY
+  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  : null;
 
 const DATE_RGX = /\b(\d{1,2}[\/\.\-]\d{1,2}[\/\.\-]\d{2,4})\b/; // 01/15/2025 or 15.01.2025
 const AMOUNT_RGX =
@@ -40,12 +44,14 @@ export async function parseTransactionsFromText(
         });
         continue;
       }
-    } // Heuristic: sometimes next line holds amount
+    }
+
+    // Heuristic: date on line i, amount on i+1, description on i+2
     if (DATE_RGX.test(line) && AMOUNT_RGX.test(lines[i + 1] || "")) {
       const date = normalizeDate(line.match(DATE_RGX)[1]);
       const amount = normalizeAmount((lines[i + 1].match(AMOUNT_RGX) || [])[1]);
       const desc = (lines[i + 2] || "").slice(0, 120);
-      if (!Number.isNaN(amount))
+      if (!Number.isNaN(amount)) {
         txs.push({
           date,
           description: desc,
@@ -53,37 +59,70 @@ export async function parseTransactionsFromText(
           amount,
           type: amount >= 0 ? "income" : "expense",
         });
-      i += 2; // skip consumed lines
+      }
+      i += 2;
     }
   }
 
-  if (txs.length < 5 && useLLMFallback) {
-    const prompt = `Extract bank-like transactions as JSON array with keys: date (YYYY-MM-DD), description, amount (number, negative for expenses). Text:\n---\n${text.slice(
-      0,
-      12000
-    )}\n---`;
+  // Optional LLM fallback if few txs parsed
+  if (txs.length < 5 && useLLMFallback && openai2) {
+    const prompt = `Extract bank-like transactions as JSON array with keys:
+- date (YYYY-MM-DD)
+- description (string)
+- amount (number, negative for expenses)
+
+Text:
+---
+${text.slice(0, 12000)}
+---`;
+
     try {
-      const resp = await openai2.chat.completions.create({
-        model: "gpt-4o-mini",
-        temperature: 0,
-        messages: [{ role: "user", content: prompt }],
-      });
-      const payload = resp.choices?.[0]?.message?.content?.trim();
-      const arr = JSON.parse(payload);
-      return arr.map((t) => ({
-        date: t.date,
-        description: t.description,
-        amount: Number(t.amount),
-        category: guessCategory(t.description),
-        type: Number(t.amount) >= 0 ? "income" : "expense",
-      }));
+      // Prefer Responses API if available, but keep chat.completions as a backup for compatibility
+      let payloadText = null;
+
+      try {
+        const resp = await openai2.responses.create({
+          model: "gpt-4o-mini",
+          temperature: 0,
+          input: prompt,
+        });
+        payloadText =
+          resp.output_text?.trim() || resp.content?.[0]?.text?.trim() || null;
+      } catch {
+        const resp2 = await openai2.chat.completions.create({
+          model: "gpt-4o-mini",
+          temperature: 0,
+          messages: [{ role: "user", content: prompt }],
+        });
+        payloadText = resp2.choices?.[0]?.message?.content?.trim() || null;
+      }
+
+      if (payloadText) {
+        // Try to find JSON anywhere in the text
+        const jsonMatch = payloadText.match(/\[[\s\S]*\]|\{[\s\S]*\}/);
+        const jsonStr = jsonMatch ? jsonMatch[0] : payloadText;
+        const arr = JSON.parse(jsonStr);
+
+        if (Array.isArray(arr)) {
+          return arr
+            .map((t) => ({
+              date: t.date,
+              description: t.description,
+              amount: Number(t.amount),
+              category: guessCategory(t.description),
+              type: Number(t.amount) >= 0 ? "income" : "expense",
+            }))
+            .filter((t) => t.date && !Number.isNaN(t.amount));
+        }
+      }
     } catch (e) {
-      console.warn("LLM fallback parse failed:", e.message);
+      console.warn("LLM fallback parse failed:", e?.message || e);
     }
   }
 
   return txs;
 }
+
 function normalizeDate(s) {
   // supports DD.MM.YYYY, MM/DD/YYYY, etc. Returns YYYY-MM-DD
   const parts = s
@@ -93,7 +132,6 @@ function normalizeDate(s) {
     .map((p) => p.padStart(2, "0"));
   let d, m, y;
   if (parts[2]?.length === 4) {
-    // either DD/MM/YYYY or MM/DD/YYYY — we’ll infer by >12 heuristic
     const a = Number(parts[0]);
     const b = Number(parts[1]);
     if (a > 12) {
@@ -108,7 +146,6 @@ function normalizeDate(s) {
     }
     y = parts[2];
   } else {
-    // YY fallback
     y = String(2000 + Number(parts[2] || "0"));
     const a = Number(parts[0]);
     const b = Number(parts[1]);
@@ -127,7 +164,6 @@ function normalizeAmount(s) {
   // handle 1.234,56 or 1,234.56 or -1234.56
   const neg = /-/.test(s);
   const cleaned = s.replace(/[^0-9.,-]/g, "");
-  // if comma appears after dot, assume dot as thousands => remove dots, replace comma with dot
   const hasDot = cleaned.includes(".");
   const hasComma = cleaned.includes(",");
   let numStr = cleaned;
@@ -145,6 +181,7 @@ function normalizeAmount(s) {
   const val = parseFloat(numStr);
   return neg ? -Math.abs(val) : val;
 }
+
 function guessCategory(desc = "") {
   const d = desc.toLowerCase();
   if (/(salary|payroll|maas|maaş|ucret|ücret)/.test(d)) return "Salary";

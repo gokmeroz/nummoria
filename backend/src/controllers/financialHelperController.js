@@ -11,6 +11,7 @@ import { parse as parseCSV } from "csv-parse/sync";
 
 import AiAdvisorFile from "../models/AiAdvisorFile.js";
 import { computeMetrics } from "../ai/financialMetrics.js";
+import { parseTransactionsFromText } from "../ai/pdfParser.js";
 
 // If you don't have a prompts file, we keep a minimal system prompt inline
 const systemPrompt = `You are Nummora Financial Helper.
@@ -25,6 +26,7 @@ const openai = process.env.OPENAI_API_KEY
   : null;
 
 const isDev = process.env.NODE_ENV !== "production";
+
 /* ------------------------- OFFLINE Q&A HELPERS ------------------------- */
 
 // Basic month-name map (EN + TR)
@@ -716,7 +718,6 @@ export async function ingestPdf(req, res) {
       if (parsedTransactions.length)
         console.log("firstTx:", parsedTransactions[0]);
 
-      // in ingestPdf, right after building parsedTransactions
       if (!parsedTransactions.length) {
         return res.status(422).json({
           ok: false,
@@ -793,10 +794,13 @@ export async function chat(req, res) {
     else fileDoc = await AiAdvisorFile.findOne({}).sort({ createdAt: -1 });
 
     if (!fileDoc) {
-      return res.json({
-        reply:
-          "I don’t see any uploaded transactions yet. Upload a PDF/CSV first and I’ll analyze it.",
-      });
+      const tone =
+        (tonePreference || "formal") === "buddy" ? "buddy" : "formal";
+      const msg =
+        tone === "buddy"
+          ? "Bro, henüz hareket göremiyorum. Bir CSV ya da metin tabanlı PDF yükle; istersen demo verilerle deneme yapabilirim—'run with demo data' yaz yeter 👍"
+          : "Henüz analiz edebileceğim veri yok. Lütfen bir CSV ya da metin tabanlı PDF yükleyin. İsterseniz 'run with demo data' yazarak örnek verilerle deneme yapabilirim.";
+      return res.json({ reply: msg });
     }
 
     const context = {
@@ -804,7 +808,7 @@ export async function chat(req, res) {
       computedMetrics: fileDoc.computedMetrics || {},
     };
 
-    // No key? Offline fallback.
+    // No key? Rule-based fallback (no scary 'offline' text).
     if (!openai) {
       const reply = buildRuleBasedReply(
         context,
@@ -814,26 +818,27 @@ export async function chat(req, res) {
       return res.json({ reply });
     }
 
-    // Try OpenAI, on error/quota → fallback
+    // Try OpenAI (Responses API), on error → fallback
     try {
-      const completion = await openai.chat.completions.create({
+      const input = [
+        "SYSTEM:",
+        systemPrompt,
+        "",
+        "USER:",
+        JSON.stringify({ tonePreference, context, message }, null, 2),
+      ].join("\n");
+
+      const completion = await openai.responses.create({
         model: "gpt-4o-mini",
         temperature: 0.3,
-        messages: [
-          { role: "system", content: systemPrompt },
-          {
-            role: "user",
-            content: JSON.stringify(
-              { tonePreference, context, message },
-              null,
-              2
-            ),
-          },
-        ],
+        input,
       });
+
       const reply =
-        completion.choices?.[0]?.message?.content ??
-        "Sorry, I could not generate a response.";
+        completion.output_text?.trim() ||
+        completion.content?.[0]?.text?.trim() ||
+        "Sorry, I couldn’t generate a response.";
+
       return res.json({ reply });
     } catch (e) {
       if (isDev)
@@ -842,9 +847,18 @@ export async function chat(req, res) {
           e?.status || e?.code,
           e?.message
         );
-      const reply =
-        buildRuleBasedReply(context, tonePreference || "formal", message) +
-        "\n\n(Using offline fallback due to AI quota or connection issue.)";
+      const reply = buildRuleBasedReply(
+        context,
+        tonePreference || "formal",
+        message
+      );
+      if (isDev) {
+        return res.json({
+          reply:
+            reply +
+            "\n\n(Dev note: AI call failed; served rule-based reply. Check OPENAI_API_KEY / network.)",
+        });
+      }
       return res.json({ reply });
     }
   } catch (err) {
