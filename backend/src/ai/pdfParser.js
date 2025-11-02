@@ -1,9 +1,15 @@
 /* eslint-disable */
 import OpenAI from "openai";
+import { GoogleGenAI } from "@google/genai"; // <-- ADDED
 
 // Make key optional; fall back gracefully to regex-only
 const openai2 = process.env.OPENAI_API_KEY
   ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  : null;
+
+// Initialize Gemini client (for LLM fallback on transaction parsing)
+const gemini2 = process.env.GEMINI_API_KEY // <-- ADDED
+  ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
   : null;
 
 const DATE_RGX = /\b(\d{1,2}[\/\.\-]\d{1,2}[\/\.\-]\d{2,4})\b/; // 01/15/2025 or 15.01.2025
@@ -64,8 +70,8 @@ export async function parseTransactionsFromText(
     }
   }
 
-  // Optional LLM fallback if few txs parsed
-  if (txs.length < 5 && useLLMFallback && openai2) {
+  // Optional LLM fallback if few txs parsed (CHECK FOR EITHER KEY)
+  if (txs.length < 5 && useLLMFallback && (openai2 || gemini2)) {
     const prompt = `Extract bank-like transactions as JSON array with keys:
 - date (YYYY-MM-DD)
 - description (string)
@@ -77,24 +83,53 @@ ${text.slice(0, 12000)}
 ---`;
 
     try {
-      // Prefer Responses API if available, but keep chat.completions as a backup for compatibility
       let payloadText = null;
 
-      try {
-        const resp = await openai2.responses.create({
-          model: "gpt-4o-mini",
-          temperature: 0,
-          input: prompt,
+      if (gemini2) {
+        // <-- NEW: Prioritize Gemini with JSON Schema
+        const resp = await gemini2.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: prompt,
+          config: {
+            temperature: 0,
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  date: { type: "string", description: "YYYY-MM-DD" },
+                  description: { type: "string" },
+                  amount: {
+                    type: "number",
+                    description: "Negative for expenses",
+                  },
+                },
+                required: ["date", "description", "amount"],
+              },
+            },
+          },
         });
-        payloadText =
-          resp.output_text?.trim() || resp.content?.[0]?.text?.trim() || null;
-      } catch {
-        const resp2 = await openai2.chat.completions.create({
-          model: "gpt-4o-mini",
-          temperature: 0,
-          messages: [{ role: "user", content: prompt }],
-        });
-        payloadText = resp2.choices?.[0]?.message?.content?.trim() || null;
+        payloadText = resp.text.trim();
+      } else if (openai2) {
+        // <-- EXISTING: OpenAI Fallback
+        // Prefer Responses API if available, but keep chat.completions as a backup for compatibility
+        try {
+          const resp = await openai2.responses.create({
+            model: "gpt-4o-mini",
+            temperature: 0,
+            input: prompt,
+          });
+          payloadText =
+            resp.output_text?.trim() || resp.content?.[0]?.text?.trim() || null;
+        } catch {
+          const resp2 = await openai2.chat.completions.create({
+            model: "gpt-4o-mini",
+            temperature: 0,
+            messages: [{ role: "user", content: prompt }],
+          });
+          payloadText = resp2.choices?.[0]?.message?.content?.trim() || null;
+        }
       }
 
       if (payloadText) {
@@ -124,6 +159,7 @@ ${text.slice(0, 12000)}
 }
 
 function normalizeDate(s) {
+  // ... (normalizeDate function remains the same) ...
   // supports DD.MM.YYYY, MM/DD/YYYY, etc. Returns YYYY-MM-DD
   const parts = s
     .replace(/-/g, "/")
@@ -161,6 +197,7 @@ function normalizeDate(s) {
 }
 
 function normalizeAmount(s) {
+  // ... (normalizeAmount function remains the same) ...
   // handle 1.234,56 or 1,234.56 or -1234.56
   const neg = /-/.test(s);
   const cleaned = s.replace(/[^0-9.,-]/g, "");
@@ -183,6 +220,7 @@ function normalizeAmount(s) {
 }
 
 function guessCategory(desc = "") {
+  // ... (guessCategory function remains the same) ...
   const d = desc.toLowerCase();
   if (/(salary|payroll|maas|maaş|ucret|ücret)/.test(d)) return "Salary";
   if (/(rent|kira)/.test(d)) return "Rent";

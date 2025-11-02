@@ -6,6 +6,8 @@ const require = createRequire(import.meta.url);
 const pdf = require("pdf-parse"); // CJS import that works in ESM
 
 import OpenAI from "openai";
+// 1. ADD GEMINI SDK IMPORT
+import { GoogleGenAI } from "@google/genai";
 import mongoose from "mongoose";
 import { parse as parseCSV } from "csv-parse/sync";
 
@@ -20,17 +22,87 @@ const systemPrompt = `You are Nummora Financial Helper.
 - Use provided parsedTransactions and computedMetrics as ground truth.
 - Output: 1–2 sentence summary, 3–5 bullets, then a metric snapshot.`;
 
-// ---------- OPENAI (optional) ----------
+// ----------------------------------------------------
+// 2. AGENT CONFIGURATION & INITIALIZATION
+// ----------------------------------------------------
+
+// Determine the active agent from environment variable (default to openai)
+const ACTIVE_AGENT = process.env.FINANCIAL_HELPER_AGENT || "openai";
+const GEMINI_MODEL = "gemini-2.5-flash"; // Recommended model for chat
+const OPENAI_MODEL = "gpt-4o-mini"; // Your existing OpenAI model
+
+// ---------- OPENAI (old agent) ----------
 const openai = process.env.OPENAI_API_KEY
   ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   : null;
 
+// ---------- GEMINI (new agent) ----------
+const gemini = process.env.GEMINI_API_KEY
+  ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
+  : null;
+
 const isDev = process.env.NODE_ENV !== "production";
+
+/**
+ * 3. Central function to call the configured LLM.
+ */
+async function callLLM(context, tonePreference, message, modelType) {
+  // This structured input is passed to the LLM to provide all context
+  const input = [
+    "SYSTEM:",
+    systemPrompt,
+    "",
+    "USER:",
+    JSON.stringify({ tonePreference, context, message }, null, 2),
+  ].join("\n");
+
+  if (modelType === "gemini" && gemini) {
+    // --- GEMINI AGENT LOGIC ---
+    const response = await gemini.models.generateContent({
+      model: GEMINI_MODEL,
+      contents: input,
+      config: {
+        temperature: 0.3,
+      },
+    });
+    return response.text.trim();
+  } else if (modelType === "openai" && openai) {
+    // --- OPENAI AGENT LOGIC ---
+    // Retaining your original call structure, though using the modern chat completions API is generally preferred.
+    try {
+      // Attempting to use the non-standard 'responses.create' if it's part of an older or custom SDK fork
+      const completion = await openai.responses.create({
+        model: OPENAI_MODEL,
+        temperature: 0.3,
+        input,
+      });
+      return (
+        completion.output_text?.trim() ||
+        completion.content?.[0]?.text?.trim() ||
+        "Sorry, I couldn’t generate a response."
+      );
+    } catch {
+      // Fallback to standard chat completions
+      const completion = await openai.chat.completions.create({
+        model: OPENAI_MODEL,
+        temperature: 0.3,
+        messages: [{ role: "user", content: input }],
+      });
+      return (
+        completion.choices?.[0]?.message?.content?.trim() ||
+        "Sorry, I couldn't generate a response."
+      );
+    }
+  } else {
+    throw new Error(`Agent '${modelType}' not configured or API key missing.`);
+  }
+}
 
 /* ------------------------- OFFLINE Q&A HELPERS ------------------------- */
 
 // Basic month-name map (EN + TR)
 const MONTHS = {
+  // ... (MONTHS array contents remain the same) ...
   january: 1,
   february: 2,
   march: 3,
@@ -64,22 +136,27 @@ const MONTHS = {
 };
 
 function toISO(d) {
+  // ... (toISO function contents remain the same) ...
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
     .toISOString()
     .slice(0, 10);
 }
 
 function startOfMonth(date = new Date()) {
+  // ... (startOfMonth function contents remain the same) ...
   return new Date(date.getFullYear(), date.getMonth(), 1);
 }
 function endOfMonth(date = new Date()) {
+  // ... (endOfMonth function contents remain the same) ...
   return new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
 }
 function addMonths(date, delta) {
+  // ... (addMonths function contents remain the same) ...
   return new Date(date.getFullYear(), date.getMonth() + delta, 1);
 }
 
 function parseDateRangeFromQuery(q) {
+  // ... (parseDateRangeFromQuery function contents remain the same) ...
   if (!q) return null;
   const s = q.toLowerCase();
 
@@ -166,6 +243,7 @@ function parseDateRangeFromQuery(q) {
 }
 
 const CATEGORY_ALIASES = [
+  // ... (CATEGORY_ALIASES array contents remain the same) ...
   { key: "Groceries", re: /(grocery|market|migros|carrefour|a101|bim)/i },
   {
     key: "Dining",
@@ -182,6 +260,7 @@ const CATEGORY_ALIASES = [
 ];
 
 function detectCategoryFromQuery(q) {
+  // ... (detectCategoryFromQuery function contents remain the same) ...
   if (!q) return null;
   for (const { key, re } of CATEGORY_ALIASES) {
     if (re.test(q)) return key;
@@ -193,6 +272,7 @@ function filterTx(
   txs,
   { start = null, end = null, type = null, category = null } = {}
 ) {
+  // ... (filterTx function contents remain the same) ...
   return txs.filter((t) => {
     const d = new Date(t.date);
     if (start && d < start) return false;
@@ -204,10 +284,12 @@ function filterTx(
 }
 
 function sumAmounts(arr) {
+  // ... (sumAmounts function contents remain the same) ...
   return arr.reduce((a, b) => a + Number(b.amount || 0), 0);
 }
 
 function groupByCategory(arr) {
+  // ... (groupByCategory function contents remain the same) ...
   const m = {};
   for (const t of arr) {
     const k = t.category || "Other";
@@ -217,11 +299,13 @@ function groupByCategory(arr) {
 }
 
 function topN(arr, n) {
+  // ... (topN function contents remain the same) ...
   return arr.slice(0, n);
 }
 
 // ---------- HELPERS ----------
 function normalizeAmount(s) {
+  // ... (normalizeAmount function contents remain the same) ...
   if (s == null) return NaN;
   const raw = String(s).replace(/[^0-9.,-]/g, "");
   const neg = raw.includes("-");
@@ -240,6 +324,7 @@ function normalizeAmount(s) {
 }
 
 function csvToTxRows(buf) {
+  // ... (csvToTxRows function contents remain the same) ...
   const text = buf.toString("utf8");
   const rows = parseCSV(text, {
     columns: true,
@@ -327,6 +412,7 @@ function csvToTxRows(buf) {
 }
 
 async function simpleRegexExtract(text) {
+  // ... (simpleRegexExtract function contents remain the same) ...
   const lines = text
     .split(/\r?\n/)
     .map((s) => s.trim())
@@ -362,6 +448,7 @@ async function simpleRegexExtract(text) {
 }
 
 function normalizeDate(s) {
+  // ... (normalizeDate function contents remain the same) ...
   const p = s.replace(/-/g, "/").replace(/\./g, "/").split("/");
   let d, m, y;
   if (p[2]?.length === 4) {
@@ -396,6 +483,7 @@ function normalizeDate(s) {
 /* ---------------------- OFFLINE, INTENT-AWARE ANSWERS ---------------------- */
 /* eslint-disable */
 function buildRuleBasedReply(ctx, tone, userMsg) {
+  // ... (buildRuleBasedReply function contents remain the same) ...
   const txs = ctx.parsedTransactions || [];
   const m = ctx.computedMetrics || {};
   const txCount = txs.length;
@@ -685,6 +773,7 @@ ${disclaimer}`;
 
 // ---------- CONTROLLERS ----------
 export async function ingestPdf(req, res) {
+  // ... (ingestPdf function contents remain the same) ...
   try {
     if (!req.file || !req.file.buffer) {
       return res.status(400).json({ error: "No file uploaded" });
@@ -711,8 +800,11 @@ export async function ingestPdf(req, res) {
         });
       }
 
+      // NOTE: This now checks for EITHER OPENAI_API_KEY OR GEMINI_API_KEY inside pdfParser.js
       parsedTransactions = await parseTransactionsFromText(contentText, {
-        useLLMFallback: Boolean(process.env.OPENAI_API_KEY),
+        useLLMFallback: Boolean(
+          process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY
+        ),
       });
       console.log("txCount:", parsedTransactions.length);
       if (parsedTransactions.length)
@@ -808,8 +900,8 @@ export async function chat(req, res) {
       computedMetrics: fileDoc.computedMetrics || {},
     };
 
-    // No key? Rule-based fallback (no scary 'offline' text).
-    if (!openai) {
+    // 4. UPDATE: No LLM key? Use rule-based fallback.
+    if (!openai && !gemini) {
       const reply = buildRuleBasedReply(
         context,
         tonePreference || "formal",
@@ -818,32 +910,17 @@ export async function chat(req, res) {
       return res.json({ reply });
     }
 
-    // Try OpenAI (Responses API), on error → fallback
+    // The agent to use is determined by the environment variable ACTIVE_AGENT
+    const agentToUse = ACTIVE_AGENT;
+
+    // 5. UPDATE: Call the central LLM function
     try {
-      const input = [
-        "SYSTEM:",
-        systemPrompt,
-        "",
-        "USER:",
-        JSON.stringify({ tonePreference, context, message }, null, 2),
-      ].join("\n");
-
-      const completion = await openai.responses.create({
-        model: "gpt-4o-mini",
-        temperature: 0.3,
-        input,
-      });
-
-      const reply =
-        completion.output_text?.trim() ||
-        completion.content?.[0]?.text?.trim() ||
-        "Sorry, I couldn’t generate a response.";
-
+      const reply = await callLLM(context, tonePreference, message, agentToUse);
       return res.json({ reply });
     } catch (e) {
       if (isDev)
         console.warn(
-          "OpenAI failed, using fallback:",
+          `${agentToUse} failed, using fallback:`, // Log which agent failed
           e?.status || e?.code,
           e?.message
         );
@@ -856,7 +933,7 @@ export async function chat(req, res) {
         return res.json({
           reply:
             reply +
-            "\n\n(Dev note: AI call failed; served rule-based reply. Check OPENAI_API_KEY / network.)",
+            `\n\n(Dev note: AI call to ${agentToUse} failed; served rule-based reply. Check API Key / network.)`, // Updated dev note
         });
       }
       return res.json({ reply });

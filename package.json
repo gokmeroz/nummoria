@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@google/genai": "^1.28.0",
     "cookie-parser": "^1.4.7",
     "csv-parse": "^6.1.0",
     "express-session": "^1.18.2",

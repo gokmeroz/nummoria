@@ -1,9 +1,11 @@
 // backend/src/controllers/authController.js
+import "../config/env.js"; // <- MUST be first
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
 import { User } from "../models/user.js";
+import { requireEnv } from "../config/env.js";
 
 /* ─────────────────────────── Config & Flags ─────────────────────────── */
 
@@ -13,7 +15,7 @@ const FRONTEND_URL = FRONTEND_URL_RAW.replace(/\/+$/, "");
 const IS_DEV = process.env.NODE_ENV !== "production"; // define FIRST
 const IS_PROD = !IS_DEV;
 
-const { JWT_SECRET } = process.env;
+const JWT_SECRET = requireEnv("JWT_SECRET");
 
 // Feature flags / dev helpers
 const SKIP_EMAIL_VERIFICATION =
