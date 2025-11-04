@@ -12,6 +12,9 @@ export default function FinancialHelper() {
   const [uploadPct, setUploadPct] = useState(0);
   const [banner, setBanner] = useState(null); // soft in-page banner
 
+  // NEW: show a waiting animation while the assistant is generating
+  const [thinking, setThinking] = useState(false);
+
   const fileRef = useRef(null);
   const askToneIfNeeded = !tone;
 
@@ -23,7 +26,7 @@ export default function FinancialHelper() {
     showBanner._t = window.setTimeout(() => setBanner(null), 5000);
   }
 
-  // ------------------------- HANDLERS (UNCHANGED) -------------------------
+  // ------------------------- HANDLERS (UNCHANGED + waiting flag) -------------------------
   async function handleFileChange(e) {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -88,6 +91,7 @@ export default function FinancialHelper() {
     setInput("");
 
     try {
+      setThinking(true); // start typing indicator
       const { data } = await api.post("/ai/financial-helper/chat", {
         message: userMsg || `Start session. Tone: ${tonePref}`,
         tonePreference: tonePref,
@@ -100,6 +104,8 @@ export default function FinancialHelper() {
         ...m,
         { role: "system", content: `Chat failed: ${msg}` },
       ]);
+    } finally {
+      setThinking(false); // stop typing indicator
     }
   }
 
@@ -118,7 +124,7 @@ export default function FinancialHelper() {
       top: chatRef.current.scrollHeight,
       behavior: "smooth",
     });
-  }, [messages.length]);
+  }, [messages.length, thinking]); // include thinking so the typing bubble stays in view
 
   // ------------------------------- UI -------------------------------
   return (
@@ -258,6 +264,7 @@ export default function FinancialHelper() {
                 {messages.map((m, i) => (
                   <ChatBubble key={i} role={m.role} text={m.content} />
                 ))}
+                {thinking && <TypingBubble />} {/* waiting indicator */}
               </div>
             )}
           </div>
@@ -266,7 +273,7 @@ export default function FinancialHelper() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              if (tone && input.trim()) onSend();
+              if (tone && input.trim() && !thinking) onSend();
             }}
             className="border-t bg-white/60 backdrop-blur p-3"
           >
@@ -287,11 +294,17 @@ export default function FinancialHelper() {
               <button
                 type="submit"
                 onClick={(e) => e.currentTarget.blur()}
-                disabled={!tone || !input.trim()}
+                disabled={!tone || !input.trim() || thinking}
                 className="px-4 py-2 rounded-xl bg-emerald-700 text-white font-semibold hover:bg-emerald-800 disabled:opacity-60"
-                title={!tone ? "Pick a tone first" : "Send"}
+                title={
+                  !tone
+                    ? "Pick a tone first"
+                    : thinking
+                    ? "Waiting for reply…"
+                    : "Send"
+                }
               >
-                Send
+                {thinking ? "Thinking…" : "Send"}
               </button>
             </div>
             {!tone && (
@@ -354,5 +367,26 @@ function Dot({ ok }) {
         ok ? "bg-emerald-600" : "bg-gray-300"
       }`}
     />
+  );
+}
+
+// NEW: minimal typing indicator using Tailwind animate-bounce with staggered delays
+function TypingBubble() {
+  return (
+    <div className="max-w-[85%] rounded-2xl px-3 py-2 shadow-sm leading-relaxed bg-[#f3f8ef] text-gray-900 border border-[#e3f0da] inline-flex items-center gap-2">
+      <span
+        className="inline-block h-2 w-2 rounded-full bg-emerald-600 animate-bounce"
+        style={{ animationDelay: "0ms" }}
+      />
+      <span
+        className="inline-block h-2 w-2 rounded-full bg-emerald-600 animate-bounce"
+        style={{ animationDelay: "150ms" }}
+      />
+      <span
+        className="inline-block h-2 w-2 rounded-full bg-emerald-600 animate-bounce"
+        style={{ animationDelay: "300ms" }}
+      />
+      <span className="sr-only">Assistant is typing…</span>
+    </div>
   );
 }
