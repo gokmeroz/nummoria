@@ -21,7 +21,11 @@ const userSchema = new mongoose.Schema(
     baseCurrency: { type: String, default: "USD" },
     avatarUrl: { type: String, default: undefined },
     avatarVersion: { type: Number, default: 0 },
-    subscription: { type: String, enum: ["free", "pro"], default: "free" },
+    subscription: {
+      type: String,
+      enum: ["Standard", "Plus", "Premium"],
+      default: "Standard",
+    },
 
     // Social ids (optional)
     googleId: { type: String, index: true, sparse: true, unique: false },

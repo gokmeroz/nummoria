@@ -2,6 +2,13 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import api from "../lib/api"; // axios instance
 
+// ───────────── Plan Gate ─────────────
+const ELIGIBLE_PLANS = new Set(["plus", "premium"]);
+function isEligible(plan) {
+  if (!plan) return false;
+  return ELIGIBLE_PLANS.has(String(plan).toLowerCase());
+}
+
 export default function FinancialHelper() {
   // ----------------------------- STATE -----------------------------
   const [fileId, setFileId] = useState(null);
@@ -15,8 +22,35 @@ export default function FinancialHelper() {
   // NEW: show a waiting animation while the assistant is generating
   const [thinking, setThinking] = useState(false);
 
+  // PLAN: current user's subscription (free/plus/premium)
+  const [plan, setPlan] = useState(null);
+  const [planLoading, setPlanLoading] = useState(true);
+
   const fileRef = useRef(null);
   const askToneIfNeeded = !tone;
+
+  // Fetch plan once (adjust /me path if different in your backend)
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const { data } = await api.get("/me");
+        if (!mounted) return;
+        const p =
+          data?.subscription?.toLowerCase?.() ||
+          data?.plan?.toLowerCase?.() ||
+          null;
+        setPlan(p);
+      } catch {
+        setPlan(null);
+      } finally {
+        if (mounted) setPlanLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // local banner helper (safe even if you have a global showBanner elsewhere)
   function showBanner(msg) {
@@ -26,8 +60,17 @@ export default function FinancialHelper() {
     showBanner._t = window.setTimeout(() => setBanner(null), 5000);
   }
 
-  // ------------------------- HANDLERS (UNCHANGED + waiting flag) -------------------------
+  // ------------------------- HANDLERS (with gate + waiting flag) -------------------------
   async function handleFileChange(e) {
+    if (!isEligible(plan)) {
+      showBanner(
+        "Uploads require Plus or Premium. Please upgrade to continue."
+      );
+      // allow selecting the same file again to re-trigger onChange later
+      if (e?.target) e.target.value = "";
+      return;
+    }
+
     const f = e.target.files?.[0];
     if (!f) return;
 
@@ -39,9 +82,8 @@ export default function FinancialHelper() {
       setBanner(null);
       const { data } = await api.post("/ai/financial-helper/ingest", fd, {
         onUploadProgress: (evt) => {
-          if (evt.total) {
+          if (evt.total)
             setUploadPct(Math.round((evt.loaded / evt.total) * 100));
-          }
         },
       });
 
@@ -64,6 +106,9 @@ export default function FinancialHelper() {
         showBanner(
           "This PDF is scanned/image-only. Please export a text-based PDF or CSV."
         );
+      } else if (err?.response?.status === 402) {
+        // if backend also enforces upgrade
+        showBanner("Upgrade required to use Financial Advisor.");
       } else {
         showBanner(msg);
       }
@@ -76,6 +121,13 @@ export default function FinancialHelper() {
   }
 
   async function onSend() {
+    if (!isEligible(plan)) {
+      showBanner(
+        "Financial Advisor is available on Plus/Premium. Please upgrade to continue."
+      );
+      return;
+    }
+
     if (!input.trim() && askToneIfNeeded) {
       if (!tone) return; // pick tone first
     }
@@ -99,7 +151,11 @@ export default function FinancialHelper() {
       });
       setMessages((m) => [...m, { role: "assistant", content: data.reply }]);
     } catch (err) {
-      const msg = err?.response?.data?.error || err.message || "Chat failed";
+      const msg =
+        err?.response?.data?.error ||
+        err?.response?.data?.message ||
+        err.message ||
+        "Chat failed";
       setMessages((m) => [
         ...m,
         { role: "system", content: `Chat failed: ${msg}` },
@@ -113,7 +169,7 @@ export default function FinancialHelper() {
   function handleComposerKeyDown(e) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if (tone && input.trim()) onSend();
+      if (tone && input.trim() && isEligible(plan)) onSend();
     }
   }
 
@@ -213,9 +269,13 @@ export default function FinancialHelper() {
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="px-3 py-2 rounded-xl border text-[#4f772d] border-[#4f772d] hover:bg-[#eef5ea] font-semibold"
-                disabled={uploading}
-                title="Choose a PDF or CSV"
+                className="px-3 py-2 rounded-xl border text-[#4f772d] border-[#4f772d] hover:bg-[#eef5ea] font-semibold disabled:opacity-60"
+                disabled={uploading || !isEligible(plan) || planLoading}
+                title={
+                  !isEligible(plan) && !planLoading
+                    ? "Upgrade to Plus or Premium"
+                    : "Choose a PDF or CSV"
+                }
               >
                 {uploading ? "Uploading…" : "Choose File"}
               </button>
@@ -246,6 +306,11 @@ export default function FinancialHelper() {
               <Dot ok={!!fileId} />
               {fileId ? "File linked to session" : "No file yet"}
             </span>
+            {!planLoading && !isEligible(plan) && (
+              <span className="ml-2 inline-flex items-center rounded-md bg-amber-50 text-amber-800 px-2 py-1">
+                Plus/Premium required
+              </span>
+            )}
           </div>
         </div>
 
@@ -253,11 +318,15 @@ export default function FinancialHelper() {
         <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
           <div
             ref={chatRef}
-            className="h-[52vh] p-4 overflow-auto bg-[linear-gradient(180deg,#ffffff_0%,#fbfdf9_100%)]"
+            className="relative h-[52vh] p-4 overflow-auto bg-[linear-gradient(180deg,#ffffff_0%,#fbfdf9_100%)]"
           >
             {messages.length === 0 ? (
               <div className="h-full grid place-items-center text-gray-500 text-sm">
-                Start by uploading a file and asking a question.
+                {planLoading
+                  ? "Checking your plan…"
+                  : isEligible(plan)
+                  ? "Start by uploading a file and asking a question."
+                  : "Upgrade to Plus or Premium to chat with the advisor."}
               </div>
             ) : (
               <div className="space-y-3">
@@ -267,13 +336,19 @@ export default function FinancialHelper() {
                 {thinking && <TypingBubble />} {/* waiting indicator */}
               </div>
             )}
+
+            {/* PLAN GATE OVERLAY */}
+            {!planLoading && !isEligible(plan) && (
+              <UpgradeOverlay plan={plan} />
+            )}
           </div>
 
           {/* Composer */}
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              if (tone && input.trim() && !thinking) onSend();
+              if (tone && input.trim() && !thinking && isEligible(plan))
+                onSend();
             }}
             className="border-t bg-white/60 backdrop-blur p-3"
           >
@@ -284,20 +359,30 @@ export default function FinancialHelper() {
                 onKeyDown={handleComposerKeyDown}
                 rows={2}
                 placeholder={
-                  tone
+                  !planLoading && !isEligible(plan)
+                    ? "Upgrade to Plus or Premium to chat with the advisor."
+                    : tone
                     ? "Ask about your budget, risk, or investments… (Shift+Enter = newline)"
                     : "Pick a tone to start…"
                 }
-                disabled={!tone}
-                className="flex-1 resize-none rounded-xl border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#90a955]/40 disabled:bg-gray-50"
+                disabled={!tone || !isEligible(plan) || planLoading}
+                className="flex-1 resize-none rounded-xl border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#90a955]/40 disabled:bg-gray-50 disabled:text-gray-400"
               />
               <button
                 type="submit"
                 onClick={(e) => e.currentTarget.blur()}
-                disabled={!tone || !input.trim() || thinking}
+                disabled={
+                  !tone ||
+                  !input.trim() ||
+                  thinking ||
+                  !isEligible(plan) ||
+                  planLoading
+                }
                 className="px-4 py-2 rounded-xl bg-emerald-700 text-white font-semibold hover:bg-emerald-800 disabled:opacity-60"
                 title={
-                  !tone
+                  !isEligible(plan) && !planLoading
+                    ? "Upgrade to use Financial Advisor"
+                    : !tone
                     ? "Pick a tone first"
                     : thinking
                     ? "Waiting for reply…"
@@ -307,7 +392,7 @@ export default function FinancialHelper() {
                 {thinking ? "Thinking…" : "Send"}
               </button>
             </div>
-            {!tone && (
+            {!tone && isEligible(plan) && (
               <div className="pt-1 text-xs text-gray-500">
                 Select a tone above to enable the composer.
               </div>
@@ -370,7 +455,7 @@ function Dot({ ok }) {
   );
 }
 
-// NEW: minimal typing indicator using Tailwind animate-bounce with staggered delays
+// Minimal typing indicator using Tailwind animate-bounce with staggered delays
 function TypingBubble() {
   return (
     <div className="max-w-[85%] rounded-2xl px-3 py-2 shadow-sm leading-relaxed bg-[#f3f8ef] text-gray-900 border border-[#e3f0da] inline-flex items-center gap-2">
@@ -387,6 +472,41 @@ function TypingBubble() {
         style={{ animationDelay: "300ms" }}
       />
       <span className="sr-only">Assistant is typing…</span>
+    </div>
+  );
+}
+
+// Upgrade overlay displayed when plan is not eligible
+function UpgradeOverlay({ plan }) {
+  return (
+    <div className="absolute inset-0 bg-white/85 backdrop-blur-sm grid place-items-center p-6">
+      <div className="max-w-md w-full rounded-2xl border bg-white shadow-sm p-5 text-center">
+        <div className="text-2xl font-bold">Unlock AI Financial Advisor</div>
+        <p className="mt-2 text-sm text-gray-600">
+          Your current plan{" "}
+          <span className="font-medium">({plan || "free"})</span> doesn’t
+          include this feature. Upgrade to{" "}
+          <span className="font-semibold">Plus</span> or{" "}
+          <span className="font-semibold">Premium</span> to continue.
+        </p>
+        <div className="mt-4 flex items-center gap-2 justify-center">
+          <a
+            href="/subscriptions"
+            className="rounded-xl bg-emerald-700 text-white px-4 py-2 font-semibold hover:bg-emerald-800"
+          >
+            See Plans
+          </a>
+          <a
+            href="/subscriptions/purchase?plan=premium"
+            className="rounded-xl border border-emerald-700 text-emerald-700 px-4 py-2 font-semibold hover:bg-emerald-50"
+          >
+            Go Premium
+          </a>
+        </div>
+        <p className="mt-3 text-xs text-gray-500">
+          Plus & Premium include AI insights, savings tips, and more.
+        </p>
+      </div>
     </div>
   );
 }

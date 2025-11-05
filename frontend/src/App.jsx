@@ -27,6 +27,7 @@ import Terms from "./pages/Terms";
 import Status from "./pages/Status";
 import VerifyEmail from "./pages/VerifyEmail";
 import SubscriptionManager from "./pages/SubscriptionManager";
+import PurchasePage from "./pages/PurchasePage";
 
 export default function App() {
   function handleLogout() {
@@ -66,7 +67,8 @@ export default function App() {
           <Route path="/oauth-callback" element={<OAuthCallback />} />
           <Route path="/ai/financial-helper" element={<FinancialHelper />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
-          <Route path="/subscription" element={<SubscriptionManager />} />
+          <Route path="/subscriptions" element={<SubscriptionManager />} />
+          <Route path="/subscriptions/purchase" element={<PurchasePage />} />
         </Route>
       </Route>
       <Route path="/goodbye" element={<Goodbye />} />

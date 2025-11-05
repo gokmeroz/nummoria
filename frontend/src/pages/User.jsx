@@ -5,6 +5,7 @@
 // frontend/src/pages/User.jsx
 import { useEffect, useRef, useState } from "react";
 import api from "../lib/api";
+import { set } from "mongoose";
 
 const ACCOUNT_TYPES = ["checking", "savings", "credit", "cash", "other"];
 const CURRENCIES = ["USD", "EUR", "TRY", "GBP"];
@@ -107,6 +108,7 @@ export default function UserPage() {
         setEmail(meData?.email || "");
         setName(meData?.name || "");
         setProfession(meData?.profession || "");
+        setSubscription(meData?.subscription || "Standard");
         setBaseCurrency(meData?.baseCurrency || "USD");
         setTz(meData?.tz || "UTC");
         setAccounts(
@@ -768,7 +770,7 @@ export default function UserPage() {
               <div className="font-semibold mb-3" style={{ color: main }}>
                 Manage Your Subscription
               </div>
-              <a href="/subscription" className="underline text-grey-700">
+              <a href="/subscriptions" className="underline text-grey-700">
                 Subscription & Billing
               </a>
             </div>
