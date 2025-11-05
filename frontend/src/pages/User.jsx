@@ -746,6 +746,17 @@ export default function UserPage() {
                 </a>
               </div>
             </div>
+            <div
+              className="mt-6 bg-white rounded-xl shadow border p-5"
+              style={{ borderColor: secondary }}
+            >
+              <div className="font-semibold mb-3" style={{ color: main }}>
+                Manage Your Subscription
+              </div>
+              <a href="/subscription" className="underline text-grey-700">
+                Subscription & Billing
+              </a>
+            </div>
           </div>
         </div>
       </section>
