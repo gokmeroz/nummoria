@@ -30,6 +30,7 @@ export default function UserPage() {
   const [name, setName] = useState("");
   const [profession, setProfession] = useState("");
   const [baseCurrency, setBaseCurrency] = useState("");
+  const [subscription, setSubscription] = useState("free");
   const [tz, setTz] = useState("");
 
   // accounts
@@ -460,6 +461,20 @@ export default function UserPage() {
                         onChange={(e) => setTz(e.target.value)}
                         placeholder="e.g., Europe/Istanbul"
                       />
+                    </Labeled>
+                    <Labeled label="Subscription Plan">
+                      <div className="relative">
+                        <input
+                          type="text"
+                          readOnly
+                          value={subscription}
+                          onChange={(e) => setSubscription(e.target.value)}
+                          className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-gray-700 font-medium cursor-default select-none focus:outline-none focus:ring-2 focus:ring-[#90a955]/40 transition-all"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
+                          Active
+                        </span>
+                      </div>
                     </Labeled>
 
                     <Labeled label="Base currency">
