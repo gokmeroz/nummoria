@@ -9,6 +9,8 @@ import React, {
   useRef,
 } from "react";
 import api from "../lib/api";
+import { ResponsiveSankey } from "@nivo/sankey";
+import { toPng } from "html-to-image";
 
 // [BRAND] logo (Vite resolves this URL at build time)
 const logoUrl = new URL("../assets/nummoria_logo.png", import.meta.url).href;
@@ -17,12 +19,10 @@ const logoUrl = new URL("../assets/nummoria_logo.png", import.meta.url).href;
 const APP_NAME = "Nummoria";
 
 /* ------------------------------ Ingest endpoints ------------------------------ */
-/* Update these if your backend uses different routes */
 const INGEST_CSV_ENDPOINT = "/ingest/csv";
 const INGEST_PDF_ENDPOINT = "/ingest/pdf";
 
 /* ------------------------------ Money helpers ------------------------------ */
-// UI formatter (kept as-is; uses user's locale)
 function decimalsForCurrency(code) {
   const zero = new Set(["JPY", "KRW", "CLP", "VND"]);
   const three = new Set(["BHD", "IQD", "JOD", "KWD", "OMR", "TND"]);
@@ -40,7 +40,6 @@ const fmtMoneyUI = (minor, cur = "USD") =>
     currency: cur || "USD",
   }).format(minorToMajor(minor, cur));
 
-// PDF-safe formatter (ASCII only, avoids NBSP & exotic symbols)
 const fmtMoneyPDF = (minor, cur = "USD") => {
   const val = minorToMajor(minor, cur);
   let s = new Intl.NumberFormat("en-US", {
@@ -49,20 +48,17 @@ const fmtMoneyPDF = (minor, cur = "USD") => {
     currencyDisplay: "symbol",
   }).format(val);
   s = s
-    .replace(/\u00A0|\u202F/g, " ") // NBSP / NNBSP → space
-    .replace(/\u2212/g, "-") // Unicode minus → ASCII
-    .replace(/[^\x20-\x7E]/g, ""); // strip non-ASCII
+    .replace(/\u00A0|\u202F/g, " ")
+    .replace(/\u2212/g, "-")
+    .replace(/[^\x20-\x7E]/g, "");
   return s;
 };
-
-// General text sanitization for PDF (keep it ASCII)
 const toPdfText = (s) =>
   String(s || "")
     .replace(/\u00A0|\u202F/g, " ")
     .replace(/[^\x20-\x7E]/g, "");
 
 /* ----------------------------- Small utilities ----------------------------- */
-// Load an <img> URL as a DataURL so jsPDF.addImage can embed it.
 async function urlToDataURL(url) {
   const res = await fetch(url);
   const blob = await res.blob();
@@ -73,8 +69,6 @@ async function urlToDataURL(url) {
     reader.readAsDataURL(blob);
   });
 }
-
-// CSV helpers
 function csvEscape(v) {
   const s = String(v ?? "");
   if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
@@ -91,6 +85,81 @@ function downloadBlob(filename, blob) {
     URL.revokeObjectURL(url);
     a.remove();
   }, 0);
+}
+
+/* ------------------------------ Sankey helpers ------------------------------ */
+function buildSankeyFromRows(rows, categoriesById, currency, topN = 5) {
+  const curRows = rows.filter((r) => (r.currency || "USD") === currency);
+
+  let income = 0;
+  let outflow = 0;
+
+  const byCategory = new Map();
+
+  for (const t of curRows) {
+    const amt = Math.abs(minorToMajor(t.amountMinor, currency));
+    if (t.type === "income") {
+      income += amt;
+    } else {
+      outflow += amt;
+      const catName = categoriesById.get(t.categoryId)?.name || "Other";
+      const desc = (t.description || "—").trim() || "—";
+      if (!byCategory.has(catName))
+        byCategory.set(catName, { total: 0, items: new Map() });
+      const bucket = byCategory.get(catName);
+      bucket.total += amt;
+      bucket.items.set(desc, (bucket.items.get(desc) || 0) + amt);
+    }
+  }
+
+  const nodes = new Map();
+  const links = [];
+  const addNode = (id) => {
+    if (!nodes.has(id)) nodes.set(id, { id });
+  };
+
+  const ROOT = "Income";
+  addNode(ROOT);
+
+  for (const [cat, data] of byCategory.entries()) {
+    addNode(cat);
+    links.push({
+      source: ROOT,
+      target: cat,
+      value: Number(data.total.toFixed(2)),
+    });
+
+    const items = [...data.items.entries()].sort((a, b) => b[1] - a[1]);
+    const top = items.slice(0, topN);
+    const restSum = items.slice(topN).reduce((s, [, v]) => s + v, 0);
+
+    for (const [desc, val] of top) {
+      addNode(desc);
+      links.push({ source: cat, target: desc, value: Number(val.toFixed(2)) });
+    }
+    if (restSum > 0) {
+      const otherId = `${cat}: Other`;
+      addNode(otherId);
+      links.push({
+        source: cat,
+        target: otherId,
+        value: Number(restSum.toFixed(2)),
+      });
+    }
+  }
+
+  const savings = Math.max(0, income - outflow);
+  if (savings > 0) {
+    const SAVE = "Sparen / Savings";
+    addNode(SAVE);
+    links.push({
+      source: ROOT,
+      target: SAVE,
+      value: Number(savings.toFixed(2)),
+    });
+  }
+
+  return { nodes: Array.from(nodes.values()), links };
 }
 
 /* ---------------------------------- Page ---------------------------------- */
@@ -112,16 +181,17 @@ function ReportsView() {
   const [importMsg, setImportMsg] = useState("");
   const csvInputRef = useRef(null);
   const pdfInputRef = useRef(null);
+  const sankeyRef = useRef(null); // <-- used to snapshot the chart
 
-  // filter state
-  const [fStart, setFStart] = useState(""); // YYYY-MM-DD
-  const [fEnd, setFEnd] = useState(""); // YYYY-MM-DD
-  const [fType, setFType] = useState("ALL"); // ALL | income | expense | investment
-  const [fAccountId, setFAccountId] = useState("ALL"); // ALL or account _id
-  const [fCategoryId, setFCategoryId] = useState("ALL"); // ALL or category _id
-  const [fCurrency, setFCurrency] = useState("ALL"); // ALL or currency code
-  const [fMin, setFMin] = useState(""); // number (major)
-  const [fMax, setFMax] = useState(""); // number (major)
+  // filters
+  const [fStart, setFStart] = useState("");
+  const [fEnd, setFEnd] = useState("");
+  const [fType, setFType] = useState("ALL");
+  const [fAccountId, setFAccountId] = useState("ALL");
+  const [fCategoryId, setFCategoryId] = useState("ALL");
+  const [fCurrency, setFCurrency] = useState("ALL");
+  const [fMin, setFMin] = useState("");
+  const [fMax, setFMax] = useState("");
 
   /* ---------------------------------- Load ---------------------------------- */
   const loadAll = useCallback(async () => {
@@ -162,7 +232,6 @@ function ReportsView() {
     return m;
   }, [accounts]);
 
-  // unique currencies for the filter dropdown
   const currencies = useMemo(() => {
     const s = new Set(transactions.map((t) => t.currency || "USD"));
     return ["ALL", ...Array.from(s)];
@@ -170,41 +239,29 @@ function ReportsView() {
 
   /* ------------------------------- Filtering -------------------------------- */
   const rows = useMemo(() => {
-    // Prepare date bounds (end is inclusive)
     const start = fStart ? new Date(`${fStart}T00:00:00`) : null;
     const end = fEnd ? new Date(`${fEnd}T23:59:59.999`) : null;
-
-    const minNum = fMin !== "" ? Number(fMin) : null; // in MAJOR
-    const maxNum = fMax !== "" ? Number(fMax) : null; // in MAJOR
-
+    const minNum = fMin !== "" ? Number(fMin) : null;
+    const maxNum = fMax !== "" ? Number(fMax) : null;
     const needle = q.trim().toLowerCase();
 
     const filtered = transactions.filter((t) => {
-      // type
       if (fType !== "ALL" && (t.type || "").toLowerCase() !== fType)
         return false;
-
-      // account
       if (fAccountId !== "ALL" && t.accountId !== fAccountId) return false;
-
-      // category
       if (fCategoryId !== "ALL" && t.categoryId !== fCategoryId) return false;
 
-      // currency
       const cur = t.currency || "USD";
       if (fCurrency !== "ALL" && cur !== fCurrency) return false;
 
-      // date range
       const dt = new Date(t.date);
       if (start && dt < start) return false;
       if (end && dt > end) return false;
 
-      // amount range (compare in MAJOR to be currency-agnostic)
       const major = minorToMajor(t.amountMinor, cur);
       if (minNum !== null && major < minNum) return false;
       if (maxNum !== null && major > maxNum) return false;
 
-      // free-text search
       if (needle) {
         const cat = categoriesById.get(t.categoryId)?.name || "";
         const acc = accountsById.get(t.accountId)?.name || "";
@@ -213,11 +270,9 @@ function ReportsView() {
         } ${cat} ${acc} ${(t.tags || []).join(" ")}`.toLowerCase();
         if (!hay.includes(needle)) return false;
       }
-
       return true;
     });
 
-    // sort newest first
     filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
     return filtered;
   }, [
@@ -242,7 +297,7 @@ function ReportsView() {
       const cur = t.currency || "USD";
       const bucket = map.get(cur) || { incomeMinor: 0, outMinor: 0 };
       if (t.type === "income") bucket.incomeMinor += Number(t.amountMinor || 0);
-      else bucket.outMinor += Number(t.amountMinor || 0); // expenses + investments = outflow
+      else bucket.outMinor += Number(t.amountMinor || 0);
       map.set(cur, bucket);
     }
     return [...map.entries()].map(([currency, v]) => {
@@ -256,21 +311,23 @@ function ReportsView() {
     });
   }, [rows]);
 
+  // Sankey data (single currency only)
+  const sankeyCurrency = fCurrency !== "ALL" ? fCurrency : null;
+  const sankeyData = useMemo(() => {
+    if (!sankeyCurrency) return null;
+    return buildSankeyFromRows(rows, categoriesById, sankeyCurrency, 6);
+  }, [rows, categoriesById, sankeyCurrency]);
+
   /* ------------------------------ File import ------------------------------- */
   async function uploadFile(endpoint, file) {
     const form = new FormData();
     form.append("file", file);
-
-    // Optional: pass active filters as context for backend (comment out if not used)
-    // form.append("context", JSON.stringify({ fStart, fEnd, fType, fAccountId, fCategoryId, fCurrency }));
-
     const res = await api.post(endpoint, form, {
       headers: { "Content-Type": "multipart/form-data" },
-      timeout: 5 * 60 * 1000, // 5 minutes for big PDFs
+      timeout: 5 * 60 * 1000,
     });
     return res?.data || {};
   }
-
   function onPickCsv() {
     setImportMsg("");
     csvInputRef.current?.click();
@@ -279,10 +336,9 @@ function ReportsView() {
     setImportMsg("");
     pdfInputRef.current?.click();
   }
-
   async function onCsvChosen(e) {
     const file = e.target.files?.[0];
-    e.target.value = ""; // allow re-upload same filename
+    e.target.value = "";
     if (!file) return;
     setImportingCsv(true);
     try {
@@ -304,10 +360,9 @@ function ReportsView() {
       setImportingCsv(false);
     }
   }
-
   async function onPdfChosen(e) {
     const file = e.target.files?.[0];
-    e.target.value = ""; // allow re-upload same filename
+    e.target.value = "";
     if (!file) return;
     setImportingPdf(true);
     try {
@@ -335,22 +390,23 @@ function ReportsView() {
     if (downloading) return;
     setDownloading(true);
     try {
-      const [{ default: JsPDF }, { default: autoTable }] = await Promise.all([
+      const [{ default: JsPDF }] = await Promise.all([
         import("jspdf"),
         import("jspdf-autotable"),
       ]);
 
       const doc = new JsPDF({ unit: "pt", format: "a4" });
       const pageWidth = doc.internal.pageSize.getWidth();
-      const margin = 36; // match header margins
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 36;
       const printable = pageWidth - margin * 2;
 
-      // ---------- Header (brand) ----------
+      // Header
       try {
         const logoData = await urlToDataURL(logoUrl);
         doc.addImage(logoData, "PNG", margin, 24, 32, 32);
       } catch {}
-      doc.setFont("helvetica", "normal"); // keep default but explicit
+      doc.setFont("helvetica", "normal");
       doc.setFontSize(18);
       doc.setTextColor(0);
       doc.text(toPdfText(APP_NAME), margin + 40, 46);
@@ -360,7 +416,7 @@ function ReportsView() {
       doc.setDrawColor(200);
       doc.line(margin, 90, pageWidth - margin, 90);
 
-      // ---------- Optional: show active filters in PDF ----------
+      // Filters line
       const activeFilters = [];
       if (fStart) activeFilters.push(`from ${fStart}`);
       if (fEnd) activeFilters.push(`to ${fEnd}`);
@@ -386,7 +442,7 @@ function ReportsView() {
         );
       }
 
-      // ---------- Table ----------
+      // Table
       const colW = {
         date: 70,
         account: 95,
@@ -437,12 +493,12 @@ function ReportsView() {
         },
         headStyles: { fillColor: [79, 119, 45], textColor: 255 },
         columnStyles: {
-          0: { cellWidth: colW.date }, // Date
-          1: { cellWidth: colW.account }, // Account
-          2: { cellWidth: colW.category }, // Category
-          3: { cellWidth: colW.type }, // Type
-          4: { cellWidth: colW.desc }, // Description
-          5: { cellWidth: colW.amount, halign: "right" }, // Amount
+          0: { cellWidth: colW.date },
+          1: { cellWidth: colW.account },
+          2: { cellWidth: colW.category },
+          3: { cellWidth: colW.type },
+          4: { cellWidth: colW.desc },
+          5: { cellWidth: colW.amount, halign: "right" },
         },
         didDrawPage: () => {
           const str = `Page ${doc.internal.getNumberOfPages()}`;
@@ -457,7 +513,7 @@ function ReportsView() {
         },
       });
 
-      // ---------- Totals / Money Flow ----------
+      // Totals / Money Flow
       let y = (doc.lastAutoTable?.finalY ?? 110) + 24;
       doc.setTextColor(0);
       doc.setFontSize(13);
@@ -481,9 +537,38 @@ function ReportsView() {
         if (netMinor >= 0) doc.setTextColor(34, 139, 34);
         else doc.setTextColor(200, 0, 0);
         doc.text(toPdfText(net), netX, y);
-
         y += 18;
       });
+
+      // Sankey snapshot under Totals
+      try {
+        if (sankeyRef.current && sankeyCurrency && sankeyData?.links?.length) {
+          const dataUrl = await toPng(sankeyRef.current, {
+            pixelRatio: 2,
+            backgroundColor: "#ffffff",
+            cacheBust: true,
+          });
+
+          const usableW = pageWidth - margin * 2;
+          const props = doc.getImageProperties(dataUrl);
+          const scaledH = (usableW / props.width) * props.height;
+
+          if (y + scaledH + 24 > pageHeight - margin) {
+            doc.addPage();
+            y = margin;
+          }
+
+          doc.setFontSize(13);
+          doc.setTextColor(0);
+          doc.text("Cash-Flow (Sankey)", margin, y);
+          y += 8;
+
+          doc.addImage(dataUrl, "PNG", margin, y, usableW, scaledH);
+          y += scaledH + 12;
+        }
+      } catch (e) {
+        console.warn("Sankey snapshot failed:", e);
+      }
 
       const ts = new Date().toISOString().slice(0, 10);
       doc.save(`${APP_NAME}_Report_${ts}.pdf`);
@@ -498,16 +583,13 @@ function ReportsView() {
   }
 
   /* ------------------------------ CSV Generation ---------------------------- */
-  // Exports the *filtered* rows for direct use by the AI Agent.
-  // Headers chosen for your backend parser: Date, Description, Amount
   function handleDownloadCsv() {
     const ts = new Date().toISOString().slice(0, 10);
-    const headers = ["Date", "Description", "Amount"]; // backend looks for Date/Description/Amount
+    const headers = ["Date", "Description", "Amount"];
     const lines = [headers.map(csvEscape).join(",")];
 
     rows.forEach((t) => {
       const date = new Date(t.date).toISOString().slice(0, 10);
-      // amount in MAJOR with sign: income positive, expense/investment negative
       let amt = minorToMajor(t.amountMinor, t.currency);
       if (t.type !== "income") amt = -Math.abs(amt);
       const desc = t.description || "";
@@ -531,7 +613,7 @@ function ReportsView() {
 
   return (
     <div className="min-h-[100dvh] bg-[#f8faf8]">
-      {/* ============================ Header / Controls ============================ */}
+      {/* Header / Controls */}
       <div className="p-4 border-b bg-white">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -540,7 +622,6 @@ function ReportsView() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap justify-end">
-            {/* IMPORT */}
             <button
               type="button"
               onClick={onPickCsv}
@@ -560,7 +641,6 @@ function ReportsView() {
               {importingPdf ? "Importing PDF…" : "Import PDF"}
             </button>
 
-            {/* Hidden file inputs */}
             <input
               ref={csvInputRef}
               type="file"
@@ -576,7 +656,6 @@ function ReportsView() {
               className="hidden"
             />
 
-            {/* DOWNLOAD */}
             <button
               type="button"
               onClick={handleDownloadCsv}
@@ -597,7 +676,6 @@ function ReportsView() {
           </div>
         </div>
 
-        {/* Import status / errors */}
         {importMsg && (
           <div className="mt-2 text-sm text-[#2b5d1a] bg-[#eef5ea] px-3 py-2 rounded border border-[#cfe3c5]">
             {importMsg}
@@ -619,27 +697,23 @@ function ReportsView() {
           />
         </div>
 
-        {/* ========================= FILTER BAR (reusable) ========================= */}
+        {/* Filters */}
         <div className="mt-3 grid grid-cols-1 xl:grid-cols-6 gap-2">
-          {/* Date range */}
           <div className="flex gap-2">
             <input
               type="date"
               value={fStart}
               onChange={(e) => setFStart(e.target.value)}
               className="border rounded-lg px-3 py-2 w-full"
-              title="From date"
             />
             <input
               type="date"
               value={fEnd}
               onChange={(e) => setFEnd(e.target.value)}
               className="border rounded-lg px-3 py-2 w-full"
-              title="To date"
             />
           </div>
 
-          {/* Type */}
           <select
             value={fType}
             onChange={(e) => setFType(e.target.value)}
@@ -652,7 +726,6 @@ function ReportsView() {
             <option value="investment">Investment</option>
           </select>
 
-          {/* Account */}
           <select
             value={fAccountId}
             onChange={(e) => setFAccountId(e.target.value)}
@@ -667,7 +740,6 @@ function ReportsView() {
             ))}
           </select>
 
-          {/* Category */}
           <select
             value={fCategoryId}
             onChange={(e) => setFCategoryId(e.target.value)}
@@ -682,7 +754,6 @@ function ReportsView() {
             ))}
           </select>
 
-          {/* Currency */}
           <select
             value={fCurrency}
             onChange={(e) => setFCurrency(e.target.value)}
@@ -696,7 +767,6 @@ function ReportsView() {
             ))}
           </select>
 
-          {/* Amount range (major units) */}
           <div className="flex gap-2">
             <input
               type="number"
@@ -717,7 +787,6 @@ function ReportsView() {
           </div>
         </div>
 
-        {/* Reset filters */}
         <div className="mt-2">
           <button
             type="button"
@@ -738,7 +807,7 @@ function ReportsView() {
         </div>
       </div>
 
-      {/* =============================== Totals bar =============================== */}
+      {/* Totals */}
       <div className="p-4">
         <div className="rounded-lg border bg-white p-4">
           <div className="font-semibold mb-2">Totals / Money Flow</div>
@@ -780,7 +849,83 @@ function ReportsView() {
         </div>
       </div>
 
-      {/* =============================== Table list ============================== */}
+      {/* Sankey chart */}
+      <div className="p-4">
+        <div className="rounded-lg border bg-white p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="font-semibold">
+              Cash-Flow (Sankey){sankeyCurrency ? ` · ${sankeyCurrency}` : ""}
+            </div>
+            {!sankeyCurrency && (
+              <div className="text-xs text-gray-600">
+                Pick a single currency to view the flow.
+              </div>
+            )}
+          </div>
+
+          {sankeyCurrency && sankeyData?.links?.length ? (
+            <div ref={sankeyRef} className="h-[560px] bg-white">
+              <ResponsiveSankey
+                data={sankeyData}
+                margin={{ top: 10, right: 140, bottom: 10, left: 10 }}
+                align="justify"
+                nodeOpacity={1}
+                nodeThickness={14}
+                nodeSpacing={16}
+                nodeBorderWidth={1}
+                nodeBorderColor={{
+                  from: "color",
+                  modifiers: [["darker", 0.6]],
+                }}
+                linkOpacity={0.45}
+                linkBlendMode="multiply"
+                linkContract={4}
+                enableLinkGradient
+                colors={{ scheme: "category10" }}
+                label={(n) => n.id}
+                labelTextColor={{ from: "color", modifiers: [["darker", 1.4]] }}
+                tooltip={({ node, link }) => {
+                  if (link) {
+                    return (
+                      <div className="px-2 py-1 text-sm bg-white/95 border rounded shadow">
+                        {link.source.id} → {link.target.id}
+                        <br />
+                        <b>
+                          {link.value.toLocaleString(undefined, {
+                            style: "currency",
+                            currency: sankeyCurrency,
+                          })}
+                        </b>
+                      </div>
+                    );
+                  }
+                  if (node) {
+                    return (
+                      <div className="px-2 py-1 text-sm bg-white/95 border rounded shadow">
+                        <b>{node.id}</b>
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
+                legends={[
+                  {
+                    anchor: "right",
+                    direction: "column",
+                    translateX: 120,
+                    itemWidth: 120,
+                    itemHeight: 16,
+                  },
+                ]}
+              />
+            </div>
+          ) : (
+            <div className="text-gray-600">No flow to display.</div>
+          )}
+        </div>
+      </div>
+
+      {/* Transactions table */}
       <div className="p-4">
         <div className="rounded-lg border bg-white overflow-x-auto">
           <div className="p-4 font-semibold border-b">
@@ -841,6 +986,5 @@ function ReportsView() {
   );
 }
 
-// Export both ways
 export const ReportsPage = React.memo(ReportsView);
 export default ReportsPage;
