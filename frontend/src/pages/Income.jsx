@@ -9,7 +9,7 @@ import React, {
   useCallback,
 } from "react";
 import api from "../lib/api";
-
+import logoUrl from "../assets/nummoria_logo.png";
 /* --------------------------- Income-only categories --------------------------- */
 const INCOME_CATEGORY_OPTIONS = [
   "Salary",
@@ -1491,11 +1491,26 @@ export default function IncomeScreen({ accountId }) {
   /* --------------------------------- Layout -------------------------------- */
   if (loading) {
     return (
-      <div className="grid place-items-center h-[60vh]">
-        <div className="text-center">
-          <div className="animate-pulse text-gray-600">Loading…</div>
-          {err ? <div className="mt-2 text-red-700">{err}</div> : null}
+      <div className="min-h-[60vh] flex flex-col items-center justify-center bg-[#f8faf8] pt-90">
+        {/* Spinner */}
+        <div className="relative w-14 h-14 mb-6">
+          <div className="absolute inset-0 rounded-full border-4 border-[#cfe3c5]" />
+          <div className="absolute inset-0 rounded-full border-4 border-t-[#4f772d] border-transparent animate-spin" />
         </div>
+
+        {/* Logo & text */}
+        <div className="flex items-center gap-2 mb-2">
+          {/* fixed: 'justify-items' -> remove */}
+          <img src={logoUrl} alt="Nummoria logo" className="w-8 h-8 rounded" />
+          <span className="text-2xl font-semibold text-[#4f772d] tracking-tight">
+            Nummoria
+          </span>
+        </div>
+
+        {/* Subtitle */}
+        <p className="text-gray-600 text-sm font-medium animate-pulse">
+          Loading your income data...
+        </p>
       </div>
     );
   }

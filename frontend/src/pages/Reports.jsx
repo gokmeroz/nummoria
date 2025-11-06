@@ -605,8 +605,26 @@ function ReportsView() {
   /* --------------------------------- Render --------------------------------- */
   if (loading) {
     return (
-      <div className="min-h-[60vh] grid place-items-center">
-        <div className="text-gray-600">Loading reports…</div>
+      <div className="min-h-[60vh] flex flex-col items-center justify-center bg-[#f8faf8] pt-90">
+        {/* Spinner */}
+        <div className="relative w-14 h-14 mb-6">
+          <div className="absolute inset-0 rounded-full border-4 border-[#cfe3c5]" />
+          <div className="absolute inset-0 rounded-full border-4 border-t-[#4f772d] border-transparent animate-spin" />
+        </div>
+
+        {/* Logo & text */}
+        <div className="flex items-center gap-2 mb-2">
+          {/* fixed: 'justify-items' -> remove */}
+          <img src={logoUrl} alt="Nummoria logo" className="w-8 h-8 rounded" />
+          <span className="text-2xl font-semibold text-[#4f772d] tracking-tight">
+            Nummoria
+          </span>
+        </div>
+
+        {/* Subtitle */}
+        <p className="text-gray-600 text-sm font-medium animate-pulse">
+          Loading your reports…
+        </p>
       </div>
     );
   }
