@@ -198,10 +198,13 @@ function PlanCard({
               </li>
             ))}
           </ul>
-
           {/* Buy button always bottom aligned with more space */}
           <button
             type="button"
+            onClick={() =>
+              (window.location.href =
+                "subscriptions/purchase?plan=" + title.toLowerCase())
+            } // Add this line
             className="mt-auto mt-10 inline-flex items-center justify-center w-full rounded-full h-10 px-5 text-sm font-semibold text-white transition focus:outline-none focus:ring-2"
             style={{
               background: `linear-gradient(180deg, ${accent}, ${shade(
