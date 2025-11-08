@@ -12,15 +12,12 @@ import mongoose from "mongoose";
 import { parse as parseCSV } from "csv-parse/sync";
 
 import AiAdvisorFile from "../models/AiAdvisorFile.js";
+import { User } from "../models/user.js";
 import { computeMetrics } from "../ai/financialMetrics.js";
 import { parseTransactionsFromText } from "../ai/pdfParser.js";
 
-// If you don't have a prompts file, we keep a minimal system prompt inline
-const systemPrompt = `You are Nummora Financial Helper.
-- Educational only; not licensed financial advice.
-- Keep the user's tonePreference (formal|buddy).
-- Use provided parsedTransactions and computedMetrics as ground truth.
-- Output: 1–2 sentence summary, 3–5 bullets, then a metric snapshot.`;
+// NEW: import prompts (Plus/Premium only)
+import { getPromptForSubscription } from "../ai/prompt/index.js";
 
 // ----------------------------------------------------
 // 2. AGENT CONFIGURATION & INITIALIZATION
@@ -45,8 +42,15 @@ const isDev = process.env.NODE_ENV !== "production";
 
 /**
  * 3. Central function to call the configured LLM.
+ * (Signature changed: accept systemPrompt explicitly)
  */
-async function callLLM(context, tonePreference, message, modelType) {
+async function callLLM(
+  systemPrompt,
+  context,
+  tonePreference,
+  message,
+  modelType
+) {
   // This structured input is passed to the LLM to provide all context
   const input = [
     "SYSTEM:",
@@ -65,12 +69,11 @@ async function callLLM(context, tonePreference, message, modelType) {
         temperature: 0.3,
       },
     });
-    return response.text.trim();
+    return response.text?.trim() || "Sorry, I couldn’t generate a response.";
   } else if (modelType === "openai" && openai) {
     // --- OPENAI AGENT LOGIC ---
-    // Retaining your original call structure, though using the modern chat completions API is generally preferred.
     try {
-      // Attempting to use the non-standard 'responses.create' if it's part of an older or custom SDK fork
+      // Attempt to use the non-standard 'responses.create' if available
       const completion = await openai.responses.create({
         model: OPENAI_MODEL,
         temperature: 0.3,
@@ -102,7 +105,6 @@ async function callLLM(context, tonePreference, message, modelType) {
 
 // Basic month-name map (EN + TR)
 const MONTHS = {
-  // ... (MONTHS array contents remain the same) ...
   january: 1,
   february: 2,
   march: 3,
@@ -136,27 +138,22 @@ const MONTHS = {
 };
 
 function toISO(d) {
-  // ... (toISO function contents remain the same) ...
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
     .toISOString()
     .slice(0, 10);
 }
 
 function startOfMonth(date = new Date()) {
-  // ... (startOfMonth function contents remain the same) ...
   return new Date(date.getFullYear(), date.getMonth(), 1);
 }
 function endOfMonth(date = new Date()) {
-  // ... (endOfMonth function contents remain the same) ...
   return new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
 }
 function addMonths(date, delta) {
-  // ... (addMonths function contents remain the same) ...
   return new Date(date.getFullYear(), date.getMonth() + delta, 1);
 }
 
 function parseDateRangeFromQuery(q) {
-  // ... (parseDateRangeFromQuery function contents remain the same) ...
   if (!q) return null;
   const s = q.toLowerCase();
 
@@ -243,7 +240,6 @@ function parseDateRangeFromQuery(q) {
 }
 
 const CATEGORY_ALIASES = [
-  // ... (CATEGORY_ALIASES array contents remain the same) ...
   { key: "Groceries", re: /(grocery|market|migros|carrefour|a101|bim)/i },
   {
     key: "Dining",
@@ -260,7 +256,6 @@ const CATEGORY_ALIASES = [
 ];
 
 function detectCategoryFromQuery(q) {
-  // ... (detectCategoryFromQuery function contents remain the same) ...
   if (!q) return null;
   for (const { key, re } of CATEGORY_ALIASES) {
     if (re.test(q)) return key;
@@ -272,7 +267,6 @@ function filterTx(
   txs,
   { start = null, end = null, type = null, category = null } = {}
 ) {
-  // ... (filterTx function contents remain the same) ...
   return txs.filter((t) => {
     const d = new Date(t.date);
     if (start && d < start) return false;
@@ -284,12 +278,10 @@ function filterTx(
 }
 
 function sumAmounts(arr) {
-  // ... (sumAmounts function contents remain the same) ...
   return arr.reduce((a, b) => a + Number(b.amount || 0), 0);
 }
 
 function groupByCategory(arr) {
-  // ... (groupByCategory function contents remain the same) ...
   const m = {};
   for (const t of arr) {
     const k = t.category || "Other";
@@ -299,13 +291,11 @@ function groupByCategory(arr) {
 }
 
 function topN(arr, n) {
-  // ... (topN function contents remain the same) ...
   return arr.slice(0, n);
 }
 
 // ---------- HELPERS ----------
 function normalizeAmount(s) {
-  // ... (normalizeAmount function contents remain the same) ...
   if (s == null) return NaN;
   const raw = String(s).replace(/[^0-9.,-]/g, "");
   const neg = raw.includes("-");
@@ -324,7 +314,6 @@ function normalizeAmount(s) {
 }
 
 function csvToTxRows(buf) {
-  // ... (csvToTxRows function contents remain the same) ...
   const text = buf.toString("utf8");
   const rows = parseCSV(text, {
     columns: true,
@@ -412,7 +401,6 @@ function csvToTxRows(buf) {
 }
 
 async function simpleRegexExtract(text) {
-  // ... (simpleRegexExtract function contents remain the same) ...
   const lines = text
     .split(/\r?\n/)
     .map((s) => s.trim())
@@ -448,7 +436,6 @@ async function simpleRegexExtract(text) {
 }
 
 function normalizeDate(s) {
-  // ... (normalizeDate function contents remain the same) ...
   const p = s.replace(/-/g, "/").replace(/\./g, "/").split("/");
   let d, m, y;
   if (p[2]?.length === 4) {
@@ -481,9 +468,7 @@ function normalizeDate(s) {
 }
 
 /* ---------------------- OFFLINE, INTENT-AWARE ANSWERS ---------------------- */
-/* eslint-disable */
 function buildRuleBasedReply(ctx, tone, userMsg) {
-  // ... (buildRuleBasedReply function contents remain the same) ...
   const txs = ctx.parsedTransactions || [];
   const m = ctx.computedMetrics || {};
   const txCount = txs.length;
@@ -773,7 +758,6 @@ ${disclaimer}`;
 
 // ---------- CONTROLLERS ----------
 export async function ingestPdf(req, res) {
-  // ... (ingestPdf function contents remain the same) ...
   try {
     if (!req.file || !req.file.buffer) {
       return res.status(400).json({ error: "No file uploaded" });
@@ -878,6 +862,18 @@ export async function chat(req, res) {
       return res.status(400).json({ error: "Missing message" });
     }
 
+    // Load user's subscription; default to "Plus" if missing/unknown
+    let subscription = "Plus";
+    if (userId) {
+      const user = await User.findById(userId).select("subscription");
+      if (user?.subscription === "Premium" || user?.subscription === "Plus") {
+        subscription = user.subscription;
+      }
+    }
+
+    // Choose the system prompt based on subscription (Plus or Premium)
+    const systemPrompt = getPromptForSubscription(subscription);
+
     // Find latest file (supports dev usage without userId)
     let fileDoc = null;
     if (fileId) fileDoc = await AiAdvisorFile.findById(fileId);
@@ -913,14 +909,20 @@ export async function chat(req, res) {
     // The agent to use is determined by the environment variable ACTIVE_AGENT
     const agentToUse = ACTIVE_AGENT;
 
-    // 5. UPDATE: Call the central LLM function
+    // 5. UPDATE: Call the central LLM function with selected systemPrompt
     try {
-      const reply = await callLLM(context, tonePreference, message, agentToUse);
+      const reply = await callLLM(
+        systemPrompt,
+        context,
+        tonePreference,
+        message,
+        agentToUse
+      );
       return res.json({ reply });
     } catch (e) {
       if (isDev)
         console.warn(
-          `${agentToUse} failed, using fallback:`, // Log which agent failed
+          `${agentToUse} failed, using fallback:`,
           e?.status || e?.code,
           e?.message
         );
@@ -933,7 +935,7 @@ export async function chat(req, res) {
         return res.json({
           reply:
             reply +
-            `\n\n(Dev note: AI call to ${agentToUse} failed; served rule-based reply. Check API Key / network.)`, // Updated dev note
+            `\n\n(Dev note: AI call to ${agentToUse} failed; served rule-based reply. Check API Key / network.)`,
         });
       }
       return res.json({ reply });
