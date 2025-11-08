@@ -62,7 +62,7 @@ export default function PricingPage() {
               "Track Transactions",
               "Get Reports",
               "Basic support",
-              "AI Financial Helper",
+              "More Advance AI Financial Helper",
               "Priority support",
               "Early access to new features",
               "Custom insights",

@@ -34,6 +34,7 @@ const PLANS = {
     name: "Premium",
     features: [
       "Everything in Plus",
+      "More Advance AI Financial Helper",
       "Early access to new features",
       "Custom insights",
       "Data export",
