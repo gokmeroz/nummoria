@@ -6,6 +6,7 @@ import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
 import { User } from "../models/user.js";
 import { requireEnv } from "../config/env.js";
+import { setAuthCookie, clearAuthCookie } from "../utils/cookies.js";
 
 /* ─────────────────────────── Config & Flags ─────────────────────────── */
 
@@ -257,12 +258,19 @@ export async function login(req, res) {
     user.lastLogin = new Date();
     await user.save();
 
-    const token = jwt.sign({ id: user._id, email: user.email }, JWT_SECRET, {
-      expiresIn: "1h",
-    });
+    const token = jwt.sign(
+      { id: user._id, email: user.email, role: user.role || "user" },
+      JWT_SECRET,
+      { expiresIn: "8h" }
+    );
 
+    // ⬇️ Set secure HttpOnly cookie (primary auth mechanism)
+    setAuthCookie(res, token);
+
+    // You may still return the token for backward compatibility if frontend expects it
     return res.json({
-      token,
+      ok: true,
+      // token, // optional: keep if your frontend still relies on it
       user: {
         id: user._id,
         email: user.email,
@@ -275,11 +283,17 @@ export async function login(req, res) {
         lastLogin: user.lastLogin,
         isActive: user.isActive,
         isEmailVerified: user.isEmailVerified,
+        subscription: user.subscription,
       },
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
+}
+
+export async function logout(_req, res) {
+  clearAuthCookie(res);
+  return res.json({ ok: true });
 }
 
 /* ─────────────── Verify email & Resend code endpoints ─────────────── */
@@ -545,12 +559,17 @@ export async function googleCallback(req, res) {
       if (changed) await user.save();
     }
 
-    const token = jwt.sign({ id: user._id, email: user.email }, JWT_SECRET, {
-      expiresIn: "1h",
-    });
+    const token = jwt.sign(
+      { id: user._id, email: user.email, role: user.role || "user" },
+      JWT_SECRET,
+      { expiresIn: "8h" }
+    );
+
+    // ⬇️ Set cookie; keep token in URL for backward compatibility (front-end can ignore)
+    setAuthCookie(res, token);
 
     const next = sanitizeNext(state ? decodeURIComponent(state) : "/");
-    const usp = new URLSearchParams({ provider: "google", token });
+    const usp = new URLSearchParams({ provider: "google" /*, token*/ });
     if (next) usp.set("next", next);
     const redirectTo = `${FRONTEND_URL}/oauth-callback?${usp.toString()}`;
     return res.redirect(redirectTo);
@@ -706,14 +725,19 @@ export async function twitterCallback(req, res) {
       if (changed) await user.save();
     }
 
-    const token = jwt.sign({ id: user._id, email: user.email }, JWT_SECRET, {
-      expiresIn: "1h",
-    });
+    const token = jwt.sign(
+      { id: user._id, email: user.email, role: user.role || "user" },
+      JWT_SECRET,
+      { expiresIn: "8h" }
+    );
 
     res.clearCookie("tw_cv", { path: "/" });
 
+    // ⬇️ Set cookie; keep URL params simple
+    setAuthCookie(res, token);
+
     const next = sanitizeNext(state ? decodeURIComponent(state) : "/");
-    const usp = new URLSearchParams({ provider: "twitter", token });
+    const usp = new URLSearchParams({ provider: "twitter" /*, token*/ });
     if (next) usp.set("next", next);
     const redirectTo = `${FRONTEND_URL}/oauth-callback?${usp.toString()}`;
     return res.redirect(redirectTo);
@@ -854,12 +878,17 @@ export async function githubCallback(req, res) {
       if (changed) await user.save();
     }
 
-    const token = jwt.sign({ id: user._id, email: user.email }, JWT_SECRET, {
-      expiresIn: "1h",
-    });
+    const token = jwt.sign(
+      { id: user._id, email: user.email, role: user.role || "user" },
+      JWT_SECRET,
+      { expiresIn: "8h" }
+    );
+
+    // ⬇️ Set cookie and redirect (no token in URL needed)
+    setAuthCookie(res, token);
 
     const next = sanitizeNext(state ? decodeURIComponent(state) : "/");
-    const qs = new URLSearchParams({ provider: "github", token });
+    const qs = new URLSearchParams({ provider: "github" /*, token*/ });
     if (next) qs.set("next", next);
     const redirectTo = `${FRONTEND_URL}/oauth-callback?${qs.toString()}`;
     return res.redirect(redirectTo);

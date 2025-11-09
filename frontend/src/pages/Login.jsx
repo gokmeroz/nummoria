@@ -23,6 +23,14 @@ export default function Login() {
   const [socialLoading, setSocialLoading] = useState("");
   const [socialErr, setSocialErr] = useState("");
 
+  // ───────────── debug panel ─────────────
+  const [meProbe, setMeProbe] = useState({
+    tried: false,
+    ok: false,
+    body: null,
+  });
+  const [lastSetCookieSeen, setLastSetCookieSeen] = useState(null);
+
   // Absolute API base for redirects
   const API_BASE =
     (api?.defaults?.baseURL || "").replace(/\/+$/, "") ||
@@ -36,7 +44,6 @@ export default function Login() {
   const [verifyErr, setVerifyErr] = useState("");
   const [verifying, setVerifying] = useState(false);
   const [resending, setResending] = useState(false);
-  // const [devCode, setDevCode] = useState(""); // optional for dev
 
   const maskedEmail = useMemo(() => {
     const email = verifyEmail?.trim();
@@ -57,6 +64,22 @@ export default function Login() {
     return () => (document.body.style.overflow = "");
   }, [showVerify]);
 
+  // On mount: quick probe of /me so you can see current auth state
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await api.get("/me", { withCredentials: true });
+        setMeProbe({ tried: true, ok: true, body: data });
+      } catch (e) {
+        setMeProbe({
+          tried: true,
+          ok: false,
+          body: e?.response?.data || { error: e?.message || "Unknown" },
+        });
+      }
+    })();
+  }, []);
+
   // ====================== LOGIN ======================
   async function onLogin(e) {
     e.preventDefault();
@@ -65,40 +88,57 @@ export default function Login() {
     setLoginLoading(true);
 
     try {
-      const { data } = await api.post("/auth/login", {
-        email: loginEmail,
-        password: loginPassword,
-      });
+      // 1) Login (must send credentials)
+      const resp = await api.post(
+        "/auth/login",
+        { email: loginEmail, password: loginPassword },
+        { withCredentials: true }
+      );
 
-      localStorage.setItem("token", data.token);
+      const data = resp?.data || {};
+
+      // 2) (Optional) remember some UI bits
       if (data?.user?.id) {
         localStorage.setItem("defaultId", data.user.id);
         localStorage.setItem("userEmail", data.user.email || "");
         localStorage.setItem("userName", data.user.name || "");
       }
-      location.href = "/";
+      // Only set token if backend returns it
+      if (data?.token) localStorage.setItem("token", data.token);
+
+      // 3) Post-login sanity: cookie should work on /me
+      try {
+        const meResp = await api.get("/me", { withCredentials: true });
+        setMeProbe({ tried: true, ok: true, body: meResp.data });
+        location.href = "/"; // all good
+        return;
+      } catch (meErr) {
+        const body = meErr?.response?.data || {
+          error: meErr?.message || "Unknown",
+        };
+        console.error("Sanity /me failed after login:", body);
+        setMeProbe({ tried: true, ok: false, body });
+        // Still go home so app can try again on mount
+        location.href = "/";
+        return;
+      }
     } catch (e) {
       const status = e.response?.status;
       const body = e.response?.data || {};
       const errMsg = body.error || "Login failed";
 
-      // ⚠️ If account exists but is not verified:
-      // handle both shapes: {reason:'UNVERIFIED'} or {needsVerification:true}
+      // ⚠️ Email not verified yet
       if (
         status === 403 &&
         (body.reason === "UNVERIFIED" || body.needsVerification === true)
       ) {
         const email = (loginEmail || "").trim();
-        setVerifyEmail(email); // prepare resend/enter code
+        setVerifyEmail(email);
         setLoginReason("UNVERIFIED");
-
-        // Prefer maskedEmail if backend provided it
         const message = body.maskedEmail
           ? `Your account isn't verified yet. Check your inbox (${body.maskedEmail}) or resend the code.`
           : "Your account isn't verified yet. Check your inbox or resend the code.";
-
         setLoginErr(message);
-        // 🚫 DO NOT auto-open the modal on login flow
         setLoginLoading(false);
         return;
       }
@@ -115,18 +155,16 @@ export default function Login() {
     setSignErr("");
     setSignLoading(true);
     try {
-      const { data } = await api.post("/auth/register", {
-        name,
-        email: signEmail,
-        password: signPassword,
-      });
+      const { data } = await api.post(
+        "/auth/register",
+        { name, email: signEmail, password: signPassword },
+        { withCredentials: true }
+      );
 
       // After successful registration, open verify modal
       const email = (signEmail || "").trim();
       setVerifyEmail(email);
       localStorage.setItem("pendingVerifyEmail", email);
-
-      // if (data?.devVerificationCode) setDevCode(String(data.devVerificationCode));
       setShowVerify(true);
     } catch (e) {
       setSignErr(e.response?.data?.error || "Registration failed");
@@ -157,25 +195,40 @@ export default function Login() {
     setVerifyMsg("");
     setVerifying(true);
     try {
-      await api.post("/auth/verify-email", {
-        email: verifyEmail,
-        code: code.trim(),
-      });
+      await api.post(
+        "/auth/verify-email",
+        { email: verifyEmail, code: code.trim() },
+        { withCredentials: true }
+      );
       setVerifyMsg("Email verified! Signing you in…");
 
       // Auto-login right after successful verification
-      const { data } = await api.post("/auth/login", {
-        email: verifyEmail,
-        password: signPassword || loginPassword, // covers both flows
-      });
+      const { data } = await api.post(
+        "/auth/login",
+        { email: verifyEmail, password: signPassword || loginPassword },
+        { withCredentials: true }
+      );
 
-      localStorage.setItem("token", data.token);
       if (data?.user?.id) {
         localStorage.setItem("defaultId", data.user.id);
         localStorage.setItem("userEmail", data.user.email || "");
         localStorage.setItem("userName", data.user.name || "");
       }
+      if (data?.token) localStorage.setItem("token", data.token);
+
       localStorage.removeItem("pendingVerifyEmail");
+
+      try {
+        const meResp = await api.get("/me", { withCredentials: true });
+        setMeProbe({ tried: true, ok: true, body: meResp.data });
+      } catch (meErr) {
+        setMeProbe({
+          tried: true,
+          ok: false,
+          body: meErr?.response?.data || { error: meErr?.message || "Unknown" },
+        });
+      }
+
       location.href = "/";
     } catch (e) {
       setVerifyErr(
@@ -193,11 +246,12 @@ export default function Login() {
     setVerifyMsg("");
     setResending(true);
     try {
-      const { data } = await api.post("/auth/resend-code", {
-        email: verifyEmail,
-      });
+      await api.post(
+        "/auth/resend-code",
+        { email: verifyEmail },
+        { withCredentials: true }
+      );
       setVerifyMsg("A new verification code was sent.");
-      // if (data?.devVerificationCode) setDevCode(String(data.devVerificationCode));
     } catch (e) {
       setVerifyErr(e.response?.data?.error || "Could not resend the code.");
     } finally {
@@ -214,6 +268,19 @@ export default function Login() {
         className="absolute inset-0 w-full h-full object-cover -z-10"
       />
       <div className="absolute inset-0 bg-black/50 -z-10" />
+
+      {/* Tiny debug bar (shows /me probe so you can see cookie status fast) */}
+      <div className="fixed top-2 right-2 z-50 text-xs px-2 py-1 rounded bg-white/90 border">
+        <div>API: {API_BASE}</div>
+        <div>
+          /me:{" "}
+          {meProbe.tried
+            ? meProbe.ok
+              ? "✅"
+              : `❌ ${meProbe.body?.error || "unknown"}`
+            : "…"}
+        </div>
+      </div>
 
       {/* Main */}
       <main className="flex-1 flex items-center justify-center p-4">
@@ -477,13 +544,6 @@ export default function Login() {
               We sent a 6-digit code to{" "}
               <span className="font-medium">{maskedEmail}</span>.
             </p>
-
-            {/* {devCode && (
-              <div className="mt-3 text-sm bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2 rounded">
-                <strong>DEV</strong> — demo code:{" "}
-                <span className="font-mono">{devCode}</span>
-              </div>
-            )} */}
 
             <form onSubmit={onVerifySubmit} className="mt-5 space-y-4">
               {verifyErr && (

@@ -10,6 +10,7 @@ import ResetPassword from "./pages/ResetPassword";
 import UserPage from "./pages/User";
 import ErrorPage from "./pages/ErrorPage";
 import ExpensesScreen from "./pages/Expenses";
+import CookieBanner from "./components/CookieBanner";
 import Footer from "./components/Footer";
 import IncomesScreen from "./pages/Income";
 import InvestmentsScreen from "./pages/Investments";
@@ -36,49 +37,61 @@ export default function App() {
   }
 
   const myDefaultUserId = localStorage.getItem("defaultId");
+
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/forgot-password" element={<ForgotPassword />} />
-      <Route path="/reset-password" element={<ResetPassword />} />
-      {/* Protected routes inside Layout */}
-      <Route element={<Guard />}>
-        <Route element={<Layout onLogout={handleLogout} />}>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/user" element={<UserPage />} />
-          <Route
-            path="/expenses"
-            element={<ExpensesScreen accountId={myDefaultUserId} />}
-          />
-          <Route
-            path="/incomes"
-            element={<IncomesScreen accountId={myDefaultUserId} />}
-          />
-          <Route
-            path="/investments"
-            element={<InvestmentsScreen accountId={myDefaultUserId} />}
-          />
-          <Route path="/reports" element={<ReportsPage />}></Route>
-          <Route
-            path="/investments/performance"
-            element={<InvestmentPerformances />}
-          ></Route>
-          <Route path="/support" element={<SupportPage />}></Route>
-          <Route path="/oauth-callback" element={<OAuthCallback />} />
-          <Route path="/ai/financial-helper" element={<FinancialHelper />} />
-          <Route path="/verify-email" element={<VerifyEmail />} />
-          <Route path="/subscriptions" element={<SubscriptionManager />} />
-          <Route path="/subscriptions/purchase" element={<PurchasePage />} />
+    <>
+      <Routes>
+        {/* Public */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/goodbye" element={<Goodbye />} />
+        <Route path="/about-us" element={<About />} />
+        <Route path="/docs" element={<Docs />} />
+        <Route path="/contact" element={<Contact />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/status" element={<Status />} />
+
+        {/* OAuth callback can be public */}
+        <Route path="/oauth-callback" element={<OAuthCallback />} />
+
+        {/* Protected */}
+        <Route element={<Guard />}>
+          <Route element={<Layout onLogout={handleLogout} />}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/user" element={<UserPage />} />
+            <Route
+              path="/expenses"
+              element={<ExpensesScreen accountId={myDefaultUserId} />}
+            />
+            <Route
+              path="/incomes"
+              element={<IncomesScreen accountId={myDefaultUserId} />}
+            />
+            <Route
+              path="/investments"
+              element={<InvestmentsScreen accountId={myDefaultUserId} />}
+            />
+            <Route path="/reports" element={<ReportsPage />} />
+            <Route
+              path="/investments/performance"
+              element={<InvestmentPerformances />}
+            />
+            <Route path="/support" element={<SupportPage />} />
+            <Route path="/ai/financial-helper" element={<FinancialHelper />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route path="/subscriptions" element={<SubscriptionManager />} />
+            <Route path="/subscriptions/purchase" element={<PurchasePage />} />
+          </Route>
         </Route>
-      </Route>
-      <Route path="/goodbye" element={<Goodbye />} />
-      <Route path="*" element={<ErrorPage />} />
-      <Route path="/about-us" element={<About />} />
-      <Route path="/docs" element={<Docs />} />
-      <Route path="/contact" element={<Contact />} />,
-      <Route path="/privacy" element={<Privacy />} />
-      <Route path="/terms" element={<Terms />} />
-      <Route path="/status" element={<Status />} />
-    </Routes>
+
+        {/* 404 */}
+        <Route path="*" element={<ErrorPage />} />
+      </Routes>
+
+      {/* Global cookie banner (renders on every page) */}
+      <CookieBanner />
+    </>
   );
 }

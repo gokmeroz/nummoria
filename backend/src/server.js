@@ -2,6 +2,7 @@
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+import cookieParser from "cookie-parser";
 
 // Load .env BEFORE any other imports use env vars
 const __filename = fileURLToPath(import.meta.url);

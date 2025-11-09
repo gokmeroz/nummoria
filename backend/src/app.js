@@ -17,16 +17,21 @@ import financialHelperRoutes from "./routes/financialHelperRoutes.js";
 import statsRoutes from "./routes/stats.js";
 import contactRoutes from "./routes/contact.js";
 import ingestRoutes from "./routes/ingestRoutes.js";
+import consentRoutes from "./routes/consentRoutes.js";
+import { consentGate } from "./middlewares/consent.js";
+
+const FRONTEND = process.env.FRONTEND_URL || "http://localhost:5173";
 
 const app = express();
 
+// ---- core middlewares ----
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: FRONTEND,
     credentials: true,
   })
 );
@@ -39,6 +44,7 @@ app.use(
 
 app.use(morgan("dev"));
 
+// ---- static files ----
 app.use(
   "/uploads",
   express.static(path.join(process.cwd(), "uploads"), {
@@ -48,23 +54,23 @@ app.use(
   })
 );
 
-// Routes
-app.use("/auth", authRoutes);
-app.use("/me", meRoutes);
-app.use("/accounts", accountRoutes);
-app.use("/categories", categoryRoutes);
-app.use("/transactions", transactionRoutes);
-app.use("/investments", investmentPerformance, marketRouter);
-app.use("/ai/financial-helper", financialHelperRoutes);
-app.use("/stats", statsRoutes);
-app.use("/contact", contactRoutes);
-app.use("/ingest", ingestRoutes);
+// ---- helpers ----
+const noCache = (_req, res, next) => {
+  res.setHeader(
+    "Cache-Control",
+    "no-store, no-cache, must-revalidate, proxy-revalidate"
+  );
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  res.setHeader("Surrogate-Control", "no-store");
+  next();
+};
 
+// ---- public endpoints (no consent required) ----
 app.get("/health", (req, res) =>
   res.json({ status: "ok", timestamp: Date.now() })
 );
 
-// Quick debug endpoint to confirm OpenAI key presence
 app.get("/debug/openai", (req, res) => {
   const k = process.env.OPENAI_API_KEY || "";
   res.json({
@@ -74,7 +80,28 @@ app.get("/debug/openai", (req, res) => {
   });
 });
 
-app.use((err, req, res, next) => {
+// Auth & consent endpoints must stay BEFORE the consent gate
+app.use("/auth", authRoutes);
+app.use("/consent", consentRoutes);
+
+// ---- consent gate applies from here down ----
+app.use(consentGate);
+
+// Apply no-cache specifically to /me so clients never see 304 with empty body
+app.use("/me", noCache, meRoutes);
+
+// Auth-required / consent-gated app routes
+app.use("/accounts", accountRoutes);
+app.use("/categories", categoryRoutes);
+app.use("/transactions", transactionRoutes);
+app.use("/investments", investmentPerformance, marketRouter);
+app.use("/ai/financial-helper", financialHelperRoutes);
+app.use("/stats", statsRoutes);
+app.use("/contact", contactRoutes);
+app.use("/ingest", ingestRoutes);
+
+// ---- error handler ----
+app.use((err, _req, res, _next) => {
   console.error("Unhandled error:", err);
   if (err?.code === "LIMIT_FILE_SIZE") {
     return res.status(413).json({ error: "File too large" });

@@ -6,8 +6,8 @@ const require = createRequire(import.meta.url);
 const pdf = require("pdf-parse"); // CJS import that works in ESM
 
 import OpenAI from "openai";
-// 1. ADD GEMINI SDK IMPORT
-import { GoogleGenAI } from "@google/genai";
+// ✅ Use the official Gemini SDK & call style
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import mongoose from "mongoose";
 import { parse as parseCSV } from "csv-parse/sync";
 
@@ -17,7 +17,7 @@ import { computeMetrics } from "../ai/financialMetrics.js";
 import { parseTransactionsFromText } from "../ai/pdfParser.js";
 
 // NEW: import prompts (Plus/Premium only)
-import { getPromptForSubscription } from "../ai/prompt/index.js";
+import { getPromptForSubscription } from "../ai/prompts/index.js";
 
 // ----------------------------------------------------
 // 2. AGENT CONFIGURATION & INITIALIZATION
@@ -35,14 +35,14 @@ const openai = process.env.OPENAI_API_KEY
 
 // ---------- GEMINI (new agent) ----------
 const gemini = process.env.GEMINI_API_KEY
-  ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
+  ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
   : null;
 
 const isDev = process.env.NODE_ENV !== "production";
 
 /**
  * 3. Central function to call the configured LLM.
- * (Signature changed: accept systemPrompt explicitly)
+ * (Signature: accept systemPrompt explicitly)
  */
 async function callLLM(
   systemPrompt,
@@ -51,7 +51,7 @@ async function callLLM(
   message,
   modelType
 ) {
-  // This structured input is passed to the LLM to provide all context
+  // Structured input for the LLM: keep it simple & deterministic
   const input = [
     "SYSTEM:",
     systemPrompt,
@@ -60,20 +60,25 @@ async function callLLM(
     JSON.stringify({ tonePreference, context, message }, null, 2),
   ].join("\n");
 
+  // --- GEMINI AGENT LOGIC ---
   if (modelType === "gemini" && gemini) {
-    // --- GEMINI AGENT LOGIC ---
-    const response = await gemini.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: input,
-      config: {
-        temperature: 0.3,
-      },
-    });
-    return response.text?.trim() || "Sorry, I couldn’t generate a response.";
-  } else if (modelType === "openai" && openai) {
-    // --- OPENAI AGENT LOGIC ---
+    const model = gemini.getGenerativeModel({ model: GEMINI_MODEL });
+    const response = await model.generateContent(input);
+    // SDK can expose .response.text() or .text(); handle both safely
+    const text =
+      typeof response?.response?.text === "function"
+        ? response.response.text()
+        : typeof response?.text === "function"
+        ? response.text()
+        : "";
+    return (text || "").trim() || "Sorry, I couldn’t generate a response.";
+  }
+
+  // --- OPENAI AGENT LOGIC ---
+  if (modelType === "openai" && openai) {
     try {
-      // Attempt to use the non-standard 'responses.create' if available
+      // Some SDKs expose `responses.create`; try first:
+      // (harmless try; falls back if not present)
       const completion = await openai.responses.create({
         model: OPENAI_MODEL,
         temperature: 0.3,
@@ -96,9 +101,9 @@ async function callLLM(
         "Sorry, I couldn't generate a response."
       );
     }
-  } else {
-    throw new Error(`Agent '${modelType}' not configured or API key missing.`);
   }
+
+  throw new Error(`Agent '${modelType}' not configured or API key missing.`);
 }
 
 /* ------------------------- OFFLINE Q&A HELPERS ------------------------- */
@@ -783,7 +788,6 @@ export async function ingestPdf(req, res) {
             "PDF has no extractable text (likely scanned). Export a text-based PDF or CSV.",
         });
       }
-
       // NOTE: This now checks for EITHER OPENAI_API_KEY OR GEMINI_API_KEY inside pdfParser.js
       parsedTransactions = await parseTransactionsFromText(contentText, {
         useLLMFallback: Boolean(
@@ -812,7 +816,7 @@ export async function ingestPdf(req, res) {
     try {
       if (mongoose.connection.readyState === 1) {
         const doc = await AiAdvisorFile.create({
-          userId: req.user?._id || req.body.userId || null,
+          userId: req.user?._id || req.userId || req.body.userId || null,
           fileName: req.file.originalname,
           contentText: undefined, // skip storing large text
           parsedTransactions,
@@ -856,7 +860,8 @@ export async function ingestPdf(req, res) {
 
 export async function chat(req, res) {
   try {
-    const userId = req.user?._id || req.body.userId || null;
+    // ✅ also check req.userId set by auth middleware
+    const userId = req.user?._id || req.userId || req.body.userId || null;
     const { message, tonePreference, fileId } = req.body;
     if (!message && !tonePreference) {
       return res.status(400).json({ error: "Missing message" });
