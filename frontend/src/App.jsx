@@ -29,6 +29,7 @@ import Status from "./pages/Status";
 import VerifyEmail from "./pages/VerifyEmail";
 import SubscriptionManager from "./pages/SubscriptionManager";
 import PurchasePage from "./pages/PurchasePage";
+import WelcomeLanding from "./pages/WelcomeLanding";
 
 export default function App() {
   function handleLogout() {
@@ -42,6 +43,7 @@ export default function App() {
     <>
       <Routes>
         {/* Public */}
+        <Route path="/" element={<WelcomeLanding />} />
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />

@@ -269,19 +269,6 @@ export default function Login() {
       />
       <div className="absolute inset-0 bg-black/50 -z-10" />
 
-      {/* Tiny debug bar (shows /me probe so you can see cookie status fast) */}
-      <div className="fixed top-2 right-2 z-50 text-xs px-2 py-1 rounded bg-white/90 border">
-        <div>API: {API_BASE}</div>
-        <div>
-          /me:{" "}
-          {meProbe.tried
-            ? meProbe.ok
-              ? "✅"
-              : `❌ ${meProbe.body?.error || "unknown"}`
-            : "…"}
-        </div>
-      </div>
-
       {/* Main */}
       <main className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-5xl bg-white rounded-2xl shadow-xl overflow-hidden grid grid-cols-1 md:grid-cols-2">
