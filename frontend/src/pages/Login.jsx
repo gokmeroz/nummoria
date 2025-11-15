@@ -110,7 +110,7 @@ export default function Login() {
       try {
         const meResp = await api.get("/me", { withCredentials: true });
         setMeProbe({ tried: true, ok: true, body: meResp.data });
-        location.href = "/"; // all good
+        location.href = "/dashboard"; // all good
         return;
       } catch (meErr) {
         const body = meErr?.response?.data || {
@@ -119,7 +119,7 @@ export default function Login() {
         console.error("Sanity /me failed after login:", body);
         setMeProbe({ tried: true, ok: false, body });
         // Still go home so app can try again on mount
-        location.href = "/";
+        location.href = "/dashboard";
         return;
       }
     } catch (e) {
@@ -178,7 +178,7 @@ export default function Login() {
     try {
       setSocialErr("");
       setSocialLoading(provider);
-      const next = encodeURIComponent(`${window.location.origin}/`);
+      const next = encodeURIComponent(`${window.location.origin}/dashboard`);
       const url = `${API_BASE}/auth/${provider}?next=${next}`;
       window.location.href = url;
     } catch (err) {
@@ -229,7 +229,7 @@ export default function Login() {
         });
       }
 
-      location.href = "/";
+      location.href = "/dashboard";
     } catch (e) {
       setVerifyErr(
         e.response?.data?.error ||
@@ -367,7 +367,7 @@ export default function Login() {
                     setSocialLoading(true);
                     const apiUrl =
                       import.meta.env.VITE_API_URL || "http://localhost:4000";
-                    window.location.href = `${apiUrl}/auth/google?next=/`;
+                    window.location.href = `${apiUrl}/auth/google?next=/dashboard`;
                   }}
                 >
                   {/* Google G */}

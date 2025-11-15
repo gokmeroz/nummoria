@@ -61,7 +61,7 @@ export default function App() {
         {/* Protected */}
         <Route element={<Guard />}>
           <Route element={<Layout onLogout={handleLogout} />}>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/user" element={<UserPage />} />
             <Route
               path="/expenses"

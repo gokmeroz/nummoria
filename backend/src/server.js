@@ -21,26 +21,27 @@ if (!process.env.JWT_SECRET) {
   process.exit(1);
 }
 
-(() => {
-  const openAIMask = process.env.OPENAI_API_KEY
-    ? `${process.env.OPENAI_API_KEY.slice(
-        0,
-        7
-      )}…${process.env.OPENAI_API_KEY.slice(-4)}`
-    : "(missing)";
-  const geminiMask = process.env.GEMINI_API_KEY
-    ? `${process.env.GEMINI_API_KEY.slice(
-        0,
-        7
-      )}…${process.env.GEMINI_API_KEY.slice(-4)}`
-    : "(missing)";
-  console.log(`[env] NODE_ENV=${process.env.NODE_ENV || "undefined"}`);
-  console.log(`[env] OPENAI_API_KEY=${openAIMask}`);
-  console.log(`[env] GEMINI_API_KEY=${geminiMask}`);
-  console.log(
-    `[env] ACTIVE_AGENT=${process.env.FINANCIAL_HELPER_AGENT || "(undefined)"}`
-  );
-})();
+// (() => {
+//   const openAIMask = process.env.OPENAI_API_KEY
+//     ? `${process.env.OPENAI_API_KEY.slice(
+//         0,
+//         7
+//       )}…${process.env.OPENAI_API_KEY.slice(-4)}`
+//     : "(missing)";
+//   const geminiMask = process.env.GEMINI_API_KEY
+//     ? `${process.env.GEMINI_API_KEY.slice(
+//         0,
+//         7
+//       )}…${process.env.GEMINI_API_KEY.slice(-4)}`
+//     : "(missing)";
+//   console.log(`[env] NODE_ENV=${process.env.NODE_ENV || "undefined"}`);
+//   console.log(`[env] OPENAI_API_KEY=${openAIMask}`);
+//   console.log(`[env] GEMINI_API_KEY=${geminiMask}`);
+//   console.log(
+//     `[env] ACTIVE_AGENT=${process.env.FINANCIAL_HELPER_AGENT || "(undefined)"}`
+//   );
+
+// })();
 
 await connectDB();
 app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
