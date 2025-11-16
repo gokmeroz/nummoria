@@ -93,10 +93,6 @@ export default function WelcomeLanding() {
 
           {/* Auth Buttons */}
           <div className="flex items-center gap-4">
-            {/* <a
-              href="/signup"
-              className="rounded-2xl border border-white/40 px-6 py-3 text-lg font-semibold text-white/90 hover:border-white/70 hover:bg-white/10 backdrop-blur-md transition-all"
-            ></a> */}
             <a
               href="/login"
               className="rounded-2xl border border-white/30 px-6 py-3 text-lg text-white/80 hover:border-white/60 hover:bg-white/10 backdrop-blur-md transition-all"
@@ -144,21 +140,138 @@ export default function WelcomeLanding() {
             </ul>
           </div>
 
+          {/* RIGHT: mobile app mock */}
           <div data-reveal="right" className="relative reveal">
-            <div className="relative mx-auto w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-white/5 p-3 shadow-2xl">
-              <div className="aspect-[9/19] w-full overflow-hidden rounded-2xl bg-black/70">
-                <div className="flex h-full flex-col">
-                  <div className="h-10 w-full bg-gradient-to-r from-emerald-500/30 to-transparent" />
-                  <div className="flex-1 space-y-3 p-4">
-                    <div className="h-3 w-24 rounded bg-white/10" />
-                    <div className="h-4 w-40 rounded bg-white/10" />
-                    <div className="h-24 w-full rounded-xl bg-white/5" />
-                    <div className="h-24 w-full rounded-xl bg-white/5" />
-                    <div className="h-24 w-full rounded-xl bg-white/5" />
+            <div className="relative mx-auto w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-white/5 p-4 shadow-2xl">
+              <div className="mx-auto aspect-[9/19] w-full max-w-[280px] rounded-[28px] bg-[#050908] text-[11px] text-white/80 shadow-[0_0_40px_rgba(16,185,129,0.25)]">
+                {/* status bar */}
+                <div className="flex items-center justify-between px-4 pt-3 pb-2 text-[9px] text-white/40">
+                  <span>9:41</span>
+                  <div className="flex items-center gap-1">
+                    <span className="h-1.5 w-3 rounded-full bg-emerald-500/70" />
+                    <span className="h-1.5 w-3 rounded-full bg-white/30" />
+                    <span className="h-1.5 w-3 rounded-full bg-white/30" />
+                  </div>
+                </div>
+
+                {/* header */}
+                <div className="flex items-center justify-between px-4 pb-3">
+                  <div className="flex items-center gap-2">
+                    <img
+                      src={logoUrl}
+                      alt="Nummoria"
+                      className="h-5 w-5 rounded-lg"
+                    />
+                    <div className="leading-tight">
+                      <div className="text-[10px] text-white/50">Today</div>
+                      <div className="text-xs font-semibold text-white">
+                        Nummoria
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 rounded-full bg-white/5 px-2 py-1 text-[9px]">
+                    <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                    <span className="text-white/60">On track</span>
+                  </div>
+                </div>
+
+                {/* balance card */}
+                <div className="px-4">
+                  <div className="rounded-2xl bg-gradient-to-br from-emerald-500/70 to-emerald-400/60 p-3 text-[10px] text-emerald-950 shadow-lg shadow-emerald-500/40">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] font-medium uppercase tracking-wide">
+                        Net worth
+                      </span>
+                      <span className="rounded-full bg-emerald-100/70 px-2 py-[2px] text-[9px] font-semibold">
+                        +$482 this month
+                      </span>
+                    </div>
+                    <div className="mt-1 text-xl font-extrabold tracking-tight">
+                      $12,840
+                    </div>
+                    <div className="mt-2 flex items-center justify-between text-[9px] text-emerald-950/80">
+                      <span>Income $3,200</span>
+                      <span>Expenses $2,718</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* accounts row */}
+                <div className="mt-3 flex gap-2 px-4">
+                  <div className="flex-1 rounded-2xl bg-white/5 p-2">
+                    <div className="text-[9px] text-white/40">Checking</div>
+                    <div className="text-sm font-semibold">$2,430</div>
+                    <div className="mt-1 h-1.5 w-full rounded-full bg-white/10">
+                      <div className="h-1.5 w-3/5 rounded-full bg-emerald-400" />
+                    </div>
+                  </div>
+                  <div className="flex-1 rounded-2xl bg-white/5 p-2">
+                    <div className="text-[9px] text-white/40">Investments</div>
+                    <div className="text-sm font-semibold">$8,920</div>
+                    <div className="mt-1 h-1.5 w-full rounded-full bg-white/10">
+                      <div className="h-1.5 w-4/5 rounded-full bg-emerald-300" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* expenses vs income chips */}
+                <div className="mt-3 flex gap-2 px-4">
+                  <div className="flex-1 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-2 py-2">
+                    <div className="flex items-center justify-between text-[9px] text-emerald-200">
+                      <span>Expenses</span>
+                      <span>- $910</span>
+                    </div>
+                    <div className="mt-1 h-[5px] w-full rounded-full bg-white/5">
+                      <div className="h-[5px] w-4/5 rounded-full bg-emerald-400" />
+                    </div>
+                  </div>
+                  <div className="flex-1 rounded-2xl bg-white/5 px-2 py-2">
+                    <div className="flex items-center justify-between text-[9px] text-white/60">
+                      <span>Income</span>
+                      <span>$1,340</span>
+                    </div>
+                    <div className="mt-1 grid grid-cols-3 gap-[3px]">
+                      <span className="h-[6px] rounded bg-emerald-400/70" />
+                      <span className="h-[6px] rounded bg-emerald-300/70" />
+                      <span className="h-[6px] rounded bg-emerald-200/60" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* transactions list */}
+                <div className="mt-3 px-4 pb-4">
+                  <div className="mb-1 flex items-center justify-between text-[9px] text-white/45">
+                    <span>Today&apos;s activity</span>
+                    <span>View all</span>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    {[
+                      { label: "Groceries · Migros", amount: "-$42.30" },
+                      { label: "Salary · Halkbank", amount: "+$820.00" },
+                      { label: "Invest · S&P 500", amount: "-$120.00" },
+                    ].map((t) => (
+                      <div
+                        key={t.label}
+                        className="flex items-center justify-between rounded-2xl bg-white/5 px-2.5 py-1.5"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="h-6 w-6 rounded-full bg-emerald-500/20" />
+                          <span className="text-[9px] text-white/75">
+                            {t.label}
+                          </span>
+                        </div>
+                        <span className="text-[9px] font-semibold text-white">
+                          {t.amount}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
             </div>
+
+            {/* glow */}
             <div className="absolute -left-8 -top-6 -z-10 h-40 w-40 rounded-full bg-emerald-500/20 blur-2xl" />
           </div>
         </div>
@@ -398,8 +511,11 @@ function PlayBadge() {
   );
 }
 
-// FeatureRow component (plain React) with anchor id
+// FeatureRow component with custom mocks
 function FeatureRow({ id, flip = false, eyebrow, title, desc, bullets }) {
+  const isAccounts = id === "features";
+  const isInvestments = id === "investments";
+
   return (
     <section id={id} className="mx-auto max-w-6xl px-4 py-16">
       <div
@@ -425,13 +541,144 @@ function FeatureRow({ id, flip = false, eyebrow, title, desc, bullets }) {
         </div>
 
         <div data-reveal={flip ? "left" : "right"} className="reveal relative">
-          <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 p-3 shadow-2xl">
-            <div className="aspect-video w-full rounded-2xl bg-gradient-to-br from-emerald-400/10 to-white/0" />
+          <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#050908] p-4 shadow-2xl">
+            {isAccounts ? (
+              <AccountsMock />
+            ) : isInvestments ? (
+              <InvestmentsMock />
+            ) : (
+              <div className="aspect-video w-full rounded-2xl bg-gradient-to-br from-emerald-400/10 to-white/0" />
+            )}
           </div>
           <div className="absolute -right-6 -top-6 -z-10 h-40 w-40 rounded-full bg-emerald-500/20 blur-2xl" />
         </div>
       </div>
     </section>
+  );
+}
+
+// Accounts illustration
+function AccountsMock() {
+  return (
+    <div className="space-y-4 text-xs text-white/75">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px] uppercase tracking-wide text-emerald-300/80">
+          Accounts overview
+        </span>
+        <span className="rounded-full bg-emerald-500/15 px-2 py-[2px] text-[10px] text-emerald-200">
+          +$320 today
+        </span>
+      </div>
+
+      <div className="rounded-2xl bg-white/5 p-3">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] text-white/60">Total balance</span>
+          <span className="text-[10px] text-emerald-300">Multi-currency</span>
+        </div>
+        <div className="mt-1 text-2xl font-bold">$12,840</div>
+        <div className="mt-3 h-1.5 w-full rounded-full bg-white/5">
+          <div className="h-1.5 w-[68%] rounded-full bg-emerald-400" />
+        </div>
+        <div className="mt-2 flex justify-between text-[10px] text-white/55">
+          <span>TRY ₺24,300</span>
+          <span>USD $3,420</span>
+          <span>EUR €910</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          { name: "Checking", amt: "$2,430", fill: "w-[60%]" },
+          { name: "Savings", amt: "$4,280", fill: "w-[82%]" },
+          { name: "Cash", amt: "$540", fill: "w-[30%]" },
+        ].map((a) => (
+          <div key={a.name} className="rounded-xl bg-white/4 p-2">
+            <div className="text-[10px] text-white/55">{a.name}</div>
+            <div className="text-sm font-semibold">{a.amt}</div>
+            <div className="mt-1 h-1 w-full rounded-full bg-white/10">
+              <div className={`h-1 rounded-full bg-emerald-300 ${a.fill}`} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Investments illustration
+function InvestmentsMock() {
+  return (
+    <div className="flex gap-4 text-xs text-white/75">
+      {/* donut-ish allocation */}
+      <div className="flex flex-col items-center justify-center">
+        <div className="relative h-28 w-28">
+          <div className="absolute inset-0 rounded-full bg-white/5" />
+          <div className="absolute inset-[4px] rounded-full border-[6px] border-emerald-400/80 border-t-emerald-300/40 border-r-emerald-500/80 border-b-emerald-700/70" />
+          <div className="absolute inset-[18px] rounded-full bg-[#050908]" />
+          <div className="absolute inset-[20px] flex flex-col items-center justify-center">
+            <span className="text-[9px] text-white/50">Portfolio</span>
+            <span className="text-sm font-semibold">$8,920</span>
+          </div>
+        </div>
+        <span className="mt-2 text-[10px] text-white/55">+7.4% this month</span>
+      </div>
+
+      {/* positions list */}
+      <div className="flex-1 space-y-2">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[10px] uppercase tracking-wide text-emerald-300/80">
+            Holdings
+          </span>
+          <span className="text-[10px] text-white/50">Today</span>
+        </div>
+
+        {[
+          {
+            name: "S&P 500 ETF",
+            pct: "42%",
+            pl: "+$210",
+            bar: "w-[70%]",
+          },
+          {
+            name: "BTC",
+            pct: "31%",
+            pl: "+$95",
+            bar: "w-[52%]",
+          },
+          {
+            name: "AVAX",
+            pct: "12%",
+            pl: "-$24",
+            bar: "w-[28%]",
+          },
+        ].map((p) => (
+          <div
+            key={p.name}
+            className="rounded-2xl bg-white/5 px-3 py-2 flex flex-col gap-1"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px]">{p.name}</span>
+              <span className="text-[10px] text-white/55">{p.pct}</span>
+            </div>
+            <div className="h-1.5 w-full rounded-full bg-white/8">
+              <div
+                className={`h-1.5 rounded-full bg-gradient-to-r from-emerald-300 via-emerald-400 to-emerald-500 ${p.bar}`}
+              />
+            </div>
+            <div className="flex items-center justify-between text-[10px] text-white/55">
+              <span>Cost basis aligned</span>
+              <span
+                className={
+                  p.pl.startsWith("-") ? "text-red-300" : "text-emerald-300"
+                }
+              >
+                {p.pl}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
