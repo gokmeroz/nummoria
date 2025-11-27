@@ -56,6 +56,9 @@ export default function WelcomeLanding() {
             >
               Features
             </a>
+            <a href="#why" className="hover:text-emerald-300 transition-colors">
+              Why Nummoria?
+            </a>
             <a
               href="#pricing"
               className="hover:text-emerald-300 transition-colors"
@@ -102,7 +105,6 @@ export default function WelcomeLanding() {
           </div>
         </div>
       </header>
-
       {/* HERO */}
       <section id="top" className="relative isolate overflow-hidden">
         <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60%_40%_at_50%_-10%,rgba(79,119,45,0.35),transparent_60%)]" />
@@ -276,7 +278,6 @@ export default function WelcomeLanding() {
           </div>
         </div>
       </section>
-
       {/* FEATURE ROWS */}
       <FeatureRow
         id="features"
@@ -303,7 +304,101 @@ export default function WelcomeLanding() {
           "CSV import",
         ]}
       />
+      {/* WHY NUMMORIA */}
+      <section id="why" className="mx-auto max-w-6xl px-6 py-20 text-white/80">
+        <div data-reveal="up" className="reveal text-center mb-16">
+          <h2 className="text-3xl md:text-5xl font-extrabold tracking-tight mb-6">
+            Why Nummoria?
+          </h2>
 
+          {/* Short, punchy intro */}
+          <p className="mt-3 max-w-2xl mx-auto text-sm md:text-base text-white/70">
+            Managing your money should feel clear, confident and powerful.
+            Nummoria gives you a financial lens that shows what is real and what
+            matters so you can make decisions with certainty.
+          </p>
+
+          {/* Flashcards */}
+          <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+            <div className="rounded-3xl bg-white/5 border border-white/10 p-6 text-left backdrop-blur-sm hover:bg-white/10 transition">
+              <div className="text-emerald-300 text-xl mb-3">💡</div>
+              <h3 className="text-lg font-semibold mb-2 text-white">
+                Clarity that feels effortless
+              </h3>
+              <p className="text-white/70 text-sm">
+                See all accounts, spending and investments in one clean, honest
+                dashboard. No clutter. No confusion. Just your real financial
+                picture.
+              </p>
+            </div>
+
+            <div className="rounded-3xl bg-white/5 border border-white/10 p-6 text-left backdrop-blur-sm hover:bg-white/10 transition">
+              <div className="text-emerald-300 text-xl mb-3">🤖</div>
+              <h3 className="text-lg font-semibold mb-2 text-white">
+                AI that understands you
+              </h3>
+              <p className="text-white/70 text-sm">
+                The AI Financial Helper studies your habits, goals and spending
+                rhythm and answers with advice shaped for you. It feels like
+                speaking to a private wealth mentor.
+              </p>
+            </div>
+
+            <div className="rounded-3xl bg-white/5 border border-white/10 p-6 text-left backdrop-blur-sm hover:bg-white/10 transition">
+              <div className="text-emerald-300 text-xl mb-3">🚀</div>
+              <h3 className="text-lg font-semibold mb-2 text-white">
+                Built for real progress
+              </h3>
+              <p className="text-white/70 text-sm">
+                Nummoria removes noise, shows opportunities and gives you the
+                clarity usually reserved for elite wealth managers so every step
+                you take is intentional.
+              </p>
+            </div>
+          </div>
+
+          {/* Final premium tagline */}
+          <p className="mt-12 max-w-2xl mx-auto text-sm md:text-base text-white/70 font-medium">
+            If you want to build your financial life with purpose and precision,
+            Nummoria is not a tool. It is your advantage.
+          </p>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-3">
+          <div className="reveal rounded-3xl border border-white/10 bg-white/5 p-6 text-left">
+            <div className="text-xs font-semibold uppercase tracking-wider text-emerald-400 mb-2">
+              Engineered by practitioners
+            </div>
+            <p className="text-sm text-white/75">
+              Designed by active investors and operators, Nummoria embodies real
+              portfolio thinking — multi-asset awareness, tax-aware views, and
+              practical workflows. It’s productized experience, not theory.
+            </p>
+          </div>
+
+          <div className="reveal rounded-3xl border border-white/10 bg-white/5 p-6 text-left">
+            <div className="text-xs font-semibold uppercase tracking-wider text-emerald-400 mb-2">
+              Unified financial intelligence
+            </div>
+            <p className="text-sm text-white/75">
+              Replace scattered apps and spreadsheets with one coherent ledger.
+              Accounts, investments, goals, and rules live together so insights
+              are contextual, decisions are faster, and risk is visible.
+            </p>
+          </div>
+
+          <div className="reveal rounded-3xl border border-white/10 bg-white/5 p-6 text-left">
+            <div className="text-xs font-semibold uppercase tracking-wider text-emerald-400 mb-2">
+              Contextual AI counsel
+            </div>
+            <p className="text-sm text-white/75">
+              A privacy-first AI that reads your numbers and explains tradeoffs.
+              Not generic advice — prioritized actions, scenario simulations,
+              and plain-language rationales tailored to your finances.
+            </p>
+          </div>
+        </div>
+      </section>
       {/* PRICING */}
       <section id="pricing" className="mx-auto max-w-6xl px-6 py-20">
         <header className="text-center mb-10">
@@ -367,7 +462,6 @@ export default function WelcomeLanding() {
           />
         </div>
       </section>
-
       {/* ABOUT (anchor target) */}
       <section
         id="about"
@@ -376,7 +470,6 @@ export default function WelcomeLanding() {
         <h3 className="text-2xl font-bold mb-2">About</h3>
         <p>Built for clarity, speed, and long-term use.</p>
       </section>
-
       {/* MARQUEE */}
       <section className="my-20 border-y border-white/10 py-8">
         <div className="animate-marquee flex gap-8 whitespace-nowrap px-4 text-white/60 [animation-duration:14s]">
@@ -387,7 +480,6 @@ export default function WelcomeLanding() {
           ))}
         </div>
       </section>
-
       {/* CTA / CONTACT (anchor target) */}
       <section id="contact" className="mx-auto max-w-6xl px-4 py-16">
         <div
@@ -418,7 +510,6 @@ export default function WelcomeLanding() {
           </div>
         </div>
       </section>
-
       {/* FOOTER */}
       <footer className="mx-auto mt-10 max-w-6xl px-4 pb-16 text-xs text-white/60">
         <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-6">
@@ -436,7 +527,6 @@ export default function WelcomeLanding() {
           </nav>
         </div>
       </footer>
-
       {/* Styles for reveal + marquee */}
       <style>{`
         .reveal {opacity: 0; transform: translateY(16px); transition: opacity .6s ease, transform .6s ease;}
