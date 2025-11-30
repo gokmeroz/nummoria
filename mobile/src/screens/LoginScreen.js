@@ -1,5 +1,5 @@
 // mobile/src/screens/LoginScreen.js
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -7,17 +7,19 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Modal,
-  ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
+  Alert,
   Image,
+  Linking,
+  Modal,
 } from "react-native";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import SignUpScreen from "./SignUpScreen"; // local toggle
+import DashboardScreen from "./DashboardScreen"; // ⬅️ NEW
 
-// Adjust this to your backend
 const API_BASE =
   process.env.EXPO_PUBLIC_API_URL?.replace(/\/+$/, "") ||
   "http://localhost:4000";
@@ -27,33 +29,24 @@ const api = axios.create({
   withCredentials: true,
 });
 
+const BG_DARK = "#020617";
+const CARD_DARK = "#020819";
+const BRAND_GREEN = "#22c55e";
+const TEXT_MUTED = "rgba(148,163,184,1)";
+const TEXT_SOFT = "rgba(148,163,184,0.8)";
+
 export default function LoginScreen({ navigation }) {
-  // ───────────── login state ─────────────
+  const [mode, setMode] = useState("login"); // "login" | "signup"
+
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginErr, setLoginErr] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginReason, setLoginReason] = useState("");
 
-  // ───────────── signup state (for later) ────────────
-  const [name, setName] = useState("");
-  const [signEmail, setSignEmail] = useState("");
-  const [signPassword, setSignPassword] = useState("");
-  const [signErr, setSignErr] = useState("");
-  const [signLoading, setSignLoading] = useState(false);
-
-  // ───────────── social state ────────────
-  const [socialLoading, setSocialLoading] = useState("");
+  const [socialLoading, setSocialLoading] = useState(false);
   const [socialErr, setSocialErr] = useState("");
 
-  // ───────────── /me probe (debug) ───────
-  const [meProbe, setMeProbe] = useState({
-    tried: false,
-    ok: false,
-    body: null,
-  });
-
-  // =============== email verification modal state ===============
   const [showVerify, setShowVerify] = useState(false);
   const [verifyEmail, setVerifyEmail] = useState("");
   const [code, setCode] = useState("");
@@ -74,21 +67,6 @@ export default function LoginScreen({ navigation }) {
     return `${maskU}@${d}`;
   }, [verifyEmail]);
 
-  // On mount: quick probe of /me
-  useEffect(() => {
-    (async () => {
-      try {
-        const { data } = await api.get("/me");
-        setMeProbe({ tried: true, ok: true, body: data });
-        console.log("Mobile /me ok:", data);
-      } catch (e) {
-        const body = e?.response?.data || { error: e?.message || "Unknown" };
-        setMeProbe({ tried: true, ok: false, body });
-        console.log("Mobile /me failed:", body);
-      }
-    })();
-  }, []);
-
   async function storeUser(data) {
     try {
       if (data?.user?.id) {
@@ -105,44 +83,45 @@ export default function LoginScreen({ navigation }) {
   }
 
   function goToDashboard() {
-    if (navigation && navigation.replace) {
-      navigation.replace("Dashboard");
-    } else {
-      Alert.alert("Success", "Logged in successfully.");
-    }
+    //Alert.alert("Success", "Logged in successfully!");
+    // navigation?.replace?.("Dashboard");
+    setMode("dashboard");
   }
 
-  // ====================== LOGIN ======================
   async function onLogin() {
-    setLoginErr("");
-    setLoginReason("");
-    setLoginLoading(true);
-
     try {
-      const resp = await api.post("/auth/login", {
-        email: loginEmail,
-        password: loginPassword,
-      });
-      const data = resp?.data || {};
+      setLoginErr("");
+      setLoginReason("");
 
-      await storeUser(data);
-
-      try {
-        const meResp = await api.get("/me");
-        setMeProbe({ tried: true, ok: true, body: meResp.data });
-      } catch (meErr) {
-        const body = meErr?.response?.data || {
-          error: meErr?.message || "Unknown",
-        };
-        console.log("Sanity /me failed after login:", body);
-        setMeProbe({ tried: true, ok: false, body });
+      if (!loginEmail || !loginEmail.trim()) {
+        setLoginErr("Please enter your email address.");
+        return;
       }
 
+      if (!loginPassword || !loginPassword.trim()) {
+        setLoginErr("Please enter your password.");
+        return;
+      }
+
+      setLoginLoading(true);
+
+      const resp = await api.post("/auth/login", {
+        email: loginEmail.trim(),
+        password: loginPassword,
+      });
+
+      const data = resp?.data || {};
+      await storeUser(data);
+
+      setLoginLoading(false);
       goToDashboard();
     } catch (e) {
-      const status = e.response?.status;
-      const body = e.response?.data || {};
-      const errMsg = body.error || "Login failed";
+      setLoginLoading(false);
+
+      const status = e?.response?.status;
+      const body = e?.response?.data || {};
+      const errMsg =
+        body.error || e.message || "Login failed. Please try again.";
 
       if (
         status === 403 &&
@@ -155,122 +134,102 @@ export default function LoginScreen({ navigation }) {
           ? `Your account is not verified yet. Check your inbox (${body.maskedEmail}) or resend the code.`
           : "Your account is not verified yet. Check your inbox or resend the code.";
         setLoginErr(message);
-        setLoginLoading(false);
         setShowVerify(true);
-        return;
+      } else {
+        setLoginErr(errMsg);
       }
-
-      setLoginErr(errMsg);
-    } finally {
-      setLoginLoading(false);
     }
   }
 
-  // ====================== SIGNUP (placeholder) ======================
-  async function onSignup() {
-    setSignErr("");
-    setSignLoading(true);
-    try {
-      await api.post("/auth/register", {
-        name,
-        email: signEmail,
-        password: signPassword,
-      });
-
-      const email = (signEmail || "").trim();
-      setVerifyEmail(email);
-      await AsyncStorage.setItem("pendingVerifyEmail", email);
-      setShowVerify(true);
-    } catch (e) {
-      setSignErr(e.response?.data?.error || "Registration failed");
-    } finally {
-      setSignLoading(false);
-    }
-  }
-
-  // ====================== SOCIAL ======================
   async function startSocial(provider) {
     try {
       setSocialErr("");
-      setSocialLoading(provider);
+      setSocialLoading(true);
       const next = encodeURIComponent("/dashboard");
       const url = `${API_BASE}/auth/${provider}?next=${next}`;
-      Alert.alert(
-        "Social sign-in",
-        `Open this in a browser:\n\n${url}`,
-        [{ text: "OK" }],
-        { cancelable: true }
-      );
-      setSocialLoading("");
+      const canOpen = await Linking.canOpenURL(url);
+
+      if (canOpen) {
+        await Linking.openURL(url);
+      } else {
+        setSocialErr("Cannot open browser. Please try again.");
+        setSocialLoading(false);
+      }
     } catch (err) {
-      setSocialErr(
-        `Could not start social sign in. Please try again. ${String(err)}`
-      );
-      setSocialLoading("");
+      setSocialErr(`Could not start social sign in. ${String(err)}`);
+      setSocialLoading(false);
     }
   }
 
-  // =================== VERIFY HANDLERS ===================
   async function onVerifySubmit() {
-    if (!verifyEmail) return;
-    setVerifyErr("");
-    setVerifyMsg("");
-    setVerifying(true);
     try {
+      if (!verifyEmail || !verifyEmail.trim()) {
+        setVerifyErr("Email is missing.");
+        return;
+      }
+
+      if (!code || !code.trim()) {
+        setVerifyErr("Please enter the verification code.");
+        return;
+      }
+
+      setVerifyErr("");
+      setVerifyMsg("");
+      setVerifying(true);
+
       await api.post("/auth/verify-email", {
         email: verifyEmail,
         code: code.trim(),
       });
 
-      setVerifyMsg("Email verified. Signing you in.");
+      setVerifyMsg("Email verified. Signing you in...");
 
       const { data } = await api.post("/auth/login", {
         email: verifyEmail,
-        password: signPassword || loginPassword,
+        password: loginPassword,
       });
 
       await storeUser(data);
       await AsyncStorage.removeItem("pendingVerifyEmail");
 
-      try {
-        const meResp = await api.get("/me");
-        setMeProbe({ tried: true, ok: true, body: meResp.data });
-      } catch (meErr) {
-        setMeProbe({
-          tried: true,
-          ok: false,
-          body: meErr?.response?.data || { error: meErr?.message || "Unknown" },
-        });
-      }
-
+      setVerifying(false);
       setShowVerify(false);
       goToDashboard();
     } catch (e) {
-      setVerifyErr(
-        e.response?.data?.error ||
-          "Verification failed. Check the code and try again."
-      );
-    } finally {
       setVerifying(false);
+      setVerifyErr(
+        e?.response?.data?.error ||
+          "Verification failed. Please check the code and try again."
+      );
     }
   }
 
   async function onResendCode() {
-    if (!verifyEmail) return;
-    setVerifyErr("");
-    setVerifyMsg("");
-    setResending(true);
     try {
+      if (!verifyEmail) return;
+
+      setVerifyErr("");
+      setVerifyMsg("");
+      setResending(true);
+
       await api.post("/auth/resend-code", { email: verifyEmail });
-      setVerifyMsg("A new verification code was sent.");
-    } catch (e) {
-      setVerifyErr(e.response?.data?.error || "Could not resend the code.");
-    } finally {
+      setVerifyMsg("A new verification code has been sent to your email.");
       setResending(false);
+    } catch (e) {
+      setResending(false);
+      setVerifyErr(e?.response?.data?.error || "Could not resend the code.");
     }
   }
 
-  // ====================== UI ======================
+  // local toggle to SignUpScreen (no navigation)
+  if (mode === "dashboard") {
+    return <DashboardScreen />;
+  }
+  if (mode === "signup") {
+    return <SignUpScreen />;
+  }
+
+  // ─────────────────────── UI (no hero / welcome) ───────────────────────
   return (
     <View style={styles.root}>
       <KeyboardAvoidingView
@@ -279,438 +238,426 @@ export default function LoginScreen({ navigation }) {
       >
         <ScrollView
           contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          {/* FULLSCREEN PANEL */}
-          <View style={styles.card}>
-            {/* Brand */}
-            <View style={styles.logoWrap}>
-              <Image
-                source={require("../assets/nummoria_logo.png")}
-                style={styles.logo}
-                resizeMode="contain"
-              />
-              <Text style={styles.brand}>Nummoria</Text>
-              <Text style={styles.brandSub}>
-                Personal finance that actually helps.
-              </Text>
+          <View style={styles.authCard}>
+            {/* small brand row */}
+            <View style={styles.brandRow}>
+              <View style={styles.logoBadge}>
+                <Image
+                  source={require("../assets/nummoria_logo.png")}
+                  style={styles.logo}
+                  resizeMode="contain"
+                />
+              </View>
+              <Text style={styles.brandName}>Nummoria</Text>
             </View>
 
-            {/* SIGN IN */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Sign in</Text>
+            <Text style={styles.sectionTitle}>Sign in</Text>
+            <Text style={styles.sectionSubtitle}>
+              Log in with your Nummoria account to see your dashboard.
+            </Text>
 
-              {loginErr ? (
-                <View style={styles.errorBox}>
-                  <Text style={styles.errorText}>{loginErr}</Text>
-                  {loginReason === "UNVERIFIED" && (
-                    <View style={styles.row}>
-                      <TouchableOpacity
-                        onPress={onResendCode}
-                        disabled={!verifyEmail || resending}
-                      >
-                        <Text style={styles.linkText}>
-                          {resending ? "Resending code…" : "Resend code"}
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => setShowVerify(true)}>
-                        <Text style={styles.linkText}>Enter code</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </View>
-              ) : null}
-
-              <View style={styles.field}>
-                <Text style={styles.label}>Email address</Text>
-                <View style={styles.inputRow}>
-                  <Text style={styles.inputIcon}>✉️</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={loginEmail}
-                    onChangeText={setLoginEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    placeholder="you@nummoria.com"
-                    placeholderTextColor="rgba(148,163,184,1)"
-                  />
-                </View>
-              </View>
-
-              <View style={styles.field}>
-                <Text style={styles.label}>Password</Text>
-                <View style={styles.inputRow}>
-                  <Text style={styles.inputIcon}>🔒</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={loginPassword}
-                    onChangeText={setLoginPassword}
-                    secureTextEntry
-                    placeholder="••••••••"
-                    placeholderTextColor="rgba(148,163,184,1)"
-                  />
-                </View>
-              </View>
-
-              <TouchableOpacity
-                style={[styles.button, styles.loginBtn]}
-                onPress={onLogin}
-                disabled={loginLoading}
-              >
-                {loginLoading ? (
-                  <ActivityIndicator color="#f9fafb" />
-                ) : (
-                  <Text style={styles.loginText}>Login</Text>
+            {loginErr ? (
+              <View style={styles.errorBox}>
+                <Text style={styles.errorText}>{loginErr}</Text>
+                {loginReason === "UNVERIFIED" && (
+                  <View style={styles.errorActionsRow}>
+                    <TouchableOpacity
+                      onPress={onResendCode}
+                      disabled={resending}
+                    >
+                      <Text style={styles.errorLink}>
+                        {resending ? "Resending..." : "Resend code"}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => setShowVerify(true)}>
+                      <Text style={styles.errorLink}>Enter code</Text>
+                    </TouchableOpacity>
+                  </View>
                 )}
-              </TouchableOpacity>
+              </View>
+            ) : null}
 
-              <TouchableOpacity
-                style={styles.forgotWrapper}
-                onPress={() =>
-                  Alert.alert("Forgot password", "Password reset coming soon.")
-                }
-              >
-                <Text style={styles.forgotText}>Forgot password?</Text>
-              </TouchableOpacity>
+            <View style={styles.field}>
+              <Text style={styles.label}>Email address</Text>
+              <TextInput
+                style={styles.input}
+                value={loginEmail}
+                onChangeText={setLoginEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholder="you@nummoria.com"
+                placeholderTextColor={TEXT_MUTED}
+                editable={!loginLoading}
+              />
             </View>
 
-            {/* Divider */}
+            <View style={styles.field}>
+              <Text style={styles.label}>Password</Text>
+              <TextInput
+                style={styles.input}
+                value={loginPassword}
+                onChangeText={setLoginPassword}
+                secureTextEntry={true}
+                placeholder="••••••••"
+                placeholderTextColor={TEXT_MUTED}
+                editable={!loginLoading}
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.button,
+                styles.loginBtn,
+                loginLoading && styles.buttonDisabled,
+              ]}
+              onPress={onLogin}
+              disabled={loginLoading}
+              activeOpacity={0.7}
+            >
+              {loginLoading ? (
+                <ActivityIndicator color="#0b1120" />
+              ) : (
+                <Text style={styles.loginText}>Log in</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() =>
+                Alert.alert(
+                  "Forgot password",
+                  "Password reset flow coming soon."
+                )
+              }
+            >
+              <Text style={styles.forgotText}>Forgot password?</Text>
+            </TouchableOpacity>
+
             <View style={styles.dividerRow}>
               <View style={styles.dividerLine} />
               <Text style={styles.dividerText}>or continue with</Text>
               <View style={styles.dividerLine} />
             </View>
 
-            {/* SOCIAL LOGIN */}
             {socialErr ? (
-              <Text style={styles.socialError}>{socialErr}</Text>
+              <View style={styles.socialErrBox}>
+                <Text style={styles.socialErrText}>{socialErr}</Text>
+              </View>
             ) : null}
 
-            <View style={styles.socialCol}>
-              <TouchableOpacity
-                style={styles.socialBtn}
-                onPress={() => startSocial("google")}
-                disabled={!!socialLoading}
-              >
-                <Text style={styles.socialText}>Sign in with Google</Text>
-              </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.socialBtn, socialLoading && styles.buttonDisabled]}
+              onPress={() => startSocial("google")}
+              disabled={socialLoading}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.socialText}>
+                {socialLoading ? "Redirecting..." : "Sign in with Google"}
+              </Text>
+            </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.socialBtn}
-                onPress={() => startSocial("github")}
-                disabled={!!socialLoading}
-              >
-                <Text style={styles.socialText}>Sign in with GitHub</Text>
-              </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.socialBtn, socialLoading && styles.buttonDisabled]}
+              onPress={() => startSocial("github")}
+              disabled={socialLoading}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.socialText}>
+                {socialLoading ? "Redirecting..." : "Sign in with GitHub"}
+              </Text>
+            </TouchableOpacity>
 
-              {socialLoading ? (
-                <Text style={styles.socialStatus}>
-                  Redirecting to {socialLoading}…
-                </Text>
-              ) : null}
-            </View>
-
-            {/* SIGN UP HINT */}
-            <View style={styles.footerSignupRow}>
-              <Text style={styles.footerSignupText}>New around here?</Text>
-              <TouchableOpacity onPress={onSignup}>
-                <Text style={styles.footerSignupLink}>Sign up</Text>
+            <View style={styles.signupRow}>
+              <Text style={styles.signupHint}>New around here?</Text>
+              <TouchableOpacity onPress={() => setMode("signup")}>
+                <Text style={styles.signupLink}>Sign up</Text>
               </TouchableOpacity>
             </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* VERIFY MODAL */}
-      {showVerify && (
-        <Modal
-          visible={showVerify}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowVerify(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalCard}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Verify your email</Text>
-                <TouchableOpacity onPress={() => setShowVerify(false)}>
-                  <Text style={styles.modalClose}>×</Text>
-                </TouchableOpacity>
-              </View>
-
-              <Text style={styles.modalText}>
-                We sent a six digit code to{" "}
-                <Text style={styles.modalEmail}>{maskedEmail}</Text>.
-              </Text>
-
-              {verifyErr ? (
-                <View style={styles.modalErrorBox}>
-                  <Text style={styles.modalErrorText}>{verifyErr}</Text>
-                </View>
-              ) : null}
-              {verifyMsg ? (
-                <View style={styles.modalMsgBox}>
-                  <Text style={styles.modalMsgText}>{verifyMsg}</Text>
-                </View>
-              ) : null}
-
-              <View style={styles.field}>
-                <Text style={styles.modalLabel}>Verification code</Text>
-                <TextInput
-                  style={styles.modalInput}
-                  keyboardType="number-pad"
-                  maxLength={6}
-                  value={code}
-                  onChangeText={(t) => setCode(t.replace(/\D/g, ""))}
-                  placeholder="Enter 6 digit code"
-                  placeholderTextColor="rgba(148,163,184,1)"
-                />
-                <Text style={styles.modalHint}>
-                  Expires around fifteen minutes after request.
-                </Text>
-              </View>
-
-              <TouchableOpacity
-                style={[styles.button, styles.loginBtn]}
-                onPress={onVerifySubmit}
-                disabled={verifying || !verifyEmail}
-              >
-                {verifying ? (
-                  <ActivityIndicator color="#f9fafb" />
-                ) : (
-                  <Text style={styles.loginText}>Verify & continue</Text>
-                )}
+      {/* Verification Modal */}
+      <Modal
+        visible={showVerify}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowVerify(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Verify your email</Text>
+              <TouchableOpacity onPress={() => setShowVerify(false)}>
+                <Text style={styles.modalClose}>×</Text>
               </TouchableOpacity>
+            </View>
 
-              <View style={styles.modalFooterRow}>
-                <Text style={styles.modalFooterText}>Didn’t get the code?</Text>
-                <TouchableOpacity
-                  onPress={onResendCode}
-                  disabled={resending || !verifyEmail}
-                >
-                  <Text style={styles.modalFooterLink}>
-                    {resending ? "Resending…" : "Resend code"}
-                  </Text>
-                </TouchableOpacity>
+            <Text style={styles.modalText}>
+              We sent a six-digit code to{" "}
+              <Text style={styles.modalEmail}>{maskedEmail}</Text>.
+            </Text>
+
+            {verifyErr ? (
+              <View style={styles.modalErrorBox}>
+                <Text style={styles.modalErrorText}>{verifyErr}</Text>
               </View>
+            ) : null}
+
+            {verifyMsg ? (
+              <View style={styles.modalMsgBox}>
+                <Text style={styles.modalMsgText}>{verifyMsg}</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.field}>
+              <Text style={styles.modalLabel}>Verification code</Text>
+              <TextInput
+                style={styles.modalInput}
+                keyboardType="number-pad"
+                maxLength={6}
+                value={code}
+                onChangeText={(t) => setCode(t.replace(/\D/g, ""))}
+                placeholder="Enter 6-digit code"
+                placeholderTextColor={TEXT_MUTED}
+                editable={!verifying}
+              />
+              <Text style={styles.modalHint}>
+                Code expires 15 minutes after request.
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.button,
+                styles.modalBtn,
+                verifying && styles.buttonDisabled,
+              ]}
+              onPress={onVerifySubmit}
+              disabled={verifying}
+              activeOpacity={0.7}
+            >
+              {verifying ? (
+                <ActivityIndicator color="#0b1120" />
+              ) : (
+                <Text style={styles.modalBtnText}>Verify & continue</Text>
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.modalFooterRow}>
+              <Text style={styles.modalFooterText}>Didn't get the code?</Text>
+              <TouchableOpacity onPress={onResendCode} disabled={resending}>
+                <Text style={styles.modalFooterLink}>
+                  {resending ? "Resending..." : "Resend code"}
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
-        </Modal>
-      )}
+        </View>
+      </Modal>
     </View>
   );
 }
 
-const DARK_GREEN = "#4f772d";
-
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-
-  // Fullscreen background (no gaps)
   root: {
     flex: 1,
-    backgroundColor: "#fdfefb",
+    backgroundColor: BG_DARK,
   },
-
   scrollContent: {
     flexGrow: 1,
+    paddingHorizontal: 18,
+    paddingTop: 32,
+    paddingBottom: 32,
   },
 
-  // Main panel now TAKES THE WHOLE SCREEN
-  card: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingVertical: 24,
-    backgroundColor: "#fdfefb",
-  },
-
-  // Brand
-  logoWrap: {
+  // small brand row
+  brandRow: {
+    flexDirection: "row",
     alignItems: "center",
-    marginBottom: 18,
-    marginTop: 8,
+    marginBottom: 16,
+  },
+  logoBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 999,
+    backgroundColor: "rgba(15,23,42,1)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
   },
   logo: {
-    width: 72,
-    height: 72,
-    borderRadius: 24,
-    marginBottom: 10,
+    width: 22,
+    height: 22,
   },
-  brand: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: DARK_GREEN,
-  },
-  brandSub: {
-    marginTop: 4,
-    fontSize: 12,
-    color: "rgba(107,114,128,1)",
+  brandName: {
+    fontSize: 15,
+    color: TEXT_SOFT,
+    fontWeight: "600",
   },
 
-  // Sections
-  section: {
-    marginTop: 8,
+  authCard: {
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 22,
+    backgroundColor: CARD_DARK,
+    borderWidth: 1,
+    borderColor: "rgba(15,23,42,1)",
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: "700",
-    color: "#111827",
-    marginBottom: 8,
+    color: "#f9fafb",
   },
-
+  sectionSubtitle: {
+    marginTop: 4,
+    fontSize: 13,
+    color: TEXT_SOFT,
+  },
   field: {
-    marginTop: 10,
+    marginTop: 14,
   },
   label: {
     fontSize: 13,
-    color: "rgba(55,65,81,1)",
+    color: "#e5e7eb",
     marginBottom: 4,
   },
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "center",
+  input: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(209,213,219,1)",
-    backgroundColor: "#f9fafb",
-    paddingHorizontal: 12,
-    paddingVertical: 2,
-  },
-  inputIcon: {
-    fontSize: 16,
-    marginRight: 6,
-  },
-  input: {
-    flex: 1,
-    paddingVertical: 9,
+    borderColor: "rgba(31,41,55,1)",
+    backgroundColor: "#020617",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     fontSize: 14,
-    color: "#111827",
+    color: "#f9fafb",
   },
-
   button: {
-    marginTop: 16,
+    marginTop: 18,
     borderRadius: 999,
     paddingVertical: 11,
     alignItems: "center",
     justifyContent: "center",
   },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
   loginBtn: {
-    backgroundColor: DARK_GREEN,
+    backgroundColor: BRAND_GREEN,
   },
   loginText: {
-    color: "#f9fafb",
+    color: "#022c22",
     fontWeight: "700",
     fontSize: 15,
   },
-
-  forgotWrapper: {
-    marginTop: 8,
-    alignItems: "flex-end",
-  },
   forgotText: {
-    fontSize: 12,
-    color: "rgba(107,114,128,1)",
+    marginTop: 10,
+    fontSize: 13,
+    color: TEXT_SOFT,
+    textAlign: "right",
   },
-
   errorBox: {
-    backgroundColor: "#fef2f2",
-    borderRadius: 10,
-    padding: 8,
-    marginBottom: 8,
+    marginTop: 12,
+    borderRadius: 12,
+    padding: 10,
+    backgroundColor: "rgba(248,113,113,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(248,113,113,0.3)",
   },
   errorText: {
-    color: "#b91c1c",
     fontSize: 13,
+    color: "#fecaca",
   },
-  row: {
-    flexDirection: "row",
+  errorActionsRow: {
     marginTop: 6,
-    columnGap: 16,
+    flexDirection: "row",
+    gap: 16,
   },
-  linkText: {
-    color: DARK_GREEN,
+  errorLink: {
     fontSize: 13,
+    color: BRAND_GREEN,
     textDecorationLine: "underline",
   },
-
   dividerRow: {
-    marginTop: 20,
     flexDirection: "row",
     alignItems: "center",
-    columnGap: 10,
+    marginTop: 22,
+    marginBottom: 10,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: "rgba(209,213,219,1)",
+    backgroundColor: "rgba(31,41,55,1)",
   },
   dividerText: {
-    fontSize: 11,
-    color: "rgba(107,114,128,1)",
+    marginHorizontal: 8,
+    fontSize: 12,
+    color: TEXT_SOFT,
   },
-
-  socialCol: {
-    marginTop: 14,
-    rowGap: 10,
+  socialErrBox: {
+    marginTop: 4,
+    marginBottom: 8,
+    padding: 8,
+    borderRadius: 10,
+    backgroundColor: "rgba(248,113,113,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(248,113,113,0.3)",
+  },
+  socialErrText: {
+    color: "#fecaca",
+    fontSize: 13,
   },
   socialBtn: {
-    height: 45,
+    marginTop: 10,
+    paddingVertical: 11,
     borderRadius: 999,
-    backgroundColor: "#ffffff",
     borderWidth: 1,
-    borderColor: "rgba(209,213,219,1)",
+    borderColor: "rgba(31,41,55,1)",
+    backgroundColor: "#020617",
     alignItems: "center",
     justifyContent: "center",
   },
   socialText: {
     fontSize: 14,
+    color: "#e5e7eb",
     fontWeight: "500",
-    color: "#111827",
   },
-  socialStatus: {
-    marginTop: 6,
-    fontSize: 12,
-    color: "rgba(107,114,128,1)",
-    textAlign: "center",
-  },
-  socialError: {
-    marginTop: 8,
-    fontSize: 12,
-    color: "#b91c1c",
-  },
-
-  footerSignupRow: {
-    marginTop: 24,
+  signupRow: {
+    marginTop: 20,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
   },
-  footerSignupText: {
+  signupHint: {
     fontSize: 13,
-    color: "rgba(75,85,99,1)",
+    color: TEXT_SOFT,
   },
-  footerSignupLink: {
+  signupLink: {
     marginLeft: 4,
     fontSize: 13,
     fontWeight: "600",
-    color: DARK_GREEN,
+    color: BRAND_GREEN,
     textDecorationLine: "underline",
   },
 
-  // Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "center",
+    backgroundColor: "rgba(15,23,42,0.85)",
     alignItems: "center",
-    padding: 16,
+    justifyContent: "center",
+    padding: 20,
   },
   modalCard: {
     width: "100%",
     maxWidth: 380,
-    backgroundColor: "#fff",
-    borderRadius: 18,
-    padding: 16,
+    borderRadius: 22,
+    padding: 18,
+    backgroundColor: "#020617",
+    borderWidth: 1,
+    borderColor: "rgba(31,41,55,1)",
   },
   modalHeader: {
     flexDirection: "row",
@@ -719,61 +666,75 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: "800",
-    color: DARK_GREEN,
+    fontWeight: "700",
+    color: "#f9fafb",
   },
   modalClose: {
-    fontSize: 22,
-    color: "#6b7280",
+    fontSize: 24,
+    color: TEXT_SOFT,
   },
   modalText: {
-    marginTop: 4,
-    color: "#4b5563",
+    marginTop: 6,
     fontSize: 13,
+    color: TEXT_SOFT,
   },
   modalEmail: {
+    color: "#e5e7eb",
     fontWeight: "600",
-    color: "#111827",
   },
   modalErrorBox: {
-    marginTop: 8,
-    backgroundColor: "#fef2f2",
-    borderRadius: 8,
+    marginTop: 10,
+    borderRadius: 10,
     padding: 8,
+    backgroundColor: "rgba(248,113,113,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(248,113,113,0.3)",
   },
   modalErrorText: {
     fontSize: 13,
-    color: "#b91c1c",
+    color: "#fecaca",
   },
   modalMsgBox: {
-    marginTop: 8,
-    backgroundColor: "#ecfdf3",
-    borderRadius: 8,
+    marginTop: 10,
+    borderRadius: 10,
     padding: 8,
+    backgroundColor: "rgba(16,185,129,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(16,185,129,0.4)",
   },
   modalMsgText: {
     fontSize: 13,
-    color: "#15803d",
+    color: BRAND_GREEN,
   },
   modalLabel: {
-    marginTop: 10,
+    marginTop: 12,
     fontSize: 13,
-    color: "#374151",
+    color: "#e5e7eb",
     marginBottom: 4,
   },
   modalInput: {
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(209,213,219,1)",
-    color: "#111827",
+    borderColor: "rgba(31,41,55,1)",
+    backgroundColor: "#020617",
+    paddingHorizontal: 16,
+    paddingVertical: 9,
     fontSize: 14,
+    color: "#f9fafb",
   },
   modalHint: {
     marginTop: 4,
     fontSize: 11,
-    color: "#6b7280",
+    color: TEXT_SOFT,
+  },
+  modalBtn: {
+    marginTop: 16,
+    backgroundColor: BRAND_GREEN,
+  },
+  modalBtnText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#022c22",
   },
   modalFooterRow: {
     marginTop: 10,
@@ -783,11 +744,11 @@ const styles = StyleSheet.create({
   },
   modalFooterText: {
     fontSize: 13,
-    color: "#4b5563",
+    color: TEXT_SOFT,
   },
   modalFooterLink: {
     fontSize: 13,
-    color: DARK_GREEN,
+    color: BRAND_GREEN,
     textDecorationLine: "underline",
   },
 });
