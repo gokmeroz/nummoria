@@ -36,7 +36,6 @@ const TEXT_MUTED = "rgba(148,163,184,1)";
 const TEXT_SOFT = "rgba(148,163,184,0.8)";
 
 export default function SignUpScreen({ navigation }) {
-  // which screen to show inside this component
   const [mode, setMode] = useState("signup"); // "signup" | "login"
 
   const [name, setName] = useState("");
@@ -88,7 +87,6 @@ export default function SignUpScreen({ navigation }) {
     setMode("dashboard");
   }
 
-  // ✅ flip to login instead of using navigation
   function goToLogin() {
     setMode("login");
   }
@@ -230,7 +228,6 @@ export default function SignUpScreen({ navigation }) {
     }
   }
 
-  // 🔁 When in login mode, just render LoginScreen
   if (mode === "dashboard") {
     return <DashboardScreen />;
   }
@@ -238,7 +235,7 @@ export default function SignUpScreen({ navigation }) {
     return <LoginScreen />;
   }
 
-  // ───────────────────────── UI (no big welcome hero) ─────────────────────────
+  // ───────────────────────── UI ─────────────────────────
   return (
     <View style={styles.root}>
       <KeyboardAvoidingView
@@ -469,9 +466,10 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
+    justifyContent: "flex-start", // card hugs the top like B
     paddingHorizontal: 18,
-    paddingTop: 32,
-    paddingBottom: 32,
+    paddingTop: 90, // small top gap
+    paddingBottom: 40,
   },
 
   // small brand row
@@ -500,15 +498,15 @@ const styles = StyleSheet.create({
   },
 
   authCard: {
-    borderRadius: 24,
+    borderRadius: 20,
     paddingHorizontal: 20,
-    paddingVertical: 22,
+    paddingVertical: 20,
     backgroundColor: CARD_DARK,
     borderWidth: 1,
     borderColor: "rgba(15,23,42,1)",
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "700",
     color: "#f9fafb",
   },

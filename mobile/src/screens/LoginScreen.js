@@ -83,8 +83,6 @@ export default function LoginScreen({ navigation }) {
   }
 
   function goToDashboard() {
-    //Alert.alert("Success", "Logged in successfully!");
-    // navigation?.replace?.("Dashboard");
     setMode("dashboard");
   }
 
@@ -229,7 +227,7 @@ export default function LoginScreen({ navigation }) {
     return <SignUpScreen />;
   }
 
-  // ─────────────────────── UI (no hero / welcome) ───────────────────────
+  // ─────────────────────── UI ───────────────────────
   return (
     <View style={styles.root}>
       <KeyboardAvoidingView
@@ -469,9 +467,10 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
+    justifyContent: "flex-start", // ⬅️ keep card stuck towards top
     paddingHorizontal: 18,
-    paddingTop: 32,
-    paddingBottom: 32,
+    paddingTop: 90, // ⬅️ smaller top gap -> like B
+    paddingBottom: 40, // ⬅️ more bottom air than top
   },
 
   // small brand row
@@ -500,15 +499,15 @@ const styles = StyleSheet.create({
   },
 
   authCard: {
-    borderRadius: 24,
+    borderRadius: 20, // slightly tighter radius like B
     paddingHorizontal: 20,
-    paddingVertical: 22,
+    paddingVertical: 20,
     backgroundColor: CARD_DARK,
     borderWidth: 1,
     borderColor: "rgba(15,23,42,1)",
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "700",
     color: "#f9fafb",
   },
