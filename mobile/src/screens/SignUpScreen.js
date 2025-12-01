@@ -36,7 +36,7 @@ const TEXT_MUTED = "rgba(148,163,184,1)";
 const TEXT_SOFT = "rgba(148,163,184,0.8)";
 
 export default function SignUpScreen({ navigation }) {
-  const [mode, setMode] = useState("signup"); // "signup" | "login"
+  //   const [mode, setMode] = useState("signup"); // "signup" | "login"
 
   const [name, setName] = useState("");
   const [signEmail, setSignEmail] = useState("");
@@ -84,11 +84,13 @@ export default function SignUpScreen({ navigation }) {
   }
 
   function goToDashboard() {
-    setMode("dashboard");
+    // setMode("dashboard");
+    navigation.replace("MainTabs");
   }
 
   function goToLogin() {
-    setMode("login");
+    // setMode("login");
+    navigation.replace("Login");
   }
 
   async function onSignup() {
@@ -228,12 +230,12 @@ export default function SignUpScreen({ navigation }) {
     }
   }
 
-  if (mode === "dashboard") {
-    return <DashboardScreen />;
-  }
-  if (mode === "login") {
-    return <LoginScreen />;
-  }
+  //   if (mode === "dashboard") {
+  //     return <DashboardScreen />;
+  //   }
+  //   if (mode === "login") {
+  //     return <LoginScreen />;
+  //   }
 
   // ───────────────────────── UI ─────────────────────────
   return (

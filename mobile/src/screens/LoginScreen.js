@@ -36,7 +36,7 @@ const TEXT_MUTED = "rgba(148,163,184,1)";
 const TEXT_SOFT = "rgba(148,163,184,0.8)";
 
 export default function LoginScreen({ navigation }) {
-  const [mode, setMode] = useState("login"); // "login" | "signup"
+  //   const [mode, setMode] = useState("login"); // "login" | "signup"
 
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -83,7 +83,8 @@ export default function LoginScreen({ navigation }) {
   }
 
   function goToDashboard() {
-    setMode("dashboard");
+    // setMode("dashboard");
+    navigation.replace("MainTabs");
   }
 
   async function onLogin() {
@@ -219,13 +220,13 @@ export default function LoginScreen({ navigation }) {
     }
   }
 
-  // local toggle to SignUpScreen (no navigation)
-  if (mode === "dashboard") {
-    return <DashboardScreen />;
-  }
-  if (mode === "signup") {
-    return <SignUpScreen />;
-  }
+  //   // local toggle to SignUpScreen (no navigation)
+  //   if (mode === "dashboard") {
+  //     return <DashboardScreen />;
+  //   }
+  //   if (mode === "signup") {
+  //     return <SignUpScreen />;
+  //   }
 
   // ─────────────────────── UI ───────────────────────
   return (
@@ -369,7 +370,8 @@ export default function LoginScreen({ navigation }) {
 
             <View style={styles.signupRow}>
               <Text style={styles.signupHint}>New around here?</Text>
-              <TouchableOpacity onPress={() => setMode("signup")}>
+              {/* <TouchableOpacity onPress={() => setMode("signup")}> */}
+              <TouchableOpacity onPress={() => navigation.navigate("SignUp")}>
                 <Text style={styles.signupLink}>Sign up</Text>
               </TouchableOpacity>
             </View>
