@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useNavigation } from "@react-navigation/native";
 
 const { width } = Dimensions.get("window");
 
@@ -86,15 +87,29 @@ const slides = [
   },
 ];
 
+// ---------- currency helpers (copied from web logic) ----------
+function decimalsForCurrency(code) {
+  const zero = new Set(["JPY", "KRW", "CLP", "VND"]);
+  const three = new Set(["BHD", "IQD", "JOD", "KWD", "OMR", "TND"]);
+  if (zero.has(code)) return 0;
+  if (three.has(code)) return 3;
+  return 2;
+}
+function minorToMajorNumber(minor, currency) {
+  const d = decimalsForCurrency(currency);
+  return minor / Math.pow(10, d);
+}
+
 function formatMoney(n, prefix = "$") {
-  if (typeof n !== "number") return `${prefix}0`;
-  return `${prefix}${n.toLocaleString("en-US", {
+  if (typeof n !== "number" || Number.isNaN(n)) return `${prefix}0`;
+  return `${prefix}${Number(n).toLocaleString("en-US", {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   })}`;
 }
 
 export default function DashboardScreen() {
+  const navigation = useNavigation(); // 👈 add this
   const [name, setName] = useState("");
   const [summary, setSummary] = useState({
     expenses: 0,
@@ -106,40 +121,77 @@ export default function DashboardScreen() {
   useEffect(() => {
     async function init() {
       try {
+        setLoading(true);
+
+        // 🔑 pull token
+        const token = await AsyncStorage.getItem("token");
+
+        // name from AsyncStorage (fallback)
         const storedName = (await AsyncStorage.getItem("userName")) || "";
         setName(storedName);
 
-        const resp = await api
-          .get("/stats/summary")
-          .catch(() => ({ data: null }));
+        // 🔹 fetch /me to get baseCurrency (and name, if you want)
+        const meResp = await api.get("/me", {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        const me = meResp?.data || {};
+        const baseCurrency = me.baseCurrency || "USD";
 
-        if (resp && resp.data) {
-          const d = resp.data;
-          setSummary({
-            expenses:
-              d.thisMonthExpense ||
-              d.totalExpense ||
-              d.expenses ||
-              summary.expenses,
-            income:
-              d.thisMonthIncome || d.totalIncome || d.income || summary.income,
-            investments:
-              d.totalInvestment || d.investedBalance || summary.investments,
-          });
-        } else {
-          // demo fallback
-          setSummary({
-            expenses: 564,
-            income: 3000,
-            investments: 268,
-          });
+        // optional: override name with backend one
+        if (me.name && !storedName) {
+          setName(me.name);
+          await AsyncStorage.setItem("userName", me.name);
         }
+
+        // 🔹 fetch /transactions (same as web)
+        const txResp = await api.get("/transactions", {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        const tx = Array.isArray(txResp.data) ? txResp.data : [];
+
+        // ---------- SAME MONTHLY CALC AS WEB ----------
+        const now = new Date();
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        const end = new Date(
+          now.getFullYear(),
+          now.getMonth() + 1,
+          0,
+          23,
+          59,
+          59,
+          999
+        );
+
+        let expMinor = 0;
+        let incMinor = 0;
+        let invMinor = 0;
+
+        for (const t of tx) {
+          if (t.currency !== baseCurrency) continue;
+          const d = new Date(t.date);
+          if (d < start || d > end) continue;
+
+          if (t.type === "expense") expMinor += t.amountMinor || 0;
+          else if (t.type === "income") incMinor += t.amountMinor || 0;
+          else if (t.type === "investment") invMinor += t.amountMinor || 0;
+        }
+
+        const monthlyExpense = minorToMajorNumber(expMinor, baseCurrency);
+        const monthlyIncome = minorToMajorNumber(incMinor, baseCurrency);
+        const monthlyInvestments = minorToMajorNumber(invMinor, baseCurrency);
+
+        setSummary({
+          expenses: monthlyExpense,
+          income: monthlyIncome,
+          investments: monthlyInvestments,
+        });
       } catch (e) {
         console.warn("Dashboard init failed:", e);
+        // on error, just show zeros so mobile ≠ fake demo numbers
         setSummary({
-          expenses: 564,
-          income: 3000,
-          investments: 268,
+          expenses: 0,
+          income: 0,
+          investments: 0,
         });
       } finally {
         setLoading(false);
@@ -156,10 +208,9 @@ export default function DashboardScreen() {
     return "Good evening";
   })();
 
-  // TODO: when you add navigation, map slide.ctas[].href -> screen names here
   const handleCtaPress = (cta) => {
     console.log("CTA pressed:", cta);
-    // e.g. navigation.navigate("Expenses") etc.
+    // navigation hook later
   };
 
   return (
@@ -170,14 +221,17 @@ export default function DashboardScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Top bar */}
         <View style={styles.topBar}>
           <Text style={styles.logoText}>Nummoria</Text>
-          <View style={styles.userBadge}>
+          <TouchableOpacity
+            style={styles.userBadge}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate("User")} // 👈 route name
+          >
             <Text style={styles.userInitial}>
               {(name || "You").charAt(0).toUpperCase()}
             </Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* Greeting */}

@@ -14,6 +14,7 @@ import OnboardingScreen from "./src/screens/OnboardingScreen";
 import LoginScreen from "./src/screens/LoginScreen";
 import SignUpScreen from "./src/screens/SignUpScreen";
 import AppTabs from "./src/navigation/AppTabs";
+import UserScreen from "./src/screens/UserScreen"; // ⭐ ADDED
 
 const Stack = createNativeStackNavigator();
 
@@ -25,7 +26,6 @@ export default function App() {
     async function bootstrap() {
       try {
         const raw = await AsyncStorage.getItem("hasSeenOnboarding");
-        // 🔑 convert string -> boolean safely
         setHasSeenOnboarding(raw === "true");
       } catch (e) {
         console.warn("Failed to read onboarding flag:", e);
@@ -49,7 +49,7 @@ export default function App() {
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {/* If user has NOT seen onboarding → show it first */}
+        {/* FIRST TIME USERS → show onboarding */}
         {!hasSeenOnboarding ? (
           <>
             <Stack.Screen name="Onboarding">
@@ -57,23 +57,28 @@ export default function App() {
                 <OnboardingScreen
                   {...props}
                   onFinish={async () => {
-                    // when onboarding is done, store "true"
                     await AsyncStorage.setItem("hasSeenOnboarding", "true");
                     setHasSeenOnboarding(true);
                   }}
                 />
               )}
             </Stack.Screen>
+
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="SignUp" component={SignUpScreen} />
             <Stack.Screen name="MainTabs" component={AppTabs} />
+
+            {/* ⭐ NEW — User profile screen */}
+            <Stack.Screen name="User" component={UserScreen} />
           </>
         ) : (
-          // Already saw onboarding → go straight to auth / main
           <>
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="SignUp" component={SignUpScreen} />
             <Stack.Screen name="MainTabs" component={AppTabs} />
+
+            {/* ⭐ NEW — User profile screen */}
+            <Stack.Screen name="User" component={UserScreen} />
           </>
         )}
       </Stack.Navigator>
