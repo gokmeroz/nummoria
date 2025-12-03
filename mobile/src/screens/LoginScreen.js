@@ -15,19 +15,8 @@ import {
   Linking,
   Modal,
 } from "react-native";
-import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import SignUpScreen from "./SignUpScreen"; // local toggle
-import DashboardScreen from "./DashboardScreen"; // ⬅️ NEW
-
-const API_BASE =
-  process.env.EXPO_PUBLIC_API_URL?.replace(/\/+$/, "") ||
-  "http://localhost:4000";
-
-const api = axios.create({
-  baseURL: API_BASE,
-  withCredentials: true,
-});
+import api from "../lib/api";
 
 const BG_DARK = "#020617";
 const CARD_DARK = "#020819";
@@ -35,9 +24,7 @@ const BRAND_GREEN = "#22c55e";
 const TEXT_MUTED = "rgba(148,163,184,1)";
 const TEXT_SOFT = "rgba(148,163,184,0.8)";
 
-export default function LoginScreen({ navigation }) {
-  //   const [mode, setMode] = useState("login"); // "login" | "signup"
-
+export default function LoginScreen({ navigation, onLoggedIn }) {
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginErr, setLoginErr] = useState("");
@@ -76,18 +63,22 @@ export default function LoginScreen({ navigation }) {
       }
       if (data?.token) {
         await AsyncStorage.setItem("token", data.token);
+        api.defaults.headers.Authorization = `Bearer ${data.token}`;
       }
     } catch (e) {
       console.warn("Failed to store user locally:", e);
     }
   }
 
+  // 🔑 Let App.js switch to MainTabs when we're logged in
   function goToDashboard() {
-    // setMode("dashboard");
-    navigation.replace("MainTabs");
+    onLoggedIn?.();
   }
 
   async function onLogin() {
+    console.log("[Login] button pressed (MOBILE)");
+    Alert.alert("Debug", "Login button pressed"); // 👈 TEMP debug
+
     try {
       setLoginErr("");
       setLoginReason("");
@@ -113,8 +104,9 @@ export default function LoginScreen({ navigation }) {
       await storeUser(data);
 
       setLoginLoading(false);
-      goToDashboard();
+      navigation.replace("MainTabs");
     } catch (e) {
+      console.log("[Login] error:", e?.message, e?.response?.data);
       setLoginLoading(false);
 
       const status = e?.response?.status;
@@ -219,14 +211,6 @@ export default function LoginScreen({ navigation }) {
       setVerifyErr(e?.response?.data?.error || "Could not resend the code.");
     }
   }
-
-  //   // local toggle to SignUpScreen (no navigation)
-  //   if (mode === "dashboard") {
-  //     return <DashboardScreen />;
-  //   }
-  //   if (mode === "signup") {
-  //     return <SignUpScreen />;
-  //   }
 
   // ─────────────────────── UI ───────────────────────
   return (
@@ -370,7 +354,6 @@ export default function LoginScreen({ navigation }) {
 
             <View style={styles.signupRow}>
               <Text style={styles.signupHint}>New around here?</Text>
-              {/* <TouchableOpacity onPress={() => setMode("signup")}> */}
               <TouchableOpacity onPress={() => navigation.navigate("SignUp")}>
                 <Text style={styles.signupLink}>Sign up</Text>
               </TouchableOpacity>
@@ -469,13 +452,12 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: "flex-start", // ⬅️ keep card stuck towards top
+    justifyContent: "flex-start",
     paddingHorizontal: 18,
-    paddingTop: 90, // ⬅️ smaller top gap -> like B
-    paddingBottom: 40, // ⬅️ more bottom air than top
+    paddingTop: 90,
+    paddingBottom: 40,
   },
 
-  // small brand row
   brandRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -501,7 +483,7 @@ const styles = StyleSheet.create({
   },
 
   authCard: {
-    borderRadius: 20, // slightly tighter radius like B
+    borderRadius: 20,
     paddingHorizontal: 20,
     paddingVertical: 20,
     backgroundColor: CARD_DARK,
