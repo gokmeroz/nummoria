@@ -7,6 +7,7 @@ import DashboardScreen from "../screens/DashboardScreen";
 import UserScreen from "../screens/UserScreen";
 import ExpensesScreen from "../screens/ExpenseScreen";
 import IncomeScreen from "../screens/IncomeScreen";
+import InvestmentScreen from "../screens/InvestmentScreen";
 
 const Tab = createBottomTabNavigator();
 
@@ -99,7 +100,7 @@ export default function AppTabs() {
       />
       <Tab.Screen
         name="Investments"
-        component={DashboardScreen}
+        component={InvestmentScreen}
         options={{
           title: "Investments",
           tabBarLabel: ({ focused }) => (
