@@ -6,6 +6,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import DashboardScreen from "../screens/DashboardScreen";
 import UserScreen from "../screens/UserScreen";
 import ExpensesScreen from "../screens/ExpenseScreen";
+import IncomeScreen from "../screens/IncomeScreen";
 
 const Tab = createBottomTabNavigator();
 
@@ -85,7 +86,7 @@ export default function AppTabs() {
       />
       <Tab.Screen
         name="Income"
-        component={DashboardScreen}
+        component={IncomeScreen}
         options={{
           title: "Income",
           tabBarLabel: ({ focused }) => (
