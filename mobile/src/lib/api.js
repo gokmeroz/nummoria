@@ -2,20 +2,27 @@
 import axios from "axios";
 import { Platform } from "react-native";
 
-// ✅ put your Mac's LAN IP here (NOT localhost)
-const LOCAL_IP = "192.168.1.3"; // <--- CHANGE THIS
+const DEV_PORT = 4000;
 
+// For iOS simulator, host = 127.0.0.1 (your Mac)
+// For Android emulator, host = 10.0.2.2 (Android’s alias for host machine)
 const baseURL = __DEV__
   ? Platform.select({
-      ios: `http://${LOCAL_IP}:4000`, // iPhone / iOS simulator
-      android: `http://${LOCAL_IP}:4000`, // Android device / emulator
-      default: `http://${LOCAL_IP}:4000`,
+      ios: `http://127.0.0.1:${DEV_PORT}`,
+      android: `http://10.0.2.2:${DEV_PORT}`,
+      default: `http://127.0.0.1:${DEV_PORT}`,
     })
-  : "https://your-real-api-domain.com"; // prod
+  : "https://your-real-api-domain.com";
 
 const api = axios.create({
   baseURL,
   timeout: 10000,
 });
+
+// (optional) debug
+// api.interceptors.request.use((config) => {
+//   console.log("[API] ->", config.method?.toUpperCase(), config.baseURL + config.url);
+//   return config;
+// });
 
 export default api;

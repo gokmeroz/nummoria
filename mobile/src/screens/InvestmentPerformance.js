@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import api from "../lib/api";
+import { useNavigation } from "@react-navigation/native";
 
 const main = "#4f772d";
 const secondary = "#90a955";
@@ -153,6 +154,8 @@ function HoldingRow({ h }) {
 }
 
 export default function InvestmentPerformanceScreen() {
+  const navigation = useNavigation();
+
   const { toast, show } = useToasts();
 
   const [loading, setLoading] = useState(true);
@@ -275,6 +278,20 @@ export default function InvestmentPerformanceScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
+      <TouchableOpacity
+        onPress={() => navigation.goBack()}
+        style={{
+          paddingVertical: 8,
+          paddingHorizontal: 4,
+          marginBottom: 12,
+          flexDirection: "row",
+          alignItems: "center",
+        }}
+      >
+        <Text style={{ fontSize: 18, color: "white", marginRight: 6 }}>←</Text>
+        <Text style={{ fontSize: 14, color: "white" }}>Back</Text>
+      </TouchableOpacity>
+
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
           <View>
@@ -813,5 +830,19 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     color: TEXT_SOFT,
+  },
+  backButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  backArrow: {
+    fontSize: 20,
+    color: "white",
+    marginRight: 6,
+  },
+  backText: {
+    fontSize: 14,
+    color: "white",
   },
 });

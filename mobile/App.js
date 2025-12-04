@@ -15,6 +15,7 @@ import LoginScreen from "./src/screens/LoginScreen";
 import SignUpScreen from "./src/screens/SignUpScreen";
 import AppTabs from "./src/navigation/AppTabs";
 import UserScreen from "./src/screens/UserScreen";
+import InvestmentPerformanceScreen from "./src/screens/InvestmentPerformance";
 import api from "./src/lib/api";
 
 const Stack = createNativeStackNavigator();
@@ -39,22 +40,21 @@ export default function App() {
         let logged = false;
         try {
           const resp = await api.get("/me");
-          if (resp?.data?.user) {
-            logged = true;
-          }
-        } catch (e) {
+          if (resp?.data?.user) logged = true;
+        } catch (_) {
           logged = false;
         }
 
         setIsLoggedIn(logged);
       } catch (e) {
-        console.warn("Failed to read flags:", e);
+        console.warn("Failed bootstrap:", e);
         setHasSeenOnboarding(false);
         setIsLoggedIn(false);
       } finally {
         setLoading(false);
       }
     }
+
     bootstrap();
   }, []);
 
@@ -67,7 +67,6 @@ export default function App() {
     );
   }
 
-  // Determine initial route based on state
   const getInitialRoute = () => {
     if (!hasSeenOnboarding) return "Onboarding";
     if (!isLoggedIn) return "Login";
@@ -80,7 +79,7 @@ export default function App() {
         screenOptions={{ headerShown: false }}
         initialRouteName={getInitialRoute()}
       >
-        {/* Define ALL screens once - no conditional rendering */}
+        {/* Onboarding */}
         <Stack.Screen name="Onboarding">
           {(props) => (
             <OnboardingScreen
@@ -88,41 +87,58 @@ export default function App() {
               onFinish={async () => {
                 await AsyncStorage.setItem("hasSeenOnboarding", "true");
                 setHasSeenOnboarding(true);
-                // Navigate to login after onboarding
                 props.navigation.replace("Login");
               }}
             />
           )}
         </Stack.Screen>
 
+        {/* Login */}
         <Stack.Screen name="Login">
           {(props) => (
             <LoginScreen
               {...props}
               onLoggedIn={() => {
                 setIsLoggedIn(true);
-                // Navigate to main tabs after login
                 props.navigation.replace("MainTabs");
               }}
             />
           )}
         </Stack.Screen>
 
+        {/* SignUp */}
         <Stack.Screen name="SignUp">
           {(props) => (
             <SignUpScreen
               {...props}
               onSignedUp={() => {
                 setIsLoggedIn(true);
-                // Navigate to main tabs after signup
                 props.navigation.replace("MainTabs");
               }}
             />
           )}
         </Stack.Screen>
 
+        {/* Tabs */}
         <Stack.Screen name="MainTabs" component={AppTabs} />
+
+        {/* User page */}
         <Stack.Screen name="User" component={UserScreen} />
+
+        {/* ✅ Market / Performance Page with Back Arrow */}
+        <Stack.Screen
+          name="InvestmentPerformance"
+          component={InvestmentPerformanceScreen}
+          options={{
+            headerShown: true,
+            title: "Market & Performance",
+            headerBackTitleVisible: false,
+            presentation: "card",
+            headerStyle: { backgroundColor: "#020819" },
+            headerTintColor: "#e5e7eb",
+            headerTitleStyle: { fontWeight: "700" },
+          }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );

@@ -270,17 +270,6 @@ function InvestmentModal({
   defaultAccountId,
   pushToast,
 }) {
-  const amountRef = useRef(null);
-  const currencyRef = useRef(null);
-  const dateRef = useRef(null);
-  const nextDateRef = useRef(null);
-  const categoryRef = useRef(null);
-  const symbolRef = useRef(null);
-  const unitsRef = useRef(null);
-  const descRef = useRef(null);
-  const tagsRef = useRef(null);
-  const accountRef = useRef(null);
-
   const isEditing = !!editing;
 
   const formDefaults = useMemo(() => {
@@ -315,20 +304,34 @@ function InvestmentModal({
     };
   }, [editing, accounts, categories, defaultAccountId]);
 
-  const handleSubmit = async () => {
-    const amount = amountRef.current?.value ?? "";
-    const currency = (currencyRef.current?.value ?? "USD").toUpperCase();
-    const date = dateRef.current?.value ?? "";
-    const nextDate = nextDateRef.current?.value ?? "";
-    const categoryId = categoryRef.current?.value ?? "";
-    const rawSymbol = (symbolRef.current?.value ?? "").toUpperCase().trim();
-    const rawUnitsStr = (unitsRef.current?.value ?? "").trim();
-    const rawUnits = rawUnitsStr === "" ? NaN : Number(rawUnitsStr);
-    const description = (descRef.current?.value ?? "").trim();
-    const tagsCsv = tagsRef.current?.value ?? "";
-    const pickedAccountId = accountRef.current?.value ?? "";
+  // -------- controlled state for all fields --------
+  const [accountId, setAccountId] = useState(formDefaults.accountId);
+  const [currency, setCurrency] = useState(formDefaults.currency);
+  const [amount, setAmount] = useState(formDefaults.amount);
+  const [date, setDate] = useState(formDefaults.date);
+  const [nextDate, setNextDate] = useState(formDefaults.nextDate);
+  const [categoryId, setCategoryId] = useState(formDefaults.categoryId);
+  const [assetSymbol, setAssetSymbol] = useState(formDefaults.assetSymbol);
+  const [units, setUnits] = useState(formDefaults.units);
+  const [description, setDescription] = useState(formDefaults.description);
+  const [tagsCsv, setTagsCsv] = useState(formDefaults.tagsCsv);
 
-    const amountMinor = majorToMinor(amount, currency);
+  // whenever editing/defaults change (open new modal), reset the state
+  useEffect(() => {
+    setAccountId(formDefaults.accountId);
+    setCurrency(formDefaults.currency);
+    setAmount(formDefaults.amount);
+    setDate(formDefaults.date);
+    setNextDate(formDefaults.nextDate);
+    setCategoryId(formDefaults.categoryId);
+    setAssetSymbol(formDefaults.assetSymbol);
+    setUnits(formDefaults.units);
+    setDescription(formDefaults.description);
+    setTagsCsv(formDefaults.tagsCsv);
+  }, [formDefaults]);
+
+  const handleSubmit = async () => {
+    const amountMinor = majorToMinor(amount, currency.toUpperCase());
     if (Number.isNaN(amountMinor)) {
       pushToast({ type: "warning", msg: "Invalid amount." });
       return;
@@ -337,12 +340,17 @@ function InvestmentModal({
       pushToast({ type: "warning", msg: "Pick a category." });
       return;
     }
-    if (!pickedAccountId) {
+    if (!accountId) {
       pushToast({ type: "warning", msg: "Pick an account." });
       return;
     }
 
+    const rawSymbol = (assetSymbol || "").toUpperCase().trim();
+    const rawUnitsStr = (units || "").trim();
+    const rawUnits = rawUnitsStr === "" ? NaN : Number(rawUnitsStr);
+    const desc = (description || "").trim();
     const category = categories.find((c) => c._id === categoryId);
+
     const isStockOrCrypto =
       !!category &&
       (category.name === "Stock Market" ||
@@ -366,14 +374,14 @@ function InvestmentModal({
     }
 
     const payload = {
-      accountId: pickedAccountId,
+      accountId,
       categoryId,
       type: "investment",
       amountMinor,
-      currency,
+      currency: currency.toUpperCase(),
       date: new Date(date).toISOString(),
-      description: description || null,
-      tags: tagsCsv
+      description: desc || null,
+      tags: (tagsCsv || "")
         .split(",")
         .map((s) => s.trim())
         .filter((s) => s.length > 0),
@@ -423,17 +431,34 @@ function InvestmentModal({
           {/* Account */}
           <View style={styles.modalField}>
             <Text style={styles.modalLabel}>Account</Text>
-            <View style={styles.modalSelect}>
-              <TextInput
-                ref={accountRef}
-                defaultValue={formDefaults.accountId}
-                style={styles.hiddenInput}
-              />
-              {/* simple "select": we just show current label, user picks with separate screen if needed later */}
-              <Text style={styles.modalSelectHint}>
-                You can change account from web for now.
-              </Text>
-            </View>
+            {accounts.length === 0 ? (
+              <View style={styles.modalSelect}>
+                <Text style={styles.modalSelectHint}>
+                  No active accounts found. Add one from web.
+                </Text>
+              </View>
+            ) : (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filterChipRow}
+              >
+                {accounts.map((a) => (
+                  <Chip
+                    key={a._id}
+                    label={`${a.name} · ${a.currency}`}
+                    selected={accountId === a._id}
+                    onPress={() => {
+                      setAccountId(a._id);
+                      if (!editing) {
+                        // if new investment, sync currency with account by default
+                        setCurrency(a.currency || "USD");
+                      }
+                    }}
+                  />
+                ))}
+              </ScrollView>
+            )}
           </View>
 
           {/* Total Cost + Currency */}
@@ -441,8 +466,8 @@ function InvestmentModal({
             <View style={[styles.modalField, { flex: 1 }]}>
               <Text style={styles.modalLabel}>Total Cost</Text>
               <TextInput
-                ref={amountRef}
-                defaultValue={formDefaults.amount}
+                value={amount}
+                onChangeText={setAmount}
                 keyboardType="decimal-pad"
                 placeholder="e.g., 1500.00"
                 placeholderTextColor={TEXT_MUTED}
@@ -452,10 +477,9 @@ function InvestmentModal({
             <View style={[styles.modalField, { width: 90 }]}>
               <Text style={styles.modalLabel}>Currency</Text>
               <TextInput
-                ref={currencyRef}
-                defaultValue={formDefaults.currency}
-                maxLength={3}
+                value={currency}
                 editable={false}
+                maxLength={3}
                 style={[styles.modalInput, { opacity: 0.8 }]}
               />
             </View>
@@ -466,8 +490,8 @@ function InvestmentModal({
             <View style={[styles.modalField, { flex: 1 }]}>
               <Text style={styles.modalLabel}>Asset Symbol</Text>
               <TextInput
-                ref={symbolRef}
-                defaultValue={formDefaults.assetSymbol}
+                value={assetSymbol}
+                onChangeText={(txt) => setAssetSymbol(txt.toUpperCase())}
                 placeholder="AAPL, BTC-USD, VOO"
                 placeholderTextColor={TEXT_MUTED}
                 autoCapitalize="characters"
@@ -477,8 +501,8 @@ function InvestmentModal({
             <View style={[styles.modalField, { width: 110 }]}>
               <Text style={styles.modalLabel}>Units</Text>
               <TextInput
-                ref={unitsRef}
-                defaultValue={formDefaults.units}
+                value={units}
+                onChangeText={setUnits}
                 keyboardType="decimal-pad"
                 placeholder="e.g., 2.5"
                 placeholderTextColor={TEXT_MUTED}
@@ -491,8 +515,8 @@ function InvestmentModal({
           <View style={styles.modalField}>
             <Text style={styles.modalLabel}>Date</Text>
             <TextInput
-              ref={dateRef}
-              defaultValue={formDefaults.date}
+              value={date}
+              onChangeText={setDate}
               placeholder="YYYY-MM-DD"
               placeholderTextColor={TEXT_MUTED}
               style={styles.modalInput}
@@ -502,8 +526,8 @@ function InvestmentModal({
           <View style={styles.modalField}>
             <Text style={styles.modalLabel}>Next date (optional)</Text>
             <TextInput
-              ref={nextDateRef}
-              defaultValue={formDefaults.nextDate}
+              value={nextDate}
+              onChangeText={setNextDate}
               placeholder="YYYY-MM-DD"
               placeholderTextColor={TEXT_MUTED}
               style={styles.modalInput}
@@ -516,24 +540,36 @@ function InvestmentModal({
           {/* Category */}
           <View style={styles.modalField}>
             <Text style={styles.modalLabel}>Category</Text>
-            <View style={styles.modalSelect}>
-              <TextInput
-                ref={categoryRef}
-                defaultValue={formDefaults.categoryId}
-                style={styles.hiddenInput}
-              />
-              <Text style={styles.modalSelectHint}>
-                Category is bound to investment kind; adjust on web if needed.
-              </Text>
-            </View>
+            {categories.length === 0 ? (
+              <View style={styles.modalSelect}>
+                <Text style={styles.modalSelectHint}>
+                  No investment categories found. Add on web.
+                </Text>
+              </View>
+            ) : (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filterChipRow}
+              >
+                {categories.map((c) => (
+                  <Chip
+                    key={c._id}
+                    label={c.name}
+                    selected={categoryId === c._id}
+                    onPress={() => setCategoryId(c._id)}
+                  />
+                ))}
+              </ScrollView>
+            )}
           </View>
 
           {/* Description */}
           <View style={styles.modalField}>
             <Text style={styles.modalLabel}>Description</Text>
             <TextInput
-              ref={descRef}
-              defaultValue={formDefaults.description}
+              value={description}
+              onChangeText={setDescription}
               placeholder="Optional memo"
               placeholderTextColor={TEXT_MUTED}
               style={styles.modalInput}
@@ -544,8 +580,8 @@ function InvestmentModal({
           <View style={styles.modalField}>
             <Text style={styles.modalLabel}>Tags (comma-separated)</Text>
             <TextInput
-              ref={tagsRef}
-              defaultValue={formDefaults.tagsCsv}
+              value={tagsCsv}
+              onChangeText={setTagsCsv}
               placeholder="long-term, dividend"
               placeholderTextColor={TEXT_MUTED}
               style={styles.modalInput}
@@ -743,7 +779,6 @@ export default function InvestmentScreen({ navigation }) {
           <View style={styles.loadingLogoWrap}>
             <View style={styles.loadingLogoBorder}>
               <View style={styles.loadingLogoInner}>
-                {/* eslint-disable-next-line global-require */}
                 <View>
                   <Text style={styles.loadingLogoText}>N</Text>
                 </View>
@@ -768,9 +803,26 @@ export default function InvestmentScreen({ navigation }) {
               Track your buys and long-term moves.
             </Text>
           </View>
-          <TouchableOpacity onPress={loadAll} style={styles.headerRefreshBtn}>
-            <Text style={styles.headerRefreshText}>Refresh</Text>
-          </TouchableOpacity>
+
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate("InvestmentPerformance")}
+              style={[styles.headerRefreshBtn, { marginRight: 8 }]}
+            >
+              <Text
+                style={[
+                  styles.headerRefreshText,
+                  { color: "#90a955", fontWeight: "600" },
+                ]}
+              >
+                View market
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={loadAll} style={styles.headerRefreshBtn}>
+              <Text style={styles.headerRefreshText}>Refresh</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* TOTALS */}
@@ -982,6 +1034,24 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: TEXT_MUTED,
     marginTop: 4,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  headerMarketBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+    backgroundColor: "#020617",
+    marginRight: 8,
+  },
+  headerMarketText: {
+    color: secondary,
+    fontSize: 12,
+    fontWeight: "600",
   },
   headerRefreshBtn: {
     paddingHorizontal: 12,
@@ -1313,11 +1383,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     backgroundColor: "#020617",
-  },
-  hiddenInput: {
-    height: 0,
-    width: 0,
-    opacity: 0,
   },
   modalSelectHint: {
     fontSize: 11,
