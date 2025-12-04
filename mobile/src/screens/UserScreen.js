@@ -1,4 +1,5 @@
 // mobile/src/screens/UserScreen.js
+/* eslint-disable no-unused-vars */
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -10,19 +11,14 @@ import {
   ActivityIndicator,
   Modal,
   Alert,
+  Image,
 } from "react-native";
-import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
+import * as ImagePicker from "expo-image-picker";
 
-const API_BASE =
-  process.env.EXPO_PUBLIC_API_URL?.replace(/\/+$/, "") ||
-  "http://localhost:4000";
-
-const api = axios.create({
-  baseURL: API_BASE,
-  withCredentials: true,
-});
+// ✅ use the SAME axios instance as the rest of the app
+import api from "../lib/api";
 
 const BG_DARK = "#020617";
 const CARD_DARK = "#020819";
@@ -55,6 +51,7 @@ function minorToMajorString(minor, cur) {
 
 export default function UserScreen() {
   const navigation = useNavigation();
+
   const [me, setMe] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -77,34 +74,50 @@ export default function UserScreen() {
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
 
+  // ✅ avatar from photo roll (local for now)
+  const [avatarUri, setAvatarUri] = useState(null);
+
   // ─────────────────────────────── init load ────────────────────────────────
   useEffect(() => {
     (async () => {
       try {
         setLoading(true);
         setErr("");
+
         const token = await AsyncStorage.getItem("token");
 
-        const [meResp, accResp] = await Promise.all([
+        const [meResp, accResp, storedAvatar] = await Promise.all([
           api.get("/me", {
             headers: token ? { Authorization: `Bearer ${token}` } : {},
           }),
           api.get("/accounts", {
             headers: token ? { Authorization: `Bearer ${token}` } : {},
           }),
+          AsyncStorage.getItem("userAvatarUri"),
         ]);
 
-        const meData = meResp?.data || {};
+        // 🔑 your /me returns { user: {...} }
+        const mePayload = meResp?.data || {};
+        const meData = mePayload.user || mePayload || {};
+
         setMe(meData);
         setEmail(meData.email || "");
         setName(meData.name || "");
         setProfession(meData.profession || "");
-        setSubscription(meData.subscription || "Standard");
+        setSubscription(
+          meData.subscription || meData.subscriptionPlan || "Standard"
+        );
         setBaseCurrency(meData.baseCurrency || "USD");
         setTz(meData.tz || "UTC");
 
         const accs = Array.isArray(accResp?.data) ? accResp.data : [];
         setAccounts(accs.filter((a) => !a.isDeleted));
+
+        if (storedAvatar) {
+          setAvatarUri(storedAvatar);
+        } else if (meData.avatarUrl) {
+          setAvatarUri(meData.avatarUrl);
+        }
       } catch (e) {
         console.warn("User load failed:", e);
         setErr(e?.response?.data?.error || "Failed to load profile");
@@ -129,6 +142,41 @@ export default function UserScreen() {
     }
   }
 
+  // ───────────────────────────── avatar picker ──────────────────────────────
+  const pickAvatar = async () => {
+    try {
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission needed",
+          "We need access to your photo library to change your profile picture."
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (result.canceled) return;
+
+      const asset = result.assets && result.assets[0];
+      if (!asset?.uri) return;
+
+      setAvatarUri(asset.uri);
+      await AsyncStorage.setItem("userAvatarUri", asset.uri);
+
+      // later: POST to /me/avatar with multipart form if you want
+    } catch (e) {
+      console.warn("pickAvatar failed:", e);
+      Alert.alert("Error", "Could not update profile picture.");
+    }
+  };
+
   // ───────────────────────────── profile save ───────────────────────────────
   async function saveProfile() {
     try {
@@ -143,9 +191,13 @@ export default function UserScreen() {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         }
       );
-      setMe(data || {});
+
+      const updatedPayload = data || {};
+      const updated = updatedPayload.user || updatedPayload || {};
+
+      setMe(updated);
       setMsg("Profile updated");
-      if (name) await AsyncStorage.setItem("userName", name);
+      if (updated.name) await AsyncStorage.setItem("userName", updated.name);
     } catch (e) {
       console.warn("Save profile failed:", e);
       setErr(e?.response?.data?.error || "Failed to update profile");
@@ -166,7 +218,6 @@ export default function UserScreen() {
       });
       await AsyncStorage.removeItem("token");
       setDeleteConfirmVisible(false);
-      // navigate to some "Goodbye" or Auth screen
       navigation.reset({
         index: 0,
         routes: [{ name: "Login" }],
@@ -273,11 +324,24 @@ export default function UserScreen() {
 
         {/* PROFILE CARD */}
         <View style={styles.profileRow}>
-          {/* right-side avatar & stats */}
           <View style={styles.profileSide}>
-            <View style={styles.avatarCircle}>
-              <Text style={styles.avatarText}>{initials}</Text>
-            </View>
+            <TouchableOpacity
+              onPress={pickAvatar}
+              style={styles.avatarTouchable}
+            >
+              <View style={styles.avatarCircle}>
+                {avatarUri ? (
+                  <Image
+                    source={{ uri: avatarUri }}
+                    style={styles.avatarImage}
+                  />
+                ) : (
+                  <Text style={styles.avatarText}>{initials}</Text>
+                )}
+              </View>
+              <Text style={styles.changePhotoText}>Change photo</Text>
+            </TouchableOpacity>
+
             <Text style={styles.profileName}>{name || "Your name"}</Text>
             <Text style={styles.profileProfession}>
               {profession || "Add your profession"}
@@ -761,6 +825,10 @@ const styles = StyleSheet.create({
   profileSide: {
     alignItems: "center",
   },
+  avatarTouchable: {
+    alignItems: "center",
+    marginBottom: 4,
+  },
   avatarCircle: {
     width: 80,
     height: 80,
@@ -768,7 +836,17 @@ const styles = StyleSheet.create({
     backgroundColor: BRAND_MAIN,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 8,
+    marginBottom: 4,
+    overflow: "hidden",
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  changePhotoText: {
+    fontSize: 11,
+    color: BRAND_SECONDARY,
   },
   avatarText: {
     fontSize: 30,

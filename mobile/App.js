@@ -40,21 +40,22 @@ export default function App() {
         let logged = false;
         try {
           const resp = await api.get("/me");
-          if (resp?.data?.user) logged = true;
-        } catch (_) {
+          if (resp?.data?.user) {
+            logged = true;
+          }
+        } catch (e) {
           logged = false;
         }
 
         setIsLoggedIn(logged);
       } catch (e) {
-        console.warn("Failed bootstrap:", e);
+        console.warn("Failed to read flags:", e);
         setHasSeenOnboarding(false);
         setIsLoggedIn(false);
       } finally {
         setLoading(false);
       }
     }
-
     bootstrap();
   }, []);
 
@@ -119,13 +120,26 @@ export default function App() {
           )}
         </Stack.Screen>
 
-        {/* Tabs */}
+        {/* Main tabs */}
         <Stack.Screen name="MainTabs" component={AppTabs} />
 
-        {/* User page */}
-        <Stack.Screen name="User" component={UserScreen} />
+        {/* ✅ User profile screen with native back button to Dashboard */}
+        <Stack.Screen
+          name="User"
+          component={UserScreen}
+          options={{
+            headerShown: true,
+            title: "Profile",
+            headerBackTitle: "", // 👈 FORCE EMPTY BACK LABEL
+            headerBackTitleVisible: false,
+            presentation: "card",
+            headerStyle: { backgroundColor: "#020819" },
+            headerTintColor: "#e5e7eb",
+            headerTitleStyle: { fontWeight: "700" },
+          }}
+        />
 
-        {/* ✅ Market / Performance Page with Back Arrow */}
+        {/* ✅ Market / performance popup screen */}
         <Stack.Screen
           name="InvestmentPerformance"
           component={InvestmentPerformanceScreen}
