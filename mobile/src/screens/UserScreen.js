@@ -17,7 +17,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
 
-// ✅ use the SAME axios instance as the rest of the app
 import api from "../lib/api";
 
 const BG_DARK = "#020617";
@@ -49,6 +48,7 @@ function minorToMajorString(minor, cur) {
   return String(n);
 }
 
+// ───────────────────────────────── screen ──────────────────────────────────
 export default function UserScreen() {
   const navigation = useNavigation();
 
@@ -74,7 +74,7 @@ export default function UserScreen() {
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
 
-  // ✅ avatar from photo roll (local for now)
+  // avatar
   const [avatarUri, setAvatarUri] = useState(null);
 
   // ─────────────────────────────── init load ────────────────────────────────
@@ -84,39 +84,43 @@ export default function UserScreen() {
         setLoading(true);
         setErr("");
 
+        // make sure api has token on this screen too
         const token = await AsyncStorage.getItem("token");
+        if (token) {
+          api.defaults.headers.Authorization = `Bearer ${token}`;
+        }
 
         const [meResp, accResp, storedAvatar] = await Promise.all([
-          api.get("/me", {
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
-          }),
-          api.get("/accounts", {
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
-          }),
+          api.get("/me"),
+          api.get("/accounts"),
           AsyncStorage.getItem("userAvatarUri"),
         ]);
 
-        // 🔑 your /me returns { user: {...} }
-        const mePayload = meResp?.data || {};
-        const meData = mePayload.user || mePayload || {};
+        const raw = meResp?.data || {};
+        const meData = raw.user || raw || {};
 
         setMe(meData);
         setEmail(meData.email || "");
         setName(meData.name || "");
         setProfession(meData.profession || "");
-        setSubscription(
-          meData.subscription || meData.subscriptionPlan || "Standard"
-        );
+        setSubscription(meData.subscription || "Standard");
         setBaseCurrency(meData.baseCurrency || "USD");
         setTz(meData.tz || "UTC");
 
         const accs = Array.isArray(accResp?.data) ? accResp.data : [];
         setAccounts(accs.filter((a) => !a.isDeleted));
 
-        if (storedAvatar) {
+        // backend avatar has priority; local cache is fallback
+        const backendAvatar = meData.avatarUrl || meData.profilePicture || null;
+        if (backendAvatar) {
+          const baseURL = api.defaults.baseURL || "";
+          const full =
+            backendAvatar.startsWith("http") || backendAvatar.startsWith("file")
+              ? backendAvatar
+              : `${baseURL}${backendAvatar}`;
+          setAvatarUri(full);
+        } else if (storedAvatar) {
           setAvatarUri(storedAvatar);
-        } else if (meData.avatarUrl) {
-          setAvatarUri(meData.avatarUrl);
         }
       } catch (e) {
         console.warn("User load failed:", e);
@@ -130,10 +134,7 @@ export default function UserScreen() {
   async function refreshAccounts() {
     try {
       setAccErr("");
-      const token = await AsyncStorage.getItem("token");
-      const { data } = await api.get("/accounts", {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      const { data } = await api.get("/accounts");
       setAccounts(
         (Array.isArray(data) ? data : []).filter((a) => !a.isDeleted)
       );
@@ -167,10 +168,25 @@ export default function UserScreen() {
       const asset = result.assets && result.assets[0];
       if (!asset?.uri) return;
 
+      // update UI + cache
       setAvatarUri(asset.uri);
       await AsyncStorage.setItem("userAvatarUri", asset.uri);
 
-      // later: POST to /me/avatar with multipart form if you want
+      // try to upload to backend (you need /me/avatar endpoint)
+      const token = await AsyncStorage.getItem("token");
+      const form = new FormData();
+      form.append("avatar", {
+        uri: asset.uri,
+        name: "avatar.jpg",
+        type: "image/jpeg",
+      });
+
+      await api.post("/me/avatar", form, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
     } catch (e) {
       console.warn("pickAvatar failed:", e);
       Alert.alert("Error", "Could not update profile picture.");
@@ -191,13 +207,12 @@ export default function UserScreen() {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         }
       );
-
-      const updatedPayload = data || {};
-      const updated = updatedPayload.user || updatedPayload || {};
-
+      const updated = data.user || data || {};
       setMe(updated);
       setMsg("Profile updated");
-      if (updated.name) await AsyncStorage.setItem("userName", updated.name);
+      if (updated.name) {
+        await AsyncStorage.setItem("userName", updated.name);
+      }
     } catch (e) {
       console.warn("Save profile failed:", e);
       setErr(e?.response?.data?.error || "Failed to update profile");
@@ -217,7 +232,7 @@ export default function UserScreen() {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       await AsyncStorage.removeItem("token");
-      setDeleteConfirmVisible(false);
+      await AsyncStorage.removeItem("userAvatarUri");
       navigation.reset({
         index: 0,
         routes: [{ name: "Login" }],
@@ -225,8 +240,8 @@ export default function UserScreen() {
     } catch (e) {
       console.warn("Delete me failed:", e);
       setErr(e?.response?.data?.error || "Failed to delete account");
-      setDeleteConfirmVisible(false);
     } finally {
+      setDeleteConfirmVisible(false);
       setDeleting(false);
     }
   }
@@ -236,17 +251,12 @@ export default function UserScreen() {
     try {
       setAccBusy(true);
       setAccErr("");
-      const token = await AsyncStorage.getItem("token");
 
       if (payload._id) {
         const { _id, ...rest } = payload;
-        await api.put(`/accounts/${_id}`, rest, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
+        await api.put(`/accounts/${_id}`, rest);
       } else {
-        await api.post("/accounts", payload, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
+        await api.post("/accounts", payload);
       }
       setAccModalVisible(false);
       await refreshAccounts();
@@ -270,10 +280,7 @@ export default function UserScreen() {
           onPress: async () => {
             try {
               setAccBusy(true);
-              const token = await AsyncStorage.getItem("token");
-              await api.delete(`/accounts/${acc._id}`, {
-                headers: token ? { Authorization: `Bearer ${token}` } : {},
-              });
+              await api.delete(`/accounts/${acc._id}`);
               await refreshAccounts();
             } catch (e) {
               console.warn("Delete account failed:", e);

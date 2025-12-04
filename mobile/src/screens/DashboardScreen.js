@@ -10,21 +10,14 @@ import {
   Dimensions,
   ActivityIndicator,
   StatusBar,
+  Image,
 } from "react-native";
-import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 
+import api from "../lib/api";
+
 const { width } = Dimensions.get("window");
-
-const API_BASE =
-  process.env.EXPO_PUBLIC_API_URL?.replace(/\/+$/, "") ||
-  "http://localhost:4000";
-
-const api = axios.create({
-  baseURL: API_BASE,
-  withCredentials: true,
-});
 
 const BG_DARK = "#020617";
 const CARD_DARK = "#020819";
@@ -87,7 +80,7 @@ const slides = [
   },
 ];
 
-// ---------- currency helpers (copied from web logic) ----------
+// ---------- currency helpers ----------
 function decimalsForCurrency(code) {
   const zero = new Set(["JPY", "KRW", "CLP", "VND"]);
   const three = new Set(["BHD", "IQD", "JOD", "KWD", "OMR", "TND"]);
@@ -109,8 +102,10 @@ function formatMoney(n, prefix = "$") {
 }
 
 export default function DashboardScreen() {
-  const navigation = useNavigation(); // 👈 add this
+  const navigation = useNavigation();
+
   const [name, setName] = useState("");
+  const [avatarUri, setAvatarUri] = useState(null);
   const [summary, setSummary] = useState({
     expenses: 0,
     income: 0,
@@ -123,33 +118,45 @@ export default function DashboardScreen() {
       try {
         setLoading(true);
 
-        // 🔑 pull token
+        // 🔑 token + default header for shared api
         const token = await AsyncStorage.getItem("token");
+        if (token) {
+          api.defaults.headers.Authorization = `Bearer ${token}`;
+        }
 
         // name from AsyncStorage (fallback)
         const storedName = (await AsyncStorage.getItem("userName")) || "";
         setName(storedName);
 
-        // 🔹 fetch /me to get baseCurrency (and name, if you want)
-        const meResp = await api.get("/me", {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
-        const me = meResp?.data || {};
+        // ── fetch /me to get baseCurrency, name & avatar ──
+        const meResp = await api.get("/me");
+        const rawMe = meResp?.data || {};
+        const me = rawMe.user || rawMe || {};
         const baseCurrency = me.baseCurrency || "USD";
 
-        // optional: override name with backend one
         if (me.name && !storedName) {
           setName(me.name);
           await AsyncStorage.setItem("userName", me.name);
         }
 
-        // 🔹 fetch /transactions (same as web)
-        const txResp = await api.get("/transactions", {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
+        // avatar: backend first, then local cache
+        const backendAvatar = me.avatarUrl || me.profilePicture || null;
+        if (backendAvatar) {
+          const baseURL = api.defaults.baseURL || "";
+          const full =
+            backendAvatar.startsWith("http") || backendAvatar.startsWith("file")
+              ? backendAvatar
+              : `${baseURL}${backendAvatar}`;
+          setAvatarUri(full);
+        } else {
+          const storedAvatar = await AsyncStorage.getItem("userAvatarUri");
+          if (storedAvatar) setAvatarUri(storedAvatar);
+        }
+
+        // ── fetch /transactions ──
+        const txResp = await api.get("/transactions");
         const tx = Array.isArray(txResp.data) ? txResp.data : [];
 
-        // ---------- SAME MONTHLY CALC AS WEB ----------
         const now = new Date();
         const start = new Date(now.getFullYear(), now.getMonth(), 1);
         const end = new Date(
@@ -187,7 +194,6 @@ export default function DashboardScreen() {
         });
       } catch (e) {
         console.warn("Dashboard init failed:", e);
-        // on error, just show zeros so mobile ≠ fake demo numbers
         setSummary({
           expenses: 0,
           income: 0,
@@ -210,7 +216,7 @@ export default function DashboardScreen() {
 
   const handleCtaPress = (cta) => {
     console.log("CTA pressed:", cta);
-    // navigation hook later
+    // hook up navigation later
   };
 
   return (
@@ -226,11 +232,15 @@ export default function DashboardScreen() {
           <TouchableOpacity
             style={styles.userBadge}
             activeOpacity={0.8}
-            onPress={() => navigation.navigate("User")} // 👈 route name
+            onPress={() => navigation.navigate("User")}
           >
-            <Text style={styles.userInitial}>
-              {(name || "You").charAt(0).toUpperCase()}
-            </Text>
+            {avatarUri ? (
+              <Image source={{ uri: avatarUri }} style={styles.userAvatar} />
+            ) : (
+              <Text style={styles.userInitial}>
+                {(name || "You").charAt(0).toUpperCase()}
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -245,7 +255,7 @@ export default function DashboardScreen() {
           </Text>
         </View>
 
-        {/* Hero carousel powered by `slides` */}
+        {/* Hero carousel */}
         <ScrollView
           horizontal
           pagingEnabled
@@ -411,12 +421,18 @@ const styles = StyleSheet.create({
     color: "#e5e7eb",
   },
   userBadge: {
-    width: 30,
-    height: 30,
+    width: 32,
+    height: 32,
     borderRadius: 999,
     backgroundColor: BRAND_GREEN_SOFT,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+  },
+  userAvatar: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
   },
   userInitial: {
     fontSize: 15,
