@@ -77,7 +77,6 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
 
   async function onLogin() {
     console.log("[Login] button pressed (MOBILE)");
-    Alert.alert("Debug", "Login button pressed"); // 👈 TEMP debug
 
     try {
       setLoginErr("");

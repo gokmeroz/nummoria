@@ -1,18 +1,15 @@
 // mobile/src/screens/ExpensesScreen.js
 /* eslint-disable no-unused-vars */
 
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+// import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
   Modal,
+  KeyboardAvoidingView,
+  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -130,6 +127,7 @@ export default function ExpensesScreen({ route }) {
 
   // --- ui ---
   const [loading, setLoading] = useState(true);
+  const [initialDone, setInitialDone] = useState(false); // only for first full-screen loader
   const [err, setErr] = useState("");
 
   // --- filters ---
@@ -154,9 +152,6 @@ export default function ExpensesScreen({ route }) {
     accountId: "",
   });
 
-  // track first load so we don't flash loader again later
-  const initialLoadRef = useRef(false);
-
   /* ---------------------------- Lookups ---------------------------- */
   const categoriesById = useMemo(() => {
     const m = new Map();
@@ -180,49 +175,38 @@ export default function ExpensesScreen({ route }) {
   }, [transactions]);
 
   /* ----------------------------- Data load ----------------------------- */
-  const loadAll = useCallback(
-    async (options = {}) => {
-      const { initial = false } = options;
-      const shouldShowFullScreenLoader = initial && !initialLoadRef.current;
+  const loadAll = useCallback(async () => {
+    try {
+      setLoading(true);
+      setErr("");
 
-      try {
-        if (shouldShowFullScreenLoader) {
-          setLoading(true);
-        }
-        setErr("");
+      console.log("[Expenses] fetching data...");
+      const t0 = Date.now();
+      const [txRes, catRes, accRes] = await Promise.all([
+        api.get("/transactions", { params: { type: "expense" } }),
+        api.get("/categories"),
+        api.get("/accounts"),
+      ]);
+      console.log("[Expenses] data loaded in", Date.now() - t0, "ms");
 
-        console.log("[Expenses] fetching data...");
-        const t0 = Date.now();
-        const [txRes, catRes, accRes] = await Promise.all([
-          api.get("/transactions", { params: { type: "expense" } }),
-          api.get("/categories"),
-          api.get("/accounts"),
-        ]);
-        console.log("[Expenses] data loaded in", Date.now() - t0, "ms");
+      const cats = (catRes.data || []).filter(
+        (c) => c.kind === "expense" && !c.isDeleted
+      );
 
-        const cats = (catRes.data || []).filter(
-          (c) => c.kind === "expense" && !c.isDeleted
-        );
-
-        setCategories(cats);
-        setTransactions(txRes.data || []);
-        setAccounts((accRes.data || []).filter((a) => !a.isDeleted));
-      } catch (e) {
-        console.log("[Expenses] error", e.message);
-        setErr(e?.response?.data?.error || e.message || "Failed to load data");
-      } finally {
-        if (shouldShowFullScreenLoader) {
-          setLoading(false);
-          initialLoadRef.current = true;
-        }
-      }
-    },
-    [] // stable
-  );
+      setCategories(cats);
+      setTransactions(txRes.data || []);
+      setAccounts((accRes.data || []).filter((a) => !a.isDeleted));
+    } catch (e) {
+      console.log("[Expenses] error", e.message);
+      setErr(e?.response?.data?.error || e.message || "Failed to load data");
+    } finally {
+      setLoading(false);
+      setInitialDone((prev) => (prev ? prev : true)); // after first load, never show full loader again
+    }
+  }, []);
 
   useEffect(() => {
-    // only first time shows the full-screen loader
-    loadAll({ initial: true });
+    loadAll();
   }, [loadAll]);
 
   /* ----------------------------- Filtering ----------------------------- */
@@ -554,7 +538,6 @@ export default function ExpensesScreen({ route }) {
             setTransactions((prev) =>
               prev.filter((t) => String(t._id) !== String(tx._id))
             );
-            await loadAll(); // no full-screen loader after first load
           } catch (e) {
             Alert.alert(
               "Error",
@@ -579,15 +562,25 @@ export default function ExpensesScreen({ route }) {
         tags: v.tags || [],
       });
 
+      // clear parent nextDate locally so it stops generating virtual rows
       if (v.__kind === "virtual" && v.__parentId) {
         try {
-          await api.put(`/transactions/${v.__parentId}`, { nextDate: null });
-        } catch {}
+          const { data: parentUpdated } = await api.put(
+            `/transactions/${v.__parentId}`,
+            { nextDate: null }
+          );
+          setTransactions((prev) =>
+            prev.map((t) =>
+              String(t._id) === String(parentUpdated._id) ? parentUpdated : t
+            )
+          );
+        } catch {
+          // ignore
+        }
       }
 
       const createdArr = Array.isArray(data?.created) ? data.created : [data];
       setTransactions((prev) => [...createdArr, ...prev]);
-      await loadAll();
     } catch (e) {
       Alert.alert(
         "Error",
@@ -599,8 +592,12 @@ export default function ExpensesScreen({ route }) {
   async function deleteUpcoming(item) {
     if (item.__kind === "virtual") {
       try {
-        await api.put(`/transactions/${item.__parentId}`, { nextDate: null });
-        await loadAll();
+        const { data } = await api.put(`/transactions/${item.__parentId}`, {
+          nextDate: null,
+        });
+        setTransactions((prev) =>
+          prev.map((t) => (String(t._id) === String(data._id) ? data : t))
+        );
       } catch (e) {
         Alert.alert(
           "Error",
@@ -664,7 +661,7 @@ export default function ExpensesScreen({ route }) {
   }
 
   /* ----------------------------- Expense Modal ----------------------------- */
-  function ExpenseModal() {
+  const ExpenseModal = useCallback(() => {
     if (!modalOpen) return null;
 
     const submit = async () => {
@@ -732,7 +729,7 @@ export default function ExpensesScreen({ route }) {
           );
         }
         setModalOpen(false);
-        await loadAll(); // no full-screen loader here
+        // await loadAll(); // 🔥 remove, rely on local state
       } catch (e) {
         Alert.alert("Error", e?.response?.data?.error || e.message || "Error");
       }
@@ -744,169 +741,191 @@ export default function ExpensesScreen({ route }) {
       <Modal
         visible={modalOpen}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setModalOpen(false)}
       >
-        <View style={styles.modalBackdrop}>
+        <KeyboardAvoidingView
+          style={styles.modalBackdrop}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>
-              {editing ? "Edit expense" : "New expense"}
-            </Text>
-
-            {/* Account */}
-            <View style={styles.modalField}>
-              <Text style={styles.modalLabel}>Account</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingVertical: 4 }}
-                keyboardShouldPersistTaps="handled"
-              >
-                {accounts.map((a) => (
-                  <Chip
-                    key={a._id}
-                    label={`${a.name} · ${a.currency}`}
-                    selected={(form.accountId || defaultAccId) === a._id}
-                    onPress={() =>
-                      setForm((f) => ({
-                        ...f,
-                        accountId: a._id,
-                        currency: a.currency,
-                      }))
-                    }
-                    small
-                  />
-                ))}
-              </ScrollView>
-            </View>
-
-            {/* Amount + currency */}
-            <View style={styles.modalRow}>
-              <View style={[styles.modalField, { flex: 1 }]}>
-                <Text style={styles.modalLabel}>Amount</Text>
-                <TextInput
-                  value={form.amount}
-                  onChangeText={(txt) =>
-                    setForm((f) => ({ ...f, amount: txt }))
-                  }
-                  placeholder="1500.00"
-                  keyboardType="decimal-pad"
-                  style={styles.modalInput}
-                  placeholderTextColor="rgba(148,163,184,0.7)"
-                />
-              </View>
-              <View style={[styles.modalField, { width: 90 }]}>
-                <Text style={styles.modalLabel}>Currency</Text>
-                <TextInput
-                  value={form.currency}
-                  editable={false}
-                  style={styles.modalInput}
-                  placeholderTextColor="rgba(148,163,184,0.7)"
-                />
-              </View>
-            </View>
-
-            {/* Date */}
-            <View style={styles.modalField}>
-              <Text style={styles.modalLabel}>Date (YYYY-MM-DD)</Text>
-              <TextInput
-                value={form.date}
-                onChangeText={(txt) => setForm((f) => ({ ...f, date: txt }))}
-                placeholder="2025-12-03"
-                style={styles.modalInput}
-                placeholderTextColor="rgba(148,163,184,0.7)"
-              />
-            </View>
-
-            {/* Next date */}
-            <View style={styles.modalField}>
-              <Text style={styles.modalLabel}>Next date (optional)</Text>
-              <TextInput
-                value={form.nextDate}
-                onChangeText={(txt) =>
-                  setForm((f) => ({ ...f, nextDate: txt }))
-                }
-                placeholder="2025-12-25"
-                style={styles.modalInput}
-                placeholderTextColor="rgba(148,163,184,0.7)"
-              />
-              <Text style={styles.modalHint}>
-                If set, this shows up under Upcoming as a planned item.
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={styles.modalTitle}>
+                {editing ? "Edit expense" : "New expense"}
               </Text>
-            </View>
 
-            {/* Category */}
-            <View style={styles.modalField}>
-              <Text style={styles.modalLabel}>Category</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingVertical: 4 }}
-                keyboardShouldPersistTaps="handled"
-              >
-                {categories.map((c) => (
-                  <Chip
-                    key={c._id}
-                    label={c.name}
-                    selected={form.categoryId === c._id}
-                    onPress={() =>
-                      setForm((f) => ({ ...f, categoryId: c._id }))
-                    }
-                    small
+              {/* Account chips */}
+              <View style={styles.modalField}>
+                <Text style={styles.modalLabel}>Account</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {accounts.map((a) => (
+                    <TouchableOpacity
+                      key={a._id}
+                      onPress={() =>
+                        setForm((f) => ({ ...f, accountId: a._id }))
+                      }
+                      style={[
+                        styles.chip,
+                        form.accountId === a._id && styles.chipSelected,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.chipText,
+                          form.accountId === a._id && styles.chipTextSelected,
+                        ]}
+                      >
+                        {a.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+              {/* Amount + currency */}
+              <View style={styles.modalRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalLabel}>Amount</Text>
+                  <TextInput
+                    value={form.amount}
+                    onChangeText={(v) => setForm((f) => ({ ...f, amount: v }))}
+                    keyboardType="numeric"
+                    placeholder="0.00"
+                    placeholderTextColor={TEXT_MUTED}
+                    style={styles.modalInput}
                   />
-                ))}
-              </ScrollView>
-            </View>
+                </View>
+                <View style={{ width: 90 }}>
+                  <Text style={styles.modalLabel}>Currency</Text>
+                  <TextInput
+                    value={form.currency}
+                    onChangeText={(v) =>
+                      setForm((f) => ({ ...f, currency: v.toUpperCase() }))
+                    }
+                    autoCapitalize="characters"
+                    placeholder="USD"
+                    placeholderTextColor={TEXT_MUTED}
+                    style={styles.modalInput}
+                  />
+                </View>
+              </View>
 
-            {/* Description */}
-            <View style={styles.modalField}>
-              <Text style={styles.modalLabel}>Description</Text>
-              <TextInput
-                value={form.description}
-                onChangeText={(txt) =>
-                  setForm((f) => ({ ...f, description: txt }))
-                }
-                placeholder="Optional memo"
-                style={styles.modalInput}
-                placeholderTextColor="rgba(148,163,184,0.7)"
-              />
-            </View>
+              {/* Date + next date */}
+              <View style={styles.modalRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalLabel}>Date</Text>
+                  <TextInput
+                    value={form.date}
+                    onChangeText={(v) => setForm((f) => ({ ...f, date: v }))}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor={TEXT_MUTED}
+                    style={styles.modalInput}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalLabel}>Next date (optional)</Text>
+                  <TextInput
+                    value={form.nextDate}
+                    onChangeText={(v) =>
+                      setForm((f) => ({ ...f, nextDate: v }))
+                    }
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor={TEXT_MUTED}
+                    style={styles.modalInput}
+                  />
+                </View>
+              </View>
 
-            {/* Tags */}
-            <View style={styles.modalField}>
-              <Text style={styles.modalLabel}>Tags (comma-separated)</Text>
-              <TextInput
-                value={form.tagsCsv}
-                onChangeText={(txt) => setForm((f) => ({ ...f, tagsCsv: txt }))}
-                placeholder="groceries, reimbursement"
-                style={styles.modalInput}
-                placeholderTextColor="rgba(148,163,184,0.7)"
-              />
-            </View>
+              {/* Category chips */}
+              <View style={styles.modalField}>
+                <Text style={styles.modalLabel}>Category</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {categories.map((c) => (
+                    <TouchableOpacity
+                      key={c._id}
+                      onPress={() =>
+                        setForm((f) => ({ ...f, categoryId: c._id }))
+                      }
+                      style={[
+                        styles.chip,
+                        form.categoryId === c._id && styles.chipSelected,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.chipText,
+                          form.categoryId === c._id && styles.chipTextSelected,
+                        ]}
+                      >
+                        {c.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
 
-            {/* Actions */}
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalBtn, styles.modalBtnSecondary]}
-                onPress={() => setModalOpen(false)}
-              >
-                <Text style={styles.modalBtnSecondaryText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalBtn, styles.modalBtnPrimary]}
-                onPress={submit}
-              >
-                <Text style={styles.modalBtnPrimaryText}>
-                  {editing ? "Save" : "Add"}
+              {/* Description */}
+              <View style={styles.modalField}>
+                <Text style={styles.modalLabel}>Description</Text>
+                <TextInput
+                  value={form.description}
+                  onChangeText={(v) =>
+                    setForm((f) => ({ ...f, description: v }))
+                  }
+                  placeholder="Optional description"
+                  placeholderTextColor={TEXT_MUTED}
+                  style={styles.modalInput}
+                />
+              </View>
+
+              {/* Tags */}
+              <View style={styles.modalField}>
+                <Text style={styles.modalLabel}>Tags (comma separated)</Text>
+                <TextInput
+                  value={form.tagsCsv}
+                  onChangeText={(v) => setForm((f) => ({ ...f, tagsCsv: v }))}
+                  placeholder="groceries, rent"
+                  placeholderTextColor={TEXT_MUTED}
+                  style={styles.modalInput}
+                />
+                <Text style={styles.modalHint}>
+                  Example: groceries, dinner, weekend
                 </Text>
-              </TouchableOpacity>
-            </View>
+              </View>
+
+              {/* Actions */}
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[styles.modalBtn, styles.modalBtnSecondary]}
+                  onPress={() => setModalOpen(false)}
+                >
+                  <Text style={styles.modalBtnSecondaryText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalBtn, styles.modalBtnPrimary]}
+                  onPress={submit}
+                >
+                  <Text style={styles.modalBtnPrimaryText}>
+                    {editing ? "Save" : "Add"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     );
-  }
-
+  }, [modalOpen, form, editing, accounts, categories, accountId, loadAll]);
   /* ------------------------------ Header & Filters ------------------------------ */
   function Header() {
     return (
@@ -1060,7 +1079,7 @@ export default function ExpensesScreen({ route }) {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.refreshBtn}
-            onPress={() => loadAll()} // refresh without full-screen loader
+            onPress={loadAll}
             activeOpacity={0.8}
           >
             <Text style={styles.refreshBtnText}>Refresh</Text>
@@ -1196,11 +1215,8 @@ export default function ExpensesScreen({ route }) {
         </View>
         {noteMixedCurrency && (
           <Text style={styles.insightsNote}>
-            KPIs are calculated in{" "}
-            <Text style={{ fontWeight: "600", color: TEXT_HEADING }}>
-              {statsCurrency}
-            </Text>
-            . Pick a currency above to switch.
+            KPIs are calculated in {statsCurrency}. Pick a currency above to
+            switch.
           </Text>
         )}
 
@@ -1294,7 +1310,7 @@ export default function ExpensesScreen({ route }) {
   }
 
   /* ------------------------------ Loading state ------------------------------ */
-  if (loading) {
+  if (!initialDone) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
         <View style={styles.loadingSpinnerOuter}>
@@ -1340,8 +1356,7 @@ export default function ExpensesScreen({ route }) {
           )}
         </View>
       </ScrollView>
-
-      <ExpenseModal />
+      {ExpenseModal()}
     </SafeAreaView>
   );
 }
@@ -1977,5 +1992,11 @@ const styles = StyleSheet.create({
   loadingSubtitle: {
     fontSize: 13,
     color: TEXT_MUTED,
+  },
+  modalScrollContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingVertical: 40,
+    paddingHorizontal: 16,
   },
 });
