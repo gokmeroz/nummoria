@@ -16,6 +16,7 @@ import SignUpScreen from "./src/screens/SignUpScreen";
 import AppTabs from "./src/navigation/AppTabs";
 import UserScreen from "./src/screens/UserScreen";
 import InvestmentPerformanceScreen from "./src/screens/InvestmentPerformance";
+import FinancialAdvisorScreen from "./src/screens/FinancialAdvisorScreen";
 import api from "./src/lib/api";
 
 const Stack = createNativeStackNavigator();
@@ -154,6 +155,21 @@ export default function App() {
           }}
         />
       </Stack.Navigator>
+      {/* <Stack.Navigator>
+        <Stack.Screen
+          name="FinancialAdvisor"
+          component={FinancialAdvisorScreen}
+          options={{
+            headerShown: true,
+            title: "Financial Advisor",
+            headerBackTitleVisible: false,
+            presentation: "card",
+            headerStyle: { backgroundColor: "#020819" },
+            headerTintColor: "#e5e7eb",
+            headerTitleStyle: { fontWeight: "700" },
+          }}
+        />
+      </Stack.Navigator> */}
     </NavigationContainer>
   );
 }
