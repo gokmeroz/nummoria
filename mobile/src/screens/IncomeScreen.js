@@ -63,6 +63,41 @@ function fmtDateUTC(dateLike) {
   });
 }
 
+function startOfYearUTC(dateLike) {
+  const d = new Date(dateLike);
+  return startOfUTC(new Date(Date.UTC(d.getUTCFullYear(), 0, 1)));
+}
+function endOfYearUTC(dateLike) {
+  const d = new Date(dateLike);
+  return new Date(Date.UTC(d.getUTCFullYear(), 11, 31, 23, 59, 59, 999));
+}
+
+function dateMatchesPreset(dateStr, preset) {
+  if (preset === "ALL") return true;
+  const d = startOfUTC(new Date(dateStr));
+  const today = startOfUTC(new Date());
+
+  if (preset === "THIS_MONTH") {
+    const s = startOfMonthUTC(today);
+    const e = endOfMonthUTC(today);
+    return d >= s && d <= e;
+  }
+
+  if (preset === "LAST_30") {
+    const thirtyAgo = new Date(today);
+    thirtyAgo.setUTCDate(thirtyAgo.getUTCDate() - 29); // inclusive 30 days
+    return d >= thirtyAgo && d <= today;
+  }
+
+  if (preset === "THIS_YEAR") {
+    const s = startOfYearUTC(today);
+    const e = endOfYearUTC(today);
+    return d >= s && d <= e;
+  }
+
+  return true;
+}
+
 /* --------------------------- Money helpers --------------------------- */
 function decimalsForCurrency(code) {
   const zero = new Set(["JPY", "KRW", "CLP", "VND"]);
@@ -136,6 +171,7 @@ export default function IncomeScreen({ route }) {
   const [fCurrency, setFCurrency] = useState("ALL");
   const [sortKey, setSortKey] = useState("date_desc");
   const [showUpcoming, setShowUpcoming] = useState(false);
+  const [fDatePreset, setFDatePreset] = useState("ALL"); // ✅ date filter
 
   // --- modal state (create / edit) ---
   const [modalOpen, setModalOpen] = useState(false);
@@ -223,6 +259,9 @@ export default function IncomeScreen({ route }) {
       const cur = t.currency || "USD";
       if (fCurrency !== "ALL" && cur !== fCurrency) return false;
 
+      // ✅ date filter
+      if (!dateMatchesPreset(t.date, fDatePreset)) return false;
+
       if (needle) {
         const cat = categoriesById.get(t.categoryId)?.name || "";
         const acc = accountsById.get(t.accountId)?.name || "";
@@ -270,6 +309,7 @@ export default function IncomeScreen({ route }) {
     fAccountId,
     fCategoryId,
     fCurrency,
+    fDatePreset,
     categoriesById,
     accountsById,
     sortKey,
@@ -311,6 +351,7 @@ export default function IncomeScreen({ route }) {
       if (t.type !== "income") continue;
       const dt = new Date(t.date);
       if (dt > today) {
+        if (!dateMatchesPreset(t.date, fDatePreset)) continue; // ✅ respect date filter
         map.set(keyOf(t), { ...t, __kind: "actual" });
       }
     }
@@ -320,6 +361,7 @@ export default function IncomeScreen({ route }) {
       if (t.type !== "income" || !t.nextDate) continue;
       const nd = new Date(t.nextDate);
       if (nd <= today) continue;
+      if (!dateMatchesPreset(nd.toISOString(), fDatePreset)) continue; // ✅ respect date filter
 
       const v = {
         ...t,
@@ -361,6 +403,7 @@ export default function IncomeScreen({ route }) {
     fAccountId,
     fCategoryId,
     fCurrency,
+    fDatePreset,
     categoriesById,
     accountsById,
   ]);
@@ -939,17 +982,27 @@ export default function IncomeScreen({ route }) {
             <Text style={styles.headerEyebrow}>Income overview</Text>
             <Text style={styles.headerTitle}>Income</Text>
           </View>
-          <TouchableOpacity
-            style={styles.headerUpcomingBtn}
-            onPress={() => setShowUpcoming((v) => !v)}
-          >
-            <Text style={styles.headerUpcomingText}>Upcoming</Text>
-            <View style={styles.headerUpcomingBadge}>
-              <Text style={styles.headerUpcomingBadgeText}>
-                {upcoming.length}
-              </Text>
-            </View>
-          </TouchableOpacity>
+          <View style={styles.headerTopRight}>
+            <TouchableOpacity
+              style={styles.headerUpcomingBtn}
+              onPress={() => setShowUpcoming((v) => !v)}
+            >
+              <Text style={styles.headerUpcomingText}>Upcoming</Text>
+              <View style={styles.headerUpcomingBadge}>
+                <Text style={styles.headerUpcomingBadgeText}>
+                  {upcoming.length}
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.headerIconBtn}
+              onPress={loadAll}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.headerIconPlus}>↻</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Search */}
@@ -1027,6 +1080,42 @@ export default function IncomeScreen({ route }) {
           </ScrollView>
         </View>
 
+        {/* Date filters */}
+        <View style={styles.dateRow}>
+          <Text style={styles.sortLabel}>Date:</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.sortChipRow}
+            keyboardShouldPersistTaps="handled"
+          >
+            <Chip
+              label="All time"
+              selected={fDatePreset === "ALL"}
+              onPress={() => setFDatePreset("ALL")}
+              small
+            />
+            <Chip
+              label="This month"
+              selected={fDatePreset === "THIS_MONTH"}
+              onPress={() => setFDatePreset("THIS_MONTH")}
+              small
+            />
+            <Chip
+              label="Last 30 days"
+              selected={fDatePreset === "LAST_30"}
+              onPress={() => setFDatePreset("LAST_30")}
+              small
+            />
+            <Chip
+              label="This year"
+              selected={fDatePreset === "THIS_YEAR"}
+              onPress={() => setFDatePreset("THIS_YEAR")}
+              small
+            />
+          </ScrollView>
+        </View>
+
         {/* Sorting row */}
         <View style={styles.sortRow}>
           <Text style={styles.sortLabel}>Sorting:</Text>
@@ -1070,24 +1159,6 @@ export default function IncomeScreen({ route }) {
               Total income {cur}: {major}
             </Text>
           ))}
-        </View>
-
-        {/* Actions */}
-        <View style={styles.headerActionButtons}>
-          <TouchableOpacity
-            style={styles.newIncomeBtn}
-            onPress={openCreate}
-            activeOpacity={0.9}
-          >
-            <Text style={styles.newIncomeBtnText}>+ New income</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.refreshBtn}
-            onPress={loadAll}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.refreshBtnText}>Refresh</Text>
-          </TouchableOpacity>
         </View>
       </View>
     );
@@ -1360,6 +1431,14 @@ export default function IncomeScreen({ route }) {
           )}
         </View>
       </ScrollView>
+
+      {/* FAB like Expenses / Investments */}
+      <View style={styles.fabContainer}>
+        <TouchableOpacity style={styles.fab} onPress={openCreate}>
+          <Text style={styles.fabPlus}>＋</Text>
+        </TouchableOpacity>
+      </View>
+
       {IncomeModal()}
     </SafeAreaView>
   );
@@ -1394,6 +1473,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 10,
   },
+  headerTopRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   headerEyebrow: {
     fontSize: 12,
     color: TEXT_MUTED,
@@ -1403,10 +1487,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: "700",
     color: TEXT_HEADING,
-  },
-  headerActionsRight: {
-    flexDirection: "row",
-    alignItems: "center",
   },
   headerUpcomingBtn: {
     flexDirection: "row",
@@ -1436,6 +1516,22 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#bbf7d0",
     fontWeight: "600",
+  },
+  headerIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+    backgroundColor: "#020617",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerIconPlus: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#bbf7d0",
+    includeFontPadding: false,
   },
 
   searchContainer: {
@@ -1480,6 +1576,12 @@ const styles = StyleSheet.create({
     paddingRight: 8,
   },
 
+  dateRow: {
+    marginTop: 4,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
   totalsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -1490,38 +1592,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     color: TEXT_SOFT,
-  },
-
-  headerActionButtons: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 10,
-    marginBottom: 2,
-  },
-  newIncomeBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: main,
-  },
-  newIncomeBtnText: {
-    color: "#022c22",
-    fontWeight: "700",
-    fontSize: 14,
-  },
-  refreshBtn: {
-    marginLeft: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
-  },
-  refreshBtnText: {
-    color: TEXT_SOFT,
-    fontSize: 13,
-    fontWeight: "500",
   },
 
   /* Chips */
@@ -1850,7 +1920,7 @@ const styles = StyleSheet.create({
   rowAmount: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#bbf7d0", // ✅ green-ish for income
+    color: "#bbf7d0", // green-ish for income
   },
   rowActions: {
     marginTop: 6,
@@ -2002,5 +2072,30 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingVertical: 40,
     paddingHorizontal: 16,
+  },
+
+  /* FAB like Expenses / Investments */
+  fabContainer: {
+    position: "absolute",
+    right: 16,
+    bottom: 24,
+  },
+  fab: {
+    width: 52,
+    height: 52,
+    borderRadius: 999,
+    backgroundColor: main,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  fabPlus: {
+    fontSize: 30,
+    lineHeight: 30,
+    color: "white",
   },
 });

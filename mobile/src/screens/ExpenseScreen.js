@@ -138,6 +138,9 @@ export default function ExpensesScreen({ route }) {
   const [sortKey, setSortKey] = useState("date_desc");
   const [showUpcoming, setShowUpcoming] = useState(false);
 
+  // 🔥 date filters (new)
+  const [datePreset, setDatePreset] = useState("ALL"); // "ALL" | "THIS_MONTH" | "LAST_MONTH" | "LAST_90"
+
   // --- modal state (create / edit) ---
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -209,6 +212,37 @@ export default function ExpensesScreen({ route }) {
     loadAll();
   }, [loadAll]);
 
+  /* ------------------------ Shared date-filter logic ------------------------ */
+  function passesDateFilter(dateStr, preset) {
+    if (preset === "ALL") return true;
+
+    const txDate = startOfUTC(new Date(dateStr));
+    if (Number.isNaN(txDate.getTime())) return false;
+
+    const today = startOfUTC(new Date());
+
+    if (preset === "THIS_MONTH") {
+      const s = startOfMonthUTC(today);
+      const e = endOfMonthUTC(today);
+      return txDate >= s && txDate <= e;
+    }
+
+    if (preset === "LAST_MONTH") {
+      const lastMonthRef = addMonthsUTC(today, -1);
+      const s = startOfMonthUTC(lastMonthRef);
+      const e = endOfMonthUTC(lastMonthRef);
+      return txDate >= s && txDate <= e;
+    }
+
+    if (preset === "LAST_90") {
+      const from = new Date(today);
+      from.setUTCDate(from.getUTCDate() - 90);
+      return txDate >= from && txDate <= today;
+    }
+
+    return true;
+  }
+
   /* ----------------------------- Filtering ----------------------------- */
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -223,6 +257,9 @@ export default function ExpensesScreen({ route }) {
 
       const cur = t.currency || "USD";
       if (fCurrency !== "ALL" && cur !== fCurrency) return false;
+
+      // 🔥 date filter
+      if (!passesDateFilter(t.date, datePreset)) return false;
 
       if (needle) {
         const cat = categoriesById.get(t.categoryId)?.name || "";
@@ -274,6 +311,7 @@ export default function ExpensesScreen({ route }) {
     categoriesById,
     accountsById,
     sortKey,
+    datePreset,
   ]);
 
   /* ------------------------------ Totals ------------------------------ */
@@ -343,6 +381,9 @@ export default function ExpensesScreen({ route }) {
       const cur = t.currency || "USD";
       if (fCurrency !== "ALL" && cur !== fCurrency) return false;
 
+      // 🔥 apply same date preset to scheduled date
+      if (!passesDateFilter(t.date, datePreset)) return false;
+
       if (needle) {
         const cat = categoriesById.get(t.categoryId)?.name || "";
         const acc = accountsById.get(t.accountId)?.name || "";
@@ -364,6 +405,7 @@ export default function ExpensesScreen({ route }) {
     fCurrency,
     categoriesById,
     accountsById,
+    datePreset,
   ]);
 
   /* ------------------------------- Insights (KPIs) ------------------------------- */
@@ -729,7 +771,6 @@ export default function ExpensesScreen({ route }) {
           );
         }
         setModalOpen(false);
-        // await loadAll(); // 🔥 remove, rely on local state
       } catch (e) {
         Alert.alert("Error", e?.response?.data?.error || e.message || "Error");
       }
@@ -925,7 +966,8 @@ export default function ExpensesScreen({ route }) {
         </KeyboardAvoidingView>
       </Modal>
     );
-  }, [modalOpen, form, editing, accounts, categories, accountId, loadAll]);
+  }, [modalOpen, form, editing, accounts, categories, accountId]);
+
   /* ------------------------------ Header & Filters ------------------------------ */
   function Header() {
     return (
@@ -945,6 +987,13 @@ export default function ExpensesScreen({ route }) {
                 {upcoming.length}
               </Text>
             </View>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.headerIconBtn}
+            onPress={loadAll}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.headerIconPlus}>↻</Text>
           </TouchableOpacity>
         </View>
 
@@ -1068,15 +1117,39 @@ export default function ExpensesScreen({ route }) {
           ))}
         </View>
 
-        {/* Actions */}
+        {/* 🔥 Date filters + Refresh (replacing '+ New expense') */}
         <View style={styles.headerActionButtons}>
-          <TouchableOpacity
-            style={styles.newExpenseBtn}
-            onPress={openCreate}
-            activeOpacity={0.9}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.dateFilterChipRow}
+            keyboardShouldPersistTaps="handled"
           >
-            <Text style={styles.newExpenseBtnText}>+ New expense</Text>
-          </TouchableOpacity>
+            <Chip
+              label="All time"
+              selected={datePreset === "ALL"}
+              onPress={() => setDatePreset("ALL")}
+              small
+            />
+            <Chip
+              label="This month"
+              selected={datePreset === "THIS_MONTH"}
+              onPress={() => setDatePreset("THIS_MONTH")}
+              small
+            />
+            <Chip
+              label="Last month"
+              selected={datePreset === "LAST_MONTH"}
+              onPress={() => setDatePreset("LAST_MONTH")}
+              small
+            />
+            <Chip
+              label="Last 90 days"
+              selected={datePreset === "LAST_90"}
+              onPress={() => setDatePreset("LAST_90")}
+              small
+            />
+          </ScrollView>
           <TouchableOpacity
             style={styles.refreshBtn}
             onPress={loadAll}
@@ -1356,6 +1429,14 @@ export default function ExpensesScreen({ route }) {
           )}
         </View>
       </ScrollView>
+
+      {/* FAB like Investments */}
+      <View style={styles.fabContainer}>
+        <TouchableOpacity style={styles.fab} onPress={openCreate}>
+          <Text style={styles.fabPlus}>＋</Text>
+        </TouchableOpacity>
+      </View>
+
       {ExpenseModal()}
     </SafeAreaView>
   );
@@ -1433,7 +1514,22 @@ const styles = StyleSheet.create({
     color: "#bbf7d0",
     fontWeight: "600",
   },
-
+  headerIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+    backgroundColor: "#020617",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerIconPlus: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#bbf7d0",
+    includeFontPadding: false,
+  },
   searchContainer: {
     marginTop: 8,
     marginBottom: 10,
@@ -1494,17 +1590,12 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 2,
   },
-  newExpenseBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: main,
+  // used for date chips ScrollView content
+  dateFilterChipRow: {
+    paddingVertical: 4,
+    paddingRight: 8,
   },
-  newExpenseBtnText: {
-    color: "#022c22",
-    fontWeight: "700",
-    fontSize: 14,
-  },
+
   refreshBtn: {
     marginLeft: 10,
     paddingHorizontal: 12,
@@ -1998,5 +2089,30 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingVertical: 40,
     paddingHorizontal: 16,
+  },
+
+  /* FAB like Investments */
+  fabContainer: {
+    position: "absolute",
+    right: 16,
+    bottom: 24,
+  },
+  fab: {
+    width: 52,
+    height: 52,
+    borderRadius: 999,
+    backgroundColor: main,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  fabPlus: {
+    fontSize: 30,
+    lineHeight: 30,
+    color: "white",
   },
 });
