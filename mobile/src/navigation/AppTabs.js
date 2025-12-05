@@ -9,7 +9,7 @@ import ExpensesScreen from "../screens/ExpenseScreen";
 import IncomeScreen from "../screens/IncomeScreen";
 import InvestmentScreen from "../screens/InvestmentScreen";
 import FinancialAdvisorScreen from "../screens/FinancialAdvisorScreen";
-
+import ReportsScreen from "../screens/ReportsScreen";
 const Tab = createBottomTabNavigator();
 
 const BRAND_CARD = "#020819";
@@ -114,7 +114,7 @@ export default function AppTabs() {
       />
       <Tab.Screen
         name="Reports"
-        component={DashboardScreen}
+        component={ReportsScreen}
         options={{
           title: "Reports",
           tabBarLabel: ({ focused }) => (
