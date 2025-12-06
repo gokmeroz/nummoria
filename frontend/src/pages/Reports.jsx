@@ -1,26 +1,36 @@
-/* eslint-disable no-empty */
 /* eslint-disable no-unused-vars */
-// src/pages/Reports.jsx
-import React, {
-  useEffect,
-  useMemo,
-  useState,
-  useCallback,
-  useRef,
-} from "react";
+
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Modal,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { Calendar } from "react-native-calendars";
+
+// 🔹 static imports – no dynamic import funkiness, no EncodingType
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
+
 import api from "../lib/api";
-import { ResponsiveSankey } from "@nivo/sankey";
-import { toPng } from "html-to-image";
 
-// [BRAND] logo (Vite resolves this URL at build time)
-const logoUrl = new URL("../assets/nummoria_logo.png", import.meta.url).href;
-
-// [BRAND] App name
-const APP_NAME = "Nummoria";
-
-/* ------------------------------ Ingest endpoints ------------------------------ */
-const INGEST_CSV_ENDPOINT = "/ingest/csv";
-const INGEST_PDF_ENDPOINT = "/ingest/pdf";
+const main = "#22c55e";
+const secondary = "#4ade80";
+const BG_DARK = "#020617";
+const CARD_DARK = "#020819";
+const BORDER_DARK = "#0f172a";
+const TEXT_SOFT = "rgba(148,163,184,0.85)";
+const TEXT_MUTED = "rgba(148,163,184,0.7)";
+const TEXT_HEADING = "#e5e7eb";
+const DATE_LANG = "en-US";
 
 /* ------------------------------ Money helpers ------------------------------ */
 function decimalsForCurrency(code) {
@@ -40,130 +50,101 @@ const fmtMoneyUI = (minor, cur = "USD") =>
     currency: cur || "USD",
   }).format(minorToMajor(minor, cur));
 
-const fmtMoneyPDF = (minor, cur = "USD") => {
-  const val = minorToMajor(minor, cur);
-  let s = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: cur || "USD",
-    currencyDisplay: "symbol",
-  }).format(val);
-  s = s
-    .replace(/\u00A0|\u202F/g, " ")
-    .replace(/\u2212/g, "-")
-    .replace(/[^\x20-\x7E]/g, "");
-  return s;
-};
-const toPdfText = (s) =>
-  String(s || "")
-    .replace(/\u00A0|\u202F/g, " ")
-    .replace(/[^\x20-\x7E]/g, "");
-
-/* ----------------------------- Small utilities ----------------------------- */
-async function urlToDataURL(url) {
-  const res = await fetch(url);
-  const blob = await res.blob();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = reject;
-    reader.onload = () => resolve(reader.result);
-    reader.readAsDataURL(blob);
+function fmtDate(dateLike) {
+  const d = new Date(dateLike);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString(DATE_LANG, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
   });
 }
+
+// helper to format YYYY-MM-DD for quick ranges
+function toISODate(d) {
+  return d.toISOString().slice(0, 10);
+}
+
+/* ------------------------- CSV escape (like web) -------------------------- */
 function csvEscape(v) {
   const s = String(v ?? "");
   if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }
-function downloadBlob(filename, blob) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => {
-    URL.revokeObjectURL(url);
-    a.remove();
-  }, 0);
+
+/* ------- Build marked dates for calendar "period" (start–end range) ------- */
+function buildMarkedDates(startStr, endStr) {
+  if (!startStr && !endStr) return {};
+
+  let start = startStr;
+  let end = endStr;
+
+  if (start && end && start > end) {
+    const tmp = start;
+    start = end;
+    end = tmp;
+  }
+
+  const marked = {};
+
+  if (start && !end) {
+    marked[start] = {
+      startingDay: true,
+      endingDay: true,
+      color: main,
+      textColor: "#0f172a",
+    };
+    return marked;
+  }
+
+  if (!start || !end) return {};
+
+  const cursor = new Date(start);
+  const endDate = new Date(end);
+
+  while (cursor <= endDate) {
+    const key = toISODate(cursor);
+    marked[key] = {
+      startingDay: key === start,
+      endingDay: key === end,
+      color: main,
+      textColor: "#0f172a",
+    };
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return marked;
 }
 
-/* ------------------------------ Sankey helpers ------------------------------ */
-function buildSankeyFromRows(rows, categoriesById, currency, topN = 5) {
-  const curRows = rows.filter((r) => (r.currency || "USD") === currency);
-
-  let income = 0;
-  let outflow = 0;
-
-  const byCategory = new Map();
-
-  for (const t of curRows) {
-    const amt = Math.abs(minorToMajor(t.amountMinor, currency));
-    if (t.type === "income") {
-      income += amt;
-    } else {
-      outflow += amt;
-      const catName = categoriesById.get(t.categoryId)?.name || "Other";
-      const desc = (t.description || "—").trim() || "—";
-      if (!byCategory.has(catName))
-        byCategory.set(catName, { total: 0, items: new Map() });
-      const bucket = byCategory.get(catName);
-      bucket.total += amt;
-      bucket.items.set(desc, (bucket.items.get(desc) || 0) + amt);
-    }
-  }
-
-  const nodes = new Map();
-  const links = [];
-  const addNode = (id) => {
-    if (!nodes.has(id)) nodes.set(id, { id });
-  };
-
-  const ROOT = "Income";
-  addNode(ROOT);
-
-  for (const [cat, data] of byCategory.entries()) {
-    addNode(cat);
-    links.push({
-      source: ROOT,
-      target: cat,
-      value: Number(data.total.toFixed(2)),
-    });
-
-    const items = [...data.items.entries()].sort((a, b) => b[1] - a[1]);
-    const top = items.slice(0, topN);
-    const restSum = items.slice(topN).reduce((s, [, v]) => s + v, 0);
-
-    for (const [desc, val] of top) {
-      addNode(desc);
-      links.push({ source: cat, target: desc, value: Number(val.toFixed(2)) });
-    }
-    if (restSum > 0) {
-      const otherId = `${cat}: Other`;
-      addNode(otherId);
-      links.push({
-        source: cat,
-        target: otherId,
-        value: Number(restSum.toFixed(2)),
-      });
-    }
-  }
-
-  const savings = Math.max(0, income - outflow);
-  if (savings > 0) {
-    const SAVE = "Sparen / Savings";
-    addNode(SAVE);
-    links.push({
-      source: ROOT,
-      target: SAVE,
-      value: Number(savings.toFixed(2)),
-    });
-  }
-
-  return { nodes: Array.from(nodes.values()), links };
+/* ----------------------------- Small components ---------------------------- */
+function Chip({ label, selected, onPress, small }) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.85}
+      style={[
+        styles.chip,
+        small && styles.chipSmall,
+        selected && styles.chipSelected,
+      ]}
+    >
+      <Text
+        numberOfLines={1}
+        style={[
+          styles.chipText,
+          small && styles.chipTextSmall,
+          selected && styles.chipTextSelected,
+        ]}
+      >
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
 }
 
-/* ---------------------------------- Page ---------------------------------- */
-function ReportsView() {
+/* =============================== Screen =============================== */
+
+export default function ReportsScreen() {
   // data
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -171,19 +152,12 @@ function ReportsView() {
 
   // ui
   const [loading, setLoading] = useState(true);
+  const [initialDone, setInitialDone] = useState(false);
   const [err, setErr] = useState("");
   const [q, setQ] = useState("");
-  const [downloading, setDownloading] = useState(false);
+  const [debouncedQ, setDebouncedQ] = useState("");
 
-  // import state
-  const [importingCsv, setImportingCsv] = useState(false);
-  const [importingPdf, setImportingPdf] = useState(false);
-  const [importMsg, setImportMsg] = useState("");
-  const csvInputRef = useRef(null);
-  const pdfInputRef = useRef(null);
-  const sankeyRef = useRef(null); // <-- used to snapshot the chart
-
-  // filters
+  // APPLIED filters
   const [fStart, setFStart] = useState("");
   const [fEnd, setFEnd] = useState("");
   const [fType, setFType] = useState("ALL");
@@ -192,17 +166,31 @@ function ReportsView() {
   const [fCurrency, setFCurrency] = useState("ALL");
   const [fMin, setFMin] = useState("");
   const [fMax, setFMax] = useState("");
+  const [rangePreset, setRangePreset] = useState("ALL");
 
-  /* ---------------------------------- Load ---------------------------------- */
+  // filters sheet
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  /* ----------------------------- Debounce search ----------------------------- */
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQ(q);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [q]);
+
+  /* ----------------------------- Load data ----------------------------- */
   const loadAll = useCallback(async () => {
     try {
       setLoading(true);
       setErr("");
+
       const [txRes, catRes, accRes] = await Promise.all([
         api.get("/transactions"),
         api.get("/categories"),
         api.get("/accounts"),
       ]);
+
       setTransactions(Array.isArray(txRes.data) ? txRes.data : []);
       setCategories(Array.isArray(catRes.data) ? catRes.data : []);
       setAccounts((accRes.data || []).filter((a) => !a?.isDeleted));
@@ -212,6 +200,7 @@ function ReportsView() {
       );
     } finally {
       setLoading(false);
+      setInitialDone((prev) => (prev ? prev : true));
     }
   }, []);
 
@@ -219,7 +208,7 @@ function ReportsView() {
     loadAll();
   }, [loadAll]);
 
-  /* ---------------------------- Lookups / helpers --------------------------- */
+  /* --------------------------- Lookups/helpers --------------------------- */
   const categoriesById = useMemo(() => {
     const m = new Map();
     for (const c of categories) m.set(c._id, c);
@@ -237,13 +226,63 @@ function ReportsView() {
     return ["ALL", ...Array.from(s)];
   }, [transactions]);
 
-  /* ------------------------------- Filtering -------------------------------- */
+  /* --------------------------- Reset filters --------------------------- */
+  const resetAllFilters = useCallback(() => {
+    setFStart("");
+    setFEnd("");
+    setFType("ALL");
+    setFAccountId("ALL");
+    setFCategoryId("ALL");
+    setFCurrency("ALL");
+    setFMin("");
+    setFMax("");
+    setRangePreset("ALL");
+  }, []);
+
+  const activeFilterCount = useMemo(() => {
+    let c = 0;
+    if (rangePreset !== "ALL" || fStart || fEnd) c++;
+    if (fType !== "ALL") c++;
+    if (fAccountId !== "ALL") c++;
+    if (fCategoryId !== "ALL") c++;
+    if (fCurrency !== "ALL") c++;
+    if (fMin.trim() !== "" || fMax.trim() !== "") c++;
+    return c;
+  }, [
+    rangePreset,
+    fStart,
+    fEnd,
+    fType,
+    fAccountId,
+    fCategoryId,
+    fCurrency,
+    fMin,
+    fMax,
+  ]);
+
+  /* ------------------------------- Filtering ------------------------------- */
   const rows = useMemo(() => {
-    const start = fStart ? new Date(`${fStart}T00:00:00`) : null;
-    const end = fEnd ? new Date(`${fEnd}T23:59:59.999`) : null;
-    const minNum = fMin !== "" ? Number(fMin) : null;
-    const maxNum = fMax !== "" ? Number(fMax) : null;
-    const needle = q.trim().toLowerCase();
+    let start = null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(fStart)) {
+      start = new Date(`${fStart}T00:00:00`);
+    }
+
+    let end = null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(fEnd)) {
+      end = new Date(`${fEnd}T23:59:59.999`);
+    }
+
+    let minNum = null;
+    if (fMin.trim() !== "" && !Number.isNaN(Number(fMin))) {
+      minNum = Number(fMin);
+    }
+
+    let maxNum = null;
+    if (fMax.trim() !== "" && !Number.isNaN(Number(fMax))) {
+      maxNum = Number(fMax);
+    }
+
+    const needle = debouncedQ.trim().toLowerCase();
 
     const filtered = transactions.filter((t) => {
       if (fType !== "ALL" && (t.type || "").toLowerCase() !== fType)
@@ -277,7 +316,7 @@ function ReportsView() {
     return filtered;
   }, [
     transactions,
-    q,
+    debouncedQ,
     fStart,
     fEnd,
     fType,
@@ -290,7 +329,7 @@ function ReportsView() {
     accountsById,
   ]);
 
-  /* ------------------------------ Money flow ------------------------------- */
+  /* ------------------------------ Totals / flow ------------------------------ */
   const totalsByCurrency = useMemo(() => {
     const map = new Map();
     for (const t of rows) {
@@ -311,698 +350,1269 @@ function ReportsView() {
     });
   }, [rows]);
 
-  // Sankey data (single currency only)
   const sankeyCurrency = fCurrency !== "ALL" ? fCurrency : null;
-  const sankeyData = useMemo(() => {
-    if (!sankeyCurrency) return null;
-    return buildSankeyFromRows(rows, categoriesById, sankeyCurrency, 6);
-  }, [rows, categoriesById, sankeyCurrency]);
+  const topCategories = useMemo(() => {
+    if (!sankeyCurrency) return [];
+    const map = new Map();
 
-  /* ------------------------------ File import ------------------------------- */
-  async function uploadFile(endpoint, file) {
-    const form = new FormData();
-    form.append("file", file);
-    const res = await api.post(endpoint, form, {
-      headers: { "Content-Type": "multipart/form-data" },
-      timeout: 5 * 60 * 1000,
-    });
-    return res?.data || {};
-  }
-  function onPickCsv() {
-    setImportMsg("");
-    csvInputRef.current?.click();
-  }
-  function onPickPdf() {
-    setImportMsg("");
-    pdfInputRef.current?.click();
-  }
-  async function onCsvChosen(e) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    setImportingCsv(true);
-    try {
-      const data = await uploadFile(INGEST_CSV_ENDPOINT, file);
-      const added = Number(data?.inserted || data?.added || 0);
-      const skipped = Number(data?.skipped || 0);
-      setImportMsg(
-        `CSV imported: ${added} added${skipped ? `, ${skipped} skipped` : ""}.`
-      );
-      await loadAll();
-    } catch (ex) {
-      console.error("CSV import error:", ex);
-      setImportMsg(
-        ex?.response?.data?.error ||
-          ex.message ||
-          "CSV import failed. Check console for details."
-      );
-    } finally {
-      setImportingCsv(false);
+    for (const t of rows) {
+      if ((t.currency || "USD") !== sankeyCurrency) continue;
+      if (t.type !== "expense") continue;
+      const catId = t.categoryId || "UNCAT";
+      map.set(catId, (map.get(catId) || 0) + Number(t.amountMinor || 0));
     }
-  }
-  async function onPdfChosen(e) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    setImportingPdf(true);
+
+    const arr = [...map.entries()].map(([catId, minor]) => ({
+      catId,
+      name: categoriesById.get(catId)?.name || "Other",
+      minor,
+    }));
+    arr.sort((a, b) => b.minor - a.minor);
+    return arr.slice(0, 6);
+  }, [rows, sankeyCurrency, categoriesById]);
+
+  /* ------------------------------ Import / Export ------------------------------ */
+
+  const handleImportCsv = async () => {
     try {
-      const data = await uploadFile(INGEST_PDF_ENDPOINT, file);
-      const added = Number(data?.inserted || data?.added || 0);
-      const skipped = Number(data?.skipped || 0);
-      setImportMsg(
-        `PDF imported: ${added} added${skipped ? `, ${skipped} skipped` : ""}.`
+      const DocumentPicker = await import("expo-document-picker");
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "text/csv",
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) return;
+
+      const formData = new FormData();
+      formData.append("file", {
+        uri: result.assets[0].uri,
+        type: "text/csv",
+        name: result.assets[0].name || "transactions.csv",
+      });
+
+      setLoading(true);
+      const response = await api.post("/ingest/csv", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      Alert.alert(
+        "Success",
+        response.data.message || "CSV imported successfully"
       );
-      await loadAll();
-    } catch (ex) {
-      console.error("PDF import error:", ex);
-      setImportMsg(
-        ex?.response?.data?.error ||
-          ex.message ||
-          "PDF import failed. Check console for details."
-      );
-    } finally {
-      setImportingPdf(false);
-    }
-  }
-
-  /* ----------------------------- PDF Generation ----------------------------- */
-  async function handleDownloadPdf() {
-    if (downloading) return;
-    setDownloading(true);
-    try {
-      const [{ default: JsPDF }] = await Promise.all([
-        import("jspdf"),
-        import("jspdf-autotable"),
-      ]);
-
-      const doc = new JsPDF({ unit: "pt", format: "a4" });
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      const margin = 36;
-      const printable = pageWidth - margin * 2;
-
-      // Header
-      try {
-        const logoData = await urlToDataURL(logoUrl);
-        doc.addImage(logoData, "PNG", margin, 24, 32, 32);
-      } catch {}
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(18);
-      doc.setTextColor(0);
-      doc.text(toPdfText(APP_NAME), margin + 40, 46);
-      doc.setFontSize(12);
-      doc.setTextColor(100);
-      doc.text("Transactions Report", margin, 80);
-      doc.setDrawColor(200);
-      doc.line(margin, 90, pageWidth - margin, 90);
-
-      // Filters line
-      const activeFilters = [];
-      if (fStart) activeFilters.push(`from ${fStart}`);
-      if (fEnd) activeFilters.push(`to ${fEnd}`);
-      if (fType !== "ALL") activeFilters.push(`type=${fType}`);
-      if (fAccountId !== "ALL")
-        activeFilters.push(
-          `account=${toPdfText(accountsById.get(fAccountId)?.name || "")}`
-        );
-      if (fCategoryId !== "ALL")
-        activeFilters.push(
-          `category=${toPdfText(categoriesById.get(fCategoryId)?.name || "")}`
-        );
-      if (fCurrency !== "ALL") activeFilters.push(`currency=${fCurrency}`);
-      if (fMin !== "") activeFilters.push(`min=${fMin}`);
-      if (fMax !== "") activeFilters.push(`max=${fMax}`);
-      if (activeFilters.length) {
-        doc.setFontSize(10);
-        doc.setTextColor(80);
-        doc.text(
-          `Filters: ${toPdfText(activeFilters.join(" · "))}`,
-          margin,
-          104
-        );
-      }
-
-      // Table
-      const colW = {
-        date: 70,
-        account: 95,
-        category: 95,
-        type: 55,
-        amount: 85,
-      };
-      colW.desc =
-        printable -
-        (colW.date + colW.account + colW.category + colW.type + colW.amount);
-
-      const tableBody = rows.map((t) => {
-        const date = new Date(t.date).toISOString().slice(0, 10);
-        const acc = accountsById.get(t.accountId)?.name || "—";
-        const cat = categoriesById.get(t.categoryId)?.name || "—";
-        const desc = t.description || "";
-        const isIncome = t.type === "income";
-        const signedAmount = `${isIncome ? "+" : "-"}${fmtMoneyPDF(
-          t.amountMinor,
-          t.currency
-        )}`;
-        return [
-          toPdfText(date),
-          toPdfText(acc),
-          toPdfText(cat),
-          toPdfText(t.type),
-          toPdfText(desc),
-          toPdfText(signedAmount),
-        ];
-      });
-
-      const { default: autoTableFn } = await import("jspdf-autotable");
-      autoTableFn(doc, {
-        startY: 110 + (activeFilters.length ? 16 : 0),
-        margin: { left: margin, right: margin },
-        head: [
-          ["Date", "Account", "Category", "Type", "Description", "Amount"].map(
-            toPdfText
-          ),
-        ],
-        body: tableBody,
-        styles: {
-          font: "helvetica",
-          fontSize: 9,
-          cellPadding: 4,
-          overflow: "linebreak",
-          halign: "left",
-        },
-        headStyles: { fillColor: [79, 119, 45], textColor: 255 },
-        columnStyles: {
-          0: { cellWidth: colW.date },
-          1: { cellWidth: colW.account },
-          2: { cellWidth: colW.category },
-          3: { cellWidth: colW.type },
-          4: { cellWidth: colW.desc },
-          5: { cellWidth: colW.amount, halign: "right" },
-        },
-        didDrawPage: () => {
-          const str = `Page ${doc.internal.getNumberOfPages()}`;
-          doc.setFontSize(9);
-          doc.setTextColor(120);
-          doc.text(
-            str,
-            pageWidth - margin,
-            doc.internal.pageSize.getHeight() - 18,
-            { align: "right" }
-          );
-        },
-      });
-
-      // Totals / Money Flow
-      let y = (doc.lastAutoTable?.finalY ?? 110) + 24;
-      doc.setTextColor(0);
-      doc.setFontSize(13);
-      doc.text("Totals / Money Flow", margin, y);
-      y += 10;
-      doc.setDrawColor(200);
-      doc.line(margin, y, pageWidth - margin, y);
-      y += 18;
-
-      totalsByCurrency.forEach((row) => {
-        const { currency, incomeMinor, outMinor, netMinor } = row;
-        const income = fmtMoneyPDF(incomeMinor, currency);
-        const out = fmtMoneyPDF(outMinor, currency);
-        const net = fmtMoneyPDF(netMinor, currency);
-
-        const prefix = `- ${currency}   Income: ${income}   Outflow: ${out}   Net: `;
-        doc.setTextColor(0);
-        doc.text(toPdfText(prefix), margin + 4, y);
-
-        const netX = margin + 4 + doc.getTextWidth(toPdfText(prefix));
-        if (netMinor >= 0) doc.setTextColor(34, 139, 34);
-        else doc.setTextColor(200, 0, 0);
-        doc.text(toPdfText(net), netX, y);
-        y += 18;
-      });
-
-      // Sankey snapshot under Totals
-      try {
-        if (sankeyRef.current && sankeyCurrency && sankeyData?.links?.length) {
-          const dataUrl = await toPng(sankeyRef.current, {
-            pixelRatio: 2,
-            backgroundColor: "#ffffff",
-            cacheBust: true,
-          });
-
-          const usableW = pageWidth - margin * 2;
-          const props = doc.getImageProperties(dataUrl);
-          const scaledH = (usableW / props.width) * props.height;
-
-          if (y + scaledH + 24 > pageHeight - margin) {
-            doc.addPage();
-            y = margin;
-          }
-
-          doc.setFontSize(13);
-          doc.setTextColor(0);
-          doc.text("Cash-Flow (Sankey)", margin, y);
-          y += 8;
-
-          doc.addImage(dataUrl, "PNG", margin, y, usableW, scaledH);
-          y += scaledH + 12;
-        }
-      } catch (e) {
-        console.warn("Sankey snapshot failed:", e);
-      }
-
-      const ts = new Date().toISOString().slice(0, 10);
-      doc.save(`${APP_NAME}_Report_${ts}.pdf`);
+      loadAll();
     } catch (err) {
-      console.error("PDF generation error:", err);
-      alert(
-        "Could not generate the PDF. Check the console for details. If needed, try the browser's Print > Save as PDF."
+      Alert.alert(
+        "Error",
+        err?.response?.data?.error || err.message || "Failed to import CSV"
       );
     } finally {
-      setDownloading(false);
+      setLoading(false);
     }
-  }
+  };
 
-  /* ------------------------------ CSV Generation ---------------------------- */
-  function handleDownloadCsv() {
-    const ts = new Date().toISOString().slice(0, 10);
-    const headers = ["Date", "Description", "Amount"];
-    const lines = [headers.map(csvEscape).join(",")];
+  const handleImportPdf = async () => {
+    try {
+      const DocumentPicker = await import("expo-document-picker");
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "application/pdf",
+        copyToCacheDirectory: true,
+      });
 
-    rows.forEach((t) => {
-      const date = new Date(t.date).toISOString().slice(0, 10);
-      let amt = minorToMajor(t.amountMinor, t.currency);
-      if (t.type !== "income") amt = -Math.abs(amt);
-      const desc = t.description || "";
-      lines.push([date, desc, amt].map(csvEscape).join(","));
-    });
+      if (result.canceled) return;
 
-    const blob = new Blob([lines.join("\n")], {
-      type: "text/csv;charset=utf-8",
-    });
-    downloadBlob(`${APP_NAME}_Report_${ts}.csv`, blob);
-  }
+      const formData = new FormData();
+      formData.append("file", {
+        uri: result.assets[0].uri,
+        type: "application/pdf",
+        name: result.assets[0].name || "transactions.pdf",
+      });
 
-  /* --------------------------------- Render --------------------------------- */
-  if (loading) {
+      setLoading(true);
+      const response = await api.post("/ingest/pdf", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      Alert.alert(
+        "Success",
+        response.data.message || "PDF imported successfully"
+      );
+      loadAll();
+    } catch (err) {
+      Alert.alert(
+        "Error",
+        err?.response?.data?.error || err.message || "Failed to import PDF"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 🔥 FIXED CSV EXPORT – no EncodingType, matches web logic
+  const handleDownloadCsv = async () => {
+    try {
+      if (rows.length === 0) {
+        Alert.alert("No Data", "No transactions to export");
+        return;
+      }
+
+      setLoading(true);
+
+      const headers = ["Date", "Description", "Amount"];
+      const csvLines = [headers.map(csvEscape).join(",")];
+
+      rows.forEach((tx) => {
+        const date = new Date(tx.date).toISOString().slice(0, 10);
+        const desc = tx.description || "";
+        let amt = minorToMajor(tx.amountMinor, tx.currency);
+        if (tx.type !== "income") amt = -Math.abs(amt);
+        csvLines.push([date, desc, amt].map(csvEscape).join(","));
+      });
+
+      const csvContent = csvLines.join("\n");
+
+      const fileName = `nummoria_report_${new Date()
+        .toISOString()
+        .slice(0, 10)}.csv`;
+      const fileUri = `${FileSystem.documentDirectory}${fileName}`;
+
+      // 👇 Expo defaults to UTF-8, we pass NO encoding option
+      await FileSystem.writeAsStringAsync(fileUri, csvContent);
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: "text/csv",
+          dialogTitle: "Save CSV Report",
+          UTI: "public.comma-separated-values-text",
+        });
+        Alert.alert("Success", "CSV report ready to save");
+      } else {
+        Alert.alert("Success", `Report saved as ${fileName}`);
+      }
+    } catch (err) {
+      Alert.alert("Error", err.message || "Failed to download CSV");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    Alert.alert(
+      "PDF Export",
+      "PDF generation is available on the web version. Would you like to export as CSV instead?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Export CSV", onPress: handleDownloadCsv },
+      ]
+    );
+  };
+
+  /* ------------------------------ Row render ------------------------------ */
+  function renderRow({ item }) {
+    const accName = accountsById.get(item.accountId)?.name || "—";
+    const catName = categoriesById.get(item.categoryId)?.name || "—";
+    const isIncome = item.type === "income";
+    const sign = isIncome ? "+" : "-";
+
     return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center bg-[#f8faf8] pt-90">
-        {/* Spinner */}
-        <div className="relative w-14 h-14 mb-6">
-          <div className="absolute inset-0 rounded-full border-4 border-[#cfe3c5]" />
-          <div className="absolute inset-0 rounded-full border-4 border-t-[#4f772d] border-transparent animate-spin" />
-        </div>
-
-        {/* Logo & text */}
-        <div className="flex items-center gap-2 mb-2">
-          {/* fixed: 'justify-items' -> remove */}
-          <img src={logoUrl} alt="Nummoria logo" className="w-8 h-8 rounded" />
-          <span className="text-2xl font-semibold text-[#4f772d] tracking-tight">
-            Nummoria
-          </span>
-        </div>
-
-        {/* Subtitle */}
-        <p className="text-gray-600 text-sm font-medium animate-pulse">
-          Loading your reports…
-        </p>
-      </div>
+      <View style={styles.rowContainer}>
+        <View style={styles.rowLeft}>
+          <View style={styles.rowTitleLine}>
+            <Text style={styles.rowCategory}>{catName}</Text>
+            <View style={styles.rowTypeBadge}>
+              <Text style={styles.rowTypeText}>{item.type}</Text>
+            </View>
+          </View>
+          <View style={styles.rowAccountBadge}>
+            <Text style={styles.rowAccountText}>{accName}</Text>
+          </View>
+          <Text style={styles.rowDescription} numberOfLines={2}>
+            {item.description || "No description"}
+          </Text>
+          <Text style={styles.rowDate}>{fmtDate(item.date)}</Text>
+        </View>
+        <View style={styles.rowRight}>
+          <Text style={[styles.rowAmount, !isIncome && { color: "#fecaca" }]}>
+            {sign}
+            {fmtMoneyUI(item.amountMinor, item.currency)}
+          </Text>
+        </View>
+      </View>
     );
   }
 
-  return (
-    <div className="min-h-[100dvh] bg-[#f8faf8]">
-      {/* Header / Controls */}
-      <div className="p-4 border-b bg-white">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <img src={logoUrl} alt="logo" className="w-8 h-8 rounded" />
-            <h1 className="text-2xl font-bold">Reports</h1>
-          </div>
+  /* ------------------------------ Header / top ------------------------------ */
+  function Header() {
+    return (
+      <View style={styles.header}>
+        <View className="header-top" style={styles.headerTopRow}>
+          <View>
+            <Text style={styles.headerEyebrow}>Reports</Text>
+            <Text style={styles.headerTitle}>Money Flow</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.headerIconBtn}
+            onPress={loadAll}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.headerIconPlus}>↻</Text>
+          </TouchableOpacity>
+        </View>
 
-          <div className="flex items-center gap-2 flex-wrap justify-end">
-            <button
-              type="button"
-              onClick={onPickCsv}
-              disabled={importingCsv || importingPdf}
-              className="px-4 py-2 rounded-lg border border-[#4f772d] text-[#4f772d] font-semibold hover:bg-[#eef5ea] disabled:opacity-60"
-              title="Import a CSV (bank export or Nummoria template)"
-            >
-              {importingCsv ? "Importing CSV…" : "Import CSV"}
-            </button>
-            <button
-              type="button"
-              onClick={onPickPdf}
-              disabled={importingCsv || importingPdf}
-              className="px-4 py-2 rounded-lg bg-[#4f772d] text-white font-semibold hover:bg-[#3f5f24] disabled:opacity-60"
-              title="Import a PDF statement (beta)"
-            >
-              {importingPdf ? "Importing PDF…" : "Import PDF"}
-            </button>
+        <View style={styles.ieRow}>
+          <TouchableOpacity
+            style={[styles.ieBtn, styles.ieBtnOutline]}
+            onPress={handleImportCsv}
+          >
+            <Text style={styles.ieBtnText}>Import CSV</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.ieBtn, styles.ieBtnSolid]}
+            onPress={handleImportPdf}
+          >
+            <Text style={styles.ieBtnTextSolid}>Import PDF</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={[styles.ieRow, { marginTop: 6 }]}>
+          <TouchableOpacity
+            style={[styles.ieBtn, styles.ieBtnOutline]}
+            onPress={handleDownloadCsv}
+          >
+            <Text style={styles.ieBtnText}>Download CSV</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.ieBtn, styles.ieBtnSolid]}
+            onPress={handleDownloadPdf}
+          >
+            <Text style={styles.ieBtnTextSolid}>Download PDF</Text>
+          </TouchableOpacity>
+        </View>
 
-            <input
-              ref={csvInputRef}
-              type="file"
-              accept=".csv,text/csv"
-              onChange={onCsvChosen}
-              className="hidden"
-            />
-            <input
-              ref={pdfInputRef}
-              type="file"
-              accept="application/pdf,.pdf"
-              onChange={onPdfChosen}
-              className="hidden"
-            />
-
-            <button
-              type="button"
-              onClick={handleDownloadCsv}
-              className="px-4 py-2 rounded-lg border border-[#4f772d] text-[#4f772d] font-semibold hover:bg-[#eef5ea]"
-              title="Download CSV for AI Agent"
-            >
-              Download CSV
-            </button>
-            <button
-              type="button"
-              onClick={handleDownloadPdf}
-              disabled={downloading}
-              className="px-4 py-2 rounded-lg bg-[#4f772d] text-white font-semibold hover:bg-[#3f5f24] disabled:opacity-60"
-              title="Download a PDF report"
-            >
-              {downloading ? "Generating…" : "Download PDF"}
-            </button>
-          </div>
-        </div>
-
-        {importMsg && (
-          <div className="mt-2 text-sm text-[#2b5d1a] bg-[#eef5ea] px-3 py-2 rounded border border-[#cfe3c5]">
-            {importMsg}
-          </div>
-        )}
-        {err && (
-          <div className="mt-2 text-sm text-red-700 bg-red-50 px-3 py-2 rounded border border-red-200">
-            {err}
-          </div>
-        )}
-
-        {/* Quick search */}
-        <div className="mt-3 flex gap-2">
-          <input
+        <View style={styles.searchContainer}>
+          <TextInput
             value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search description, notes, type, category, account, #tags"
-            className="flex-1 border rounded-lg px-3 py-2"
+            onChangeText={setQ}
+            placeholder="Search description, notes, #tags, account, category"
+            placeholderTextColor={TEXT_MUTED}
+            style={styles.searchInput}
+            returnKeyType="search"
+            blurOnSubmit={false}
           />
-        </div>
+        </View>
 
-        {/* Filters */}
-        <div className="mt-3 grid grid-cols-1 xl:grid-cols-6 gap-2">
-          <div className="flex gap-2">
-            <input
-              type="date"
-              value={fStart}
-              onChange={(e) => setFStart(e.target.value)}
-              className="border rounded-lg px-3 py-2 w-full"
-            />
-            <input
-              type="date"
-              value={fEnd}
-              onChange={(e) => setFEnd(e.target.value)}
-              className="border rounded-lg px-3 py-2 w-full"
-            />
-          </div>
-
-          <select
-            value={fType}
-            onChange={(e) => setFType(e.target.value)}
-            className="border rounded-lg px-3 py-2"
-            title="Type"
+        <View style={styles.headerFilterRow}>
+          <TouchableOpacity
+            style={styles.filterPill}
+            onPress={() => setFiltersOpen(true)}
+            activeOpacity={0.9}
           >
-            <option value="ALL">All types</option>
-            <option value="income">Income</option>
-            <option value="expense">Expense</option>
-            <option value="investment">Investment</option>
-          </select>
+            <Text style={styles.filterPillIcon}>☰</Text>
+            <Text style={styles.filterPillText}>Filters</Text>
+            {activeFilterCount > 0 && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
-          <select
-            value={fAccountId}
-            onChange={(e) => setFAccountId(e.target.value)}
-            className="border rounded-lg px-3 py-2"
-            title="Account"
-          >
-            <option value="ALL">All accounts</option>
-            {accounts.map((a) => (
-              <option key={a._id} value={a._id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
+  /* ------------------------------ Filters sheet ------------------------------ */
+  function FiltersSheet() {
+    const [localStart, setLocalStart] = useState("");
+    const [localEnd, setLocalEnd] = useState("");
+    const [localType, setLocalType] = useState("ALL");
+    const [localAccountId, setLocalAccountId] = useState("ALL");
+    const [localCategoryId, setLocalCategoryId] = useState("ALL");
+    const [localCurrency, setLocalCurrency] = useState("ALL");
+    const [localMin, setLocalMin] = useState("");
+    const [localMax, setLocalMax] = useState("");
+    const [localRangePreset, setLocalRangePreset] = useState("ALL");
 
-          <select
-            value={fCategoryId}
-            onChange={(e) => setFCategoryId(e.target.value)}
-            className="border rounded-lg px-3 py-2"
-            title="Category"
-          >
-            <option value="ALL">All categories</option>
-            {categories.map((c) => (
-              <option key={c._id} value={c._id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+    useEffect(() => {
+      if (filtersOpen) {
+        setLocalStart(fStart);
+        setLocalEnd(fEnd);
+        setLocalType(fType);
+        setLocalAccountId(fAccountId);
+        setLocalCategoryId(fCategoryId);
+        setLocalCurrency(fCurrency);
+        setLocalMin(fMin);
+        setLocalMax(fMax);
+        setLocalRangePreset(rangePreset);
+      }
+    }, [filtersOpen]);
 
-          <select
-            value={fCurrency}
-            onChange={(e) => setFCurrency(e.target.value)}
-            className="border rounded-lg px-3 py-2"
-            title="Currency"
-          >
-            {currencies.map((c) => (
-              <option key={c} value={c}>
-                {c === "ALL" ? "All currencies" : c}
-              </option>
-            ))}
-          </select>
+    const markedDates = buildMarkedDates(localStart, localEnd);
 
-          <div className="flex gap-2">
-            <input
-              type="number"
-              inputMode="decimal"
-              value={fMin}
-              onChange={(e) => setFMin(e.target.value)}
-              placeholder="Min amount"
-              className="border rounded-lg px-3 py-2 w-full"
-            />
-            <input
-              type="number"
-              inputMode="decimal"
-              value={fMax}
-              onChange={(e) => setFMax(e.target.value)}
-              placeholder="Max amount"
-              className="border rounded-lg px-3 py-2 w-full"
-            />
-          </div>
-        </div>
+    const handleCalendarPress = (dateStr) => {
+      setLocalRangePreset("CUSTOM");
 
-        <div className="mt-2">
-          <button
-            type="button"
-            onClick={() => {
-              setFStart("");
-              setFEnd("");
-              setFType("ALL");
-              setFAccountId("ALL");
-              setFCategoryId("ALL");
-              setFCurrency("ALL");
-              setFMin("");
-              setFMax("");
-            }}
-            className="px-3 py-1.5 text-sm rounded border"
-          >
-            Reset filters
-          </button>
-        </div>
-      </div>
+      if (!localStart || (localStart && localEnd)) {
+        setLocalStart(dateStr);
+        setLocalEnd("");
+        return;
+      }
 
-      {/* Totals */}
-      <div className="p-4">
-        <div className="rounded-lg border bg-white p-4">
-          <div className="font-semibold mb-2">Totals / Money Flow</div>
+      if (!localEnd) {
+        if (dateStr < localStart) {
+          setLocalEnd(localStart);
+          setLocalStart(dateStr);
+        } else {
+          setLocalEnd(dateStr);
+        }
+      }
+    };
+
+    const applyLocalRangePreset = (preset) => {
+      setLocalRangePreset(preset);
+      const now = new Date();
+      const todayStr = toISODate(now);
+
+      if (preset === "ALL") {
+        setLocalStart("");
+        setLocalEnd("");
+        return;
+      }
+
+      if (preset === "7D" || preset === "30D" || preset === "90D") {
+        const days = preset === "7D" ? 7 : preset === "30D" ? 30 : 90;
+        const start = new Date(now);
+        start.setDate(start.getDate() - days);
+        const startStr = toISODate(start);
+        setLocalStart(startStr);
+        setLocalEnd(todayStr);
+        return;
+      }
+
+      if (preset === "YTD") {
+        const start = new Date(now.getFullYear(), 0, 1);
+        const startStr = toISODate(start);
+        setLocalStart(startStr);
+        setLocalEnd(todayStr);
+      }
+    };
+
+    const handleClear = () => {
+      setLocalStart("");
+      setLocalEnd("");
+      setLocalType("ALL");
+      setLocalAccountId("ALL");
+      setLocalCategoryId("ALL");
+      setLocalCurrency("ALL");
+      setLocalMin("");
+      setLocalMax("");
+      setLocalRangePreset("ALL");
+
+      resetAllFilters();
+      setFiltersOpen(false);
+    };
+
+    const handleApply = () => {
+      setFStart(localStart);
+      setFEnd(localEnd);
+      setFType(localType);
+      setFAccountId(localAccountId);
+      setFCategoryId(localCategoryId);
+      setFCurrency(localCurrency);
+      setFMin(localMin);
+      setFMax(localMax);
+      setRangePreset(localRangePreset);
+      setFiltersOpen(false);
+    };
+
+    return (
+      <Modal
+        visible={filtersOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setFiltersOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Filters</Text>
+              <TouchableOpacity
+                onPress={() => setFiltersOpen(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.modalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={{ paddingBottom: 12 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {/* Quick ranges */}
+              <View style={styles.sectionRow}>
+                <Text style={styles.sectionLabel}>Quick range</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.chipRow}
+                >
+                  <Chip
+                    label="All time"
+                    selected={localRangePreset === "ALL"}
+                    onPress={() => applyLocalRangePreset("ALL")}
+                    small
+                  />
+                  <Chip
+                    label="Last 7 days"
+                    selected={localRangePreset === "7D"}
+                    onPress={() => applyLocalRangePreset("7D")}
+                    small
+                  />
+                  <Chip
+                    label="Last 30 days"
+                    selected={localRangePreset === "30D"}
+                    onPress={() => applyLocalRangePreset("30D")}
+                    small
+                  />
+                  <Chip
+                    label="Last 90 days"
+                    selected={localRangePreset === "90D"}
+                    onPress={() => applyLocalRangePreset("90D")}
+                    small
+                  />
+                  <Chip
+                    label="Year to date"
+                    selected={localRangePreset === "YTD"}
+                    onPress={() => applyLocalRangePreset("YTD")}
+                    small
+                  />
+                </ScrollView>
+              </View>
+
+              {/* Date range */}
+              <View style={styles.modalSection}>
+                <Text style={styles.sectionLabel}>Date range</Text>
+
+                <View style={styles.dateRangePill}>
+                  <Text style={styles.dateRangeText}>
+                    {localStart && localEnd
+                      ? `${fmtDate(localStart)} - ${fmtDate(localEnd)}`
+                      : localStart
+                      ? `${fmtDate(localStart)} - Select end date`
+                      : "Select dates"}
+                  </Text>
+                </View>
+
+                <View style={styles.calendarCard}>
+                  <Calendar
+                    markingType="period"
+                    onDayPress={(day) => handleCalendarPress(day.dateString)}
+                    markedDates={markedDates}
+                    maxDate={toISODate(new Date())}
+                    theme={{
+                      backgroundColor: CARD_DARK,
+                      calendarBackground: CARD_DARK,
+                      textSectionTitleColor: TEXT_MUTED,
+                      monthTextColor: TEXT_HEADING,
+                      dayTextColor: TEXT_SOFT,
+                      todayTextColor: main,
+                      arrowColor: main,
+                      textDisabledColor: "rgba(148,163,184,0.35)",
+                    }}
+                  />
+                </View>
+              </View>
+
+              {/* Type filter */}
+              <View style={styles.sectionRow}>
+                <Text style={styles.sectionLabel}>Type</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.chipRow}
+                >
+                  <Chip
+                    label="All"
+                    selected={localType === "ALL"}
+                    onPress={() => setLocalType("ALL")}
+                    small
+                  />
+                  <Chip
+                    label="Income"
+                    selected={localType === "income"}
+                    onPress={() => setLocalType("income")}
+                    small
+                  />
+                  <Chip
+                    label="Expense"
+                    selected={localType === "expense"}
+                    onPress={() => setLocalType("expense")}
+                    small
+                  />
+                  <Chip
+                    label="Investment"
+                    selected={localType === "investment"}
+                    onPress={() => setLocalType("investment")}
+                    small
+                  />
+                </ScrollView>
+              </View>
+
+              {/* Accounts & Categories */}
+              <View style={styles.sectionRowColumn}>
+                <Text style={styles.sectionLabel}>Accounts</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.chipRow}
+                >
+                  <Chip
+                    label="All accounts"
+                    selected={localAccountId === "ALL"}
+                    onPress={() => setLocalAccountId("ALL")}
+                    small
+                  />
+                  {accounts.map((a) => (
+                    <Chip
+                      key={a._id}
+                      label={a.name}
+                      selected={localAccountId === a._id}
+                      onPress={() => setLocalAccountId(a._id)}
+                      small
+                    />
+                  ))}
+                </ScrollView>
+
+                <Text style={[styles.sectionLabel, { marginTop: 6 }]}>
+                  Categories
+                </Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.chipRow}
+                >
+                  <Chip
+                    label="All categories"
+                    selected={localCategoryId === "ALL"}
+                    onPress={() => setLocalCategoryId("ALL")}
+                    small
+                  />
+                  {categories.map((c) => (
+                    <Chip
+                      key={c._id}
+                      label={c.name}
+                      selected={localCategoryId === c._id}
+                      onPress={() => setLocalCategoryId(c._id)}
+                      small
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Currency */}
+              <View style={styles.sectionRow}>
+                <Text style={styles.sectionLabel}>Currency</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.chipRow}
+                >
+                  {currencies.map((c) => (
+                    <Chip
+                      key={c}
+                      label={c === "ALL" ? "All currencies" : c}
+                      selected={localCurrency === c}
+                      onPress={() => setLocalCurrency(c)}
+                      small
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Amount filters */}
+              <View style={styles.filtersGrid}>
+                <View style={styles.filtersCol}>
+                  <Text style={styles.sectionLabel}>Min amount</Text>
+                  <TextInput
+                    value={localMin}
+                    onChangeText={setLocalMin}
+                    placeholder="0"
+                    keyboardType="numeric"
+                    placeholderTextColor={TEXT_MUTED}
+                    style={styles.filterInput}
+                  />
+                </View>
+                <View style={styles.filtersCol}>
+                  <Text style={styles.sectionLabel}>Max amount</Text>
+                  <TextInput
+                    value={localMax}
+                    onChangeText={setLocalMax}
+                    placeholder="No max"
+                    keyboardType="numeric"
+                    placeholderTextColor={TEXT_MUTED}
+                    style={styles.filterInput}
+                  />
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnOutline]}
+                onPress={handleClear}
+              >
+                <Text style={styles.modalBtnOutlineText}>Clear</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnSolid]}
+                onPress={handleApply}
+              >
+                <Text style={styles.modalBtnSolidText}>View results</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
+
+  /* ------------------------------ Loading state ------------------------------ */
+  if (!initialDone) {
+    return (
+      <SafeAreaView style={styles.loadingContainer}>
+        <View style={styles.loadingSpinnerOuter}>
+          <ActivityIndicator size="large" color={main} />
+        </View>
+        <Text style={styles.loadingTitle}>Nummoria</Text>
+        <Text style={styles.loadingSubtitle}>Loading your reports…</Text>
+      </SafeAreaView>
+    );
+  }
+
+  /* ------------------------------ Main render ------------------------------ */
+  return (
+    <SafeAreaView style={styles.screen}>
+      <FiltersSheet />
+
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={{ paddingBottom: 32 }}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="always"
+      >
+        <Header />
+
+        {err ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>{err}</Text>
+          </View>
+        ) : null}
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Totals / Money Flow</Text>
           {totalsByCurrency.length === 0 ? (
-            <div className="text-gray-600">
+            <Text style={styles.emptyText}>
               No transactions match these filters.
-            </div>
+            </Text>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            <View style={styles.totalsGrid}>
               {totalsByCurrency.map((t) => {
                 const netUp = t.netMinor >= 0;
                 return (
-                  <div key={t.currency} className="rounded border p-3">
-                    <div className="font-semibold">{t.currency}</div>
-                    <div className="text-sm text-gray-600">
+                  <View key={t.currency} style={styles.totalCard}>
+                    <Text style={styles.totalCur}>{t.currency}</Text>
+                    <Text style={styles.totalLine}>
                       Income:{" "}
-                      <span className="font-medium">
+                      <Text style={styles.totalValue}>
                         {fmtMoneyUI(t.incomeMinor, t.currency)}
-                      </span>
-                    </div>
-                    <div className="text-sm text-gray-600">
+                      </Text>
+                    </Text>
+                    <Text style={styles.totalLine}>
                       Outflow:{" "}
-                      <span className="font-medium">
+                      <Text style={styles.totalValue}>
                         {fmtMoneyUI(t.outMinor, t.currency)}
-                      </span>
-                    </div>
-                    <div
-                      className={`text-sm font-semibold ${
-                        netUp ? "text-green-700" : "text-red-700"
-                      }`}
+                      </Text>
+                    </Text>
+                    <Text
+                      style={[
+                        styles.totalNet,
+                        netUp ? styles.totalNetUp : styles.totalNetDown,
+                      ]}
                     >
                       Net: {fmtMoneyUI(t.netMinor, t.currency)}
-                    </div>
-                  </div>
+                    </Text>
+                  </View>
                 );
               })}
-            </div>
+            </View>
           )}
-        </div>
-      </div>
+        </View>
 
-      {/* Sankey chart */}
-      <div className="p-4">
-        <div className="rounded-lg border bg-white p-4">
-          <div className="flex items-center justify-between mb-2">
-            <div className="font-semibold">
-              Cash-Flow (Sankey){sankeyCurrency ? ` · ${sankeyCurrency}` : ""}
-            </div>
+        <View style={styles.card}>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardTitle}>
+              Top spending categories
+              {sankeyCurrency ? ` · ${sankeyCurrency}` : ""}
+            </Text>
             {!sankeyCurrency && (
-              <div className="text-xs text-gray-600">
-                Pick a single currency to view the flow.
-              </div>
+              <Text style={styles.cardHint}>
+                Pick a single currency in filters to see details.
+              </Text>
             )}
-          </div>
+          </View>
 
-          {sankeyCurrency && sankeyData?.links?.length ? (
-            <div ref={sankeyRef} className="h-[560px] bg-white">
-              <ResponsiveSankey
-                data={sankeyData}
-                margin={{ top: 10, right: 140, bottom: 10, left: 10 }}
-                align="justify"
-                nodeOpacity={1}
-                nodeThickness={14}
-                nodeSpacing={16}
-                nodeBorderWidth={1}
-                nodeBorderColor={{
-                  from: "color",
-                  modifiers: [["darker", 0.6]],
-                }}
-                linkOpacity={0.45}
-                linkBlendMode="multiply"
-                linkContract={4}
-                enableLinkGradient
-                colors={{ scheme: "category10" }}
-                label={(n) => n.id}
-                labelTextColor={{ from: "color", modifiers: [["darker", 1.4]] }}
-                tooltip={({ node, link }) => {
-                  if (link) {
-                    return (
-                      <div className="px-2 py-1 text-sm bg-white/95 border rounded shadow">
-                        {link.source.id} → {link.target.id}
-                        <br />
-                        <b>
-                          {link.value.toLocaleString(undefined, {
-                            style: "currency",
-                            currency: sankeyCurrency,
-                          })}
-                        </b>
-                      </div>
-                    );
-                  }
-                  if (node) {
-                    return (
-                      <div className="px-2 py-1 text-sm bg-white/95 border rounded shadow">
-                        <b>{node.id}</b>
-                      </div>
-                    );
-                  }
-                  return null;
-                }}
-                legends={[
-                  {
-                    anchor: "right",
-                    direction: "column",
-                    translateX: 120,
-                    itemWidth: 120,
-                    itemHeight: 16,
-                  },
-                ]}
-              />
-            </div>
+          {!sankeyCurrency || !topCategories.length ? (
+            <Text style={styles.emptyText}>No flow to display.</Text>
           ) : (
-            <div className="text-gray-600">No flow to display.</div>
+            topCategories.map((c) => (
+              <View key={c.catId} style={styles.catRow}>
+                <View style={styles.catRowTop}>
+                  <Text style={styles.catName}>{c.name}</Text>
+                  <Text style={styles.catAmount}>
+                    {fmtMoneyUI(c.minor, sankeyCurrency)}
+                  </Text>
+                </View>
+                <View style={styles.catBarTrack}>
+                  <View style={styles.catBarFill} />
+                </View>
+              </View>
+            ))
           )}
-        </div>
-      </div>
+        </View>
 
-      {/* Transactions table */}
-      <div className="p-4">
-        <div className="rounded-lg border bg-white overflow-x-auto">
-          <div className="p-4 font-semibold border-b">
+        <View style={styles.listCard}>
+          <Text style={styles.cardTitle}>
             All Transactions{" "}
-            <span className="text-gray-500 font-normal">
+            <Text style={styles.cardSubtitle}>
               ({rows.length} result{rows.length === 1 ? "" : "s"})
-            </span>
-          </div>
-          <table className="min-w-full text-sm">
-            <thead className="text-left text-gray-600">
-              <tr>
-                <th className="py-2 px-4">Date</th>
-                <th className="py-2 px-4">Account</th>
-                <th className="py-2 px-4">Category</th>
-                <th className="py-2 px-4">Type</th>
-                <th className="py-2 px-4">Description</th>
-                <th className="py-2 px-4 text-right">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="py-4 px-4 text-gray-600">
-                    No transactions found.
-                  </td>
-                </tr>
-              ) : (
-                rows.map((t) => {
-                  const date = new Date(t.date).toISOString().slice(0, 10);
-                  const acc = accountsById.get(t.accountId)?.name || "—";
-                  const cat = categoriesById.get(t.categoryId)?.name || "—";
-                  const sign = t.type === "income" ? "+" : "-";
-                  return (
-                    <tr key={t._id} className="border-t">
-                      <td className="py-2 px-4">{date}</td>
-                      <td className="py-2 px-4">{acc}</td>
-                      <td className="py-2 px-4">{cat}</td>
-                      <td className="py-2 px-4 capitalize">{t.type}</td>
-                      <td className="py-2 px-4">{t.description || "—"}</td>
-                      <td className="py-2 px-4 text-right">
-                        {sign}
-                        {fmtMoneyUI(t.amountMinor, t.currency)}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+            </Text>
+          </Text>
+          {rows.length === 0 ? (
+            <Text style={styles.emptyText}>No transactions found.</Text>
+          ) : (
+            <FlatList
+              data={rows}
+              keyExtractor={(item) => String(item._id)}
+              renderItem={renderRow}
+              scrollEnabled={false}
+            />
+          )}
+        </View>
 
-        <div className="text-xs text-gray-500 mt-2">
-          Tip: If the PDF download doesn’t start, use “Save as PDF” from the
-          print dialog.
-        </div>
-      </div>
-    </div>
+        <Text style={styles.footerTip}>
+          Tip: Tap the Filters button to narrow reports by date range, type,
+          accounts, categories, currency, and amount.
+        </Text>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
-export const ReportsPage = React.memo(ReportsView);
-export default ReportsPage;
+/* =============================== Styles =============================== */
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: BG_DARK,
+  },
+  content: {
+    flex: 1,
+  },
+  header: {
+    marginTop: 12,
+    marginHorizontal: 16,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 14,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+    backgroundColor: CARD_DARK,
+  },
+  headerTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  headerEyebrow: {
+    fontSize: 12,
+    color: TEXT_MUTED,
+    marginBottom: 2,
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: TEXT_HEADING,
+  },
+  headerIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+    backgroundColor: "#020617",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerIconPlus: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#bbf7d0",
+  },
+  ieRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 4,
+  },
+  ieBtn: {
+    flex: 1,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ieBtnOutline: {
+    borderColor: BORDER_DARK,
+    backgroundColor: "#020617",
+  },
+  ieBtnSolid: {
+    borderColor: main,
+    backgroundColor: "#022c22",
+  },
+  ieBtnText: {
+    fontSize: 12,
+    color: TEXT_SOFT,
+  },
+  ieBtnTextSolid: {
+    fontSize: 12,
+    color: "#bbf7d0",
+    fontWeight: "600",
+  },
+  searchContainer: {
+    marginTop: 10,
+    marginBottom: 6,
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    backgroundColor: "#020617",
+    color: TEXT_HEADING,
+  },
+  headerFilterRow: {
+    marginTop: 8,
+    alignItems: "flex-start",
+  },
+  filterPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "#020617",
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+  },
+  filterPillIcon: {
+    fontSize: 14,
+    color: TEXT_SOFT,
+    marginRight: 6,
+  },
+  filterPillText: {
+    fontSize: 13,
+    color: TEXT_HEADING,
+    fontWeight: "500",
+  },
+  filterBadge: {
+    marginLeft: 8,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: main,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  filterBadgeText: {
+    fontSize: 11,
+    color: "#022c22",
+    fontWeight: "700",
+  },
+  sectionRow: {
+    marginTop: 8,
+  },
+  sectionRowColumn: {
+    marginTop: 10,
+  },
+  sectionLabel: {
+    fontSize: 12,
+    color: TEXT_MUTED,
+    marginBottom: 4,
+  },
+  chipRow: {
+    paddingVertical: 4,
+    paddingRight: 8,
+  },
+  filtersGrid: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 10,
+  },
+  filtersCol: {
+    flex: 1,
+  },
+  filterInput: {
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    fontSize: 13,
+    backgroundColor: "#020617",
+    color: TEXT_HEADING,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+    backgroundColor: "#020617",
+    marginRight: 6,
+  },
+  chipSmall: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  chipSelected: {
+    borderColor: main,
+    backgroundColor: "#022c22",
+  },
+  chipText: {
+    fontSize: 13,
+    color: TEXT_SOFT,
+  },
+  chipTextSmall: {
+    fontSize: 12,
+  },
+  chipTextSelected: {
+    color: "#bbf7d0",
+    fontWeight: "600",
+  },
+  card: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 20,
+    backgroundColor: CARD_DARK,
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+  },
+  cardHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+    gap: 8,
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: TEXT_HEADING,
+  },
+  cardSubtitle: {
+    fontSize: 13,
+    fontWeight: "400",
+    color: TEXT_MUTED,
+  },
+  cardHint: {
+    fontSize: 11,
+    color: TEXT_MUTED,
+  },
+  totalsGrid: {
+    marginTop: 8,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  totalCard: {
+    flexBasis: "48%",
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: "#020617",
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+  },
+  totalCur: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: TEXT_HEADING,
+    marginBottom: 4,
+  },
+  totalLine: {
+    fontSize: 12,
+    color: TEXT_MUTED,
+  },
+  totalValue: {
+    color: TEXT_SOFT,
+    fontWeight: "600",
+  },
+  totalNet: {
+    marginTop: 4,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  totalNetUp: {
+    color: "#22c55e",
+  },
+  totalNetDown: {
+    color: "#fecaca",
+  },
+  catRow: {
+    marginTop: 8,
+  },
+  catRowTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 2,
+  },
+  catName: {
+    fontSize: 13,
+    color: TEXT_SOFT,
+    flex: 1,
+    marginRight: 4,
+  },
+  catAmount: {
+    fontSize: 13,
+    color: "#bbf7d0",
+  },
+  catBarTrack: {
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: "#020617",
+    overflow: "hidden",
+  },
+  catBarFill: {
+    height: "100%",
+    borderRadius: 999,
+    backgroundColor: "rgba(34,197,94,0.9)",
+  },
+  listCard: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 16,
+    padding: 14,
+    borderRadius: 20,
+    backgroundColor: CARD_DARK,
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+  },
+  rowContainer: {
+    paddingVertical: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: BORDER_DARK,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  rowLeft: {
+    flex: 1,
+    minWidth: 0,
+  },
+  rowTitleLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 4,
+  },
+  rowCategory: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: TEXT_HEADING,
+  },
+  rowTypeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+    backgroundColor: "#020617",
+  },
+  rowTypeText: {
+    fontSize: 11,
+    color: TEXT_MUTED,
+    textTransform: "capitalize",
+  },
+  rowAccountBadge: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+    marginBottom: 2,
+    backgroundColor: "#020617",
+  },
+  rowAccountText: {
+    fontSize: 11,
+    color: TEXT_MUTED,
+  },
+  rowDescription: {
+    fontSize: 13,
+    color: TEXT_SOFT,
+    marginTop: 2,
+  },
+  rowDate: {
+    fontSize: 11,
+    color: TEXT_MUTED,
+    marginTop: 2,
+  },
+  rowRight: {
+    alignItems: "flex-end",
+    justifyContent: "center",
+  },
+  rowAmount: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#bbf7d0",
+  },
+  emptyText: {
+    paddingTop: 6,
+    fontSize: 13,
+    color: TEXT_MUTED,
+  },
+  errorBox: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: "rgba(127,29,29,0.2)",
+    borderWidth: 1,
+    borderColor: "#7f1d1d",
+  },
+  errorText: {
+    fontSize: 13,
+    color: "#fecaca",
+  },
+  footerTip: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    fontSize: 11,
+    color: TEXT_MUTED,
+    textAlign: "center",
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: BG_DARK,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingSpinnerOuter: {
+    marginBottom: 12,
+  },
+  loadingTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: main,
+    marginBottom: 4,
+  },
+  loadingSubtitle: {
+    fontSize: 13,
+    color: TEXT_MUTED,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15,23,42,0.7)",
+    justifyContent: "flex-end",
+  },
+  modalSheet: {
+    maxHeight: "85%",
+    backgroundColor: BG_DARK,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 8,
+    borderTopWidth: 1,
+    borderColor: BORDER_DARK,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: TEXT_HEADING,
+  },
+  modalClose: {
+    fontSize: 18,
+    color: TEXT_MUTED,
+  },
+  modalScroll: {
+    flexGrow: 0,
+  },
+  modalSection: {
+    marginTop: 10,
+  },
+  dateRangePill: {
+    marginTop: 4,
+    marginBottom: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: "#020617",
+  },
+  dateRangeText: {
+    fontSize: 14,
+    color: TEXT_HEADING,
+    textAlign: "center",
+  },
+  calendarCard: {
+    marginTop: 8,
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+    backgroundColor: CARD_DARK,
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 8,
+  },
+  modalBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalBtnOutline: {
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+    backgroundColor: "#020617",
+  },
+  modalBtnSolid: {
+    borderWidth: 1,
+    borderColor: main,
+    backgroundColor: main,
+  },
+  modalBtnOutlineText: {
+    fontSize: 13,
+    color: TEXT_SOFT,
+    fontWeight: "500",
+  },
+  modalBtnSolidText: {
+    fontSize: 13,
+    color: "#022c22",
+    fontWeight: "700",
+  },
+});

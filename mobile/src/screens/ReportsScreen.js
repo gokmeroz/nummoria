@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Modal,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -14,6 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { Calendar } from "react-native-calendars";
 
 import api from "../lib/api";
 
@@ -60,6 +62,50 @@ function toISODate(d) {
   return d.toISOString().slice(0, 10);
 }
 
+/* ------- Build marked dates for calendar "period" (start–end range) ------- */
+function buildMarkedDates(startStr, endStr) {
+  if (!startStr && !endStr) return {};
+
+  let start = startStr;
+  let end = endStr;
+
+  if (start && end && start > end) {
+    const tmp = start;
+    start = end;
+    end = tmp;
+  }
+
+  const marked = {};
+
+  if (start && !end) {
+    marked[start] = {
+      startingDay: true,
+      endingDay: true,
+      color: main,
+      textColor: "#0f172a",
+    };
+    return marked;
+  }
+
+  if (!start || !end) return {};
+
+  const cursor = new Date(start);
+  const endDate = new Date(end);
+
+  while (cursor <= endDate) {
+    const key = toISODate(cursor);
+    marked[key] = {
+      startingDay: key === start,
+      endingDay: key === end,
+      color: main,
+      textColor: "#0f172a",
+    };
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return marked;
+}
+
 /* ----------------------------- Small components ---------------------------- */
 function Chip({ label, selected, onPress, small }) {
   return (
@@ -101,18 +147,19 @@ export default function ReportsScreen() {
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
 
-  // filters
-  const [fStart, setFStart] = useState(""); // YYYY-MM-DD text
+  // APPLIED filters (these control the actual filtering)
+  const [fStart, setFStart] = useState("");
   const [fEnd, setFEnd] = useState("");
   const [fType, setFType] = useState("ALL");
   const [fAccountId, setFAccountId] = useState("ALL");
   const [fCategoryId, setFCategoryId] = useState("ALL");
   const [fCurrency, setFCurrency] = useState("ALL");
-  const [fMin, setFMin] = useState(""); // text
+  const [fMin, setFMin] = useState("");
   const [fMax, setFMax] = useState("");
-
-  // quick-range preset (for UI only)
   const [rangePreset, setRangePreset] = useState("ALL");
+
+  // filters sheet
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   /* ----------------------------- Debounce search ----------------------------- */
   useEffect(() => {
@@ -169,42 +216,42 @@ export default function ReportsScreen() {
     return ["ALL", ...Array.from(s)];
   }, [transactions]);
 
-  /* --------------------------- Quick range logic --------------------------- */
-  const applyRangePreset = useCallback(
-    (preset) => {
-      setRangePreset(preset);
-      const now = new Date();
-      const todayStr = toISODate(now);
+  /* --------------------------- Reset filters --------------------------- */
+  const resetAllFilters = useCallback(() => {
+    setFStart("");
+    setFEnd("");
+    setFType("ALL");
+    setFAccountId("ALL");
+    setFCategoryId("ALL");
+    setFCurrency("ALL");
+    setFMin("");
+    setFMax("");
+    setRangePreset("ALL");
+  }, []);
 
-      if (preset === "ALL") {
-        setFStart("");
-        setFEnd("");
-        return;
-      }
-
-      if (preset === "7D" || preset === "30D" || preset === "90D") {
-        const days = preset === "7D" ? 7 : preset === "30D" ? 30 : 90;
-        const start = new Date(now);
-        start.setDate(start.getDate() - days);
-        const startStr = toISODate(start);
-        setFStart(startStr);
-        setFEnd(todayStr);
-        return;
-      }
-
-      if (preset === "YTD") {
-        const start = new Date(now.getFullYear(), 0, 1);
-        const startStr = toISODate(start);
-        setFStart(startStr);
-        setFEnd(todayStr);
-      }
-    },
-    [setFStart, setFEnd]
-  );
+  const activeFilterCount = useMemo(() => {
+    let c = 0;
+    if (rangePreset !== "ALL" || fStart || fEnd) c++;
+    if (fType !== "ALL") c++;
+    if (fAccountId !== "ALL") c++;
+    if (fCategoryId !== "ALL") c++;
+    if (fCurrency !== "ALL") c++;
+    if (fMin.trim() !== "" || fMax.trim() !== "") c++;
+    return c;
+  }, [
+    rangePreset,
+    fStart,
+    fEnd,
+    fType,
+    fAccountId,
+    fCategoryId,
+    fCurrency,
+    fMin,
+    fMax,
+  ]);
 
   /* ------------------------------- Filtering ------------------------------- */
   const rows = useMemo(() => {
-    // only use date filter when it's in full YYYY-MM-DD format
     let start = null;
     if (/^\d{4}-\d{2}-\d{2}$/.test(fStart)) {
       start = new Date(`${fStart}T00:00:00`);
@@ -240,7 +287,7 @@ export default function ReportsScreen() {
       if (start && dt < start) return false;
       if (end && dt > end) return false;
 
-      const major = minorToMajor(t.amountMinor, cur); // signed
+      const major = minorToMajor(t.amountMinor, cur);
       if (minNum !== null && major < minNum) return false;
       if (maxNum !== null && major > maxNum) return false;
 
@@ -293,7 +340,6 @@ export default function ReportsScreen() {
     });
   }, [rows]);
 
-  // "Sankey-like" top expense categories for selected currency
   const sankeyCurrency = fCurrency !== "ALL" ? fCurrency : null;
   const topCategories = useMemo(() => {
     if (!sankeyCurrency) return [];
@@ -316,29 +362,163 @@ export default function ReportsScreen() {
   }, [rows, sankeyCurrency, categoriesById]);
 
   /* ------------------------------ Import / Export ------------------------------ */
-  // keep it dumb & web-only for now (no mobile deps)
-  function alertWebOnly(featureLabel) {
+  const handleImportCsv = async () => {
+    try {
+      const DocumentPicker = await import("expo-document-picker");
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "text/csv",
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) return;
+
+      const formData = new FormData();
+      formData.append("file", {
+        uri: result.assets[0].uri,
+        type: "text/csv",
+        name: result.assets[0].name || "transactions.csv",
+      });
+
+      setLoading(true);
+      const response = await api.post("/ingest/csv", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      Alert.alert(
+        "Success",
+        response.data.message || "CSV imported successfully"
+      );
+      loadAll();
+    } catch (err) {
+      Alert.alert(
+        "Error",
+        err?.response?.data?.error || err.message || "Failed to import CSV"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleImportPdf = async () => {
+    try {
+      const DocumentPicker = await import("expo-document-picker");
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "application/pdf",
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) return;
+
+      const formData = new FormData();
+      formData.append("file", {
+        uri: result.assets[0].uri,
+        type: "application/pdf",
+        name: result.assets[0].name || "transactions.pdf",
+      });
+
+      setLoading(true);
+      const response = await api.post("/ingest/pdf", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      Alert.alert(
+        "Success",
+        response.data.message || "PDF imported successfully"
+      );
+      loadAll();
+    } catch (err) {
+      Alert.alert(
+        "Error",
+        err?.response?.data?.error || err.message || "Failed to import PDF"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDownloadCsv = async () => {
+    try {
+      if (rows.length === 0) {
+        Alert.alert("No Data", "No transactions to export");
+        return;
+      }
+
+      setLoading(true);
+
+      const headers = [
+        "Date",
+        "Type",
+        "Category",
+        "Account",
+        "Description",
+        "Amount",
+        "Currency",
+        "Notes",
+      ];
+      const csvLines = [headers.join(",")];
+
+      rows.forEach((tx) => {
+        const cat = categoriesById.get(tx.categoryId)?.name || "";
+        const acc = accountsById.get(tx.accountId)?.name || "";
+        const amount = minorToMajor(tx.amountMinor, tx.currency);
+        const line = [
+          fmtDate(tx.date),
+          tx.type || "",
+          `"${cat.replace(/"/g, '""')}"`,
+          `"${acc.replace(/"/g, '""')}"`,
+          `"${(tx.description || "").replace(/"/g, '""')}"`,
+          amount,
+          tx.currency || "USD",
+          `"${(tx.notes || "").replace(/"/g, '""')}"`,
+        ].join(",");
+        csvLines.push(line);
+      });
+
+      const csvContent = csvLines.join("\n");
+
+      // ✅ proper dynamic imports
+      const FSModule = await import("expo-file-system");
+      const SharingModule = await import("expo-sharing");
+
+      const FileSystem = FSModule.default || FSModule;
+      const Sharing = SharingModule.default || SharingModule;
+
+      const fileName = `nummoria_report_${new Date()
+        .toISOString()
+        .slice(0, 10)}.csv`;
+      const fileUri = `${FileSystem.documentDirectory}${fileName}`;
+
+      await FileSystem.writeAsStringAsync(fileUri, csvContent, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: "text/csv",
+          dialogTitle: "Save CSV Report",
+          UTI: "public.comma-separated-values-text",
+        });
+        Alert.alert("Success", "CSV report ready to save");
+      } else {
+        Alert.alert("Success", `Report saved as ${fileName}`);
+      }
+    } catch (err) {
+      Alert.alert("Error", err.message || "Failed to download CSV");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
     Alert.alert(
-      featureLabel,
-      "Right now, this is available on the Nummoria web app Reports page. Use the desktop/browser version to import or download full PDF/CSV reports."
+      "PDF Export",
+      "PDF generation is available on the web version. Would you like to export as CSV instead?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Export CSV", onPress: handleDownloadCsv },
+      ]
     );
-  }
-
-  function handleImportCsv() {
-    alertWebOnly("Import CSV");
-  }
-
-  function handleImportPdf() {
-    alertWebOnly("Import PDF");
-  }
-
-  function handleDownloadCsv() {
-    alertWebOnly("Download CSV");
-  }
-
-  function handleDownloadPdf() {
-    alertWebOnly("Download PDF");
-  }
+  };
 
   /* ------------------------------ Row render ------------------------------ */
   function renderRow({ item }) {
@@ -374,11 +554,11 @@ export default function ReportsScreen() {
     );
   }
 
-  /* ------------------------------ Header / Filters ------------------------------ */
+  /* ------------------------------ Header / top ------------------------------ */
   function Header() {
     return (
       <View style={styles.header}>
-        <View style={styles.headerTopRow}>
+        <View className="header-top" style={styles.headerTopRow}>
           <View>
             <Text style={styles.headerEyebrow}>Reports</Text>
             <Text style={styles.headerTitle}>Money Flow</Text>
@@ -392,7 +572,6 @@ export default function ReportsScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Import / Export buttons */}
         <View style={styles.ieRow}>
           <TouchableOpacity
             style={[styles.ieBtn, styles.ieBtnOutline]}
@@ -422,7 +601,6 @@ export default function ReportsScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* search */}
         <View style={styles.searchContainer}>
           <TextInput
             value={q}
@@ -435,238 +613,373 @@ export default function ReportsScreen() {
           />
         </View>
 
-        {/* quick ranges */}
-        <View style={styles.sectionRow}>
-          <Text style={styles.sectionLabel}>Quick range:</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chipRow}
-            keyboardShouldPersistTaps="handled"
+        <View style={styles.headerFilterRow}>
+          <TouchableOpacity
+            style={styles.filterPill}
+            onPress={() => setFiltersOpen(true)}
+            activeOpacity={0.9}
           >
-            <Chip
-              label="All time"
-              selected={rangePreset === "ALL"}
-              onPress={() => applyRangePreset("ALL")}
-              small
-            />
-            <Chip
-              label="Last 7 days"
-              selected={rangePreset === "7D"}
-              onPress={() => applyRangePreset("7D")}
-              small
-            />
-            <Chip
-              label="Last 30 days"
-              selected={rangePreset === "30D"}
-              onPress={() => applyRangePreset("30D")}
-              small
-            />
-            <Chip
-              label="Last 90 days"
-              selected={rangePreset === "90D"}
-              onPress={() => applyRangePreset("90D")}
-              small
-            />
-            <Chip
-              label="Year to date"
-              selected={rangePreset === "YTD"}
-              onPress={() => applyRangePreset("YTD")}
-              small
-            />
-          </ScrollView>
+            <Text style={styles.filterPillIcon}>☰</Text>
+            <Text style={styles.filterPillText}>Filters</Text>
+            {activeFilterCount > 0 && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
-
-        {/* type filter */}
-        <View style={styles.sectionRow}>
-          <Text style={styles.sectionLabel}>Type:</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chipRow}
-            keyboardShouldPersistTaps="handled"
-          >
-            <Chip
-              label="All"
-              selected={fType === "ALL"}
-              onPress={() => setFType("ALL")}
-              small
-            />
-            <Chip
-              label="Income"
-              selected={fType === "income"}
-              onPress={() => setFType("income")}
-              small
-            />
-            <Chip
-              label="Expense"
-              selected={fType === "expense"}
-              onPress={() => setFType("expense")}
-              small
-            />
-            <Chip
-              label="Investment"
-              selected={fType === "investment"}
-              onPress={() => setFType("investment")}
-              small
-            />
-          </ScrollView>
-        </View>
-
-        {/* account + category */}
-        <View style={styles.sectionRowColumn}>
-          <Text style={styles.sectionLabel}>Accounts:</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chipRow}
-            keyboardShouldPersistTaps="handled"
-          >
-            <Chip
-              label="All accounts"
-              selected={fAccountId === "ALL"}
-              onPress={() => setFAccountId("ALL")}
-              small
-            />
-            {accounts.map((a) => (
-              <Chip
-                key={a._id}
-                label={a.name}
-                selected={fAccountId === a._id}
-                onPress={() => setFAccountId(a._id)}
-                small
-              />
-            ))}
-          </ScrollView>
-
-          <Text style={[styles.sectionLabel, { marginTop: 6 }]}>
-            Categories:
-          </Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chipRow}
-            keyboardShouldPersistTaps="handled"
-          >
-            <Chip
-              label="All categories"
-              selected={fCategoryId === "ALL"}
-              onPress={() => setFCategoryId("ALL")}
-              small
-            />
-            {categories.map((c) => (
-              <Chip
-                key={c._id}
-                label={c.name}
-                selected={fCategoryId === c._id}
-                onPress={() => setFCategoryId(c._id)}
-                small
-              />
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* currency */}
-        <View style={styles.sectionRow}>
-          <Text style={styles.sectionLabel}>Currency:</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chipRow}
-            keyboardShouldPersistTaps="handled"
-          >
-            {currencies.map((c) => (
-              <Chip
-                key={c}
-                label={c === "ALL" ? "All currencies" : c}
-                selected={fCurrency === c}
-                onPress={() => setFCurrency(c)}
-                small
-              />
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* date + amount filters (simple inputs) */}
-        <View style={styles.filtersGrid}>
-          <View style={styles.filtersCol}>
-            <Text style={styles.sectionLabel}>Start date (YYYY-MM-DD)</Text>
-            <TextInput
-              value={fStart}
-              onChangeText={(val) => {
-                setRangePreset("CUSTOM");
-                setFStart(val);
-              }}
-              placeholder="2025-01-01"
-              placeholderTextColor={TEXT_MUTED}
-              keyboardType="numbers-and-punctuation"
-              maxLength={10}
-              autoCorrect={false}
-              autoCapitalize="none"
-              style={styles.filterInput}
-            />
-          </View>
-          <View style={styles.filtersCol}>
-            <Text style={styles.sectionLabel}>End date (YYYY-MM-DD)</Text>
-            <TextInput
-              value={fEnd}
-              onChangeText={(val) => {
-                setRangePreset("CUSTOM");
-                setFEnd(val);
-              }}
-              placeholder="2025-12-31"
-              placeholderTextColor={TEXT_MUTED}
-              keyboardType="numbers-and-punctuation"
-              maxLength={10}
-              autoCorrect={false}
-              autoCapitalize="none"
-              style={styles.filterInput}
-            />
-          </View>
-        </View>
-
-        <View style={styles.filtersGrid}>
-          <View style={styles.filtersCol}>
-            <Text style={styles.sectionLabel}>Min amount</Text>
-            <TextInput
-              value={fMin}
-              onChangeText={setFMin}
-              placeholder="0"
-              keyboardType="numeric"
-              placeholderTextColor={TEXT_MUTED}
-              style={styles.filterInput}
-            />
-          </View>
-          <View style={styles.filtersCol}>
-            <Text style={styles.sectionLabel}>Max amount</Text>
-            <TextInput
-              value={fMax}
-              onChangeText={setFMax}
-              placeholder="No max"
-              keyboardType="numeric"
-              placeholderTextColor={TEXT_MUTED}
-              style={styles.filterInput}
-            />
-          </View>
-        </View>
-
-        <TouchableOpacity
-          style={styles.resetBtn}
-          onPress={() => {
-            setFStart("");
-            setFEnd("");
-            setFType("ALL");
-            setFAccountId("ALL");
-            setFCategoryId("ALL");
-            setFCurrency("ALL");
-            setFMin("");
-            setFMax("");
-            setRangePreset("ALL");
-          }}
-        >
-          <Text style={styles.resetBtnText}>Reset filters</Text>
-        </TouchableOpacity>
       </View>
+    );
+  }
+
+  /* ------------------------------ Filters sheet ------------------------------ */
+  function FiltersSheet() {
+    const [localStart, setLocalStart] = useState("");
+    const [localEnd, setLocalEnd] = useState("");
+    const [localType, setLocalType] = useState("ALL");
+    const [localAccountId, setLocalAccountId] = useState("ALL");
+    const [localCategoryId, setLocalCategoryId] = useState("ALL");
+    const [localCurrency, setLocalCurrency] = useState("ALL");
+    const [localMin, setLocalMin] = useState("");
+    const [localMax, setLocalMax] = useState("");
+    const [localRangePreset, setLocalRangePreset] = useState("ALL");
+
+    useEffect(() => {
+      if (filtersOpen) {
+        setLocalStart(fStart);
+        setLocalEnd(fEnd);
+        setLocalType(fType);
+        setLocalAccountId(fAccountId);
+        setLocalCategoryId(fCategoryId);
+        setLocalCurrency(fCurrency);
+        setLocalMin(fMin);
+        setLocalMax(fMax);
+        setLocalRangePreset(rangePreset);
+      }
+    }, [filtersOpen]);
+
+    const markedDates = buildMarkedDates(localStart, localEnd);
+
+    const handleCalendarPress = (dateStr) => {
+      setLocalRangePreset("CUSTOM");
+
+      if (!localStart || (localStart && localEnd)) {
+        setLocalStart(dateStr);
+        setLocalEnd("");
+        return;
+      }
+
+      if (!localEnd) {
+        if (dateStr < localStart) {
+          setLocalEnd(localStart);
+          setLocalStart(dateStr);
+        } else {
+          setLocalEnd(dateStr);
+        }
+      }
+    };
+
+    const applyLocalRangePreset = (preset) => {
+      setLocalRangePreset(preset);
+      const now = new Date();
+      const todayStr = toISODate(now);
+
+      if (preset === "ALL") {
+        setLocalStart("");
+        setLocalEnd("");
+        return;
+      }
+
+      if (preset === "7D" || preset === "30D" || preset === "90D") {
+        const days = preset === "7D" ? 7 : preset === "30D" ? 30 : 90;
+        const start = new Date(now);
+        start.setDate(start.getDate() - days);
+        const startStr = toISODate(start);
+        setLocalStart(startStr);
+        setLocalEnd(todayStr);
+        return;
+      }
+
+      if (preset === "YTD") {
+        const start = new Date(now.getFullYear(), 0, 1);
+        const startStr = toISODate(start);
+        setLocalStart(startStr);
+        setLocalEnd(todayStr);
+      }
+    };
+
+    const handleClear = () => {
+      setLocalStart("");
+      setLocalEnd("");
+      setLocalType("ALL");
+      setLocalAccountId("ALL");
+      setLocalCategoryId("ALL");
+      setLocalCurrency("ALL");
+      setLocalMin("");
+      setLocalMax("");
+      setLocalRangePreset("ALL");
+
+      resetAllFilters();
+      setFiltersOpen(false);
+    };
+
+    const handleApply = () => {
+      setFStart(localStart);
+      setFEnd(localEnd);
+      setFType(localType);
+      setFAccountId(localAccountId);
+      setFCategoryId(localCategoryId);
+      setFCurrency(localCurrency);
+      setFMin(localMin);
+      setFMax(localMax);
+      setRangePreset(localRangePreset);
+      setFiltersOpen(false);
+    };
+
+    return (
+      <Modal
+        visible={filtersOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setFiltersOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Filters</Text>
+              <TouchableOpacity
+                onPress={() => setFiltersOpen(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.modalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={{ paddingBottom: 12 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={styles.sectionRow}>
+                <Text style={styles.sectionLabel}>Quick range</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.chipRow}
+                >
+                  <Chip
+                    label="All time"
+                    selected={localRangePreset === "ALL"}
+                    onPress={() => applyLocalRangePreset("ALL")}
+                    small
+                  />
+                  <Chip
+                    label="Last 7 days"
+                    selected={localRangePreset === "7D"}
+                    onPress={() => applyLocalRangePreset("7D")}
+                    small
+                  />
+                  <Chip
+                    label="Last 30 days"
+                    selected={localRangePreset === "30D"}
+                    onPress={() => applyLocalRangePreset("30D")}
+                    small
+                  />
+                  <Chip
+                    label="Last 90 days"
+                    selected={localRangePreset === "90D"}
+                    onPress={() => applyLocalRangePreset("90D")}
+                    small
+                  />
+                  <Chip
+                    label="Year to date"
+                    selected={localRangePreset === "YTD"}
+                    onPress={() => applyLocalRangePreset("YTD")}
+                    small
+                  />
+                </ScrollView>
+              </View>
+
+              <View style={styles.modalSection}>
+                <Text style={styles.sectionLabel}>Date range</Text>
+
+                <View style={styles.dateRangePill}>
+                  <Text style={styles.dateRangeText}>
+                    {localStart && localEnd
+                      ? `${fmtDate(localStart)} - ${fmtDate(localEnd)}`
+                      : localStart
+                      ? `${fmtDate(localStart)} - Select end date`
+                      : "Select dates"}
+                  </Text>
+                </View>
+
+                <View style={styles.calendarCard}>
+                  <Calendar
+                    markingType="period"
+                    onDayPress={(day) => handleCalendarPress(day.dateString)}
+                    markedDates={markedDates}
+                    maxDate={toISODate(new Date())}
+                    theme={{
+                      backgroundColor: CARD_DARK,
+                      calendarBackground: CARD_DARK,
+                      textSectionTitleColor: TEXT_MUTED,
+                      monthTextColor: TEXT_HEADING,
+                      dayTextColor: TEXT_SOFT,
+                      todayTextColor: main,
+                      arrowColor: main,
+                      textDisabledColor: "rgba(148,163,184,0.35)",
+                    }}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.sectionRow}>
+                <Text style={styles.sectionLabel}>Type</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.chipRow}
+                >
+                  <Chip
+                    label="All"
+                    selected={localType === "ALL"}
+                    onPress={() => setLocalType("ALL")}
+                    small
+                  />
+                  <Chip
+                    label="Income"
+                    selected={localType === "income"}
+                    onPress={() => setLocalType("income")}
+                    small
+                  />
+                  <Chip
+                    label="Expense"
+                    selected={localType === "expense"}
+                    onPress={() => setLocalType("expense")}
+                    small
+                  />
+                  <Chip
+                    label="Investment"
+                    selected={localType === "investment"}
+                    onPress={() => setLocalType("investment")}
+                    small
+                  />
+                </ScrollView>
+              </View>
+
+              <View style={styles.sectionRowColumn}>
+                <Text style={styles.sectionLabel}>Accounts</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.chipRow}
+                >
+                  <Chip
+                    label="All accounts"
+                    selected={localAccountId === "ALL"}
+                    onPress={() => setLocalAccountId("ALL")}
+                    small
+                  />
+                  {accounts.map((a) => (
+                    <Chip
+                      key={a._id}
+                      label={a.name}
+                      selected={localAccountId === a._id}
+                      onPress={() => setLocalAccountId(a._id)}
+                      small
+                    />
+                  ))}
+                </ScrollView>
+
+                <Text style={[styles.sectionLabel, { marginTop: 6 }]}>
+                  Categories
+                </Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.chipRow}
+                >
+                  <Chip
+                    label="All categories"
+                    selected={localCategoryId === "ALL"}
+                    onPress={() => setLocalCategoryId("ALL")}
+                    small
+                  />
+                  {categories.map((c) => (
+                    <Chip
+                      key={c._id}
+                      label={c.name}
+                      selected={localCategoryId === c._id}
+                      onPress={() => setLocalCategoryId(c._id)}
+                      small
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+
+              <View style={styles.sectionRow}>
+                <Text style={styles.sectionLabel}>Currency</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.chipRow}
+                >
+                  {currencies.map((c) => (
+                    <Chip
+                      key={c}
+                      label={c === "ALL" ? "All currencies" : c}
+                      selected={localCurrency === c}
+                      onPress={() => setLocalCurrency(c)}
+                      small
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+
+              <View style={styles.filtersGrid}>
+                <View style={styles.filtersCol}>
+                  <Text style={styles.sectionLabel}>Min amount</Text>
+                  <TextInput
+                    value={localMin}
+                    onChangeText={setLocalMin}
+                    placeholder="0"
+                    keyboardType="numeric"
+                    placeholderTextColor={TEXT_MUTED}
+                    style={styles.filterInput}
+                  />
+                </View>
+                <View style={styles.filtersCol}>
+                  <Text style={styles.sectionLabel}>Max amount</Text>
+                  <TextInput
+                    value={localMax}
+                    onChangeText={setLocalMax}
+                    placeholder="No max"
+                    keyboardType="numeric"
+                    placeholderTextColor={TEXT_MUTED}
+                    style={styles.filterInput}
+                  />
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnOutline]}
+                onPress={handleClear}
+              >
+                <Text style={styles.modalBtnOutlineText}>Clear</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnSolid]}
+                onPress={handleApply}
+              >
+                <Text style={styles.modalBtnSolidText}>View results</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     );
   }
 
@@ -686,6 +999,8 @@ export default function ReportsScreen() {
   /* ------------------------------ Main render ------------------------------ */
   return (
     <SafeAreaView style={styles.screen}>
+      <FiltersSheet />
+
       <ScrollView
         style={styles.content}
         contentContainerStyle={{ paddingBottom: 32 }}
@@ -700,7 +1015,6 @@ export default function ReportsScreen() {
           </View>
         ) : null}
 
-        {/* Totals */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Totals / Money Flow</Text>
           {totalsByCurrency.length === 0 ? (
@@ -741,7 +1055,6 @@ export default function ReportsScreen() {
           )}
         </View>
 
-        {/* Category breakdown (Sankey-style summary) */}
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
             <Text style={styles.cardTitle}>
@@ -750,7 +1063,7 @@ export default function ReportsScreen() {
             </Text>
             {!sankeyCurrency && (
               <Text style={styles.cardHint}>
-                Pick a single currency above to see details.
+                Pick a single currency in filters to see details.
               </Text>
             )}
           </View>
@@ -774,7 +1087,6 @@ export default function ReportsScreen() {
           )}
         </View>
 
-        {/* Transactions list */}
         <View style={styles.listCard}>
           <Text style={styles.cardTitle}>
             All Transactions{" "}
@@ -795,15 +1107,13 @@ export default function ReportsScreen() {
         </View>
 
         <Text style={styles.footerTip}>
-          Tip: Type dates as YYYY-MM-DD and amounts as plain numbers — filters
-          only apply when values are complete and valid.
+          Tip: Tap the Filters button to narrow reports by date range, type,
+          accounts, categories, currency, and amount.
         </Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
-
-/* =============================== Styles =============================== */
 
 const styles = StyleSheet.create({
   screen: {
@@ -813,7 +1123,6 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
-
   header: {
     marginTop: 12,
     marginHorizontal: 16,
@@ -856,7 +1165,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#bbf7d0",
   },
-
   ieRow: {
     flexDirection: "row",
     gap: 8,
@@ -887,10 +1195,9 @@ const styles = StyleSheet.create({
     color: "#bbf7d0",
     fontWeight: "600",
   },
-
   searchContainer: {
     marginTop: 10,
-    marginBottom: 10,
+    marginBottom: 6,
   },
   searchInput: {
     borderWidth: 1,
@@ -902,12 +1209,49 @@ const styles = StyleSheet.create({
     backgroundColor: "#020617",
     color: TEXT_HEADING,
   },
-
+  headerFilterRow: {
+    marginTop: 8,
+    alignItems: "flex-start",
+  },
+  filterPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "#020617",
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+  },
+  filterPillIcon: {
+    fontSize: 14,
+    color: TEXT_SOFT,
+    marginRight: 6,
+  },
+  filterPillText: {
+    fontSize: 13,
+    color: TEXT_HEADING,
+    fontWeight: "500",
+  },
+  filterBadge: {
+    marginLeft: 8,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: main,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  filterBadgeText: {
+    fontSize: 11,
+    color: "#022c22",
+    fontWeight: "700",
+  },
   sectionRow: {
-    marginTop: 4,
+    marginTop: 8,
   },
   sectionRowColumn: {
-    marginTop: 6,
+    marginTop: 10,
   },
   sectionLabel: {
     fontSize: 12,
@@ -918,11 +1262,10 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingRight: 8,
   },
-
   filtersGrid: {
     flexDirection: "row",
     gap: 8,
-    marginTop: 6,
+    marginTop: 10,
   },
   filtersCol: {
     flex: 1,
@@ -937,22 +1280,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#020617",
     color: TEXT_HEADING,
   },
-
-  resetBtn: {
-    marginTop: 8,
-    alignSelf: "flex-start",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
-  },
-  resetBtnText: {
-    fontSize: 12,
-    color: TEXT_SOFT,
-  },
-
   chip: {
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -981,7 +1308,6 @@ const styles = StyleSheet.create({
     color: "#bbf7d0",
     fontWeight: "600",
   },
-
   card: {
     marginHorizontal: 16,
     marginTop: 12,
@@ -1011,7 +1337,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: TEXT_MUTED,
   },
-
   totalsGrid: {
     marginTop: 8,
     flexDirection: "row",
@@ -1051,7 +1376,6 @@ const styles = StyleSheet.create({
   totalNetDown: {
     color: "#fecaca",
   },
-
   catRow: {
     marginTop: 8,
   },
@@ -1082,7 +1406,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: "rgba(34,197,94,0.9)",
   },
-
   listCard: {
     marginHorizontal: 16,
     marginTop: 12,
@@ -1093,7 +1416,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER_DARK,
   },
-
   rowContainer: {
     paddingVertical: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -1163,13 +1485,11 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#bbf7d0",
   },
-
   emptyText: {
     paddingTop: 6,
     fontSize: 13,
     color: TEXT_MUTED,
   },
-
   errorBox: {
     marginHorizontal: 16,
     marginTop: 12,
@@ -1183,7 +1503,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#fecaca",
   },
-
   footerTip: {
     marginHorizontal: 16,
     marginBottom: 8,
@@ -1191,7 +1510,6 @@ const styles = StyleSheet.create({
     color: TEXT_MUTED,
     textAlign: "center",
   },
-
   loadingContainer: {
     flex: 1,
     backgroundColor: BG_DARK,
@@ -1210,5 +1528,97 @@ const styles = StyleSheet.create({
   loadingSubtitle: {
     fontSize: 13,
     color: TEXT_MUTED,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15,23,42,0.7)",
+    justifyContent: "flex-end",
+  },
+  modalSheet: {
+    maxHeight: "85%",
+    backgroundColor: BG_DARK,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 8,
+    borderTopWidth: 1,
+    borderColor: BORDER_DARK,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: TEXT_HEADING,
+  },
+  modalClose: {
+    fontSize: 18,
+    color: TEXT_MUTED,
+  },
+  modalScroll: {
+    flexGrow: 0,
+  },
+  modalSection: {
+    marginTop: 10,
+  },
+  dateRangePill: {
+    marginTop: 4,
+    marginBottom: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: "#020617",
+  },
+  dateRangeText: {
+    fontSize: 14,
+    color: TEXT_HEADING,
+    textAlign: "center",
+  },
+  calendarCard: {
+    marginTop: 8,
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+    backgroundColor: CARD_DARK,
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 8,
+  },
+  modalBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalBtnOutline: {
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+    backgroundColor: "#020617",
+  },
+  modalBtnSolid: {
+    borderWidth: 1,
+    borderColor: main,
+    backgroundColor: main,
+  },
+  modalBtnOutlineText: {
+    fontSize: 13,
+    color: TEXT_SOFT,
+    fontWeight: "500",
+  },
+  modalBtnSolidText: {
+    fontSize: 13,
+    color: "#022c22",
+    fontWeight: "700",
   },
 });
