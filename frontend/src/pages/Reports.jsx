@@ -13,12 +13,9 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Linking,
 } from "react-native";
 import { Calendar } from "react-native-calendars";
-
-// 🔹 static imports – no dynamic import funkiness, no EncodingType
-import * as FileSystem from "expo-file-system";
-import * as Sharing from "expo-sharing";
 
 import api from "../lib/api";
 
@@ -157,7 +154,7 @@ export default function ReportsScreen() {
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
 
-  // APPLIED filters
+  // APPLIED filters (these control the actual filtering)
   const [fStart, setFStart] = useState("");
   const [fEnd, setFEnd] = useState("");
   const [fType, setFType] = useState("ALL");
@@ -372,7 +369,6 @@ export default function ReportsScreen() {
   }, [rows, sankeyCurrency, categoriesById]);
 
   /* ------------------------------ Import / Export ------------------------------ */
-
   const handleImportCsv = async () => {
     try {
       const DocumentPicker = await import("expo-document-picker");
@@ -447,7 +443,7 @@ export default function ReportsScreen() {
     }
   };
 
-  // 🔥 FIXED CSV EXPORT – no EncodingType, matches web logic
+  // 🔥 CSV EXPORT – NO expo-file-system, NO UTF8, matches web format
   const handleDownloadCsv = async () => {
     try {
       if (rows.length === 0) {
@@ -455,43 +451,35 @@ export default function ReportsScreen() {
         return;
       }
 
-      setLoading(true);
-
       const headers = ["Date", "Description", "Amount"];
       const csvLines = [headers.map(csvEscape).join(",")];
 
       rows.forEach((tx) => {
         const date = new Date(tx.date).toISOString().slice(0, 10);
-        const desc = tx.description || "";
         let amt = minorToMajor(tx.amountMinor, tx.currency);
         if (tx.type !== "income") amt = -Math.abs(amt);
+        const desc = tx.description || "";
         csvLines.push([date, desc, amt].map(csvEscape).join(","));
       });
 
       const csvContent = csvLines.join("\n");
 
-      const fileName = `nummoria_report_${new Date()
-        .toISOString()
-        .slice(0, 10)}.csv`;
-      const fileUri = `${FileSystem.documentDirectory}${fileName}`;
+      // Encode as data URL so user can open/share from mobile browser
+      const encoded = encodeURIComponent(csvContent);
+      const uri = `data:text/csv;charset=utf-8,${encoded}`;
 
-      // 👇 Expo defaults to UTF-8, we pass NO encoding option
-      await FileSystem.writeAsStringAsync(fileUri, csvContent);
-
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri, {
-          mimeType: "text/csv",
-          dialogTitle: "Save CSV Report",
-          UTI: "public.comma-separated-values-text",
-        });
-        Alert.alert("Success", "CSV report ready to save");
-      } else {
-        Alert.alert("Success", `Report saved as ${fileName}`);
+      const supported = await Linking.canOpenURL(uri);
+      if (!supported) {
+        Alert.alert(
+          "Export not supported",
+          "Your device cannot open CSV data URLs directly. Please use the web app export instead."
+        );
+        return;
       }
+
+      await Linking.openURL(uri);
     } catch (err) {
       Alert.alert("Error", err.message || "Failed to download CSV");
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -620,6 +608,7 @@ export default function ReportsScreen() {
 
   /* ------------------------------ Filters sheet ------------------------------ */
   function FiltersSheet() {
+    // LOCAL state for the filter modal
     const [localStart, setLocalStart] = useState("");
     const [localEnd, setLocalEnd] = useState("");
     const [localType, setLocalType] = useState("ALL");
@@ -630,6 +619,7 @@ export default function ReportsScreen() {
     const [localMax, setLocalMax] = useState("");
     const [localRangePreset, setLocalRangePreset] = useState("ALL");
 
+    // Sync local state when modal opens
     useEffect(() => {
       if (filtersOpen) {
         setLocalStart(fStart);
@@ -705,11 +695,13 @@ export default function ReportsScreen() {
       setLocalMax("");
       setLocalRangePreset("ALL");
 
+      // Also clear the applied filters
       resetAllFilters();
       setFiltersOpen(false);
     };
 
     const handleApply = () => {
+      // Apply all local state to actual filters
       setFStart(localStart);
       setFEnd(localEnd);
       setFType(localType);
@@ -955,6 +947,7 @@ export default function ReportsScreen() {
               </View>
             </ScrollView>
 
+            {/* bottom actions */}
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={[styles.modalBtn, styles.modalBtnOutline]}
