@@ -101,6 +101,36 @@ function formatMoney(n, prefix = "$") {
   })}`;
 }
 
+// 🔗 Map web-style hrefs → React Navigation route names
+function hrefToRouteName(href) {
+  if (!href) return null;
+
+  switch (href) {
+    case "/ai/financial-advice":
+    case "/ai/financial-helper":
+      return "Financial Helper"; // Tab name
+
+    case "/reports":
+    case "Reports":
+      return "Reports"; // Tab name
+
+    case "/expenses":
+      return "Expenses"; // Tab name
+
+    case "/income":
+      return "Income"; // (if you ever use this)
+
+    case "/investments":
+      return "Investments"; // Tab name
+
+    case "/investments/performance":
+      return "InvestmentPerformance"; // Stack screen in App.js
+
+    default:
+      return null;
+  }
+}
+
 export default function DashboardScreen() {
   const navigation = useNavigation();
 
@@ -215,8 +245,12 @@ export default function DashboardScreen() {
   })();
 
   const handleCtaPress = (cta) => {
-    console.log("CTA pressed:", cta);
-    // hook up navigation later
+    const routeName = hrefToRouteName(cta?.href);
+    if (!routeName) {
+      console.warn("No route mapped for CTA href:", cta?.href);
+      return;
+    }
+    navigation.navigate(routeName);
   };
 
   return (
@@ -366,13 +400,22 @@ export default function DashboardScreen() {
         </View>
 
         <View style={styles.actionsRow}>
-          <TouchableOpacity style={styles.actionChip}>
+          <TouchableOpacity
+            style={styles.actionChip}
+            onPress={() => navigation.navigate("Expenses")}
+          >
             <Text style={styles.actionChipLabel}>Add expense</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionChip}>
+          <TouchableOpacity
+            style={styles.actionChip}
+            onPress={() => navigation.navigate("Income")}
+          >
             <Text style={styles.actionChipLabel}>Add income</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionChip}>
+          <TouchableOpacity
+            style={styles.actionChip}
+            onPress={() => navigation.navigate("Financial Helper")}
+          >
             <Text style={styles.actionChipLabel}>Open AI Mentor</Text>
           </TouchableOpacity>
         </View>
@@ -385,7 +428,10 @@ export default function DashboardScreen() {
             “What happens if I move to NYC in 3 years?” – ask it in plain
             language.
           </Text>
-          <TouchableOpacity style={styles.aiButton}>
+          <TouchableOpacity
+            style={styles.aiButton}
+            onPress={() => navigation.navigate("Financial Helper")}
+          >
             <Text style={styles.aiButtonText}>Chat with AI</Text>
           </TouchableOpacity>
         </View>
