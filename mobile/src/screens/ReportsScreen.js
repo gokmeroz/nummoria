@@ -510,14 +510,126 @@ export default function ReportsScreen() {
   };
 
   const handleDownloadPdf = async () => {
-    Alert.alert(
-      "PDF Export",
-      "PDF generation is available on the web version. Would you like to export as CSV instead?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Export CSV", onPress: handleDownloadCsv },
-      ]
-    );
+    try {
+      if (rows.length === 0) {
+        Alert.alert("No Data", "No transactions to export");
+        return;
+      }
+
+      setLoading(true);
+
+      // 1) Build simple HTML table for the PDF
+      const tableRowsHtml = rows
+        .map((tx) => {
+          const cat = categoriesById.get(tx.categoryId)?.name || "";
+          const acc = accountsById.get(tx.accountId)?.name || "";
+          const amount = minorToMajor(tx.amountMinor, tx.currency);
+          return `
+          <tr>
+            <td>${fmtDate(tx.date)}</td>
+            <td>${tx.type || ""}</td>
+            <td>${cat}</td>
+            <td>${acc}</td>
+            <td>${(tx.description || "").replace(/</g, "&lt;")}</td>
+            <td style="text-align:right;">${amount}</td>
+            <td>${tx.currency || "USD"}</td>
+            <td>${(tx.notes || "").replace(/</g, "&lt;")}</td>
+          </tr>
+        `;
+        })
+        .join("");
+
+      const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Nummoria Report</title>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+              font-size: 12px;
+              color: #0f172a;
+              padding: 24px;
+            }
+            h1 {
+              font-size: 18px;
+              margin-bottom: 4px;
+            }
+            p {
+              margin: 0 0 12px 0;
+              color: #6b7280;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+            }
+            th, td {
+              border: 1px solid #e5e7eb;
+              padding: 4px 6px;
+            }
+            th {
+              background-color: #f3f4f6;
+              text-align: left;
+            }
+            tr:nth-child(even) td {
+              background-color: #fafafa;
+            }
+          </style>
+        </head>
+        <body>
+          <h1>Nummoria – Transactions Report</h1>
+          <p>Generated on ${new Date().toLocaleString()}</p>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Category</th>
+                <th>Account</th>
+                <th>Description</th>
+                <th>Amount</th>
+                <th>Currency</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tableRowsHtml}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+
+      // 2) Use expo-print to create a PDF file from this HTML
+      const PrintModule = await import("expo-print");
+      const { printToFileAsync } = PrintModule;
+
+      const { uri } = await printToFileAsync({
+        html,
+        base64: false,
+      });
+
+      // 3) Share / save the PDF using expo-sharing
+      const SharingModule = await import("expo-sharing");
+      const Sharing = SharingModule.default || SharingModule;
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          mimeType: "application/pdf",
+          dialogTitle: "Save PDF Report",
+          UTI: "com.adobe.pdf",
+        });
+        Alert.alert("Success", "PDF report ready to save");
+      } else {
+        Alert.alert("Success", "PDF report generated");
+      }
+    } catch (err) {
+      console.error("PDF export error:", err);
+      Alert.alert("Error", err.message || "Failed to download PDF");
+    } finally {
+      setLoading(false);
+    }
   };
 
   /* ------------------------------ Row render ------------------------------ */

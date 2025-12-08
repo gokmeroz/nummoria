@@ -1,35 +1,13 @@
 /* eslint-disable no-unused-vars */
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Modal,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  Linking,
-} from "react-native";
-import { Calendar } from "react-native-calendars";
-
+import { ResponsiveSankey } from "@nivo/sankey";
 import api from "../lib/api";
 
-const main = "#22c55e";
-const secondary = "#4ade80";
-const BG_DARK = "#020617";
-const CARD_DARK = "#020819";
-const BORDER_DARK = "#0f172a";
-const TEXT_SOFT = "rgba(148,163,184,0.85)";
-const TEXT_MUTED = "rgba(148,163,184,0.7)";
-const TEXT_HEADING = "#e5e7eb";
+/* =========================== Money helpers =========================== */
+
 const DATE_LANG = "en-US";
 
-/* ------------------------------ Money helpers ------------------------------ */
 function decimalsForCurrency(code) {
   const zero = new Set(["JPY", "KRW", "CLP", "VND"]);
   const three = new Set(["BHD", "IQD", "JOD", "KWD", "OMR", "TND"]);
@@ -37,10 +15,12 @@ function decimalsForCurrency(code) {
   if (three.has(code)) return 3;
   return 2;
 }
+
 function minorToMajor(minor, currency = "USD") {
   const d = decimalsForCurrency(currency || "USD");
   return Number(Number(minor || 0) / Math.pow(10, d));
 }
+
 const fmtMoneyUI = (minor, cur = "USD") =>
   new Intl.NumberFormat(undefined, {
     style: "currency",
@@ -57,126 +37,49 @@ function fmtDate(dateLike) {
   });
 }
 
-// helper to format YYYY-MM-DD for quick ranges
-function toISODate(d) {
-  return d.toISOString().slice(0, 10);
-}
-
-/* ------------------------- CSV escape (like web) -------------------------- */
 function csvEscape(v) {
   const s = String(v ?? "");
   if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }
 
-/* ------- Build marked dates for calendar "period" (start–end range) ------- */
-function buildMarkedDates(startStr, endStr) {
-  if (!startStr && !endStr) return {};
+/* =============================== Component =============================== */
 
-  let start = startStr;
-  let end = endStr;
+const REPORTS_STYLE_ID = "reports-page-styles";
 
-  if (start && end && start > end) {
-    const tmp = start;
-    start = end;
-    end = tmp;
-  }
+export default function Reports() {
+  /* ---------- inject CSS once ---------- */
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (document.getElementById(REPORTS_STYLE_ID)) return;
 
-  const marked = {};
+    const style = document.createElement("style");
+    style.id = REPORTS_STYLE_ID;
+    style.innerHTML = reportsCss;
+    document.head.appendChild(style);
+  }, []);
 
-  if (start && !end) {
-    marked[start] = {
-      startingDay: true,
-      endingDay: true,
-      color: main,
-      textColor: "#0f172a",
-    };
-    return marked;
-  }
-
-  if (!start || !end) return {};
-
-  const cursor = new Date(start);
-  const endDate = new Date(end);
-
-  while (cursor <= endDate) {
-    const key = toISODate(cursor);
-    marked[key] = {
-      startingDay: key === start,
-      endingDay: key === end,
-      color: main,
-      textColor: "#0f172a",
-    };
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  return marked;
-}
-
-/* ----------------------------- Small components ---------------------------- */
-function Chip({ label, selected, onPress, small }) {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      activeOpacity={0.85}
-      style={[
-        styles.chip,
-        small && styles.chipSmall,
-        selected && styles.chipSelected,
-      ]}
-    >
-      <Text
-        numberOfLines={1}
-        style={[
-          styles.chipText,
-          small && styles.chipTextSmall,
-          selected && styles.chipTextSelected,
-        ]}
-      >
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
-}
-
-/* =============================== Screen =============================== */
-
-export default function ReportsScreen() {
-  // data
+  /* ---------- data ---------- */
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
   const [accounts, setAccounts] = useState([]);
 
-  // ui
+  /* ---------- UI state ---------- */
   const [loading, setLoading] = useState(true);
   const [initialDone, setInitialDone] = useState(false);
   const [err, setErr] = useState("");
-  const [q, setQ] = useState("");
-  const [debouncedQ, setDebouncedQ] = useState("");
 
-  // APPLIED filters (these control the actual filtering)
+  /* filters */
   const [fStart, setFStart] = useState("");
   const [fEnd, setFEnd] = useState("");
   const [fType, setFType] = useState("ALL");
   const [fAccountId, setFAccountId] = useState("ALL");
   const [fCategoryId, setFCategoryId] = useState("ALL");
-  const [fCurrency, setFCurrency] = useState("ALL");
+  const [fCurrency, setFCurrency] = useState("USD");
   const [fMin, setFMin] = useState("");
   const [fMax, setFMax] = useState("");
-  const [rangePreset, setRangePreset] = useState("ALL");
 
-  // filters sheet
-  const [filtersOpen, setFiltersOpen] = useState(false);
-
-  /* ----------------------------- Debounce search ----------------------------- */
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedQ(q);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [q]);
-
-  /* ----------------------------- Load data ----------------------------- */
+  /* ---------- load data ---------- */
   const loadAll = useCallback(async () => {
     try {
       setLoading(true);
@@ -197,7 +100,7 @@ export default function ReportsScreen() {
       );
     } finally {
       setLoading(false);
-      setInitialDone((prev) => (prev ? prev : true));
+      setInitialDone(true);
     }
   }, []);
 
@@ -205,7 +108,7 @@ export default function ReportsScreen() {
     loadAll();
   }, [loadAll]);
 
-  /* --------------------------- Lookups/helpers --------------------------- */
+  /* ---------- lookups ---------- */
   const categoriesById = useMemo(() => {
     const m = new Map();
     for (const c of categories) m.set(c._id, c);
@@ -220,44 +123,23 @@ export default function ReportsScreen() {
 
   const currencies = useMemo(() => {
     const s = new Set(transactions.map((t) => t.currency || "USD"));
-    return ["ALL", ...Array.from(s)];
+    const arr = Array.from(s);
+    if (!arr.includes("USD")) arr.unshift("USD");
+    return arr;
   }, [transactions]);
 
-  /* --------------------------- Reset filters --------------------------- */
-  const resetAllFilters = useCallback(() => {
+  /* ---------- filters ---------- */
+  const resetFilters = () => {
     setFStart("");
     setFEnd("");
     setFType("ALL");
     setFAccountId("ALL");
     setFCategoryId("ALL");
-    setFCurrency("ALL");
+    setFCurrency("USD");
     setFMin("");
     setFMax("");
-    setRangePreset("ALL");
-  }, []);
+  };
 
-  const activeFilterCount = useMemo(() => {
-    let c = 0;
-    if (rangePreset !== "ALL" || fStart || fEnd) c++;
-    if (fType !== "ALL") c++;
-    if (fAccountId !== "ALL") c++;
-    if (fCategoryId !== "ALL") c++;
-    if (fCurrency !== "ALL") c++;
-    if (fMin.trim() !== "" || fMax.trim() !== "") c++;
-    return c;
-  }, [
-    rangePreset,
-    fStart,
-    fEnd,
-    fType,
-    fAccountId,
-    fCategoryId,
-    fCurrency,
-    fMin,
-    fMax,
-  ]);
-
-  /* ------------------------------- Filtering ------------------------------- */
   const rows = useMemo(() => {
     let start = null;
     if (/^\d{4}-\d{2}-\d{2}$/.test(fStart)) {
@@ -279,8 +161,6 @@ export default function ReportsScreen() {
       maxNum = Number(fMax);
     }
 
-    const needle = debouncedQ.trim().toLowerCase();
-
     const filtered = transactions.filter((t) => {
       if (fType !== "ALL" && (t.type || "").toLowerCase() !== fType)
         return false;
@@ -288,7 +168,7 @@ export default function ReportsScreen() {
       if (fCategoryId !== "ALL" && t.categoryId !== fCategoryId) return false;
 
       const cur = t.currency || "USD";
-      if (fCurrency !== "ALL" && cur !== fCurrency) return false;
+      if (fCurrency && cur !== fCurrency) return false;
 
       const dt = new Date(t.date);
       if (start && dt < start) return false;
@@ -298,14 +178,6 @@ export default function ReportsScreen() {
       if (minNum !== null && major < minNum) return false;
       if (maxNum !== null && major > maxNum) return false;
 
-      if (needle) {
-        const cat = categoriesById.get(t.categoryId)?.name || "";
-        const acc = accountsById.get(t.accountId)?.name || "";
-        const hay = `${t.description || ""} ${t.notes || ""} ${
-          t.type || ""
-        } ${cat} ${acc} ${(t.tags || []).join(" ")}`.toLowerCase();
-        if (!hay.includes(needle)) return false;
-      }
       return true;
     });
 
@@ -313,7 +185,6 @@ export default function ReportsScreen() {
     return filtered;
   }, [
     transactions,
-    debouncedQ,
     fStart,
     fEnd,
     fType,
@@ -322,11 +193,9 @@ export default function ReportsScreen() {
     fCurrency,
     fMin,
     fMax,
-    categoriesById,
-    accountsById,
   ]);
 
-  /* ------------------------------ Totals / flow ------------------------------ */
+  /* ---------- totals ---------- */
   const totalsByCurrency = useMemo(() => {
     const map = new Map();
     for (const t of rows) {
@@ -347,1265 +216,907 @@ export default function ReportsScreen() {
     });
   }, [rows]);
 
-  const sankeyCurrency = fCurrency !== "ALL" ? fCurrency : null;
-  const topCategories = useMemo(() => {
-    if (!sankeyCurrency) return [];
-    const map = new Map();
+  /* ---------- sankey ---------- */
+  const sankeyData = useMemo(() => {
+    if (!fCurrency) return null;
+    const cur = fCurrency;
+
+    let totalIncome = 0;
+    const catMap = new Map(); // name -> minor
 
     for (const t of rows) {
-      if ((t.currency || "USD") !== sankeyCurrency) continue;
-      if (t.type !== "expense") continue;
-      const catId = t.categoryId || "UNCAT";
-      map.set(catId, (map.get(catId) || 0) + Number(t.amountMinor || 0));
+      if ((t.currency || "USD") !== cur) continue;
+      if (t.type === "income") {
+        totalIncome += Number(t.amountMinor || 0);
+      } else if (t.type === "expense") {
+        const catId = t.categoryId || "UNCAT";
+        const name = categoriesById.get(catId)?.name || "Other";
+        catMap.set(name, (catMap.get(name) || 0) + Number(t.amountMinor || 0));
+      }
     }
 
-    const arr = [...map.entries()].map(([catId, minor]) => ({
-      catId,
-      name: categoriesById.get(catId)?.name || "Other",
-      minor,
-    }));
-    arr.sort((a, b) => b.minor - a.minor);
-    return arr.slice(0, 6);
-  }, [rows, sankeyCurrency, categoriesById]);
+    if (totalIncome <= 0 || catMap.size === 0) return null;
 
-  /* ------------------------------ Import / Export ------------------------------ */
+    const catEntries = [...catMap.entries()].sort((a, b) => b[1] - a[1]);
+    const top = catEntries.slice(0, 6);
+    const otherSum = catEntries.slice(6).reduce((acc, [, v]) => acc + v, 0);
+
+    const nodes = [{ id: "Income" }];
+    const links = [];
+
+    let totalExpenses = 0;
+
+    for (const [name, minor] of top) {
+      nodes.push({ id: name });
+      links.push({
+        source: "Income",
+        target: name,
+        value: minorToMajor(minor, cur),
+      });
+      totalExpenses += minor;
+    }
+
+    if (otherSum > 0) {
+      nodes.push({ id: "Other" });
+      links.push({
+        source: "Income",
+        target: "Other",
+        value: minorToMajor(otherSum, cur),
+      });
+      totalExpenses += otherSum;
+    }
+
+    const net = totalIncome - totalExpenses;
+    if (net > 0) {
+      nodes.push({ id: "Sparen / Savings" });
+      links.push({
+        source: "Income",
+        target: "Sparen / Savings",
+        value: minorToMajor(net, cur),
+      });
+    }
+
+    return { nodes, links };
+  }, [rows, fCurrency, categoriesById]);
+
+  /* ---------- import / export ---------- */
+
   const handleImportCsv = async () => {
     try {
-      const DocumentPicker = await import("expo-document-picker");
-      const result = await DocumentPicker.getDocumentAsync({
-        type: "text/csv",
-        copyToCacheDirectory: true,
-      });
+      if (typeof window === "undefined" || typeof document === "undefined")
+        return;
 
-      if (result.canceled) return;
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".csv,text/csv";
+      input.style.display = "none";
 
-      const formData = new FormData();
-      formData.append("file", {
-        uri: result.assets[0].uri,
-        type: "text/csv",
-        name: result.assets[0].name || "transactions.csv",
-      });
+      const handleChange = async (e) => {
+        const file = e.target.files && e.target.files[0];
+        document.body.removeChild(input);
+        input.removeEventListener("change", handleChange);
 
-      setLoading(true);
-      const response = await api.post("/ingest/csv", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+        if (!file) return;
 
-      Alert.alert(
-        "Success",
-        response.data.message || "CSV imported successfully"
-      );
-      loadAll();
+        const formData = new FormData();
+        formData.append("file", file);
+
+        setLoading(true);
+        try {
+          const response = await api.post("/ingest/csv", formData, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
+          // eslint-disable-next-line no-alert
+          alert(response.data.message || "CSV imported successfully");
+          await loadAll();
+        } catch (err) {
+          // eslint-disable-next-line no-alert
+          alert(
+            err?.response?.data?.error || err.message || "Failed to import CSV"
+          );
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      input.addEventListener("change", handleChange);
+      document.body.appendChild(input);
+      input.click();
     } catch (err) {
-      Alert.alert(
-        "Error",
-        err?.response?.data?.error || err.message || "Failed to import CSV"
-      );
-    } finally {
-      setLoading(false);
+      // eslint-disable-next-line no-alert
+      alert(err.message || "Failed to open file picker");
     }
   };
 
   const handleImportPdf = async () => {
     try {
-      const DocumentPicker = await import("expo-document-picker");
-      const result = await DocumentPicker.getDocumentAsync({
-        type: "application/pdf",
-        copyToCacheDirectory: true,
-      });
+      if (typeof window === "undefined" || typeof document === "undefined")
+        return;
 
-      if (result.canceled) return;
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".pdf,application/pdf";
+      input.style.display = "none";
 
-      const formData = new FormData();
-      formData.append("file", {
-        uri: result.assets[0].uri,
-        type: "application/pdf",
-        name: result.assets[0].name || "transactions.pdf",
-      });
+      const handleChange = async (e) => {
+        const file = e.target.files && e.target.files[0];
+        document.body.removeChild(input);
+        input.removeEventListener("change", handleChange);
 
-      setLoading(true);
-      const response = await api.post("/ingest/pdf", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+        if (!file) return;
 
-      Alert.alert(
-        "Success",
-        response.data.message || "PDF imported successfully"
-      );
-      loadAll();
+        const formData = new FormData();
+        formData.append("file", file);
+
+        setLoading(true);
+        try {
+          const response = await api.post("/ingest/pdf", formData, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
+          // eslint-disable-next-line no-alert
+          alert(response.data.message || "PDF imported successfully");
+          await loadAll();
+        } catch (err) {
+          // eslint-disable-next-line no-alert
+          alert(
+            err?.response?.data?.error || err.message || "Failed to import PDF"
+          );
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      input.addEventListener("change", handleChange);
+      document.body.appendChild(input);
+      input.click();
     } catch (err) {
-      Alert.alert(
-        "Error",
-        err?.response?.data?.error || err.message || "Failed to import PDF"
-      );
-    } finally {
-      setLoading(false);
+      // eslint-disable-next-line no-alert
+      alert(err.message || "Failed to open file picker");
     }
   };
 
-  // 🔥 CSV EXPORT – NO expo-file-system, NO UTF8, matches web format
+  // CSV EXPORT – web-only, creates a download in browser
   const handleDownloadCsv = async () => {
     try {
-      if (rows.length === 0) {
-        Alert.alert("No Data", "No transactions to export");
+      if (!rows || rows.length === 0) {
+        // eslint-disable-next-line no-alert
+        alert("No transactions to export");
         return;
       }
 
-      const headers = ["Date", "Description", "Amount"];
+      const headers = [
+        "Date",
+        "Account",
+        "Category",
+        "Type",
+        "Description",
+        "Amount",
+      ];
       const csvLines = [headers.map(csvEscape).join(",")];
 
       rows.forEach((tx) => {
         const date = new Date(tx.date).toISOString().slice(0, 10);
+        const accName = accountsById.get(tx.accountId)?.name || "";
+        const catName = categoriesById.get(tx.categoryId)?.name || "";
+        const isIncome = tx.type === "income";
         let amt = minorToMajor(tx.amountMinor, tx.currency);
-        if (tx.type !== "income") amt = -Math.abs(amt);
+        if (!isIncome) amt = -Math.abs(amt);
         const desc = tx.description || "";
-        csvLines.push([date, desc, amt].map(csvEscape).join(","));
+
+        csvLines.push(
+          [date, accName, catName, tx.type || "", desc, amt.toString()]
+            .map(csvEscape)
+            .join(",")
+        );
       });
 
       const csvContent = csvLines.join("\n");
+      const blob = new Blob([csvContent], {
+        type: "text/csv;charset=utf-8;",
+      });
 
-      // Encode as data URL so user can open/share from mobile browser
-      const encoded = encodeURIComponent(csvContent);
-      const uri = `data:text/csv;charset=utf-8,${encoded}`;
+      if (typeof document === "undefined") return;
 
-      const supported = await Linking.canOpenURL(uri);
-      if (!supported) {
-        Alert.alert(
-          "Export not supported",
-          "Your device cannot open CSV data URLs directly. Please use the web app export instead."
-        );
-        return;
-      }
-
-      await Linking.openURL(uri);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `transactions_${new Date()
+        .toISOString()
+        .slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     } catch (err) {
-      Alert.alert("Error", err.message || "Failed to download CSV");
+      // eslint-disable-next-line no-alert
+      alert(err.message || "Failed to download CSV");
     }
   };
 
   const handleDownloadPdf = async () => {
-    Alert.alert(
-      "PDF Export",
-      "PDF generation is available on the web version. Would you like to export as CSV instead?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Export CSV", onPress: handleDownloadCsv },
-      ]
-    );
+    try {
+      if (!rows || rows.length === 0) {
+        // eslint-disable-next-line no-alert
+        alert("No transactions to export");
+        return;
+      }
+      if (typeof window === "undefined" || typeof document === "undefined")
+        return;
+
+      // grab current sankey SVG (if rendered)
+      let sankeySvgHtml = "";
+      const svgEl = document.querySelector(".reports-sankey-wrapper svg");
+      if (svgEl) {
+        sankeySvgHtml = svgEl.outerHTML;
+      }
+
+      // Build a simple HTML table (same columns as screen)
+      const tableRowsHtml = rows
+        .map((tx) => {
+          const accName = accountsById.get(tx.accountId)?.name || "—";
+          const catName = categoriesById.get(tx.categoryId)?.name || "—";
+          const isIncome = tx.type === "income";
+          let val = minorToMajor(tx.amountMinor, tx.currency);
+          if (!isIncome) val = -Math.abs(val);
+
+          const formattedAmount = new Intl.NumberFormat(undefined, {
+            style: "currency",
+            currency: tx.currency || "USD",
+          }).format(val);
+
+          return `<tr>
+<td>${fmtDate(tx.date)}</td>
+<td>${accName}</td>
+<td>${catName}</td>
+<td>${tx.type}</td>
+<td>${(tx.description || "").replace(/</g, "&lt;")}</td>
+<td style="text-align:right;">${formattedAmount}</td>
+</tr>`;
+        })
+        .join("");
+
+      const html = `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Transactions Report</title>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 24px; }
+    h1 { font-size: 18px; margin-bottom: 12px; }
+    h2 { font-size: 14px; margin: 18px 0 8px; }
+    table { border-collapse: collapse; width: 100%; font-size: 12px; }
+    th, td { border: 1px solid #d1d5db; padding: 6px 8px; text-align: left; }
+    th { background: #f3f4f6; font-weight: 600; }
+    td:last-child, th:last-child { text-align: right; }
+    .sankey-container { margin-bottom: 20px; }
+    .sankey-container svg { width: 100%; height: auto; }
+  </style>
+</head>
+<body>
+  <h1>Nummoria – Transactions Report</h1>
+  ${
+    sankeySvgHtml
+      ? `<h2>Cash-Flow (Sankey) · ${fCurrency}</h2>
+  <div class="sankey-container">
+    ${sankeySvgHtml}
+  </div>`
+      : ""
+  }
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Account</th>
+        <th>Category</th>
+        <th>Type</th>
+        <th>Description</th>
+        <th>Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${tableRowsHtml}
+    </tbody>
+  </table>
+</body>
+</html>`;
+
+      const win = window.open("", "_blank");
+      if (!win) {
+        // eslint-disable-next-line no-alert
+        alert(
+          "Popup blocked. Allow popups for this site to download the PDF (via print dialog)."
+        );
+        return;
+      }
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+      // user can choose "Save as PDF" in print dialog
+      win.print();
+    } catch (err) {
+      // eslint-disable-next-line no-alert
+      alert(err.message || "Failed to generate PDF");
+    }
   };
 
-  /* ------------------------------ Row render ------------------------------ */
-  function renderRow({ item }) {
-    const accName = accountsById.get(item.accountId)?.name || "—";
-    const catName = categoriesById.get(item.categoryId)?.name || "—";
-    const isIncome = item.type === "income";
-    const sign = isIncome ? "+" : "-";
-
+  /* ---------- loading ---------- */
+  if (!initialDone && loading) {
     return (
-      <View style={styles.rowContainer}>
-        <View style={styles.rowLeft}>
-          <View style={styles.rowTitleLine}>
-            <Text style={styles.rowCategory}>{catName}</Text>
-            <View style={styles.rowTypeBadge}>
-              <Text style={styles.rowTypeText}>{item.type}</Text>
-            </View>
-          </View>
-          <View style={styles.rowAccountBadge}>
-            <Text style={styles.rowAccountText}>{accName}</Text>
-          </View>
-          <Text style={styles.rowDescription} numberOfLines={2}>
-            {item.description || "No description"}
-          </Text>
-          <Text style={styles.rowDate}>{fmtDate(item.date)}</Text>
-        </View>
-        <View style={styles.rowRight}>
-          <Text style={[styles.rowAmount, !isIncome && { color: "#fecaca" }]}>
-            {sign}
-            {fmtMoneyUI(item.amountMinor, item.currency)}
-          </Text>
-        </View>
-      </View>
+      <div className="reports-loading">
+        <div className="reports-loading-inner">
+          <div className="spinner" />
+          <div className="brand">
+            <span>🪙</span>
+            <span>Nummoria</span>
+          </div>
+          <p>Loading your reports…</p>
+        </div>
+      </div>
     );
   }
 
-  /* ------------------------------ Header / top ------------------------------ */
-  function Header() {
-    return (
-      <View style={styles.header}>
-        <View className="header-top" style={styles.headerTopRow}>
-          <View>
-            <Text style={styles.headerEyebrow}>Reports</Text>
-            <Text style={styles.headerTitle}>Money Flow</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.headerIconBtn}
-            onPress={loadAll}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.headerIconPlus}>↻</Text>
-          </TouchableOpacity>
-        </View>
+  /* ============================= RENDER ============================= */
 
-        <View style={styles.ieRow}>
-          <TouchableOpacity
-            style={[styles.ieBtn, styles.ieBtnOutline]}
-            onPress={handleImportCsv}
-          >
-            <Text style={styles.ieBtnText}>Import CSV</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.ieBtn, styles.ieBtnSolid]}
-            onPress={handleImportPdf}
-          >
-            <Text style={styles.ieBtnTextSolid}>Import PDF</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={[styles.ieRow, { marginTop: 6 }]}>
-          <TouchableOpacity
-            style={[styles.ieBtn, styles.ieBtnOutline]}
-            onPress={handleDownloadCsv}
-          >
-            <Text style={styles.ieBtnText}>Download CSV</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.ieBtn, styles.ieBtnSolid]}
-            onPress={handleDownloadPdf}
-          >
-            <Text style={styles.ieBtnTextSolid}>Download PDF</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.searchContainer}>
-          <TextInput
-            value={q}
-            onChangeText={setQ}
-            placeholder="Search description, notes, #tags, account, category"
-            placeholderTextColor={TEXT_MUTED}
-            style={styles.searchInput}
-            returnKeyType="search"
-            blurOnSubmit={false}
-          />
-        </View>
-
-        <View style={styles.headerFilterRow}>
-          <TouchableOpacity
-            style={styles.filterPill}
-            onPress={() => setFiltersOpen(true)}
-            activeOpacity={0.9}
-          >
-            <Text style={styles.filterPillIcon}>☰</Text>
-            <Text style={styles.filterPillText}>Filters</Text>
-            {activeFilterCount > 0 && (
-              <View style={styles.filterBadge}>
-                <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
-
-  /* ------------------------------ Filters sheet ------------------------------ */
-  function FiltersSheet() {
-    // LOCAL state for the filter modal
-    const [localStart, setLocalStart] = useState("");
-    const [localEnd, setLocalEnd] = useState("");
-    const [localType, setLocalType] = useState("ALL");
-    const [localAccountId, setLocalAccountId] = useState("ALL");
-    const [localCategoryId, setLocalCategoryId] = useState("ALL");
-    const [localCurrency, setLocalCurrency] = useState("ALL");
-    const [localMin, setLocalMin] = useState("");
-    const [localMax, setLocalMax] = useState("");
-    const [localRangePreset, setLocalRangePreset] = useState("ALL");
-
-    // Sync local state when modal opens
-    useEffect(() => {
-      if (filtersOpen) {
-        setLocalStart(fStart);
-        setLocalEnd(fEnd);
-        setLocalType(fType);
-        setLocalAccountId(fAccountId);
-        setLocalCategoryId(fCategoryId);
-        setLocalCurrency(fCurrency);
-        setLocalMin(fMin);
-        setLocalMax(fMax);
-        setLocalRangePreset(rangePreset);
-      }
-    }, [filtersOpen]);
-
-    const markedDates = buildMarkedDates(localStart, localEnd);
-
-    const handleCalendarPress = (dateStr) => {
-      setLocalRangePreset("CUSTOM");
-
-      if (!localStart || (localStart && localEnd)) {
-        setLocalStart(dateStr);
-        setLocalEnd("");
-        return;
-      }
-
-      if (!localEnd) {
-        if (dateStr < localStart) {
-          setLocalEnd(localStart);
-          setLocalStart(dateStr);
-        } else {
-          setLocalEnd(dateStr);
-        }
-      }
-    };
-
-    const applyLocalRangePreset = (preset) => {
-      setLocalRangePreset(preset);
-      const now = new Date();
-      const todayStr = toISODate(now);
-
-      if (preset === "ALL") {
-        setLocalStart("");
-        setLocalEnd("");
-        return;
-      }
-
-      if (preset === "7D" || preset === "30D" || preset === "90D") {
-        const days = preset === "7D" ? 7 : preset === "30D" ? 30 : 90;
-        const start = new Date(now);
-        start.setDate(start.getDate() - days);
-        const startStr = toISODate(start);
-        setLocalStart(startStr);
-        setLocalEnd(todayStr);
-        return;
-      }
-
-      if (preset === "YTD") {
-        const start = new Date(now.getFullYear(), 0, 1);
-        const startStr = toISODate(start);
-        setLocalStart(startStr);
-        setLocalEnd(todayStr);
-      }
-    };
-
-    const handleClear = () => {
-      setLocalStart("");
-      setLocalEnd("");
-      setLocalType("ALL");
-      setLocalAccountId("ALL");
-      setLocalCategoryId("ALL");
-      setLocalCurrency("ALL");
-      setLocalMin("");
-      setLocalMax("");
-      setLocalRangePreset("ALL");
-
-      // Also clear the applied filters
-      resetAllFilters();
-      setFiltersOpen(false);
-    };
-
-    const handleApply = () => {
-      // Apply all local state to actual filters
-      setFStart(localStart);
-      setFEnd(localEnd);
-      setFType(localType);
-      setFAccountId(localAccountId);
-      setFCategoryId(localCategoryId);
-      setFCurrency(localCurrency);
-      setFMin(localMin);
-      setFMax(localMax);
-      setRangePreset(localRangePreset);
-      setFiltersOpen(false);
-    };
-
-    return (
-      <Modal
-        visible={filtersOpen}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setFiltersOpen(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Filters</Text>
-              <TouchableOpacity
-                onPress={() => setFiltersOpen(false)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Text style={styles.modalClose}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView
-              style={styles.modalScroll}
-              contentContainerStyle={{ paddingBottom: 12 }}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-            >
-              {/* Quick ranges */}
-              <View style={styles.sectionRow}>
-                <Text style={styles.sectionLabel}>Quick range</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.chipRow}
-                >
-                  <Chip
-                    label="All time"
-                    selected={localRangePreset === "ALL"}
-                    onPress={() => applyLocalRangePreset("ALL")}
-                    small
-                  />
-                  <Chip
-                    label="Last 7 days"
-                    selected={localRangePreset === "7D"}
-                    onPress={() => applyLocalRangePreset("7D")}
-                    small
-                  />
-                  <Chip
-                    label="Last 30 days"
-                    selected={localRangePreset === "30D"}
-                    onPress={() => applyLocalRangePreset("30D")}
-                    small
-                  />
-                  <Chip
-                    label="Last 90 days"
-                    selected={localRangePreset === "90D"}
-                    onPress={() => applyLocalRangePreset("90D")}
-                    small
-                  />
-                  <Chip
-                    label="Year to date"
-                    selected={localRangePreset === "YTD"}
-                    onPress={() => applyLocalRangePreset("YTD")}
-                    small
-                  />
-                </ScrollView>
-              </View>
-
-              {/* Date range */}
-              <View style={styles.modalSection}>
-                <Text style={styles.sectionLabel}>Date range</Text>
-
-                <View style={styles.dateRangePill}>
-                  <Text style={styles.dateRangeText}>
-                    {localStart && localEnd
-                      ? `${fmtDate(localStart)} - ${fmtDate(localEnd)}`
-                      : localStart
-                      ? `${fmtDate(localStart)} - Select end date`
-                      : "Select dates"}
-                  </Text>
-                </View>
-
-                <View style={styles.calendarCard}>
-                  <Calendar
-                    markingType="period"
-                    onDayPress={(day) => handleCalendarPress(day.dateString)}
-                    markedDates={markedDates}
-                    maxDate={toISODate(new Date())}
-                    theme={{
-                      backgroundColor: CARD_DARK,
-                      calendarBackground: CARD_DARK,
-                      textSectionTitleColor: TEXT_MUTED,
-                      monthTextColor: TEXT_HEADING,
-                      dayTextColor: TEXT_SOFT,
-                      todayTextColor: main,
-                      arrowColor: main,
-                      textDisabledColor: "rgba(148,163,184,0.35)",
-                    }}
-                  />
-                </View>
-              </View>
-
-              {/* Type filter */}
-              <View style={styles.sectionRow}>
-                <Text style={styles.sectionLabel}>Type</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.chipRow}
-                >
-                  <Chip
-                    label="All"
-                    selected={localType === "ALL"}
-                    onPress={() => setLocalType("ALL")}
-                    small
-                  />
-                  <Chip
-                    label="Income"
-                    selected={localType === "income"}
-                    onPress={() => setLocalType("income")}
-                    small
-                  />
-                  <Chip
-                    label="Expense"
-                    selected={localType === "expense"}
-                    onPress={() => setLocalType("expense")}
-                    small
-                  />
-                  <Chip
-                    label="Investment"
-                    selected={localType === "investment"}
-                    onPress={() => setLocalType("investment")}
-                    small
-                  />
-                </ScrollView>
-              </View>
-
-              {/* Accounts & Categories */}
-              <View style={styles.sectionRowColumn}>
-                <Text style={styles.sectionLabel}>Accounts</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.chipRow}
-                >
-                  <Chip
-                    label="All accounts"
-                    selected={localAccountId === "ALL"}
-                    onPress={() => setLocalAccountId("ALL")}
-                    small
-                  />
-                  {accounts.map((a) => (
-                    <Chip
-                      key={a._id}
-                      label={a.name}
-                      selected={localAccountId === a._id}
-                      onPress={() => setLocalAccountId(a._id)}
-                      small
-                    />
-                  ))}
-                </ScrollView>
-
-                <Text style={[styles.sectionLabel, { marginTop: 6 }]}>
-                  Categories
-                </Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.chipRow}
-                >
-                  <Chip
-                    label="All categories"
-                    selected={localCategoryId === "ALL"}
-                    onPress={() => setLocalCategoryId("ALL")}
-                    small
-                  />
-                  {categories.map((c) => (
-                    <Chip
-                      key={c._id}
-                      label={c.name}
-                      selected={localCategoryId === c._id}
-                      onPress={() => setLocalCategoryId(c._id)}
-                      small
-                    />
-                  ))}
-                </ScrollView>
-              </View>
-
-              {/* Currency */}
-              <View style={styles.sectionRow}>
-                <Text style={styles.sectionLabel}>Currency</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.chipRow}
-                >
-                  {currencies.map((c) => (
-                    <Chip
-                      key={c}
-                      label={c === "ALL" ? "All currencies" : c}
-                      selected={localCurrency === c}
-                      onPress={() => setLocalCurrency(c)}
-                      small
-                    />
-                  ))}
-                </ScrollView>
-              </View>
-
-              {/* Amount filters */}
-              <View style={styles.filtersGrid}>
-                <View style={styles.filtersCol}>
-                  <Text style={styles.sectionLabel}>Min amount</Text>
-                  <TextInput
-                    value={localMin}
-                    onChangeText={setLocalMin}
-                    placeholder="0"
-                    keyboardType="numeric"
-                    placeholderTextColor={TEXT_MUTED}
-                    style={styles.filterInput}
-                  />
-                </View>
-                <View style={styles.filtersCol}>
-                  <Text style={styles.sectionLabel}>Max amount</Text>
-                  <TextInput
-                    value={localMax}
-                    onChangeText={setLocalMax}
-                    placeholder="No max"
-                    keyboardType="numeric"
-                    placeholderTextColor={TEXT_MUTED}
-                    style={styles.filterInput}
-                  />
-                </View>
-              </View>
-            </ScrollView>
-
-            {/* bottom actions */}
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalBtn, styles.modalBtnOutline]}
-                onPress={handleClear}
-              >
-                <Text style={styles.modalBtnOutlineText}>Clear</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalBtn, styles.modalBtnSolid]}
-                onPress={handleApply}
-              >
-                <Text style={styles.modalBtnSolidText}>View results</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    );
-  }
-
-  /* ------------------------------ Loading state ------------------------------ */
-  if (!initialDone) {
-    return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <View style={styles.loadingSpinnerOuter}>
-          <ActivityIndicator size="large" color={main} />
-        </View>
-        <Text style={styles.loadingTitle}>Nummoria</Text>
-        <Text style={styles.loadingSubtitle}>Loading your reports…</Text>
-      </SafeAreaView>
-    );
-  }
-
-  /* ------------------------------ Main render ------------------------------ */
   return (
-    <SafeAreaView style={styles.screen}>
-      <FiltersSheet />
+    <div className="reports-page">
+      {/* FILTER BAR (top row like screenshot) */}
+      <div className="reports-filters-bar">
+        <button
+          type="button"
+          className="reports-reset-btn"
+          onClick={resetFilters}
+        >
+          Reset filters
+        </button>
 
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={{ paddingBottom: 32 }}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="always"
-      >
-        <Header />
+        <input
+          type="date"
+          className="reports-filter-input"
+          value={fStart}
+          onChange={(e) => setFStart(e.target.value)}
+        />
+        <input
+          type="date"
+          className="reports-filter-input"
+          value={fEnd}
+          onChange={(e) => setFEnd(e.target.value)}
+        />
 
-        {err ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{err}</Text>
-          </View>
-        ) : null}
+        <select
+          className="reports-filter-input"
+          value={fType}
+          onChange={(e) => setFType(e.target.value)}
+        >
+          <option value="ALL">All types</option>
+          <option value="income">Income</option>
+          <option value="expense">Expense</option>
+          <option value="investment">Investment</option>
+        </select>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Totals / Money Flow</Text>
-          {totalsByCurrency.length === 0 ? (
-            <Text style={styles.emptyText}>
-              No transactions match these filters.
-            </Text>
+        <select
+          className="reports-filter-input"
+          value={fAccountId}
+          onChange={(e) => setFAccountId(e.target.value)}
+        >
+          <option value="ALL">All accounts</option>
+          {accounts.map((a) => (
+            <option key={a._id} value={a._id}>
+              {a.name}
+            </option>
+          ))}
+        </select>
+
+        <select
+          className="reports-filter-input"
+          value={fCategoryId}
+          onChange={(e) => setFCategoryId(e.target.value)}
+        >
+          <option value="ALL">All categories</option>
+          {categories.map((c) => (
+            <option key={c._id} value={c._id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+
+        <select
+          className="reports-filter-input"
+          value={fCurrency}
+          onChange={(e) => setFCurrency(e.target.value)}
+        >
+          {currencies.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+
+        <input
+          type="number"
+          className="reports-filter-input"
+          placeholder="Min amount"
+          value={fMin}
+          onChange={(e) => setFMin(e.target.value)}
+        />
+        <input
+          type="number"
+          className="reports-filter-input"
+          placeholder="Max amount"
+          value={fMax}
+          onChange={(e) => setFMax(e.target.value)}
+        />
+      </div>
+
+      {/* IMPORT / EXPORT ROW (small buttons under filters) */}
+      <div className="reports-ie-row">
+        <button
+          type="button"
+          className="reports-ie-btn reports-ie-btn-outline"
+          onClick={handleImportCsv}
+        >
+          Import CSV
+        </button>
+        <button
+          type="button"
+          className="reports-ie-btn reports-ie-btn-outline"
+          onClick={handleImportPdf}
+        >
+          Import PDF
+        </button>
+        <button
+          type="button"
+          className="reports-ie-btn reports-ie-btn-solid"
+          onClick={handleDownloadCsv}
+        >
+          Download CSV
+        </button>
+        <button
+          type="button"
+          className="reports-ie-btn reports-ie-btn-solid"
+          onClick={handleDownloadPdf}
+        >
+          Download PDF
+        </button>
+      </div>
+
+      {err && (
+        <div className="reports-error">
+          <span>{err}</span>
+        </div>
+      )}
+
+      {/* TOTALS CARD (top white box) */}
+      <section className="reports-totals-section">
+        <h3>Totals / Money Flow</h3>
+        {totalsByCurrency.length === 0 ? (
+          <div className="reports-totals-empty">
+            No transactions match these filters.
+          </div>
+        ) : (
+          totalsByCurrency.map((t) => {
+            const netUp = t.netMinor >= 0;
+            return (
+              <div key={t.currency} className="reports-totals-card">
+                <div className="totals-currency">{t.currency}</div>
+                <div className="totals-line">
+                  Income: <span>{fmtMoneyUI(t.incomeMinor, t.currency)}</span>
+                </div>
+                <div className="totals-line">
+                  Outflow: <span>{fmtMoneyUI(t.outMinor, t.currency)}</span>
+                </div>
+                <div
+                  className={
+                    "totals-net " +
+                    (netUp ? "totals-net-up" : "totals-net-down")
+                  }
+                >
+                  Net: {fmtMoneyUI(t.netMinor, t.currency)}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </section>
+
+      {/* SANKEY CARD */}
+      <section className="reports-sankey-section">
+        <div className="reports-sankey-header">
+          <h3>Cash-Flow (Sankey) · {fCurrency}</h3>
+        </div>
+
+        <div className="reports-sankey-wrapper">
+          {!sankeyData ? (
+            <div className="reports-totals-empty">
+              Not enough data to display cash-flow for {fCurrency}.
+            </div>
           ) : (
-            <View style={styles.totalsGrid}>
-              {totalsByCurrency.map((t) => {
-                const netUp = t.netMinor >= 0;
-                return (
-                  <View key={t.currency} style={styles.totalCard}>
-                    <Text style={styles.totalCur}>{t.currency}</Text>
-                    <Text style={styles.totalLine}>
-                      Income:{" "}
-                      <Text style={styles.totalValue}>
-                        {fmtMoneyUI(t.incomeMinor, t.currency)}
-                      </Text>
-                    </Text>
-                    <Text style={styles.totalLine}>
-                      Outflow:{" "}
-                      <Text style={styles.totalValue}>
-                        {fmtMoneyUI(t.outMinor, t.currency)}
-                      </Text>
-                    </Text>
-                    <Text
-                      style={[
-                        styles.totalNet,
-                        netUp ? styles.totalNetUp : styles.totalNetDown,
-                      ]}
-                    >
-                      Net: {fmtMoneyUI(t.netMinor, t.currency)}
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
-          )}
-        </View>
-
-        <View style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardTitle}>
-              Top spending categories
-              {sankeyCurrency ? ` · ${sankeyCurrency}` : ""}
-            </Text>
-            {!sankeyCurrency && (
-              <Text style={styles.cardHint}>
-                Pick a single currency in filters to see details.
-              </Text>
-            )}
-          </View>
-
-          {!sankeyCurrency || !topCategories.length ? (
-            <Text style={styles.emptyText}>No flow to display.</Text>
-          ) : (
-            topCategories.map((c) => (
-              <View key={c.catId} style={styles.catRow}>
-                <View style={styles.catRowTop}>
-                  <Text style={styles.catName}>{c.name}</Text>
-                  <Text style={styles.catAmount}>
-                    {fmtMoneyUI(c.minor, sankeyCurrency)}
-                  </Text>
-                </View>
-                <View style={styles.catBarTrack}>
-                  <View style={styles.catBarFill} />
-                </View>
-              </View>
-            ))
-          )}
-        </View>
-
-        <View style={styles.listCard}>
-          <Text style={styles.cardTitle}>
-            All Transactions{" "}
-            <Text style={styles.cardSubtitle}>
-              ({rows.length} result{rows.length === 1 ? "" : "s"})
-            </Text>
-          </Text>
-          {rows.length === 0 ? (
-            <Text style={styles.emptyText}>No transactions found.</Text>
-          ) : (
-            <FlatList
-              data={rows}
-              keyExtractor={(item) => String(item._id)}
-              renderItem={renderRow}
-              scrollEnabled={false}
+            <ResponsiveSankey
+              data={sankeyData}
+              margin={{ top: 20, right: 180, bottom: 20, left: 40 }}
+              align="justify"
+              colors={{ scheme: "paired" }}
+              nodeOpacity={1}
+              nodeThickness={12}
+              nodeInnerPadding={2}
+              nodeSpacing={16}
+              nodeBorderWidth={1}
+              nodeBorderColor={{ from: "color", modifiers: [["darker", 0.2]] }}
+              nodeBorderRadius={0}
+              linkOpacity={0.45}
+              linkBlendMode="multiply"
+              enableLinkGradient
+              labelPosition="outside"
+              labelOrientation="horizontal"
+              labelPadding={8}
+              labelTextColor={{ from: "color", modifiers: [["darker", 1.2]] }}
+              animate
+              motionConfig="gentle"
             />
           )}
-        </View>
+        </div>
+      </section>
 
-        <Text style={styles.footerTip}>
-          Tip: Tap the Filters button to narrow reports by date range, type,
-          accounts, categories, currency, and amount.
-        </Text>
-      </ScrollView>
-    </SafeAreaView>
+      {/* TABLE */}
+      <section className="reports-table-section">
+        <div className="reports-table-header">
+          <h3>All Transactions</h3>
+          <span className="results-count">
+            ({rows.length} result{rows.length === 1 ? "" : "s"})
+          </span>
+        </div>
+
+        {rows.length === 0 ? (
+          <div className="reports-totals-empty">No transactions found.</div>
+        ) : (
+          <div className="reports-table-wrapper">
+            <table className="reports-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Account</th>
+                  <th>Category</th>
+                  <th>Type</th>
+                  <th>Description</th>
+                  <th>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((tx) => {
+                  const accName = accountsById.get(tx.accountId)?.name || "—";
+                  const catName =
+                    categoriesById.get(tx.categoryId)?.name || "—";
+                  const isIncome = tx.type === "income";
+                  let val = minorToMajor(tx.amountMinor, tx.currency);
+                  if (!isIncome) val = -Math.abs(val);
+
+                  return (
+                    <tr key={tx._id}>
+                      <td>{fmtDate(tx.date)}</td>
+                      <td>{accName}</td>
+                      <td>{catName}</td>
+                      <td>{tx.type}</td>
+                      <td>{tx.description || ""}</td>
+                      <td>
+                        {new Intl.NumberFormat(undefined, {
+                          style: "currency",
+                          currency: tx.currency || "USD",
+                        }).format(val)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
   );
 }
 
-/* =============================== Styles =============================== */
+/* =============================== CSS =============================== */
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: BG_DARK,
-  },
-  content: {
-    flex: 1,
-  },
-  header: {
-    marginTop: 12,
-    marginHorizontal: 16,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 14,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: CARD_DARK,
-  },
-  headerTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 10,
-  },
-  headerEyebrow: {
-    fontSize: 12,
-    color: TEXT_MUTED,
-    marginBottom: 2,
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: TEXT_HEADING,
-  },
-  headerIconBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerIconPlus: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#bbf7d0",
-  },
-  ieRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 4,
-  },
-  ieBtn: {
-    flex: 1,
-    paddingVertical: 7,
-    borderRadius: 999,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  ieBtnOutline: {
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
-  },
-  ieBtnSolid: {
-    borderColor: main,
-    backgroundColor: "#022c22",
-  },
-  ieBtnText: {
-    fontSize: 12,
-    color: TEXT_SOFT,
-  },
-  ieBtnTextSolid: {
-    fontSize: 12,
-    color: "#bbf7d0",
-    fontWeight: "600",
-  },
-  searchContainer: {
-    marginTop: 10,
-    marginBottom: 6,
-  },
-  searchInput: {
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 14,
-    backgroundColor: "#020617",
-    color: TEXT_HEADING,
-  },
-  headerFilterRow: {
-    marginTop: 8,
-    alignItems: "flex-start",
-  },
-  filterPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: "#020617",
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-  },
-  filterPillIcon: {
-    fontSize: 14,
-    color: TEXT_SOFT,
-    marginRight: 6,
-  },
-  filterPillText: {
-    fontSize: 13,
-    color: TEXT_HEADING,
-    fontWeight: "500",
-  },
-  filterBadge: {
-    marginLeft: 8,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: main,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  filterBadgeText: {
-    fontSize: 11,
-    color: "#022c22",
-    fontWeight: "700",
-  },
-  sectionRow: {
-    marginTop: 8,
-  },
-  sectionRowColumn: {
-    marginTop: 10,
-  },
-  sectionLabel: {
-    fontSize: 12,
-    color: TEXT_MUTED,
-    marginBottom: 4,
-  },
-  chipRow: {
-    paddingVertical: 4,
-    paddingRight: 8,
-  },
-  filtersGrid: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 10,
-  },
-  filtersCol: {
-    flex: 1,
-  },
-  filterInput: {
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    fontSize: 13,
-    backgroundColor: "#020617",
-    color: TEXT_HEADING,
-  },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
-    marginRight: 6,
-  },
-  chipSmall: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  chipSelected: {
-    borderColor: main,
-    backgroundColor: "#022c22",
-  },
-  chipText: {
-    fontSize: 13,
-    color: TEXT_SOFT,
-  },
-  chipTextSmall: {
-    fontSize: 12,
-  },
-  chipTextSelected: {
-    color: "#bbf7d0",
-    fontWeight: "600",
-  },
-  card: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    padding: 14,
-    borderRadius: 20,
-    backgroundColor: CARD_DARK,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-  },
-  cardHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
-    gap: 8,
-  },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: TEXT_HEADING,
-  },
-  cardSubtitle: {
-    fontSize: 13,
-    fontWeight: "400",
-    color: TEXT_MUTED,
-  },
-  cardHint: {
-    fontSize: 11,
-    color: TEXT_MUTED,
-  },
-  totalsGrid: {
-    marginTop: 8,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  totalCard: {
-    flexBasis: "48%",
-    padding: 10,
-    borderRadius: 12,
-    backgroundColor: "#020617",
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-  },
-  totalCur: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: TEXT_HEADING,
-    marginBottom: 4,
-  },
-  totalLine: {
-    fontSize: 12,
-    color: TEXT_MUTED,
-  },
-  totalValue: {
-    color: TEXT_SOFT,
-    fontWeight: "600",
-  },
-  totalNet: {
-    marginTop: 4,
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  totalNetUp: {
-    color: "#22c55e",
-  },
-  totalNetDown: {
-    color: "#fecaca",
-  },
-  catRow: {
-    marginTop: 8,
-  },
-  catRowTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 2,
-  },
-  catName: {
-    fontSize: 13,
-    color: TEXT_SOFT,
-    flex: 1,
-    marginRight: 4,
-  },
-  catAmount: {
-    fontSize: 13,
-    color: "#bbf7d0",
-  },
-  catBarTrack: {
-    height: 6,
-    borderRadius: 999,
-    backgroundColor: "#020617",
-    overflow: "hidden",
-  },
-  catBarFill: {
-    height: "100%",
-    borderRadius: 999,
-    backgroundColor: "rgba(34,197,94,0.9)",
-  },
-  listCard: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 16,
-    padding: 14,
-    borderRadius: 20,
-    backgroundColor: CARD_DARK,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-  },
-  rowContainer: {
-    paddingVertical: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: BORDER_DARK,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  rowLeft: {
-    flex: 1,
-    minWidth: 0,
-  },
-  rowTitleLine: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 4,
-  },
-  rowCategory: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: TEXT_HEADING,
-  },
-  rowTypeBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
-  },
-  rowTypeText: {
-    fontSize: 11,
-    color: TEXT_MUTED,
-    textTransform: "capitalize",
-  },
-  rowAccountBadge: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    marginBottom: 2,
-    backgroundColor: "#020617",
-  },
-  rowAccountText: {
-    fontSize: 11,
-    color: TEXT_MUTED,
-  },
-  rowDescription: {
-    fontSize: 13,
-    color: TEXT_SOFT,
-    marginTop: 2,
-  },
-  rowDate: {
-    fontSize: 11,
-    color: TEXT_MUTED,
-    marginTop: 2,
-  },
-  rowRight: {
-    alignItems: "flex-end",
-    justifyContent: "center",
-  },
-  rowAmount: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#bbf7d0",
-  },
-  emptyText: {
-    paddingTop: 6,
-    fontSize: 13,
-    color: TEXT_MUTED,
-  },
-  errorBox: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    padding: 10,
-    borderRadius: 12,
-    backgroundColor: "rgba(127,29,29,0.2)",
-    borderWidth: 1,
-    borderColor: "#7f1d1d",
-  },
-  errorText: {
-    fontSize: 13,
-    color: "#fecaca",
-  },
-  footerTip: {
-    marginHorizontal: 16,
-    marginBottom: 8,
-    fontSize: 11,
-    color: TEXT_MUTED,
-    textAlign: "center",
-  },
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: BG_DARK,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingSpinnerOuter: {
-    marginBottom: 12,
-  },
-  loadingTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: main,
-    marginBottom: 4,
-  },
-  loadingSubtitle: {
-    fontSize: 13,
-    color: TEXT_MUTED,
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(15,23,42,0.7)",
-    justifyContent: "flex-end",
-  },
-  modalSheet: {
-    maxHeight: "85%",
-    backgroundColor: BG_DARK,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 8,
-    borderTopWidth: 1,
-    borderColor: BORDER_DARK,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 6,
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: TEXT_HEADING,
-  },
-  modalClose: {
-    fontSize: 18,
-    color: TEXT_MUTED,
-  },
-  modalScroll: {
-    flexGrow: 0,
-  },
-  modalSection: {
-    marginTop: 10,
-  },
-  dateRangePill: {
-    marginTop: 4,
-    marginBottom: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: "#020617",
-  },
-  dateRangeText: {
-    fontSize: 14,
-    color: TEXT_HEADING,
-    textAlign: "center",
-  },
-  calendarCard: {
-    marginTop: 8,
-    borderRadius: 16,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: CARD_DARK,
-  },
-  modalActions: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 8,
-  },
-  modalBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  modalBtnOutline: {
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
-  },
-  modalBtnSolid: {
-    borderWidth: 1,
-    borderColor: main,
-    backgroundColor: main,
-  },
-  modalBtnOutlineText: {
-    fontSize: 13,
-    color: TEXT_SOFT,
-    fontWeight: "500",
-  },
-  modalBtnSolidText: {
-    fontSize: 13,
-    color: "#022c22",
-    fontWeight: "700",
-  },
-});
+const reportsCss = `
+.reports-page {
+  padding: 16px 24px 40px;
+  background: #f5f5f5;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  color: #111827;
+}
+
+/* loading */
+.reports-loading {
+  min-height: calc(100vh - 80px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f5f5;
+}
+
+.reports-loading-inner {
+  text-align: center;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  padding: 24px 32px;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
+}
+
+.reports-loading-inner .brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.reports-loading-inner .brand span:last-child {
+  font-weight: 600;
+  color: #16a34a;
+}
+
+.reports-loading-inner p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #16a34a;
+  margin: 0 auto;
+  animation: reports-spin 0.8s linear infinite;
+}
+
+@keyframes reports-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* error box */
+.reports-error {
+  margin-top: 10px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  background: rgba(127, 29, 29, 0.08);
+  border: 1px solid #7f1d1d;
+  color: #991b1b;
+  font-size: 12px;
+}
+
+/* top filters bar */
+.reports-filters-bar {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #ffffff;
+  border: 1px solid #d4d4d4;
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+
+.reports-filter-input {
+  height: 30px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #d1d5db;
+  font-size: 12px;
+  color: #111827;
+  background: #ffffff;
+  min-width: 120px;
+}
+
+.reports-filter-input:focus {
+  outline: none;
+  border-color: #16a34a;
+  box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.3);
+}
+
+.reports-reset-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: 1px solid #9ca3af;
+  background: #f9fafb;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.reports-reset-btn:hover {
+  background: #e5e7eb;
+}
+
+/* import/export row */
+.reports-ie-row {
+  margin-top: 6px;
+  margin-bottom: 10px;
+  display: flex;
+  gap: 8px;
+}
+
+.reports-ie-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  border-width: 1px;
+  border-style: solid;
+  white-space: nowrap;
+}
+
+.reports-ie-btn-outline {
+  border-color: #9ca3af;
+  background: #f9fafb;
+  color: #374151;
+}
+
+.reports-ie-btn-outline:hover {
+  background: #e5e7eb;
+}
+
+.reports-ie-btn-solid {
+  border-color: #16a34a;
+  background: #16a34a;
+  color: #022c22;
+  font-weight: 600;
+}
+
+.reports-ie-btn-solid:hover {
+  background: #15803d;
+  border-color: #15803d;
+}
+
+/* totals section */
+.reports-totals-section {
+  background: #ffffff;
+  border: 1px solid #d4d4d4;
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.reports-totals-section h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.reports-totals-empty {
+  padding: 8px 4px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.reports-totals-card {
+  display: inline-block;
+  vertical-align: top;
+  min-width: 220px;
+  padding: 10px 12px;
+  margin-right: 10px;
+  border-radius: 4px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  font-size: 12px;
+}
+
+.totals-currency {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.totals-line {
+  margin: 1px 0;
+}
+
+.totals-line span {
+  font-weight: 500;
+}
+
+.totals-net {
+  margin-top: 4px;
+  font-weight: 600;
+}
+
+.totals-net-up { color: #16a34a; }
+.totals-net-down { color: #b91c1c; }
+
+/* sankey section */
+.reports-sankey-section {
+  background: #ffffff;
+  border: 1px solid #d4d4d4;
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.reports-sankey-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.reports-sankey-header h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.reports-sankey-wrapper {
+  height: 420px;
+}
+
+/* table section */
+.reports-table-section {
+  background: #ffffff;
+  border: 1px solid #d4d4d4;
+  border-radius: 4px;
+  padding: 10px 12px 12px;
+  margin-top: 8px;
+}
+
+.reports-table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+
+.reports-table-header h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.results-count {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.reports-table-wrapper {
+  overflow-x: auto;
+}
+
+.reports-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.reports-table thead tr {
+  background: #f3f4f6;
+}
+
+.reports-table th,
+.reports-table td {
+  border-top: 1px solid #e5e7eb;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.reports-table th {
+  font-weight: 600;
+  font-size: 11px;
+  color: #374151;
+}
+
+.reports-table tbody tr:nth-child(even) {
+  background: #fafafa;
+}
+
+.reports-table tbody tr:hover {
+  background: #eef2ff;
+}
+
+.reports-table th:last-child,
+.reports-table td:last-child {
+  text-align: right;
+}
+`;
