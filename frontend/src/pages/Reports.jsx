@@ -1,6 +1,13 @@
 /* eslint-disable no-unused-vars */
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+// src/pages/Reports.jsx
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { ResponsiveSankey } from "@nivo/sankey";
 import api from "../lib/api";
 
@@ -43,22 +50,7 @@ function csvEscape(v) {
   return s;
 }
 
-/* =============================== Component =============================== */
-
-const REPORTS_STYLE_ID = "reports-page-styles";
-
 export default function Reports() {
-  /* ---------- inject CSS once ---------- */
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    if (document.getElementById(REPORTS_STYLE_ID)) return;
-
-    const style = document.createElement("style");
-    style.id = REPORTS_STYLE_ID;
-    style.innerHTML = reportsCss;
-    document.head.appendChild(style);
-  }, []);
-
   /* ---------- data ---------- */
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -78,6 +70,9 @@ export default function Reports() {
   const [fCurrency, setFCurrency] = useState("USD");
   const [fMin, setFMin] = useState("");
   const [fMax, setFMax] = useState("");
+
+  // ref for Sankey chart (for PDF export)
+  const sankeyRef = useRef(null);
 
   /* ---------- load data ---------- */
   const loadAll = useCallback(async () => {
@@ -443,14 +438,26 @@ export default function Reports() {
       if (typeof window === "undefined" || typeof document === "undefined")
         return;
 
-      // grab current sankey SVG (if rendered)
+      // Grab the rendered Sankey SVG directly
       let sankeySvgHtml = "";
-      const svgEl = document.querySelector(".reports-sankey-wrapper svg");
-      if (svgEl) {
-        sankeySvgHtml = svgEl.outerHTML;
+      try {
+        if (sankeyRef.current) {
+          const svg = sankeyRef.current.querySelector("svg");
+          if (svg) {
+            // clone to avoid live DOM mutations
+            const cloned = svg.cloneNode(true);
+            // Make sure it scales nicely in print
+            cloned.removeAttribute("width");
+            cloned.removeAttribute("height");
+            sankeySvgHtml = cloned.outerHTML;
+          }
+        }
+      } catch (e) {
+        // fail softly; still generate table-only PDF
+        sankeySvgHtml = "";
+        // optional: console.error(e);
       }
 
-      // Build a simple HTML table (same columns as screen)
       const tableRowsHtml = rows
         .map((tx) => {
           const accName = accountsById.get(tx.accountId)?.name || "—";
@@ -475,33 +482,33 @@ export default function Reports() {
         })
         .join("");
 
+      const sankeyHtml = sankeySvgHtml
+        ? `<div style="margin-bottom:16px;">
+  <h2 style="font-size:14px; margin:0 0 8px;">Cash-Flow (Sankey) · ${fCurrency}</h2>
+  <div style="border:1px solid #e5e7eb; border-radius:4px; padding:4px;">
+    ${sankeySvgHtml}
+  </div>
+</div>`
+        : "";
+
       const html = `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
   <title>Transactions Report</title>
   <style>
-    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 24px; }
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 24px; background:#f5f5f5; }
     h1 { font-size: 18px; margin-bottom: 12px; }
-    h2 { font-size: 14px; margin: 18px 0 8px; }
     table { border-collapse: collapse; width: 100%; font-size: 12px; }
     th, td { border: 1px solid #d1d5db; padding: 6px 8px; text-align: left; }
     th { background: #f3f4f6; font-weight: 600; }
     td:last-child, th:last-child { text-align: right; }
-    .sankey-container { margin-bottom: 20px; }
-    .sankey-container svg { width: 100%; height: auto; }
+    svg { max-width: 100%; height: auto; }
   </style>
 </head>
 <body>
   <h1>Nummoria – Transactions Report</h1>
-  ${
-    sankeySvgHtml
-      ? `<h2>Cash-Flow (Sankey) · ${fCurrency}</h2>
-  <div class="sankey-container">
-    ${sankeySvgHtml}
-  </div>`
-      : ""
-  }
+  ${sankeyHtml}
   <table>
     <thead>
       <tr>
@@ -532,7 +539,6 @@ export default function Reports() {
       win.document.write(html);
       win.document.close();
       win.focus();
-      // user can choose "Save as PDF" in print dialog
       win.print();
     } catch (err) {
       // eslint-disable-next-line no-alert
@@ -543,14 +549,14 @@ export default function Reports() {
   /* ---------- loading ---------- */
   if (!initialDone && loading) {
     return (
-      <div className="reports-loading">
-        <div className="reports-loading-inner">
-          <div className="spinner" />
-          <div className="brand">
+      <div className="min-h-[calc(100vh-80px)] flex items-center justify-center bg-[#f5f5f5]">
+        <div className="text-center bg-white border border-gray-200 px-8 py-6 rounded-xl shadow">
+          <div className="mx-auto mb-3 h-6 w-6 rounded-full border-2 border-gray-200 border-t-[#16a34a] animate-spin" />
+          <div className="flex items-center justify-center gap-2 text-sm">
             <span>🪙</span>
-            <span>Nummoria</span>
+            <span className="font-semibold text-[#16a34a]">Nummoria</span>
           </div>
-          <p>Loading your reports…</p>
+          <p className="mt-1 text-xs text-gray-500">Loading your reports…</p>
         </div>
       </div>
     );
@@ -559,12 +565,12 @@ export default function Reports() {
   /* ============================= RENDER ============================= */
 
   return (
-    <div className="reports-page">
-      {/* FILTER BAR (top row like screenshot) */}
-      <div className="reports-filters-bar">
+    <div className="min-h-screen bg-[#f5f5f5] text-[#111827] px-6 py-4">
+      {/* FILTER BAR */}
+      <div className="flex flex-wrap items-center gap-2 rounded border border-gray-300 bg-white px-2.5 py-2 mb-1.5">
         <button
           type="button"
-          className="reports-reset-btn"
+          className="whitespace-nowrap rounded border border-gray-400 bg-gray-50 px-3 py-1 text-xs hover:bg-gray-200"
           onClick={resetFilters}
         >
           Reset filters
@@ -572,19 +578,19 @@ export default function Reports() {
 
         <input
           type="date"
-          className="reports-filter-input"
+          className="h-[30px] min-w-[120px] rounded border border-gray-300 bg-white px-2 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#16a34a]"
           value={fStart}
           onChange={(e) => setFStart(e.target.value)}
         />
         <input
           type="date"
-          className="reports-filter-input"
+          className="h-[30px] min-w-[120px] rounded border border-gray-300 bg-white px-2 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#16a34a]"
           value={fEnd}
           onChange={(e) => setFEnd(e.target.value)}
         />
 
         <select
-          className="reports-filter-input"
+          className="h-[30px] min-w-[120px] rounded border border-gray-300 bg-white px-2 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#16a34a]"
           value={fType}
           onChange={(e) => setFType(e.target.value)}
         >
@@ -595,7 +601,7 @@ export default function Reports() {
         </select>
 
         <select
-          className="reports-filter-input"
+          className="h-[30px] min-w-[120px] rounded border border-gray-300 bg-white px-2 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#16a34a]"
           value={fAccountId}
           onChange={(e) => setFAccountId(e.target.value)}
         >
@@ -608,7 +614,7 @@ export default function Reports() {
         </select>
 
         <select
-          className="reports-filter-input"
+          className="h-[30px] min-w-[120px] rounded border border-gray-300 bg-white px-2 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#16a34a]"
           value={fCategoryId}
           onChange={(e) => setFCategoryId(e.target.value)}
         >
@@ -621,7 +627,7 @@ export default function Reports() {
         </select>
 
         <select
-          className="reports-filter-input"
+          className="h-[30px] min-w-[80px] rounded border border-gray-300 bg-white px-2 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#16a34a]"
           value={fCurrency}
           onChange={(e) => setFCurrency(e.target.value)}
         >
@@ -634,46 +640,46 @@ export default function Reports() {
 
         <input
           type="number"
-          className="reports-filter-input"
+          className="h-[30px] min-w-[120px] rounded border border-gray-300 bg-white px-2 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#16a34a]"
           placeholder="Min amount"
           value={fMin}
           onChange={(e) => setFMin(e.target.value)}
         />
         <input
           type="number"
-          className="reports-filter-input"
+          className="h-[30px] min-w-[120px] rounded border border-gray-300 bg-white px-2 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#16a34a]"
           placeholder="Max amount"
           value={fMax}
           onChange={(e) => setFMax(e.target.value)}
         />
       </div>
 
-      {/* IMPORT / EXPORT ROW (small buttons under filters) */}
-      <div className="reports-ie-row">
+      {/* IMPORT / EXPORT ROW */}
+      <div className="mb-2.5 mt-1.5 flex gap-2">
         <button
           type="button"
-          className="reports-ie-btn reports-ie-btn-outline"
+          className="whitespace-nowrap rounded-full border border-gray-400 bg-gray-50 px-3 py-1 text-xs text-gray-700 hover:bg-gray-200"
           onClick={handleImportCsv}
         >
           Import CSV
         </button>
         <button
           type="button"
-          className="reports-ie-btn reports-ie-btn-outline"
+          className="whitespace-nowrap rounded-full border border-gray-400 bg-gray-50 px-3 py-1 text-xs text-gray-700 hover:bg-gray-200"
           onClick={handleImportPdf}
         >
           Import PDF
         </button>
         <button
           type="button"
-          className="reports-ie-btn reports-ie-btn-solid"
+          className="whitespace-nowrap rounded-full border border-[#16a34a] bg-[#16a34a] px-3 py-1 text-xs font-semibold text-[#022c22] hover:bg-[#15803d] hover:border-[#15803d]"
           onClick={handleDownloadCsv}
         >
           Download CSV
         </button>
         <button
           type="button"
-          className="reports-ie-btn reports-ie-btn-solid"
+          className="whitespace-nowrap rounded-full border border-[#16a34a] bg-[#16a34a] px-3 py-1 text-xs font-semibold text-[#022c22] hover:bg-[#15803d] hover:border-[#15803d]"
           onClick={handleDownloadPdf}
         >
           Download PDF
@@ -681,53 +687,65 @@ export default function Reports() {
       </div>
 
       {err && (
-        <div className="reports-error">
-          <span>{err}</span>
+        <div className="mt-2 mb-2 rounded border border-red-900 bg-red-900/5 px-2.5 py-2 text-xs text-red-800">
+          {err}
         </div>
       )}
 
-      {/* TOTALS CARD (top white box) */}
-      <section className="reports-totals-section">
-        <h3>Totals / Money Flow</h3>
+      {/* TOTALS CARD */}
+      <section className="mb-3 rounded border border-gray-300 bg-white px-3 py-2.5">
+        <h3 className="mb-2 text-sm font-semibold">Totals / Money Flow</h3>
         {totalsByCurrency.length === 0 ? (
-          <div className="reports-totals-empty">
+          <div className="py-2 text-xs text-gray-500">
             No transactions match these filters.
           </div>
         ) : (
-          totalsByCurrency.map((t) => {
-            const netUp = t.netMinor >= 0;
-            return (
-              <div key={t.currency} className="reports-totals-card">
-                <div className="totals-currency">{t.currency}</div>
-                <div className="totals-line">
-                  Income: <span>{fmtMoneyUI(t.incomeMinor, t.currency)}</span>
-                </div>
-                <div className="totals-line">
-                  Outflow: <span>{fmtMoneyUI(t.outMinor, t.currency)}</span>
-                </div>
+          <div className="flex flex-wrap gap-2">
+            {totalsByCurrency.map((t) => {
+              const netUp = t.netMinor >= 0;
+              return (
                 <div
-                  className={
-                    "totals-net " +
-                    (netUp ? "totals-net-up" : "totals-net-down")
-                  }
+                  key={t.currency}
+                  className="min-w-[220px] rounded border border-gray-300 bg-white px-3 py-2 text-xs"
                 >
-                  Net: {fmtMoneyUI(t.netMinor, t.currency)}
+                  <div className="mb-1 font-semibold">{t.currency}</div>
+                  <div className="my-[1px]">
+                    Income:{" "}
+                    <span className="font-medium">
+                      {fmtMoneyUI(t.incomeMinor, t.currency)}
+                    </span>
+                  </div>
+                  <div className="my-[1px]">
+                    Outflow:{" "}
+                    <span className="font-medium">
+                      {fmtMoneyUI(t.outMinor, t.currency)}
+                    </span>
+                  </div>
+                  <div
+                    className={`mt-1 font-semibold ${
+                      netUp ? "text-[#16a34a]" : "text-[#b91c1c]"
+                    }`}
+                  >
+                    Net: {fmtMoneyUI(t.netMinor, t.currency)}
+                  </div>
                 </div>
-              </div>
-            );
-          })
+              );
+            })}
+          </div>
         )}
       </section>
 
       {/* SANKEY CARD */}
-      <section className="reports-sankey-section">
-        <div className="reports-sankey-header">
-          <h3>Cash-Flow (Sankey) · {fCurrency}</h3>
+      <section className="mb-3 rounded border border-gray-300 bg-white px-3 py-2.5">
+        <div className="mb-1.5 flex items-center justify-between">
+          <h3 className="text-sm font-semibold">
+            Cash-Flow (Sankey) · {fCurrency}
+          </h3>
         </div>
 
-        <div className="reports-sankey-wrapper">
+        <div ref={sankeyRef} className="h-[420px]">
           {!sankeyData ? (
-            <div className="reports-totals-empty">
+            <div className="flex h-full items-center justify-center text-xs text-gray-500">
               Not enough data to display cash-flow for {fCurrency}.
             </div>
           ) : (
@@ -758,31 +776,45 @@ export default function Reports() {
       </section>
 
       {/* TABLE */}
-      <section className="reports-table-section">
-        <div className="reports-table-header">
-          <h3>All Transactions</h3>
-          <span className="results-count">
+      <section className="mt-2 rounded border border-gray-300 bg-white px-3 pb-3 pt-2.5">
+        <div className="mb-1.5 flex items-baseline justify-between">
+          <h3 className="text-sm font-semibold">All Transactions</h3>
+          <span className="text-[11px] text-gray-500">
             ({rows.length} result{rows.length === 1 ? "" : "s"})
           </span>
         </div>
 
         {rows.length === 0 ? (
-          <div className="reports-totals-empty">No transactions found.</div>
+          <div className="py-2 text-xs text-gray-500">
+            No transactions found.
+          </div>
         ) : (
-          <div className="reports-table-wrapper">
-            <table className="reports-table">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-xs">
               <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Account</th>
-                  <th>Category</th>
-                  <th>Type</th>
-                  <th>Description</th>
-                  <th>Amount</th>
+                <tr className="bg-gray-100">
+                  <th className="border-t border-gray-200 px-2 py-1 text-left text-[11px] font-semibold text-gray-700">
+                    Date
+                  </th>
+                  <th className="border-t border-gray-200 px-2 py-1 text-left text-[11px] font-semibold text-gray-700">
+                    Account
+                  </th>
+                  <th className="border-t border-gray-200 px-2 py-1 text-left text-[11px] font-semibold text-gray-700">
+                    Category
+                  </th>
+                  <th className="border-t border-gray-200 px-2 py-1 text-left text-[11px] font-semibold text-gray-700">
+                    Type
+                  </th>
+                  <th className="border-t border-gray-200 px-2 py-1 text-left text-[11px] font-semibold text-gray-700">
+                    Description
+                  </th>
+                  <th className="border-t border-gray-200 px-2 py-1 text-right text-[11px] font-semibold text-gray-700">
+                    Amount
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((tx) => {
+                {rows.map((tx, idx) => {
                   const accName = accountsById.get(tx.accountId)?.name || "—";
                   const catName =
                     categoriesById.get(tx.categoryId)?.name || "—";
@@ -791,13 +823,26 @@ export default function Reports() {
                   if (!isIncome) val = -Math.abs(val);
 
                   return (
-                    <tr key={tx._id}>
-                      <td>{fmtDate(tx.date)}</td>
-                      <td>{accName}</td>
-                      <td>{catName}</td>
-                      <td>{tx.type}</td>
-                      <td>{tx.description || ""}</td>
-                      <td>
+                    <tr
+                      key={tx._id}
+                      className={idx % 2 === 1 ? "bg-gray-50" : "bg-white"}
+                    >
+                      <td className="border-t border-gray-200 px-2 py-1">
+                        {fmtDate(tx.date)}
+                      </td>
+                      <td className="border-t border-gray-200 px-2 py-1">
+                        {accName}
+                      </td>
+                      <td className="border-t border-gray-200 px-2 py-1">
+                        {catName}
+                      </td>
+                      <td className="border-t border-gray-200 px-2 py-1">
+                        {tx.type}
+                      </td>
+                      <td className="border-t border-gray-200 px-2 py-1">
+                        {tx.description || ""}
+                      </td>
+                      <td className="border-t border-gray-200 px-2 py-1 text-right">
                         {new Intl.NumberFormat(undefined, {
                           style: "currency",
                           currency: tx.currency || "USD",
@@ -814,309 +859,3 @@ export default function Reports() {
     </div>
   );
 }
-
-/* =============================== CSS =============================== */
-
-const reportsCss = `
-.reports-page {
-  padding: 16px 24px 40px;
-  background: #f5f5f5;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
-  color: #111827;
-}
-
-/* loading */
-.reports-loading {
-  min-height: calc(100vh - 80px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #f5f5f5;
-}
-
-.reports-loading-inner {
-  text-align: center;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  padding: 24px 32px;
-  border-radius: 10px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
-}
-
-.reports-loading-inner .brand {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 4px;
-}
-
-.reports-loading-inner .brand span:last-child {
-  font-weight: 600;
-  color: #16a34a;
-}
-
-.reports-loading-inner p {
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: #6b7280;
-}
-
-.spinner {
-  width: 24px;
-  height: 24px;
-  border-radius: 9999px;
-  border: 3px solid #e5e7eb;
-  border-top-color: #16a34a;
-  margin: 0 auto;
-  animation: reports-spin 0.8s linear infinite;
-}
-
-@keyframes reports-spin {
-  to { transform: rotate(360deg); }
-}
-
-/* error box */
-.reports-error {
-  margin-top: 10px;
-  margin-bottom: 8px;
-  padding: 8px 10px;
-  border-radius: 4px;
-  background: rgba(127, 29, 29, 0.08);
-  border: 1px solid #7f1d1d;
-  color: #991b1b;
-  font-size: 12px;
-}
-
-/* top filters bar */
-.reports-filters-bar {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  background: #ffffff;
-  border: 1px solid #d4d4d4;
-  border-radius: 4px;
-  margin-bottom: 6px;
-}
-
-.reports-filter-input {
-  height: 30px;
-  padding: 4px 8px;
-  border-radius: 4px;
-  border: 1px solid #d1d5db;
-  font-size: 12px;
-  color: #111827;
-  background: #ffffff;
-  min-width: 120px;
-}
-
-.reports-filter-input:focus {
-  outline: none;
-  border-color: #16a34a;
-  box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.3);
-}
-
-.reports-reset-btn {
-  padding: 4px 10px;
-  font-size: 12px;
-  border-radius: 4px;
-  border: 1px solid #9ca3af;
-  background: #f9fafb;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.reports-reset-btn:hover {
-  background: #e5e7eb;
-}
-
-/* import/export row */
-.reports-ie-row {
-  margin-top: 6px;
-  margin-bottom: 10px;
-  display: flex;
-  gap: 8px;
-}
-
-.reports-ie-btn {
-  padding: 4px 10px;
-  font-size: 12px;
-  border-radius: 999px;
-  cursor: pointer;
-  border-width: 1px;
-  border-style: solid;
-  white-space: nowrap;
-}
-
-.reports-ie-btn-outline {
-  border-color: #9ca3af;
-  background: #f9fafb;
-  color: #374151;
-}
-
-.reports-ie-btn-outline:hover {
-  background: #e5e7eb;
-}
-
-.reports-ie-btn-solid {
-  border-color: #16a34a;
-  background: #16a34a;
-  color: #022c22;
-  font-weight: 600;
-}
-
-.reports-ie-btn-solid:hover {
-  background: #15803d;
-  border-color: #15803d;
-}
-
-/* totals section */
-.reports-totals-section {
-  background: #ffffff;
-  border: 1px solid #d4d4d4;
-  border-radius: 4px;
-  padding: 10px 12px;
-  margin-bottom: 12px;
-}
-
-.reports-totals-section h3 {
-  margin: 0 0 8px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.reports-totals-empty {
-  padding: 8px 4px;
-  font-size: 12px;
-  color: #6b7280;
-}
-
-.reports-totals-card {
-  display: inline-block;
-  vertical-align: top;
-  min-width: 220px;
-  padding: 10px 12px;
-  margin-right: 10px;
-  border-radius: 4px;
-  border: 1px solid #d1d5db;
-  background: #ffffff;
-  font-size: 12px;
-}
-
-.totals-currency {
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-
-.totals-line {
-  margin: 1px 0;
-}
-
-.totals-line span {
-  font-weight: 500;
-}
-
-.totals-net {
-  margin-top: 4px;
-  font-weight: 600;
-}
-
-.totals-net-up { color: #16a34a; }
-.totals-net-down { color: #b91c1c; }
-
-/* sankey section */
-.reports-sankey-section {
-  background: #ffffff;
-  border: 1px solid #d4d4d4;
-  border-radius: 4px;
-  padding: 10px 12px;
-  margin-bottom: 12px;
-}
-
-.reports-sankey-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-}
-
-.reports-sankey-header h3 {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.reports-sankey-wrapper {
-  height: 420px;
-}
-
-/* table section */
-.reports-table-section {
-  background: #ffffff;
-  border: 1px solid #d4d4d4;
-  border-radius: 4px;
-  padding: 10px 12px 12px;
-  margin-top: 8px;
-}
-
-.reports-table-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 6px;
-}
-
-.reports-table-header h3 {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.results-count {
-  font-size: 11px;
-  color: #6b7280;
-}
-
-.reports-table-wrapper {
-  overflow-x: auto;
-}
-
-.reports-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-}
-
-.reports-table thead tr {
-  background: #f3f4f6;
-}
-
-.reports-table th,
-.reports-table td {
-  border-top: 1px solid #e5e7eb;
-  padding: 6px 8px;
-  text-align: left;
-}
-
-.reports-table th {
-  font-weight: 600;
-  font-size: 11px;
-  color: #374151;
-}
-
-.reports-table tbody tr:nth-child(even) {
-  background: #fafafa;
-}
-
-.reports-table tbody tr:hover {
-  background: #eef2ff;
-}
-
-.reports-table th:last-child,
-.reports-table td:last-child {
-  text-align: right;
-}
-`;
