@@ -2,7 +2,6 @@
 /* eslint-disable no-unused-vars */
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-// import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import {
   ActivityIndicator,
   Alert,
@@ -18,6 +17,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
+import { CameraView, useCameraPermissions } from "expo-camera";
 
 // ✅ mobile axios instance (points to same backend as web)
 import api from "../lib/api";
@@ -88,6 +89,67 @@ const fmtMoney = (minor, cur = "USD") =>
     currency: cur || "USD",
   }).format((minor || 0) / Math.pow(10, decimalsForCurrency(cur || "USD")));
 
+/* --------------------- Receipt QR parse helper --------------------- */
+function parseReceiptFromQR(data) {
+  if (!data || typeof data !== "string") return null;
+
+  let amount;
+  let currency;
+  let dateStr;
+  let description;
+
+  // 1) Try JSON
+  try {
+    const obj = JSON.parse(data);
+    if (obj && typeof obj === "object") {
+      amount = obj.amount ?? obj.total ?? obj.amt ?? amount;
+      currency = obj.currency ?? obj.cur ?? currency;
+      dateStr = obj.date ?? obj.txDate ?? dateStr;
+      description = obj.description ?? obj.desc ?? description;
+    }
+  } catch {
+    // not JSON
+  }
+
+  // 2) Fallback: first "xx.xx" number
+  if (amount == null) {
+    const match = data.match(/([0-9]+[.,][0-9]{2})/);
+    if (match) {
+      amount = match[1];
+    }
+  }
+
+  // 3) Currency code
+  if (!currency) {
+    const curMatch = data.match(/\b(USD|EUR|TRY|GBP)\b/i);
+    if (curMatch) {
+      currency = curMatch[1].toUpperCase();
+    }
+  }
+
+  // 4) Date
+  if (!dateStr) {
+    const iso = data.match(/(\d{4}-\d{2}-\d{2})/);
+    const eu = data.match(/(\d{2}\.\d{2}\.\d{4})/);
+    if (iso) {
+      dateStr = iso[1];
+    } else if (eu) {
+      const raw = eu[1]; // DD.MM.YYYY
+      const [dd, mm, yyyy] = raw.split(".");
+      dateStr = `${yyyy}-${mm}-${dd}`;
+    }
+  }
+
+  if (!amount && !currency && !dateStr) return null;
+
+  return {
+    amount: amount != null ? String(amount).replace(",", ".") : null,
+    currency: currency || null,
+    date: dateStr || null,
+    description: description || null,
+  };
+}
+
 /* ----------------------------- UI Primitives ----------------------------- */
 function Chip({ label, selected, onPress, small }) {
   return (
@@ -117,7 +179,6 @@ function Chip({ label, selected, onPress, small }) {
 /* =============================== Screen =============================== */
 
 export default function ExpensesScreen({ route }) {
-  // optional: coming from Home, e.g. "show this account"
   const accountId = route?.params?.accountId;
 
   // --- data ---
@@ -127,7 +188,7 @@ export default function ExpensesScreen({ route }) {
 
   // --- ui ---
   const [loading, setLoading] = useState(true);
-  const [initialDone, setInitialDone] = useState(false); // only for first full-screen loader
+  const [initialDone, setInitialDone] = useState(false);
   const [err, setErr] = useState("");
 
   // --- filters ---
@@ -137,9 +198,7 @@ export default function ExpensesScreen({ route }) {
   const [fCurrency, setFCurrency] = useState("ALL");
   const [sortKey, setSortKey] = useState("date_desc");
   const [showUpcoming, setShowUpcoming] = useState(false);
-
-  // 🔥 date filters (new)
-  const [datePreset, setDatePreset] = useState("ALL"); // "ALL" | "THIS_MONTH" | "LAST_MONTH" | "LAST_90"
+  const [datePreset, setDatePreset] = useState("ALL");
 
   // --- modal state (create / edit) ---
   const [modalOpen, setModalOpen] = useState(false);
@@ -154,6 +213,16 @@ export default function ExpensesScreen({ route }) {
     tagsCsv: "",
     accountId: "",
   });
+
+  // --- QR scanner state (expo-camera) ---
+  const [scannerVisible, setScannerVisible] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
+  const [facing, setFacing] = useState("back");
+  const [flash, setFlash] = useState("off");
+
+  // NEW: track whether we should reopen the modal after closing camera
+  const [reopenModalOnClose, setReopenModalOnClose] = useState(false);
 
   /* ---------------------------- Lookups ---------------------------- */
   const categoriesById = useMemo(() => {
@@ -204,7 +273,7 @@ export default function ExpensesScreen({ route }) {
       setErr(e?.response?.data?.error || e.message || "Failed to load data");
     } finally {
       setLoading(false);
-      setInitialDone((prev) => (prev ? prev : true)); // after first load, never show full loader again
+      setInitialDone((prev) => (prev ? prev : true));
     }
   }, []);
 
@@ -258,7 +327,6 @@ export default function ExpensesScreen({ route }) {
       const cur = t.currency || "USD";
       if (fCurrency !== "ALL" && cur !== fCurrency) return false;
 
-      // 🔥 date filter
       if (!passesDateFilter(t.date, datePreset)) return false;
 
       if (needle) {
@@ -381,7 +449,6 @@ export default function ExpensesScreen({ route }) {
       const cur = t.currency || "USD";
       if (fCurrency !== "ALL" && cur !== fCurrency) return false;
 
-      // 🔥 apply same date preset to scheduled date
       if (!passesDateFilter(t.date, datePreset)) return false;
 
       if (needle) {
@@ -569,7 +636,7 @@ export default function ExpensesScreen({ route }) {
   }
 
   async function softDelete(tx) {
-    Alert.alert("Delete expense?", "This action can’t be undone.", [
+    Alert.alert("Delete expense?", "This action can't be undone.", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
@@ -604,7 +671,6 @@ export default function ExpensesScreen({ route }) {
         tags: v.tags || [],
       });
 
-      // clear parent nextDate locally so it stops generating virtual rows
       if (v.__kind === "virtual" && v.__parentId) {
         try {
           const { data: parentUpdated } = await api.put(
@@ -650,6 +716,91 @@ export default function ExpensesScreen({ route }) {
       await softDelete(item);
     }
   }
+
+  /* ---------------------- QR scanner handlers (expo-camera) ---------------------- */
+  const openScanner = useCallback(async () => {
+    console.log("[Expenses] Scan receipt QR pressed");
+
+    try {
+      if (!permission) {
+        console.log("[Expenses] Permission is undefined, requesting...");
+        const res = await requestPermission();
+        if (!res.granted) {
+          Alert.alert(
+            "Camera permission needed",
+            "Enable camera access to scan receipt QR codes in your device settings."
+          );
+          return;
+        }
+      } else if (!permission.granted) {
+        console.log("[Expenses] Permission not granted, requesting...");
+        const res = await requestPermission();
+        if (!res.granted) {
+          Alert.alert(
+            "Camera permission needed",
+            "Enable camera access to scan receipt QR codes in your device settings."
+          );
+          return;
+        }
+      }
+
+      console.log("[Expenses] Permission granted, opening camera");
+
+      // 🔹 close the expense modal while camera is active
+      setModalOpen(false);
+
+      setIsScanning(true);
+      setScannerVisible(true);
+    } catch (e) {
+      console.log("[Expenses] openScanner error", e);
+      Alert.alert("Error", e.message || "Failed to open scanner");
+    }
+  }, [permission, requestPermission]);
+
+  const handleBarCodeScanned = useCallback(
+    ({ type, data }) => {
+      if (!isScanning) return;
+
+      console.log("[Expenses] QR scanned:", { type, data });
+
+      setIsScanning(false);
+      setScannerVisible(false);
+      // After a successful scan, modal will open explicitly below,
+      // so we no longer need the "reopen on close" flag.
+      setReopenModalOnClose(false);
+
+      try {
+        const parsed = parseReceiptFromQR(String(data || ""));
+        if (!parsed) {
+          Alert.alert(
+            "Unsupported QR",
+            "This QR code does not look like a receipt I can parse yet."
+          );
+          return;
+        }
+
+        setForm((prev) => ({
+          ...prev,
+          amount: parsed.amount || prev.amount,
+          currency: parsed.currency || prev.currency,
+          date: parsed.date || prev.date,
+          description: parsed.description || prev.description,
+        }));
+
+        // Always show the menu/modal after a successful scan so user can review
+        setModalOpen(true);
+
+        Alert.alert(
+          "Receipt scanned",
+          "Fields were pre-filled from the receipt. Please review and edit before saving."
+        );
+      } catch (e) {
+        console.log("[Expenses] scan parse error", e);
+        Alert.alert("Scan error", e.message || "Failed to parse receipt QR.");
+      }
+    },
+    [isScanning]
+  );
 
   /* ------------------------------- Row item ------------------------------- */
   function renderRow({ item }) {
@@ -776,8 +927,6 @@ export default function ExpensesScreen({ route }) {
       }
     };
 
-    const defaultAccId = form.accountId || accountId || accounts[0]?._id || "";
-
     return (
       <Modal
         visible={modalOpen}
@@ -829,6 +978,7 @@ export default function ExpensesScreen({ route }) {
                   ))}
                 </ScrollView>
               </View>
+
               {/* Amount + currency */}
               <View style={styles.modalRow}>
                 <View style={{ flex: 1 }}>
@@ -855,6 +1005,21 @@ export default function ExpensesScreen({ route }) {
                     style={styles.modalInput}
                   />
                 </View>
+              </View>
+
+              {/* Scan receipt QR */}
+              <View style={styles.modalField}>
+                <TouchableOpacity
+                  style={styles.scanBtn}
+                  onPress={openScanner}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.scanBtnText}>Scan receipt QR</Text>
+                </TouchableOpacity>
+                <Text style={styles.modalHint}>
+                  Scan the QR on your receipt to pre-fill amount and date. You
+                  can still edit everything before saving.
+                </Text>
               </View>
 
               {/* Date + next date */}
@@ -966,7 +1131,7 @@ export default function ExpensesScreen({ route }) {
         </KeyboardAvoidingView>
       </Modal>
     );
-  }, [modalOpen, form, editing, accounts, categories, accountId]);
+  }, [modalOpen, form, editing, accounts, categories, accountId, openScanner]);
 
   /* ------------------------------ Header & Filters ------------------------------ */
   function Header() {
@@ -1117,7 +1282,7 @@ export default function ExpensesScreen({ route }) {
           ))}
         </View>
 
-        {/* 🔥 Date filters + Refresh (replacing '+ New expense') */}
+        {/* Date filters + Refresh */}
         <View style={styles.headerActionButtons}>
           <ScrollView
             horizontal
@@ -1362,7 +1527,7 @@ export default function ExpensesScreen({ route }) {
                   const height = 8 + ratio * 32; // 8–40
                   return (
                     <View key={p.label} style={styles.sparkCol}>
-                      <View style={[styles.sparkBarTrack]}>
+                      <View style={styles.sparkBarTrack}>
                         <View
                           style={[
                             styles.sparkBarFill,
@@ -1430,7 +1595,7 @@ export default function ExpensesScreen({ route }) {
         </View>
       </ScrollView>
 
-      {/* FAB like Investments */}
+      {/* FAB to add expense */}
       <View style={styles.fabContainer}>
         <TouchableOpacity style={styles.fab} onPress={openCreate}>
           <Text style={styles.fabPlus}>＋</Text>
@@ -1438,6 +1603,95 @@ export default function ExpensesScreen({ route }) {
       </View>
 
       {ExpenseModal()}
+
+      {/* FULL-SCREEN CAMERA OVERLAY (no RN Modal) */}
+      {scannerVisible && (
+        <View style={styles.fullCamOverlay}>
+          {/* Top bar */}
+          <SafeAreaView style={styles.fullCamTopSafe}>
+            <View style={styles.fullCamTopBar}>
+              <TouchableOpacity
+                onPress={() => {
+                  setScannerVisible(false);
+                  setIsScanning(false);
+                  setModalOpen(true); // <--- reopen "New expense" panel
+                }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.fullCamTopText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </SafeAreaView>
+
+          {/* Camera */}
+          <View style={styles.fullCamBody}>
+            <CameraView
+              style={StyleSheet.absoluteFillObject}
+              facing={facing}
+              flash={flash}
+              barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+              onBarcodeScanned={isScanning ? handleBarCodeScanned : undefined}
+            />
+            {/* QR frame */}
+            <View style={styles.fullCamFrameOverlay} pointerEvents="none" />
+          </View>
+
+          {/* Bottom controls */}
+          <View style={styles.fullCamBottomBar}>
+            {/* LEFT: Cancel + Flash side-by-side */}
+            <View style={styles.fullCamLeftCluster}>
+              <TouchableOpacity
+                style={styles.fullCamBottomIconBtn}
+                activeOpacity={0.7}
+                onPress={() => {
+                  setScannerVisible(false);
+                  setIsScanning(false);
+                  setModalOpen(true); // 🔹 reopen New expense modal
+                }}
+              >
+                <Text style={styles.fullCamCancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.fullCamBottomIconBtn}
+                activeOpacity={0.7}
+                onPress={() =>
+                  setFlash((prev) => (prev === "off" ? "torch" : "off"))
+                }
+              >
+                <Text style={styles.fullCamBottomIconText}>
+                  {flash === "off" ? "⚡︎" : "⚡︎A"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* CENTER: shutter */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => setIsScanning((prev) => !prev)}
+              style={styles.fullCamShutterOuter}
+            >
+              <View
+                style={[
+                  styles.fullCamShutterInner,
+                  isScanning && styles.fullCamShutterInnerActive,
+                ]}
+              />
+            </TouchableOpacity>
+
+            {/* RIGHT: flip camera */}
+            <TouchableOpacity
+              style={styles.fullCamBottomIconBtn}
+              activeOpacity={0.7}
+              onPress={() =>
+                setFacing((prev) => (prev === "back" ? "front" : "back"))
+              }
+            >
+              <Text style={styles.fullCamBottomIconText}>⟲</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -1480,10 +1734,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: "700",
     color: TEXT_HEADING,
-  },
-  headerActionsRight: {
-    flexDirection: "row",
-    alignItems: "center",
   },
   headerUpcomingBtn: {
     flexDirection: "row",
@@ -1590,7 +1840,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 2,
   },
-  // used for date chips ScrollView content
   dateFilterChipRow: {
     paddingVertical: 4,
     paddingRight: 8,
@@ -2049,6 +2298,22 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
+  /* Scan button inside modal */
+  scanBtn: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: main,
+    backgroundColor: "#022c22",
+  },
+  scanBtnText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#bbf7d0",
+  },
+
   /* Error */
   errorBox: {
     marginHorizontal: 16,
@@ -2084,12 +2349,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: TEXT_MUTED,
   },
-  modalScrollContent: {
-    flexGrow: 1,
-    justifyContent: "center",
-    paddingVertical: 40,
-    paddingHorizontal: 16,
-  },
 
   /* FAB like Investments */
   fabContainer: {
@@ -2114,5 +2373,97 @@ const styles = StyleSheet.create({
     fontSize: 30,
     lineHeight: 30,
     color: "white",
+  },
+
+  /* Full-screen camera sheet (ChatGPT-like) */
+  fullCamOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "black",
+    justifyContent: "flex-end",
+  },
+  fullCamContainer: {
+    flex: 1,
+    backgroundColor: "black",
+  },
+  fullCamTopSafe: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+  },
+  fullCamTopBar: {
+    height: 52,
+    paddingHorizontal: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-start",
+  },
+  fullCamTopText: {
+    fontSize: 24,
+    color: "white",
+  },
+  fullCamBody: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  fullCamFrameOverlay: {
+    width: "70%",
+    aspectRatio: 1,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.9)",
+  },
+  fullCamBottomIconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  fullCamBottomBar: {
+    height: 120,
+    paddingHorizontal: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "black",
+  },
+  fullCamBottomIconText: {
+    fontSize: 24,
+    color: "white",
+  },
+  fullCamShutterOuter: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 4,
+    borderColor: "white",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  fullCamShutterInner: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "white",
+  },
+  fullCamShutterInnerActive: {
+    backgroundColor: "#22c55e",
+  },
+  fullCamLeftCluster: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  fullCamCancelText: {
+    fontSize: 13,
+    color: "white",
+    fontWeight: "500",
   },
 });
