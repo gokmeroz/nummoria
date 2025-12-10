@@ -1,7 +1,14 @@
 // mobile/src/screens/ExpensesScreen.js
 /* eslint-disable no-unused-vars */
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useRef,
+} from "react";
+
 import {
   ActivityIndicator,
   Alert,
@@ -17,6 +24,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import TextRecognition from "@react-native-ml-kit/text-recognition"; // after install
 
 import { CameraView, useCameraPermissions } from "expo-camera";
 
@@ -149,6 +157,71 @@ function parseReceiptFromQR(data) {
     description: description || null,
   };
 }
+function parseReceiptFromText(rawText) {
+  if (!rawText) return null;
+
+  const text = rawText.replace(/\s+/g, " ").toUpperCase();
+
+  // ----- 1) TOTAL AMOUNT -----
+  // Look for lines containing TOTAL / TOPLAM / GENEL TOPLAM
+  const totalRegex = /(GENEL TOPLAM|TOPLAM|TOTAL)[^\d]*([0-9]+[.,][0-9]{2})/;
+  const totalMatch = text.match(totalRegex);
+
+  let amount = null;
+  if (totalMatch && totalMatch[2]) {
+    amount = totalMatch[2].replace(",", ".");
+  } else {
+    // Fallback: last money-like pattern in the text
+    const allMoney = [...text.matchAll(/([0-9]+[.,][0-9]{2})/g)];
+    if (allMoney.length) {
+      amount = allMoney[allMoney.length - 1][1].replace(",", ".");
+    }
+  }
+
+  // ----- 2) CURRENCY -----
+  let currency = null;
+  const curMatch = text.match(/\b(USD|EUR|TRY|TL)\b/);
+  if (curMatch) {
+    currency = curMatch[1] === "TL" ? "TRY" : curMatch[1];
+  }
+
+  // ----- 3) DATE -----
+  let dateStr = null;
+  const iso = text.match(/(\d{4}[-/.]\d{2}[-/.]\d{2})/);
+  const eu = text.match(/(\d{2}[-/.]\d{2}[-/.]\d{4})/);
+
+  if (iso) {
+    dateStr = iso[1].replace(/\./g, "-").replace(/\//g, "-");
+  } else if (eu) {
+    const [dd, mm, yyyy] = eu[1].split(/[./-]/);
+    dateStr = `${yyyy}-${mm}-${dd}`;
+  }
+
+  // ----- 4) SELLER NAME (first line or two, before "TARIH" / "DATE") -----
+  let seller = null;
+  const lines = rawText
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  if (lines.length) {
+    const stopIdx = lines.findIndex((l) =>
+      /TARİH|TARIH|DATE|FİŞ NO|FIS NO|RECEIPT/i.test(l)
+    );
+    const headerLines =
+      stopIdx > 0 ? lines.slice(0, stopIdx) : lines.slice(0, 2);
+    seller = headerLines.join(" ").trim();
+  }
+
+  if (!amount && !dateStr && !seller) return null;
+
+  return {
+    amount: amount || null,
+    currency: currency || null,
+    date: dateStr || null,
+    seller: seller || null,
+  };
+}
 
 /* ----------------------------- UI Primitives ----------------------------- */
 function Chip({ label, selected, onPress, small }) {
@@ -220,9 +293,11 @@ export default function ExpensesScreen({ route }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState("back");
   const [flash, setFlash] = useState("off");
-
+  // NEW: guard so handler runs only once per open
+  const scannedOnceRef = useRef(false);
   // NEW: track whether we should reopen the modal after closing camera
   const [reopenModalOnClose, setReopenModalOnClose] = useState(false);
+  const cameraRef = useRef(null);
 
   /* ---------------------------- Lookups ---------------------------- */
   const categoriesById = useMemo(() => {
@@ -748,7 +823,9 @@ export default function ExpensesScreen({ route }) {
 
       // 🔹 close the expense modal while camera is active
       setModalOpen(false);
-
+      // reset scan guard
+      scannedOnceRef.current = false;
+      /* The above code is setting a variable `isScanning` to `true`. */
       setIsScanning(true);
       setScannerVisible(true);
     } catch (e) {
@@ -759,49 +836,106 @@ export default function ExpensesScreen({ route }) {
 
   const handleBarCodeScanned = useCallback(
     ({ type, data }) => {
-      if (!isScanning) return;
+      // 🔒 guard: only handle first scan per open
+      if (scannedOnceRef.current) {
+        return;
+      }
+      scannedOnceRef.current = true;
 
-      console.log("[Expenses] QR scanned:", { type, data });
+      const text = String(data || "");
+      console.log("[Expenses] QR scanned:", { type, data: text });
 
+      // stop scanner + hide camera
       setIsScanning(false);
       setScannerVisible(false);
-      // After a successful scan, modal will open explicitly below,
-      // so we no longer need the "reopen on close" flag.
       setReopenModalOnClose(false);
 
+      // ---------- CASE 1: simple numeric code128 (receipt ID only) ----------
+      if (type === "code128" && /^\d{10,20}$/.test(text)) {
+        setForm((prev) => ({
+          ...prev,
+          description: prev.description?.trim()
+            ? `${prev.description} (Receipt ID: ${text})`
+            : `Receipt ID: ${text}`,
+        }));
+
+        setModalOpen(true);
+
+        Alert.alert(
+          "Receipt scanned",
+          "This barcode only contains a receipt/transaction ID, so I can't auto-fill amount or date, but I attached the ID to the description."
+        );
+
+        return;
+      }
+
+      // ---------- CASE 2: real QR / rich payload that parseReceiptFromQR can handle ----------
       try {
-        const parsed = parseReceiptFromQR(String(data || ""));
+        const parsed = parseReceiptFromQR(text);
+
         if (!parsed) {
+          setModalOpen(true);
           Alert.alert(
-            "Unsupported QR",
-            "This QR code does not look like a receipt I can parse yet."
+            "Unsupported code",
+            "I scanned this code, but it doesn't contain structured receipt data (amount/date/currency) I can parse yet."
           );
           return;
         }
 
         setForm((prev) => ({
           ...prev,
-          amount: parsed.amount || prev.amount,
-          currency: parsed.currency || prev.currency,
-          date: parsed.date || prev.date,
-          description: parsed.description || prev.description,
+          amount: parsed.amount ?? prev.amount,
+          currency: parsed.currency ?? prev.currency,
+          date: parsed.date ?? prev.date,
+          description: parsed.description ?? prev.description,
         }));
 
-        // Always show the menu/modal after a successful scan so user can review
         setModalOpen(true);
 
         Alert.alert(
           "Receipt scanned",
-          "Fields were pre-filled from the receipt. Please review and edit before saving."
+          "I pre-filled the available fields from the code. Please review before saving."
         );
       } catch (e) {
         console.log("[Expenses] scan parse error", e);
-        Alert.alert("Scan error", e.message || "Failed to parse receipt QR.");
+        setModalOpen(true);
+        Alert.alert("Scan error", e.message || "Failed to parse receipt code.");
       }
     },
-    [isScanning]
+    [setForm, setModalOpen]
   );
+  const openOcrScanner = useCallback(async () => {
+    // reuse your permission logic
+    try {
+      if (!permission) {
+        const res = await requestPermission();
+        if (!res.granted) {
+          Alert.alert(
+            "Camera permission needed",
+            "Enable camera access to scan receipts."
+          );
+          return;
+        }
+      } else if (!permission.granted) {
+        const res = await requestPermission();
+        if (!res.granted) {
+          Alert.alert(
+            "Camera permission needed",
+            "Enable camera access to scan receipts."
+          );
+          return;
+        }
+      }
 
+      // close modal, open camera overlay
+      setModalOpen(false);
+      setScannerVisible(true);
+      setIsScanning(false); // we won't use barcode in this mode
+      // you can keep a separate state like isOcrMode if you want
+    } catch (e) {
+      Alert.alert("Error", e.message || "Failed to open camera.");
+    }
+  }, [permission, requestPermission]);
   /* ------------------------------- Row item ------------------------------- */
   function renderRow({ item }) {
     const catName =
@@ -1011,14 +1145,26 @@ export default function ExpensesScreen({ route }) {
               <View style={styles.modalField}>
                 <TouchableOpacity
                   style={styles.scanBtn}
-                  onPress={openScanner}
+                  onPress={openScanner} // your existing QR/barcode flow
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.scanBtnText}>Scan receipt QR</Text>
+                  <Text style={styles.scanBtnText}>
+                    Scan receipt QR / barcode
+                  </Text>
                 </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.scanBtn, { marginTop: 8 }]}
+                  onPress={openOcrScanner}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.scanBtnText}>Smart scan (photo)</Text>
+                </TouchableOpacity>
+
                 <Text style={styles.modalHint}>
-                  Scan the QR on your receipt to pre-fill amount and date. You
-                  can still edit everything before saving.
+                  QR/barcode will attach a receipt ID if possible. Smart scan
+                  reads the whole receipt image and tries to auto-fill amount,
+                  date and seller directly on your device.
                 </Text>
               </View>
 
@@ -1626,10 +1772,20 @@ export default function ExpensesScreen({ route }) {
           {/* Camera */}
           <View style={styles.fullCamBody}>
             <CameraView
+              ref={cameraRef}
               style={StyleSheet.absoluteFillObject}
               facing={facing}
               flash={flash}
-              barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+              barcodeScannerSettings={{
+                barcodeTypes: [
+                  "ean13",
+                  "code128",
+                  "code39",
+                  "upc_a",
+                  "upc_e",
+                  "ean8",
+                ],
+              }}
               onBarcodeScanned={isScanning ? handleBarCodeScanned : undefined}
             />
             {/* QR frame */}
@@ -1668,13 +1824,66 @@ export default function ExpensesScreen({ route }) {
             {/* CENTER: shutter */}
             <TouchableOpacity
               activeOpacity={0.7}
-              onPress={() => setIsScanning((prev) => !prev)}
+              onPress={async () => {
+                try {
+                  if (!cameraRef.current) return;
+
+                  // Take picture
+                  const photo = await cameraRef.current.takePictureAsync({
+                    base64: false,
+                  });
+
+                  // Close camera UI
+                  setScannerVisible(false);
+
+                  // Run OCR on-device
+                  const result = await TextRecognition.recognize(photo.uri);
+                  const fullText = result?.text || "";
+
+                  console.log("[Expenses] OCR text:", fullText);
+
+                  const parsed = parseReceiptFromText(fullText);
+
+                  // Reopen modal
+                  setModalOpen(true);
+
+                  if (!parsed) {
+                    Alert.alert(
+                      "Could not auto-fill",
+                      "I couldn't confidently detect total / date on this receipt. You can still enter them manually."
+                    );
+                    return;
+                  }
+
+                  setForm((prev) => ({
+                    ...prev,
+                    amount: parsed.amount || prev.amount,
+                    currency: parsed.currency || prev.currency,
+                    date: parsed.date || prev.date,
+                    description:
+                      parsed.seller || prev.description || prev.description,
+                  }));
+
+                  Alert.alert(
+                    "Smart scan complete",
+                    "I tried to fill in total, date and seller from the receipt. Please review before saving."
+                  );
+                } catch (e) {
+                  console.log("[Expenses] OCR error", e);
+                  setModalOpen(true);
+                  Alert.alert(
+                    "Scan error",
+                    e.message ||
+                      "I couldn't read this receipt. Try retaking the photo."
+                  );
+                }
+              }}
               style={styles.fullCamShutterOuter}
             >
               <View
                 style={[
                   styles.fullCamShutterInner,
-                  isScanning && styles.fullCamShutterInnerActive,
+                  styles.fullCamShutterInnerActive,
                 ]}
               />
             </TouchableOpacity>
