@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/nummoria_logo.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "splash": {
       "image": "./assets/nummoria_logo.png",
       "resizeMode": "contain",
@@ -16,7 +16,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.mobile",
       "infoPlist": {
-        "NSCameraUsageDescription": "This app needs camera access to scan receipt QR codes and automatically fill expense details."
+        "NSCameraUsageDescription": "This app needs camera access to scan receipt QR codes and automatically fill expense details.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -26,9 +27,6 @@
       },
       "edgeToEdgeEnabled": true,
       "permissions": [
-        "CAMERA",
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
         "CAMERA",
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
@@ -45,6 +43,11 @@
           "cameraPermission": "Allow Nummoria to access your camera to scan receipt QR codes."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "7c6d191c-d66b-4c66-9281-7fa479893021"
+      }
+    }
   }
 }

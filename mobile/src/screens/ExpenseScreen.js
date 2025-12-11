@@ -905,7 +905,16 @@ export default function ExpensesScreen({ route }) {
     [setForm, setModalOpen]
   );
   const openOcrScanner = useCallback(async () => {
-    // reuse your permission logic
+    // iOS: do NOT open OCR Camera – MLKit native module is not linked in your Expo iOS build
+    if (Platform.OS === "ios") {
+      Alert.alert(
+        "Smart scan not available on iOS (yet)",
+        "OCR uses native ML Kit which is currently wired only for Android in your setup. You can still use QR / barcode scan on iOS."
+      );
+      return;
+    }
+
+    // ANDROID: reuse your permission logic and open camera overlay
     try {
       if (!permission) {
         const res = await requestPermission();
@@ -927,15 +936,15 @@ export default function ExpensesScreen({ route }) {
         }
       }
 
-      // close modal, open camera overlay
+      // close modal, open camera overlay in OCR mode (no barcode scanning)
       setModalOpen(false);
       setScannerVisible(true);
-      setIsScanning(false); // we won't use barcode in this mode
-      // you can keep a separate state like isOcrMode if you want
+      setIsScanning(false);
     } catch (e) {
       Alert.alert("Error", e.message || "Failed to open camera.");
     }
   }, [permission, requestPermission]);
+
   /* ------------------------------- Row item ------------------------------- */
   function renderRow({ item }) {
     const catName =
@@ -1828,7 +1837,18 @@ export default function ExpensesScreen({ route }) {
                 try {
                   if (!cameraRef.current) return;
 
-                  // Take picture
+                  // iOS: do NOT call TextRecognition – the native module isn't linked in your Expo iOS build
+                  if (Platform.OS === "ios") {
+                    setScannerVisible(false);
+                    setModalOpen(true);
+                    Alert.alert(
+                      "Smart scan not supported on iOS (for now)",
+                      "Because '@react-native-ml-kit/text-recognition' can't be fully linked in your current Expo iOS setup, OCR runs only on Android. You can still use QR / barcode scan or fill fields manually."
+                    );
+                    return;
+                  }
+
+                  // ANDROID: full OCR flow with ML Kit
                   const photo = await cameraRef.current.takePictureAsync({
                     base64: false,
                   });
@@ -1836,7 +1856,7 @@ export default function ExpensesScreen({ route }) {
                   // Close camera UI
                   setScannerVisible(false);
 
-                  // Run OCR on-device
+                  // Run OCR on-device (Android)
                   const result = await TextRecognition.recognize(photo.uri);
                   const fullText = result?.text || "";
 

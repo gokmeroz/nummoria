@@ -1,0 +1,51 @@
+diff --git a/node_modules/react-native/React/DevSupport/RCTPackagerConnection.mm b/node_modules/react-native/React/DevSupport/RCTPackagerConnection.mm
+index 39419d6..f466b77 100644
+--- a/node_modules/react-native/React/DevSupport/RCTPackagerConnection.mm
++++ b/node_modules/react-native/React/DevSupport/RCTPackagerConnection.mm
+@@ -1,4 +1,4 @@
+-/*
++O/*
+  * Copyright (c) Meta Platforms, Inc. and affiliates.
+  *
+  * This source code is licensed under the MIT license found in the
+@@ -8,6 +8,7 @@
+ #import <React/RCTPackagerConnection.h>
+ 
+ #import <objc/runtime.h>
++#include <mutex> 
+ #import <algorithm>
+ #import <vector>
+ 
+@@ -26,6 +27,7 @@
+ #if RCT_DEV
+ 
+ #import <SocketRocket/SRWebSocket.h>
++#include <mutex>
+ 
+ @interface RCTPackagerConnection () <RCTReconnectingWebSocketDelegate>
+ @end
+@@ -330,3 +332,5 @@ registrationsWithMethod(std::mutex &mutex, const std::vector<Registration<Handle
+ @end
+ 
+ #endif
++
++
+diff --git a/node_modules/react-native/scripts/react_native_pods.rb b/node_modules/react-native/scripts/react_native_pods.rb
+index e9f5a89..d716721 100644
+--- a/node_modules/react-native/scripts/react_native_pods.rb
++++ b/node_modules/react-native/scripts/react_native_pods.rb
+@@ -23,6 +23,14 @@ require_relative './cocoapods/spm.rb'
+ require_relative './cocoapods/rncore.rb'
+ # Importing to expose use_native_modules!
+ require_relative './cocoapods/autolinking.rb'
++# TEMP PATCH: Disable strict Xcode version check on this machine.
++# WARNING: You are running React Native on an Xcode version that is not officially supported.
++class ReactNativePodsUtils
++  def self.check_minimum_required_xcode
++    # No-op: skip the "Xcode >= 16.1" enforcement
++    Pod::UI.puts "[RN] Skipping minimum Xcode version check. You are responsible for testing on your setup."
++  end
++end
+ 
+ $CODEGEN_OUTPUT_DIR = 'build/generated/ios'
+ $CODEGEN_COMPONENT_DIR = 'react/renderer/components'
