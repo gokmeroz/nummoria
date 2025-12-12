@@ -1,5 +1,5 @@
 // App.js
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   SafeAreaView,
@@ -16,15 +16,31 @@ import SignUpScreen from "./src/screens/SignUpScreen";
 import AppTabs from "./src/navigation/AppTabs";
 import UserScreen from "./src/screens/UserScreen";
 import InvestmentPerformanceScreen from "./src/screens/InvestmentPerformance";
-import FinancialAdvisorScreen from "./src/screens/FinancialAdvisorScreen";
+// import FinancialAdvisorScreen from "./src/screens/FinancialAdvisorScreen";
 import api from "./src/lib/api";
+
+import {
+  registerForPushNotifications,
+  attachNotificationListeners,
+  handleInitialNotification,
+} from "./notifications/notifications";
 
 const Stack = createNativeStackNavigator();
 
 export default function App() {
+  const navigationRef = useRef(null);
+
   const [loading, setLoading] = useState(true);
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  // Attach notification listeners ONCE (foreground + tap handling)
+  useEffect(() => {
+    const detach = attachNotificationListeners(navigationRef);
+    return () => {
+      if (typeof detach === "function") detach();
+    };
+  }, []);
 
   useEffect(() => {
     async function bootstrap() {
@@ -34,21 +50,34 @@ export default function App() {
 
         setHasSeenOnboarding(raw === "true");
 
+        // Set auth header early (needed for /me and /devices/register)
         if (token) {
           api.defaults.headers.Authorization = `Bearer ${token}`;
+        } else {
+          delete api.defaults.headers.Authorization;
         }
 
+        // Validate session
         let logged = false;
         try {
           const resp = await api.get("/me");
-          if (resp?.data?.user) {
-            logged = true;
-          }
+          if (resp?.data?.user) logged = true;
         } catch (e) {
           logged = false;
         }
 
         setIsLoggedIn(logged);
+
+        // ✅ Register push token ONLY when authenticated
+        // This ensures /devices/register behaves the same in dev & prod.
+        if (logged && token) {
+          try {
+            await registerForPushNotifications();
+          } catch (e) {
+            // Do not block app boot for notification failures
+            console.warn("Push registration failed:", e?.message || e);
+          }
+        }
       } catch (e) {
         console.warn("Failed to read flags:", e);
         setHasSeenOnboarding(false);
@@ -57,6 +86,7 @@ export default function App() {
         setLoading(false);
       }
     }
+
     bootstrap();
   }, []);
 
@@ -76,7 +106,18 @@ export default function App() {
   };
 
   return (
-    <NavigationContainer>
+    <NavigationContainer
+      ref={navigationRef}
+      onReady={() => {
+        // ✅ Handle cold start notification routing (app launched by tapping push)
+        handleInitialNotification(navigationRef).catch((e) => {
+          console.warn(
+            "Initial notification handling failed:",
+            e?.message || e
+          );
+        });
+      }}
+    >
       <Stack.Navigator
         screenOptions={{ headerShown: false }}
         initialRouteName={getInitialRoute()}
@@ -100,8 +141,24 @@ export default function App() {
           {(props) => (
             <LoginScreen
               {...props}
-              onLoggedIn={() => {
+              onLoggedIn={async () => {
                 setIsLoggedIn(true);
+
+                // Ensure api auth header is set (LoginScreen should save token)
+                const token = await AsyncStorage.getItem("token");
+                if (token)
+                  api.defaults.headers.Authorization = `Bearer ${token}`;
+
+                // ✅ Register push token now that we are logged in
+                try {
+                  await registerForPushNotifications();
+                } catch (e) {
+                  console.warn(
+                    "Push registration failed after login:",
+                    e?.message || e
+                  );
+                }
+
                 props.navigation.replace("MainTabs");
               }}
             />
@@ -113,8 +170,23 @@ export default function App() {
           {(props) => (
             <SignUpScreen
               {...props}
-              onSignedUp={() => {
+              onSignedUp={async () => {
                 setIsLoggedIn(true);
+
+                const token = await AsyncStorage.getItem("token");
+                if (token)
+                  api.defaults.headers.Authorization = `Bearer ${token}`;
+
+                // ✅ Register push token now that we are logged in
+                try {
+                  await registerForPushNotifications();
+                } catch (e) {
+                  console.warn(
+                    "Push registration failed after signup:",
+                    e?.message || e
+                  );
+                }
+
                 props.navigation.replace("MainTabs");
               }}
             />
@@ -131,7 +203,7 @@ export default function App() {
           options={{
             headerShown: true,
             title: "Profile",
-            headerBackTitle: "", // 👈 FORCE EMPTY BACK LABEL
+            headerBackTitle: "",
             headerBackTitleVisible: false,
             presentation: "card",
             headerStyle: { backgroundColor: "#020819" },
@@ -155,21 +227,6 @@ export default function App() {
           }}
         />
       </Stack.Navigator>
-      {/* <Stack.Navigator>
-        <Stack.Screen
-          name="FinancialAdvisor"
-          component={FinancialAdvisorScreen}
-          options={{
-            headerShown: true,
-            title: "Financial Advisor",
-            headerBackTitleVisible: false,
-            presentation: "card",
-            headerStyle: { backgroundColor: "#020819" },
-            headerTintColor: "#e5e7eb",
-            headerTitleStyle: { fontWeight: "700" },
-          }}
-        />
-      </Stack.Navigator> */}
     </NavigationContainer>
   );
 }

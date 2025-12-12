@@ -18,7 +18,12 @@ import statsRoutes from "./routes/stats.js";
 import contactRoutes from "./routes/contact.js";
 import ingestRoutes from "./routes/ingestRoutes.js";
 import consentRoutes from "./routes/consentRoutes.js";
+
 import { consentGate } from "./middlewares/consent.js";
+import { requireAuth } from "./middlewares/auth.js"; // ✅ FIX: define auth
+
+import devicesRouter from "./routes/devices.js";
+import notificationsRouter from "./routes/notifications.js";
 
 const FRONTEND = process.env.FRONTEND_URL || "http://localhost:5173";
 
@@ -99,6 +104,10 @@ app.use("/ai/financial-helper", financialHelperRoutes);
 app.use("/stats", statsRoutes);
 app.use("/contact", contactRoutes);
 app.use("/ingest", ingestRoutes);
+
+// ✅ Notifications infrastructure (auth-protected)
+app.use("/devices", requireAuth, devicesRouter);
+app.use("/notifications", requireAuth, notificationsRouter);
 
 // ---- error handler ----
 app.use((err, _req, res, _next) => {

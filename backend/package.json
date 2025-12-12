@@ -1,39 +1,31 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "main": "index.js",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "nodemon src/server.js",
-    "start": "cross-env ENABLE_QUOTES=true nodemon src/server.js"
+    "dev": "cross-env ENABLE_QUOTES=true nodemon src/server.js",
+    "worker:dev": "nodemon --exec \"node src/workers/pushWorkerEntry.js\"",
+    "dev:all": "concurrently -k \"npm run dev\" \"npm run worker:dev\"",
+    "start": "cross-env ENABLE_QUOTES=true node src/server.js",
+    "worker": "node src/workers/pushWorkerEntry.js"
   },
-  "keywords": [],
-  "author": "G. Mert Ozdogan",
-  "license": "ISC",
-  "description": "",
   "dependencies": {
-    "@google/generative-ai": "^0.24.1",
-    "bcrypt": "^6.0.0",
-    "cors": "^2.8.5",
-    "csv-parse": "^6.1.0",
-    "csv-parser": "^3.2.0",
-    "dotenv": "^17.2.2",
+    "bullmq": "^5.66.0",
+    "ioredis": "^5.8.2",
+    "expo-server-sdk": "^4.0.0",
     "express": "^5.1.0",
-    "helmet": "^8.1.0",
-    "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.18.1",
-    "morgan": "^1.10.1",
-    "multer": "^2.0.2",
-    "node-cron": "^4.2.1",
-    "openai": "^6.8.1",
-    "pdf-parse": "^2.4.5",
-    "pdfjs-dist": "^5.4.296",
-    "yahoo-finance2": "^2.13.3",
-    "zod": "^4.1.7"
+    "jsonwebtoken": "^9.0.2",
+    "cors": "^2.8.5",
+    "helmet": "^8.1.0",
+    "morgan": "^1.10.1"
   },
   "devDependencies": {
-    "cross-env": "^10.0.0",
-    "nodemon": "^3.1.10"
+    "nodemon": "^3.1.11",
+    "concurrently": "^8.2.2",
+    "cross-env": "^10.0.0"
   },
-  "type": "module"
+  "engines": {
+    "node": ">=22 <23"
+  }
 }
