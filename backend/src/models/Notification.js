@@ -14,6 +14,7 @@ const NotificationSchema = new mongoose.Schema(
         "monthly.summary_ready",
         "budget.threshold_crossed",
         "expense.anomaly_detected",
+        "transaction.reminder", // ✅ add
         "test",
       ],
       required: true,

@@ -3,6 +3,10 @@ import mongoose from "mongoose";
 import { Transaction } from "../models/transaction.js";
 import { Category } from "../models/category.js";
 import { Account } from "../models/account.js";
+import {
+  upsertTransactionReminderJob,
+  removeTransactionReminderJob,
+} from "../utils/reminders.js";
 
 const { ObjectId } = mongoose.Types;
 
@@ -64,6 +68,54 @@ function isStockOrCryptoCategory(catDoc) {
     .trim()
     .toLowerCase();
   return n === "stock market" || n === "crypto currency exchange";
+}
+
+function parseReminder(reminder) {
+  // Accept undefined => no change (for update)
+  if (reminder === undefined) return undefined;
+
+  const enabled = Boolean(reminder?.enabled);
+  const offsetMinutesRaw = reminder?.offsetMinutes;
+
+  const offsetMinutes =
+    typeof offsetMinutesRaw === "number" &&
+    Number.isFinite(offsetMinutesRaw) &&
+    offsetMinutesRaw >= 0
+      ? Math.floor(offsetMinutesRaw)
+      : 1440; // default 1 day
+
+  return { enabled, offsetMinutes };
+}
+
+function computeRemindAtUTC(txDateUTCStart, offsetMinutes) {
+  // txDateUTCStart is already startOfUTC(date)
+  return new Date(txDateUTCStart.getTime() - offsetMinutes * 60_000);
+}
+
+async function applyReminderScheduling({ userId, tx }) {
+  // tx is a Transaction doc (or lean object) that includes reminder
+  const enabled = Boolean(tx?.reminder?.enabled);
+  const remindAt = tx?.reminder?.remindAt
+    ? new Date(tx.reminder.remindAt)
+    : null;
+
+  // Always remove if disabled or invalid
+  if (!enabled || !remindAt || Number.isNaN(remindAt.getTime())) {
+    await removeTransactionReminderJob(tx._id);
+    return;
+  }
+
+  // If remindAt already passed, don’t schedule
+  if (remindAt.getTime() <= Date.now()) {
+    await removeTransactionReminderJob(tx._id);
+    return;
+  }
+
+  await upsertTransactionReminderJob({
+    transactionId: tx._id,
+    remindAt,
+    payload: { userId, transactionId: String(tx._id) },
+  });
 }
 
 /* --------------------------------- GETs ----------------------------------- */
@@ -153,6 +205,7 @@ export async function createTransaction(req, res) {
       tags,
       assetSymbol,
       units,
+      reminder,
     } = req.body;
 
     // Basic validation
@@ -224,6 +277,20 @@ export async function createTransaction(req, res) {
       : [];
     const cur = normalizeCurrency(currency);
     const when = startOfUTC(date);
+    const rem = parseReminder(reminder);
+
+    const reminderObj =
+      rem && rem.enabled
+        ? {
+            enabled: true,
+            offsetMinutes: rem.offsetMinutes,
+            remindAt: computeRemindAtUTC(when, rem.offsetMinutes),
+          }
+        : {
+            enabled: false,
+            offsetMinutes: rem?.offsetMinutes ?? 1440,
+            remindAt: null,
+          };
 
     // Account and currency check
     const acct = await getAccountOrThrow({ accountId, userId: req.userId });
@@ -254,6 +321,7 @@ export async function createTransaction(req, res) {
         typeof units === "number" && !Number.isNaN(units)
           ? Number(units)
           : null,
+      reminder: reminderObj,
       isDeleted: false,
     };
 
@@ -263,12 +331,14 @@ export async function createTransaction(req, res) {
     const delta = shouldAffectBalance(when)
       ? deltaFor(type, baseDoc.amountMinor)
       : 0;
+
     try {
       if (delta !== 0) {
         await incBalanceOrThrow({ accountId, userId: req.userId, delta });
       }
       const doc = await Transaction.create(baseDoc);
       created.push(doc.toObject());
+      await applyReminderScheduling({ userId: req.userId, tx: doc });
     } catch (e) {
       if (delta !== 0) {
         try {
@@ -311,12 +381,28 @@ export async function createTransaction(req, res) {
               delta: delta2,
             });
           }
+
+          const copyReminder =
+            rem && rem.enabled
+              ? {
+                  enabled: true,
+                  offsetMinutes: rem.offsetMinutes,
+                  remindAt: computeRemindAtUTC(plannedDate, rem.offsetMinutes),
+                }
+              : {
+                  enabled: false,
+                  offsetMinutes: rem?.offsetMinutes ?? 1440,
+                  remindAt: null,
+                };
+
           const copy = await Transaction.create({
             ...baseDoc,
             date: plannedDate,
             nextDate: undefined, // do not chain
+            reminder: copyReminder,
           });
           created.push(copy.toObject());
+          await applyReminderScheduling({ userId: req.userId, tx: copy }); // ✅ schedule reminder for the copy too
         } catch (e2) {
           if (delta2 !== 0) {
             try {
@@ -343,7 +429,7 @@ export async function createTransaction(req, res) {
 export async function updateTransaction(req, res) {
   try {
     const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!ObjectId.isValid(id)) {
       return res.status(400).json({ error: "Invalid transaction id" });
     }
 
@@ -368,19 +454,21 @@ export async function updateTransaction(req, res) {
       tags,
       assetSymbol,
       units,
+      reminder,
     } = req.body;
 
     const next = { ...current };
 
+    // --- apply incoming fields to `next` first ---
     if (accountId !== undefined) {
-      if (!mongoose.Types.ObjectId.isValid(accountId)) {
+      if (!ObjectId.isValid(accountId)) {
         return res.status(400).json({ error: "Invalid accountId" });
       }
       next.accountId = accountId;
     }
 
     if (categoryId !== undefined) {
-      if (categoryId !== null && !mongoose.Types.ObjectId.isValid(categoryId)) {
+      if (categoryId !== null && !ObjectId.isValid(categoryId)) {
         return res.status(400).json({ error: "Invalid categoryId" });
       }
       next.categoryId = categoryId === null ? null : categoryId;
@@ -472,6 +560,25 @@ export async function updateTransaction(req, res) {
           .json({ error: "units must be a number or null" });
       }
       next.units = units;
+    }
+
+    // ✅ CRITICAL FIX: compute reminder AFTER date has been applied above
+    const rem = parseReminder(reminder); // undefined means "no change"
+    if (rem !== undefined) {
+      if (rem.enabled) {
+        const d = next.date ?? current.date;
+        next.reminder = {
+          enabled: true,
+          offsetMinutes: rem.offsetMinutes,
+          remindAt: computeRemindAtUTC(startOfUTC(d), rem.offsetMinutes),
+        };
+      } else {
+        next.reminder = {
+          enabled: false,
+          offsetMinutes: rem.offsetMinutes,
+          remindAt: null,
+        };
+      }
     }
 
     // Category ↔ type check (if category present)
@@ -599,29 +706,46 @@ export async function updateTransaction(req, res) {
         }
       }
 
+      const setDoc = {
+        accountId: next.accountId,
+        categoryId: next.categoryId ?? null,
+        type: next.type,
+        amountMinor: Math.abs(next.amountMinor),
+        currency: next.currency,
+        date: next.date ?? current.date,
+        nextDate: next.nextDate ?? undefined,
+        description: next.description ?? null,
+        notes: next.notes ?? null,
+        tags: next.tags ?? [],
+        assetSymbol: next.assetSymbol ?? null,
+        units: next.units ?? null,
+      };
+
+      // ✅ Only touch reminder fields if client sent `reminder`
+      if (rem !== undefined) {
+        setDoc["reminder.enabled"] = Boolean(next.reminder?.enabled);
+        setDoc["reminder.offsetMinutes"] =
+          typeof next.reminder?.offsetMinutes === "number"
+            ? next.reminder.offsetMinutes
+            : 1440;
+        setDoc["reminder.remindAt"] = next.reminder?.remindAt ?? null;
+      }
+
       const updated = await Transaction.findOneAndUpdate(
         { _id: id, userId: req.userId, isDeleted: { $ne: true } },
-        {
-          $set: {
-            accountId: next.accountId,
-            categoryId: next.categoryId ?? null,
-            type: next.type,
-            amountMinor: Math.abs(next.amountMinor),
-            currency: next.currency,
-            date: next.date ?? current.date,
-            nextDate: next.nextDate ?? undefined,
-            description: next.description ?? null,
-            notes: next.notes ?? null,
-            tags: next.tags ?? [],
-            assetSymbol: next.assetSymbol ?? null,
-            units: next.units ?? null,
-          },
-        },
+        { $set: setDoc },
         { new: true, runValidators: true }
       ).lean();
 
-      if (!updated)
+      if (!updated) {
         return res.status(404).json({ error: "Transaction not found" });
+      }
+
+      // ✅ Reschedule / remove job after successful update ONLY if reminder was in payload
+      if (rem !== undefined) {
+        await applyReminderScheduling({ userId: req.userId, tx: updated });
+      }
+
       return res.status(200).json(updated);
     } catch (errApply) {
       return res
@@ -637,7 +761,7 @@ export async function updateTransaction(req, res) {
 export async function softDeleteTransaction(req, res) {
   try {
     const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!ObjectId.isValid(id)) {
       return res.status(400).json({ error: "Invalid transaction id" });
     }
 
@@ -683,6 +807,9 @@ export async function softDeleteTransaction(req, res) {
         { _id: tx._id },
         { $set: { isDeleted: true } }
       );
+
+      await removeTransactionReminderJob(tx._id);
+
       return res.status(200).json({ message: "Transaction soft-deleted", id });
     } catch (applyErr) {
       if (revert !== 0) {
@@ -706,7 +833,7 @@ export async function softDeleteTransaction(req, res) {
 export async function hardDeleteTransaction(req, res) {
   try {
     const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!ObjectId.isValid(id)) {
       return res.status(400).json({ error: "Invalid transaction id" });
     }
 
@@ -749,6 +876,9 @@ export async function hardDeleteTransaction(req, res) {
     }
 
     const result = await Transaction.deleteOne({ _id: id, userId: req.userId });
+
+    await removeTransactionReminderJob(id);
+
     if (result.deletedCount === 0) {
       return res.status(404).json({ error: "Transaction not found" });
     }

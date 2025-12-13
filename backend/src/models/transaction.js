@@ -24,6 +24,11 @@ const transactionSchema = new mongoose.Schema(
     // for this date (future planned occurrence). This field is stored, but
     // has no special behavior beyond creation-time convenience.
     nextDate: { type: Date, index: true },
+    reminder: {
+      enabled: { type: Boolean, default: false },
+      offsetMinutes: { type: Number, default: 1440 }, // 1 day
+      remindAt: { type: Date, default: null }, // computed server-side
+    },
 
     description: { type: String },
     notes: { type: String },

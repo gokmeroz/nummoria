@@ -1,9 +1,10 @@
+// backend/src/workers/pushWorker.js
 import { Worker } from "bullmq";
-import { connection } from "../queues/pushQueue.js";
+import { Expo } from "expo-server-sdk";
 
 import Notification from "../models/Notification.js";
 import Device from "../models/Device.js";
-import { Expo } from "expo-server-sdk";
+import { connection } from "../queues/pushQueue.js";
 
 const expo = new Expo();
 
@@ -17,29 +18,40 @@ new Worker(
 
     const devices = await Device.find({
       userId: notif.userId,
-      enabled: true,
+      isActive: true,
     });
 
-    const messages = devices
-      .filter((d) => Expo.isExpoPushToken(d.expoPushToken))
-      .map((d) => ({
-        to: d.expoPushToken,
+    const messages = [];
+
+    for (const device of devices) {
+      if (!Expo.isExpoPushToken(device.expoPushToken)) continue;
+
+      messages.push({
+        to: device.expoPushToken,
         sound: "default",
         title: notif.title,
         body: notif.body,
         data: notif.data || {},
-      }));
+      });
+    }
 
-    if (messages.length === 0) return;
+    if (!messages.length) return;
 
     const chunks = expo.chunkPushNotifications(messages);
+
     for (const chunk of chunks) {
-      await expo.sendPushNotificationsAsync(chunk);
+      try {
+        await expo.sendPushNotificationsAsync(chunk);
+      } catch (err) {
+        console.error("[push-worker] expo error", err);
+      }
     }
+
+    notif.status = "sent";
+    notif.sentAt = new Date();
+    await notif.save();
   },
-  {
-    connection, // ✅ SAME connection with maxRetriesPerRequest: null
-  }
+  { connection }
 );
 
 console.log("[push-worker] worker online");

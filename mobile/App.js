@@ -1,14 +1,16 @@
-// App.js
+// mobile/App.js
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   SafeAreaView,
   Text,
   StyleSheet,
+  Platform,
 } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Device from "expo-device";
 
 import OnboardingScreen from "./src/screens/OnboardingScreen";
 import LoginScreen from "./src/screens/LoginScreen";
@@ -16,14 +18,14 @@ import SignUpScreen from "./src/screens/SignUpScreen";
 import AppTabs from "./src/navigation/AppTabs";
 import UserScreen from "./src/screens/UserScreen";
 import InvestmentPerformanceScreen from "./src/screens/InvestmentPerformance";
-// import FinancialAdvisorScreen from "./src/screens/FinancialAdvisorScreen";
+
 import api from "./src/lib/api";
 
+// ✅ NEW: use the new notification helpers from your correct folder
 import {
-  registerForPushNotifications,
+  registerForPushTokenAsync,
   attachNotificationListeners,
-  handleInitialNotification,
-} from "./notifications/notifications";
+} from "./src/notifications/notifications";
 
 const Stack = createNativeStackNavigator();
 
@@ -34,14 +36,47 @@ export default function App() {
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  // Attach notification listeners ONCE (foreground + tap handling)
+  // ✅ Register device on backend (requires being authenticated already)
+  async function registerDeviceOnBackend() {
+    const expoPushToken = await registerForPushTokenAsync();
+    if (!expoPushToken) return;
+
+    await api.post("/devices/register", {
+      expoPushToken,
+      platform: Platform.OS,
+      deviceName: Device.deviceName || "",
+      modelName: Device.modelName || "",
+      osVersion: Device.osVersion || "",
+    });
+  }
+
+  // ✅ Attach notification listeners ONCE
   useEffect(() => {
-    const detach = attachNotificationListeners(navigationRef);
+    const detach = attachNotificationListeners({
+      onTap: (data) => {
+        // Backend sends: { route: "Transactions", params: { transactionId } }
+        // or sometimes: { route: "Transactions", transactionId }
+        const route = data?.route;
+        const params =
+          data?.params ||
+          (data?.transactionId ? { transactionId: data.transactionId } : {});
+
+        if (route && navigationRef.current?.navigate) {
+          try {
+            navigationRef.current.navigate(route, params);
+          } catch (e) {
+            console.log("[push] navigation failed:", e?.message || e);
+          }
+        }
+      },
+    });
+
     return () => {
       if (typeof detach === "function") detach();
     };
   }, []);
 
+  // ✅ Boot: onboarding + restore token + validate session
   useEffect(() => {
     async function bootstrap() {
       try {
@@ -50,7 +85,7 @@ export default function App() {
 
         setHasSeenOnboarding(raw === "true");
 
-        // Set auth header early (needed for /me and /devices/register)
+        // Set auth header early
         if (token) {
           api.defaults.headers.Authorization = `Bearer ${token}`;
         } else {
@@ -69,13 +104,11 @@ export default function App() {
         setIsLoggedIn(logged);
 
         // ✅ Register push token ONLY when authenticated
-        // This ensures /devices/register behaves the same in dev & prod.
         if (logged && token) {
           try {
-            await registerForPushNotifications();
+            await registerDeviceOnBackend();
           } catch (e) {
-            // Do not block app boot for notification failures
-            console.warn("Push registration failed:", e?.message || e);
+            console.warn("[push] device register failed:", e?.message || e);
           }
         }
       } catch (e) {
@@ -106,18 +139,7 @@ export default function App() {
   };
 
   return (
-    <NavigationContainer
-      ref={navigationRef}
-      onReady={() => {
-        // ✅ Handle cold start notification routing (app launched by tapping push)
-        handleInitialNotification(navigationRef).catch((e) => {
-          console.warn(
-            "Initial notification handling failed:",
-            e?.message || e
-          );
-        });
-      }}
-    >
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator
         screenOptions={{ headerShown: false }}
         initialRouteName={getInitialRoute()}
@@ -146,15 +168,18 @@ export default function App() {
 
                 // Ensure api auth header is set (LoginScreen should save token)
                 const token = await AsyncStorage.getItem("token");
-                if (token)
+                if (token) {
                   api.defaults.headers.Authorization = `Bearer ${token}`;
+                } else {
+                  delete api.defaults.headers.Authorization;
+                }
 
-                // ✅ Register push token now that we are logged in
+                // ✅ Register device now that we are logged in
                 try {
-                  await registerForPushNotifications();
+                  await registerDeviceOnBackend();
                 } catch (e) {
                   console.warn(
-                    "Push registration failed after login:",
+                    "[push] device register failed after login:",
                     e?.message || e
                   );
                 }
@@ -174,15 +199,18 @@ export default function App() {
                 setIsLoggedIn(true);
 
                 const token = await AsyncStorage.getItem("token");
-                if (token)
+                if (token) {
                   api.defaults.headers.Authorization = `Bearer ${token}`;
+                } else {
+                  delete api.defaults.headers.Authorization;
+                }
 
-                // ✅ Register push token now that we are logged in
+                // ✅ Register device now that we are logged in
                 try {
-                  await registerForPushNotifications();
+                  await registerDeviceOnBackend();
                 } catch (e) {
                   console.warn(
-                    "Push registration failed after signup:",
+                    "[push] device register failed after signup:",
                     e?.message || e
                   );
                 }
@@ -196,7 +224,7 @@ export default function App() {
         {/* Main tabs */}
         <Stack.Screen name="MainTabs" component={AppTabs} />
 
-        {/* ✅ User profile screen with native back button to Dashboard */}
+        {/* User profile */}
         <Stack.Screen
           name="User"
           component={UserScreen}
@@ -212,7 +240,7 @@ export default function App() {
           }}
         />
 
-        {/* ✅ Market / performance popup screen */}
+        {/* Investment performance */}
         <Stack.Screen
           name="InvestmentPerformance"
           component={InvestmentPerformanceScreen}
