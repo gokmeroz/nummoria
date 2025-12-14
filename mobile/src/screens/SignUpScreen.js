@@ -15,19 +15,8 @@ import {
   Linking,
   Modal,
 } from "react-native";
-import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import LoginScreen from "./LoginScreen"; // ✅ so we can flip to login
-import DashboardScreen from "./DashboardScreen"; // ⬅️ NEW
-
-const API_BASE =
-  process.env.EXPO_PUBLIC_API_URL?.replace(/\/+$/, "") ||
-  "http://localhost:4000";
-
-const api = axios.create({
-  baseURL: API_BASE,
-  withCredentials: true,
-});
+import api from "../lib/api";
 
 const BG_DARK = "#020617";
 const CARD_DARK = "#020819";
@@ -35,9 +24,7 @@ const BRAND_GREEN = "#22c55e";
 const TEXT_MUTED = "rgba(148,163,184,1)";
 const TEXT_SOFT = "rgba(148,163,184,0.8)";
 
-export default function SignUpScreen({ navigation }) {
-  //   const [mode, setMode] = useState("signup"); // "signup" | "login"
-
+export default function SignUpScreen({ navigation, onSignedUp }) {
   const [name, setName] = useState("");
   const [signEmail, setSignEmail] = useState("");
   const [signPassword, setSignPassword] = useState("");
@@ -77,19 +64,15 @@ export default function SignUpScreen({ navigation }) {
       }
       if (data?.token) {
         await AsyncStorage.setItem("token", data.token);
+        // Keep axios header consistent for the rest of the app
+        api.defaults.headers.Authorization = `Bearer ${data.token}`;
       }
     } catch (e) {
       console.warn("Failed to store user locally:", e);
     }
   }
 
-  function goToDashboard() {
-    // setMode("dashboard");
-    navigation.replace("MainTabs");
-  }
-
   function goToLogin() {
-    // setMode("login");
     navigation.replace("Login");
   }
 
@@ -101,17 +84,14 @@ export default function SignUpScreen({ navigation }) {
         setSignErr("Please enter your full name.");
         return;
       }
-
       if (!signEmail || !signEmail.trim()) {
         setSignErr("Please enter your email address.");
         return;
       }
-
       if (!signPassword || !signPassword.trim()) {
         setSignErr("Please enter a password.");
         return;
       }
-
       if (signPassword.length < 8) {
         setSignErr("Password must be at least 8 characters long.");
         return;
@@ -133,18 +113,13 @@ export default function SignUpScreen({ navigation }) {
       Alert.alert(
         "Verify your email",
         "A verification code has been sent to your email. Please verify to continue.",
-        [
-          {
-            text: "OK",
-            onPress: () => setShowVerify(true),
-          },
-        ]
+        [{ text: "OK", onPress: () => setShowVerify(true) }]
       );
     } catch (e) {
       setSignLoading(false);
       const msg =
         e?.response?.data?.error ||
-        e.message ||
+        e?.message ||
         "Registration failed. Please try again.";
       setSignErr(msg);
     }
@@ -154,10 +129,16 @@ export default function SignUpScreen({ navigation }) {
     try {
       setSocialErr("");
       setSocialLoading(true);
-      const next = encodeURIComponent("/dashboard");
-      const url = `${API_BASE}/auth/${provider}?next=${next}`;
-      const canOpen = await Linking.canOpenURL(url);
 
+      // NOTE: This still relies on your backend web OAuth flow.
+      // If you want this to work on mobile properly you’ll typically use expo-auth-session.
+      const next = encodeURIComponent("/dashboard");
+      const API_BASE =
+        process.env.EXPO_PUBLIC_API_URL?.replace(/\/+$/, "") ||
+        "http://localhost:4000";
+      const url = `${API_BASE}/auth/${provider}?next=${next}`;
+
+      const canOpen = await Linking.canOpenURL(url);
       if (canOpen) {
         await Linking.openURL(url);
       } else {
@@ -176,7 +157,6 @@ export default function SignUpScreen({ navigation }) {
         setVerifyErr("Email is missing.");
         return;
       }
-
       if (!code || !code.trim()) {
         setVerifyErr("Please enter the verification code.");
         return;
@@ -203,7 +183,19 @@ export default function SignUpScreen({ navigation }) {
 
       setVerifying(false);
       setShowVerify(false);
-      goToDashboard();
+
+      // ✅ CRITICAL: call App.js onSignedUp so Terms gating can happen there
+      if (typeof onSignedUp === "function") {
+        await onSignedUp();
+        return;
+      }
+
+      // Fallback: if App.js isn't gating, go to Terms explicitly
+      const uid = data?.user?.id || (await AsyncStorage.getItem("defaultId"));
+      navigation.replace("Terms", {
+        userId: String(uid || ""),
+        nextRoute: "MainTabs",
+      });
     } catch (e) {
       setVerifying(false);
       setVerifyErr(
@@ -230,14 +222,6 @@ export default function SignUpScreen({ navigation }) {
     }
   }
 
-  //   if (mode === "dashboard") {
-  //     return <DashboardScreen />;
-  //   }
-  //   if (mode === "login") {
-  //     return <LoginScreen />;
-  //   }
-
-  // ───────────────────────── UI ─────────────────────────
   return (
     <View style={styles.root}>
       <KeyboardAvoidingView
@@ -249,7 +233,6 @@ export default function SignUpScreen({ navigation }) {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.authCard}>
-            {/* small brand row */}
             <View style={styles.heroHeaderRow}>
               <View style={styles.logoBadge}>
                 <Image
@@ -462,19 +445,14 @@ export default function SignUpScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  root: {
-    flex: 1,
-    backgroundColor: BG_DARK,
-  },
+  root: { flex: 1, backgroundColor: BG_DARK },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: "flex-start", // card hugs the top like B
+    justifyContent: "flex-start",
     paddingHorizontal: 18,
-    paddingTop: 90, // small top gap
+    paddingTop: 90,
     paddingBottom: 40,
   },
-
-  // small brand row
   heroHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -489,16 +467,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 8,
   },
-  logo: {
-    width: 22,
-    height: 22,
-  },
-  brandName: {
-    fontSize: 15,
-    color: TEXT_SOFT,
-    fontWeight: "600",
-  },
-
+  logo: { width: 22, height: 22 },
+  brandName: { fontSize: 15, color: TEXT_SOFT, fontWeight: "600" },
   authCard: {
     borderRadius: 20,
     paddingHorizontal: 20,
@@ -507,24 +477,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(15,23,42,1)",
   },
-  sectionTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#f9fafb",
-  },
-  sectionSubtitle: {
-    marginTop: 4,
-    fontSize: 13,
-    color: TEXT_SOFT,
-  },
-  field: {
-    marginTop: 14,
-  },
-  label: {
-    fontSize: 13,
-    color: "#e5e7eb",
-    marginBottom: 4,
-  },
+  sectionTitle: { fontSize: 22, fontWeight: "700", color: "#f9fafb" },
+  sectionSubtitle: { marginTop: 4, fontSize: 13, color: TEXT_SOFT },
+  field: { marginTop: 14 },
+  label: { fontSize: 13, color: "#e5e7eb", marginBottom: 4 },
   input: {
     borderRadius: 999,
     borderWidth: 1,
@@ -542,17 +498,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  signupBtn: {
-    backgroundColor: BRAND_GREEN,
-  },
-  signupText: {
-    color: "#022c22",
-    fontWeight: "700",
-    fontSize: 15,
-  },
+  buttonDisabled: { opacity: 0.6 },
+  signupBtn: { backgroundColor: BRAND_GREEN },
+  signupText: { color: "#022c22", fontWeight: "700", fontSize: 15 },
   errorBox: {
     marginTop: 12,
     borderRadius: 12,
@@ -561,26 +509,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(248,113,113,0.3)",
   },
-  errorText: {
-    fontSize: 13,
-    color: "#fecaca",
-  },
+  errorText: { fontSize: 13, color: "#fecaca" },
   dividerRow: {
     flexDirection: "row",
     alignItems: "center",
     marginTop: 22,
     marginBottom: 10,
   },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "rgba(31,41,55,1)",
-  },
-  dividerText: {
-    marginHorizontal: 8,
-    fontSize: 12,
-    color: TEXT_SOFT,
-  },
+  dividerLine: { flex: 1, height: 1, backgroundColor: "rgba(31,41,55,1)" },
+  dividerText: { marginHorizontal: 8, fontSize: 12, color: TEXT_SOFT },
   socialErrBox: {
     marginTop: 4,
     marginBottom: 8,
@@ -590,10 +527,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(248,113,113,0.3)",
   },
-  socialErrText: {
-    color: "#fecaca",
-    fontSize: 13,
-  },
+  socialErrText: { color: "#fecaca", fontSize: 13 },
   socialBtn: {
     marginTop: 10,
     paddingVertical: 11,
@@ -604,21 +538,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  socialText: {
-    fontSize: 14,
-    color: "#e5e7eb",
-    fontWeight: "500",
-  },
+  socialText: { fontSize: 14, color: "#e5e7eb", fontWeight: "500" },
   loginRow: {
     marginTop: 20,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
   },
-  loginHint: {
-    fontSize: 13,
-    color: TEXT_SOFT,
-  },
+  loginHint: { fontSize: 13, color: TEXT_SOFT },
   loginLink: {
     marginLeft: 4,
     fontSize: 13,
@@ -626,7 +553,6 @@ const styles = StyleSheet.create({
     color: BRAND_GREEN,
     textDecorationLine: "underline",
   },
-
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(15,23,42,0.85)",
@@ -648,24 +574,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#f9fafb",
-  },
-  modalClose: {
-    fontSize: 24,
-    color: TEXT_SOFT,
-  },
-  modalText: {
-    marginTop: 6,
-    fontSize: 13,
-    color: TEXT_SOFT,
-  },
-  modalEmail: {
-    color: "#e5e7eb",
-    fontWeight: "600",
-  },
+  modalTitle: { fontSize: 18, fontWeight: "700", color: "#f9fafb" },
+  modalClose: { fontSize: 24, color: TEXT_SOFT },
+  modalText: { marginTop: 6, fontSize: 13, color: TEXT_SOFT },
+  modalEmail: { color: "#e5e7eb", fontWeight: "600" },
   modalErrorBox: {
     marginTop: 10,
     borderRadius: 10,
@@ -674,10 +586,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(248,113,113,0.3)",
   },
-  modalErrorText: {
-    fontSize: 13,
-    color: "#fecaca",
-  },
+  modalErrorText: { fontSize: 13, color: "#fecaca" },
   modalMsgBox: {
     marginTop: 10,
     borderRadius: 10,
@@ -686,10 +595,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(16,185,129,0.4)",
   },
-  modalMsgText: {
-    fontSize: 13,
-    color: BRAND_GREEN,
-  },
+  modalMsgText: { fontSize: 13, color: BRAND_GREEN },
   modalLabel: {
     marginTop: 12,
     fontSize: 13,
@@ -706,30 +612,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#f9fafb",
   },
-  modalHint: {
-    marginTop: 4,
-    fontSize: 11,
-    color: TEXT_SOFT,
-  },
-  modalBtn: {
-    marginTop: 16,
-    backgroundColor: BRAND_GREEN,
-  },
-  modalBtnText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#022c22",
-  },
+  modalHint: { marginTop: 4, fontSize: 11, color: TEXT_SOFT },
+  modalBtn: { marginTop: 16, backgroundColor: BRAND_GREEN },
+  modalBtnText: { fontSize: 15, fontWeight: "700", color: "#022c22" },
   modalFooterRow: {
     marginTop: 10,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  modalFooterText: {
-    fontSize: 13,
-    color: TEXT_SOFT,
-  },
+  modalFooterText: { fontSize: 13, color: TEXT_SOFT },
   modalFooterLink: {
     fontSize: 13,
     color: BRAND_GREEN,

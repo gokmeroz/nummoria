@@ -18,10 +18,9 @@ import SignUpScreen from "./src/screens/SignUpScreen";
 import AppTabs from "./src/navigation/AppTabs";
 import UserScreen from "./src/screens/UserScreen";
 import InvestmentPerformanceScreen from "./src/screens/InvestmentPerformance";
-
+import TermsScreen from "./src/screens/TermsScreen";
 import api from "./src/lib/api";
 
-// ✅ NEW: use the new notification helpers from your correct folder
 import {
   registerForPushTokenAsync,
   attachNotificationListeners,
@@ -29,12 +28,30 @@ import {
 
 const Stack = createNativeStackNavigator();
 
+// Local consent gate
+const CONSENT_KEY = (userId) => `consent:${String(userId)}`;
+
+async function hasAcceptedConsent(userId) {
+  if (!userId) return false;
+  try {
+    const raw = await AsyncStorage.getItem(CONSENT_KEY(userId));
+    if (!raw) return false;
+    const c = JSON.parse(raw);
+    return !!(c?.termsAccepted && c?.cookiesAccepted);
+  } catch {
+    return false;
+  }
+}
+
 export default function App() {
   const navigationRef = useRef(null);
 
   const [loading, setLoading] = useState(true);
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  // ✅ NEW: we compute the *real* initial route including Terms
+  const [initialRoute, setInitialRoute] = useState("Login");
 
   // ✅ Register device on backend (requires being authenticated already)
   async function registerDeviceOnBackend() {
@@ -54,8 +71,6 @@ export default function App() {
   useEffect(() => {
     const detach = attachNotificationListeners({
       onTap: (data) => {
-        // Backend sends: { route: "Transactions", params: { transactionId } }
-        // or sometimes: { route: "Transactions", transactionId }
         const route = data?.route;
         const params =
           data?.params ||
@@ -76,20 +91,29 @@ export default function App() {
     };
   }, []);
 
-  // ✅ Boot: onboarding + restore token + validate session
+  // ✅ Boot: onboarding + restore token + validate session + consent gate
   useEffect(() => {
     async function bootstrap() {
       try {
         const raw = await AsyncStorage.getItem("hasSeenOnboarding");
         const token = await AsyncStorage.getItem("token");
+        const userId = await AsyncStorage.getItem("defaultId");
 
-        setHasSeenOnboarding(raw === "true");
+        const seen = raw === "true";
+        setHasSeenOnboarding(seen);
 
         // Set auth header early
         if (token) {
           api.defaults.headers.Authorization = `Bearer ${token}`;
         } else {
           delete api.defaults.headers.Authorization;
+        }
+
+        // If onboarding not seen, go onboarding immediately (no need to validate session)
+        if (!seen) {
+          setIsLoggedIn(false);
+          setInitialRoute("Onboarding");
+          return;
         }
 
         // Validate session
@@ -103,6 +127,20 @@ export default function App() {
 
         setIsLoggedIn(logged);
 
+        if (!logged) {
+          setInitialRoute("Login");
+          return;
+        }
+
+        // ✅ Consent gate (THIS is what you were missing)
+        const accepted = await hasAcceptedConsent(userId);
+
+        if (!accepted) {
+          setInitialRoute("Terms");
+        } else {
+          setInitialRoute("MainTabs");
+        }
+
         // ✅ Register push token ONLY when authenticated
         if (logged && token) {
           try {
@@ -115,6 +153,7 @@ export default function App() {
         console.warn("Failed to read flags:", e);
         setHasSeenOnboarding(false);
         setIsLoggedIn(false);
+        setInitialRoute("Onboarding");
       } finally {
         setLoading(false);
       }
@@ -132,17 +171,23 @@ export default function App() {
     );
   }
 
-  const getInitialRoute = () => {
-    if (!hasSeenOnboarding) return "Onboarding";
-    if (!isLoggedIn) return "Login";
-    return "MainTabs";
-  };
+  // ✅ Centralized post-auth routing (login + signup use the same gate)
+  async function routeAfterAuth(navigation) {
+    const userId = await AsyncStorage.getItem("defaultId");
+    const accepted = await hasAcceptedConsent(userId);
+
+    if (!accepted) {
+      navigation.replace("Terms");
+      return;
+    }
+    navigation.replace("MainTabs");
+  }
 
   return (
     <NavigationContainer ref={navigationRef}>
       <Stack.Navigator
         screenOptions={{ headerShown: false }}
-        initialRouteName={getInitialRoute()}
+        initialRouteName={initialRoute}
       >
         {/* Onboarding */}
         <Stack.Screen name="Onboarding">
@@ -174,7 +219,7 @@ export default function App() {
                   delete api.defaults.headers.Authorization;
                 }
 
-                // ✅ Register device now that we are logged in
+                // Register device now that we are logged in
                 try {
                   await registerDeviceOnBackend();
                 } catch (e) {
@@ -184,7 +229,8 @@ export default function App() {
                   );
                 }
 
-                props.navigation.replace("MainTabs");
+                // ✅ Enforce Terms before letting them into MainTabs
+                await routeAfterAuth(props.navigation);
               }}
             />
           )}
@@ -205,7 +251,6 @@ export default function App() {
                   delete api.defaults.headers.Authorization;
                 }
 
-                // ✅ Register device now that we are logged in
                 try {
                   await registerDeviceOnBackend();
                 } catch (e) {
@@ -215,11 +260,19 @@ export default function App() {
                   );
                 }
 
-                props.navigation.replace("MainTabs");
+                // ✅ Enforce Terms before letting them into MainTabs
+                await routeAfterAuth(props.navigation);
               }}
             />
           )}
         </Stack.Screen>
+
+        {/* ✅ Terms MUST be inside Navigator */}
+        <Stack.Screen
+          name="Terms"
+          component={TermsScreen}
+          options={{ headerShown: false, gestureEnabled: false }}
+        />
 
         {/* Main tabs */}
         <Stack.Screen name="MainTabs" component={AppTabs} />

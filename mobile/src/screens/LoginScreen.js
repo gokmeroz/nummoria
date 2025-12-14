@@ -24,6 +24,9 @@ const BRAND_GREEN = "#22c55e";
 const TEXT_MUTED = "rgba(148,163,184,1)";
 const TEXT_SOFT = "rgba(148,163,184,0.8)";
 
+// Consent (local gate)
+const CONSENT_KEY = (userId) => `consent:${String(userId)}`;
+
 export default function LoginScreen({ navigation, onLoggedIn }) {
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -56,6 +59,7 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
 
   async function storeUser(data) {
     try {
+      // NOTE: your backend returns data.user.id (as used below)
       if (data?.user?.id) {
         await AsyncStorage.setItem("defaultId", String(data.user.id));
         await AsyncStorage.setItem("userEmail", data.user.email || "");
@@ -70,9 +74,58 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
     }
   }
 
-  // 🔑 Let App.js switch to MainTabs when we're logged in
   function goToDashboard() {
-    onLoggedIn?.();
+    // Your app sometimes uses App.js switching; sometimes Stack replace.
+    // Support both without breaking existing flows.
+    if (typeof onLoggedIn === "function") {
+      onLoggedIn();
+      return;
+    }
+    navigation?.replace?.("MainTabs");
+  }
+
+  async function hasAcceptedConsent(userId) {
+    try {
+      if (!userId) return false;
+      const raw = await AsyncStorage.getItem(CONSENT_KEY(userId));
+      if (!raw) return false;
+      const consent = JSON.parse(raw);
+      return !!(consent?.termsAccepted && consent?.cookiesAccepted);
+    } catch {
+      return false;
+    }
+  }
+
+  async function routeAfterAuth(data) {
+    // 1) Store token/user
+    await storeUser(data);
+
+    // 2) Determine userId (prefer response, fallback to AsyncStorage)
+    const userId =
+      data?.user?.id || (await AsyncStorage.getItem("defaultId")) || null;
+
+    // 3) Enforce consent for first-time users (or anyone missing consent)
+    const ok = await hasAcceptedConsent(userId);
+    if (!ok) {
+      // You must have a "Terms" screen registered in your navigator.
+      // Pass nextRoute so Terms can redirect back to MainTabs after accept.
+      if (navigation?.replace) {
+        navigation.replace("Terms", {
+          userId: String(userId || ""),
+          nextRoute: "MainTabs",
+        });
+        return;
+      }
+
+      Alert.alert(
+        "Terms required",
+        "You must accept Terms & Conditions and Cookies to continue."
+      );
+      return;
+    }
+
+    // 4) Continue to app
+    goToDashboard();
   }
 
   async function onLogin() {
@@ -100,10 +153,11 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
       });
 
       const data = resp?.data || {};
-      await storeUser(data);
 
       setLoginLoading(false);
-      navigation.replace("MainTabs");
+
+      // ✅ NEW: gate by consent (first-time must accept)
+      await routeAfterAuth(data);
     } catch (e) {
       console.log("[Login] error:", e?.message, e?.response?.data);
       setLoginLoading(false);
@@ -136,6 +190,8 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
       setSocialErr("");
       setSocialLoading(true);
       const next = encodeURIComponent("/dashboard");
+      // NOTE: API_BASE is referenced in your original code but not defined here.
+      // Keeping logic unchanged; ensure API_BASE is defined globally or imported.
       const url = `${API_BASE}/auth/${provider}?next=${next}`;
       const canOpen = await Linking.canOpenURL(url);
 
@@ -179,12 +235,13 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
         password: loginPassword,
       });
 
-      await storeUser(data);
       await AsyncStorage.removeItem("pendingVerifyEmail");
 
       setVerifying(false);
       setShowVerify(false);
-      goToDashboard();
+
+      // ✅ NEW: gate by consent after verification + auto-login
+      await routeAfterAuth(data);
     } catch (e) {
       setVerifying(false);
       setVerifyErr(
