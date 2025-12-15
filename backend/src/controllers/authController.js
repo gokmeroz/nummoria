@@ -7,6 +7,7 @@ import nodemailer from "nodemailer";
 import { User } from "../models/user.js";
 import { requireEnv } from "../config/env.js";
 import { setAuthCookie, clearAuthCookie } from "../utils/cookies.js";
+import { createRegToken, readRegToken } from "../utils/registrationToken.js";
 
 /* ─────────────────────────── Config & Flags ─────────────────────────── */
 
@@ -165,53 +166,57 @@ export async function register(req, res) {
   try {
     const { email, password, name, profession, role, tz, baseCurrency } =
       req.body;
+
     if (!email || !password) {
       return res.status(400).json({ error: "Email and password are required" });
     }
 
-    const existing = await User.findOne({ email: email.toLowerCase() });
-    if (existing)
-      return res.status(400).json({ error: "Email already registered" });
+    const normalizedEmail = email.toLowerCase().trim();
 
+    const existing = await User.findOne({ email: normalizedEmail });
+    if (existing) {
+      return res.status(400).json({ error: "Email already registered" });
+    }
+
+    // Prepare signup data but DO NOT create User yet
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await User.create({
-      email: email.toLowerCase(),
+
+    const code = makeVerificationCode();
+    const codeHash = await bcrypt.hash(code, 10);
+    const expiresAt = Date.now() + 15 * 60 * 1000; // 15 min
+
+    const regToken = createRegToken({
+      email: normalizedEmail,
       passwordHash,
       name,
       profession,
       role,
       tz,
       baseCurrency,
-      isEmailVerified: false,
+      codeHash,
+      expiresAt,
+      iat: Date.now(),
     });
 
-    // Create code
-    const code = await setNewEmailCode(user);
-
-    // In dev with fake emails, don't actually send unless forced.
     if (FORCE_EMAIL_SEND) {
       const { subject, text, html } = buildVerifyEmailMessage({
-        email: user.email,
+        email: normalizedEmail,
         code,
       });
-      await sendMail({ to: user.email, subject, text, html });
+      await sendMail({ to: normalizedEmail, subject, text, html });
     } else {
-      console.log("[VERIFY:DEV] Code for %s => %s", user.email, code);
+      console.log("[VERIFY:DEV] Code for %s => %s", normalizedEmail, code);
     }
 
-    return res.status(201).json({
-      message: "Registration successful.",
+    return res.status(200).json({
+      message:
+        "Verification code sent. Please verify to complete registration.",
       requiresEmailVerification: true,
-      maskedEmail: maskEmail(user.email),
+      maskedEmail: maskEmail(normalizedEmail),
+      regToken,
       ...(IS_DEV && DEBUG_VERIFY && !FORCE_EMAIL_SEND
         ? { devVerificationCode: code }
         : {}),
-      user: {
-        id: user._id,
-        email: user.email,
-        name: user.name,
-        isEmailVerified: user.isEmailVerified,
-      },
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -238,7 +243,7 @@ export async function login(req, res) {
     const match = await bcrypt.compare(password, user.passwordHash);
     if (!match) return res.status(401).json({ error: "Invalid credentials" });
 
-    // DEV bypass: let you login with test email without verifying
+    // Block login if email not verified (unless DEV bypass is enabled)
     if (!user.isEmailVerified) {
       if (IS_DEV && SKIP_EMAIL_VERIFICATION) {
         user.isEmailVerified = true;
@@ -264,13 +269,11 @@ export async function login(req, res) {
       { expiresIn: "8h" }
     );
 
-    // ⬇️ Set secure HttpOnly cookie (primary auth mechanism)
     setAuthCookie(res, token);
 
-    // You may still return the token for backward compatibility if frontend expects it
     return res.json({
       ok: true,
-      // token, // optional: keep if your frontend still relies on it
+      token, // ✅ add this for mobile
       user: {
         id: user._id,
         email: user.email,
@@ -290,7 +293,6 @@ export async function login(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
-
 export async function logout(_req, res) {
   clearAuthCookie(res);
   return res.json({ ok: true });
@@ -300,44 +302,57 @@ export async function logout(_req, res) {
 
 export async function verifyEmail(req, res) {
   try {
-    const { email, code } = req.body;
-    if (!email || !code)
-      return res.status(400).json({ error: "email and code are required" });
+    const { regToken, code } = req.body;
 
-    const user = await User.findOne({ email: email.toLowerCase() }).select(
-      "+emailVerificationCodeHash +emailVerificationExpiresAt"
-    );
-    if (!user)
-      return res.status(400).json({ error: "Invalid or expired code" });
-
-    // DEV backdoor: universal code
-    if (IS_DEV && code === DEV_VERIFICATION_CODE) {
-      user.isEmailVerified = true;
-      user.emailVerifiedAt = new Date();
-      user.emailVerificationCodeHash = null;
-      user.emailVerificationExpiresAt = null;
-      await user.save();
-      return res.json({ message: "Email verified successfully (DEV)" });
+    if (!regToken || !code) {
+      return res.status(400).json({ error: "regToken and code are required" });
     }
 
-    if (
-      !user.emailVerificationCodeHash ||
-      !user.emailVerificationExpiresAt ||
-      user.emailVerificationExpiresAt < new Date()
-    ) {
+    const data = readRegToken(regToken);
+    if (!data || !data.email || !data.codeHash || !data.expiresAt) {
       return res.status(400).json({ error: "Invalid or expired code" });
     }
 
-    const ok = await bcrypt.compare(code, user.emailVerificationCodeHash);
-    if (!ok) return res.status(400).json({ error: "Invalid or expired code" });
+    if (Number(data.expiresAt) < Date.now()) {
+      return res.status(400).json({ error: "Invalid or expired code" });
+    }
 
-    user.isEmailVerified = true;
-    user.emailVerifiedAt = new Date();
-    user.emailVerificationCodeHash = null;
-    user.emailVerificationExpiresAt = null;
-    await user.save();
+    // DEV universal code bypass (optional)
+    if (!(IS_DEV && code === DEV_VERIFICATION_CODE)) {
+      const ok = await bcrypt.compare(code, data.codeHash);
+      if (!ok)
+        return res.status(400).json({ error: "Invalid or expired code" });
+    }
 
-    return res.json({ message: "Email verified successfully" });
+    // If already created, treat as idempotent success
+    const existing = await User.findOne({ email: data.email });
+    if (existing) {
+      return res.status(200).json({ message: "Email already verified." });
+    }
+
+    const user = await User.create({
+      email: data.email,
+      passwordHash: data.passwordHash,
+      name: data.name,
+      profession: data.profession,
+      role: data.role,
+      tz: data.tz,
+      baseCurrency: data.baseCurrency,
+      isEmailVerified: true,
+      isActive: true,
+      emailVerifiedAt: new Date(),
+    });
+
+    return res.status(201).json({
+      message: "Email verified. Account created.",
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        isEmailVerified: true,
+        isActive: true,
+      },
+    });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -345,32 +360,45 @@ export async function verifyEmail(req, res) {
 
 export async function resendCode(req, res) {
   try {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ error: "email is required" });
+    const { regToken } = req.body;
+    if (!regToken)
+      return res.status(400).json({ error: "regToken is required" });
 
-    const user = await User.findOne({ email: email.toLowerCase() });
-    if (!user) {
-      // avoid email enumeration
+    const data = readRegToken(regToken);
+    if (!data || !data.email || !data.passwordHash) {
+      // avoid leaking anything
       return res.json({ message: "If the email exists, a new code was sent." });
     }
-    if (user.isEmailVerified) {
-      return res.status(400).json({ error: "Email already verified" });
+
+    const existing = await User.findOne({ email: data.email });
+    if (existing) {
+      return res.json({ message: "If the email exists, a new code was sent." });
     }
 
-    const code = await setNewEmailCode(user);
+    const code = makeVerificationCode();
+    const codeHash = await bcrypt.hash(code, 10);
+    const expiresAt = Date.now() + 15 * 60 * 1000;
+
+    const newRegToken = createRegToken({
+      ...data,
+      codeHash,
+      expiresAt,
+      iat: Date.now(),
+    });
 
     if (FORCE_EMAIL_SEND) {
       const { subject, text, html } = buildVerifyEmailMessage({
-        email: user.email,
+        email: data.email,
         code,
       });
-      await sendMail({ to: user.email, subject, text, html });
+      await sendMail({ to: data.email, subject, text, html });
     } else {
-      console.log("[VERIFY:DEV-RESEND] Code for %s => %s", user.email, code);
+      console.log("[VERIFY:DEV-RESEND] Code for %s => %s", data.email, code);
     }
 
     return res.json({
       message: "A new verification code was sent.",
+      regToken: newRegToken,
       ...(IS_DEV && DEBUG_VERIFY && !FORCE_EMAIL_SEND
         ? { devVerificationCode: code }
         : {}),

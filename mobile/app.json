@@ -15,12 +15,17 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.mobile",
+      "deploymentTarget": "13.0",
       "infoPlist": {
         "NSCameraUsageDescription": "This app needs camera access to scan receipt QR codes and automatically fill expense details.",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
       }
     },
     "android": {
+      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/nummoria_logo.png",
         "backgroundColor": "#ffffff"
@@ -42,7 +47,8 @@
         {
           "cameraPermission": "Allow Nummoria to access your camera to scan receipt QR codes."
         }
-      ]
+      ],
+      "expo-build-properties"
     ],
     "extra": {
       "eas": {

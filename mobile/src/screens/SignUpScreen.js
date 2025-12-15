@@ -24,6 +24,10 @@ const BRAND_GREEN = "#22c55e";
 const TEXT_MUTED = "rgba(148,163,184,1)";
 const TEXT_SOFT = "rgba(148,163,184,0.8)";
 
+// ✅ Verification persistence keys
+const PENDING_VERIFY_EMAIL_KEY = "pendingVerifyEmail";
+const PENDING_REG_TOKEN_KEY = "pendingRegToken";
+
 export default function SignUpScreen({ navigation, onSignedUp }) {
   const [name, setName] = useState("");
   const [signEmail, setSignEmail] = useState("");
@@ -36,6 +40,7 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
 
   const [showVerify, setShowVerify] = useState(false);
   const [verifyEmail, setVerifyEmail] = useState("");
+  const [verifyRegToken, setVerifyRegToken] = useState(""); // ✅ NEW
   const [code, setCode] = useState("");
   const [verifyMsg, setVerifyMsg] = useState("");
   const [verifyErr, setVerifyErr] = useState("");
@@ -64,7 +69,6 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
       }
       if (data?.token) {
         await AsyncStorage.setItem("token", data.token);
-        // Keep axios header consistent for the rest of the app
         api.defaults.headers.Authorization = `Bearer ${data.token}`;
       }
     } catch (e) {
@@ -74,6 +78,26 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
 
   function goToLogin() {
     navigation.replace("Login");
+  }
+
+  async function openVerifyModal(email, regToken) {
+    const cleanEmail = (email || "").trim();
+    setVerifyEmail(cleanEmail);
+    setVerifyErr("");
+    setVerifyMsg("");
+    setCode("");
+
+    if (regToken) {
+      const rt = String(regToken);
+      setVerifyRegToken(rt);
+      await AsyncStorage.setItem(PENDING_REG_TOKEN_KEY, rt);
+    } else {
+      const stored = await AsyncStorage.getItem(PENDING_REG_TOKEN_KEY);
+      setVerifyRegToken(stored || "");
+    }
+
+    await AsyncStorage.setItem(PENDING_VERIFY_EMAIL_KEY, cleanEmail);
+    setShowVerify(true);
   }
 
   async function onSignup() {
@@ -99,21 +123,26 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
 
       setSignLoading(true);
 
-      await api.post("/auth/register", {
+      // ✅ Must capture regToken
+      const resp = await api.post("/auth/register", {
         name: name.trim(),
         email: signEmail.trim(),
         password: signPassword,
       });
 
-      setVerifyEmail(signEmail.trim());
-      setTempPassword(signPassword);
+      const data = resp?.data || {};
+      const regToken = data?.regToken;
 
+      setTempPassword(signPassword);
       setSignLoading(false);
+
+      // Persist email + regToken for verify
+      await openVerifyModal(signEmail.trim(), regToken);
 
       Alert.alert(
         "Verify your email",
         "A verification code has been sent to your email. Please verify to continue.",
-        [{ text: "OK", onPress: () => setShowVerify(true) }]
+        [{ text: "OK" }]
       );
     } catch (e) {
       setSignLoading(false);
@@ -130,12 +159,12 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
       setSocialErr("");
       setSocialLoading(true);
 
-      // NOTE: This still relies on your backend web OAuth flow.
-      // If you want this to work on mobile properly you’ll typically use expo-auth-session.
       const next = encodeURIComponent("/dashboard");
       const API_BASE =
         process.env.EXPO_PUBLIC_API_URL?.replace(/\/+$/, "") ||
+        (api?.defaults?.baseURL || "").replace(/\/+$/, "") ||
         "http://localhost:4000";
+
       const url = `${API_BASE}/auth/${provider}?next=${next}`;
 
       const canOpen = await Linking.canOpenURL(url);
@@ -153,11 +182,14 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
 
   async function onVerifySubmit() {
     try {
-      if (!verifyEmail || !verifyEmail.trim()) {
+      const email = (verifyEmail || "").trim();
+      if (!email) {
         setVerifyErr("Email is missing.");
         return;
       }
-      if (!code || !code.trim()) {
+
+      const codeTrimmed = (code || "").trim();
+      if (!codeTrimmed) {
         setVerifyErr("Please enter the verification code.");
         return;
       }
@@ -166,20 +198,31 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
       setVerifyMsg("");
       setVerifying(true);
 
+      const storedRegToken =
+        verifyRegToken || (await AsyncStorage.getItem(PENDING_REG_TOKEN_KEY));
+
+      if (!storedRegToken) {
+        setVerifying(false);
+        setVerifyErr("Missing verification token. Please tap “Resend code”.");
+        return;
+      }
+
       await api.post("/auth/verify-email", {
-        email: verifyEmail,
-        code: code.trim(),
+        regToken: storedRegToken,
+        code: codeTrimmed,
       });
 
       setVerifyMsg("Email verified. Signing you in...");
 
       const { data } = await api.post("/auth/login", {
-        email: verifyEmail,
+        email,
         password: tempPassword,
       });
 
       await storeUser(data);
-      await AsyncStorage.removeItem("pendingVerifyEmail");
+
+      await AsyncStorage.removeItem(PENDING_VERIFY_EMAIL_KEY);
+      await AsyncStorage.removeItem(PENDING_REG_TOKEN_KEY);
 
       setVerifying(false);
       setShowVerify(false);
@@ -207,13 +250,26 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
 
   async function onResendCode() {
     try {
-      if (!verifyEmail) return;
+      const email =
+        (verifyEmail || "").trim() ||
+        (await AsyncStorage.getItem(PENDING_VERIFY_EMAIL_KEY)) ||
+        "";
+
+      if (!email) return;
 
       setVerifyErr("");
       setVerifyMsg("");
       setResending(true);
 
-      await api.post("/auth/resend-code", { email: verifyEmail });
+      const resp = await api.post("/auth/resend-code", { email });
+      const data = resp?.data || {};
+
+      if (data?.regToken) {
+        const rt = String(data.regToken);
+        setVerifyRegToken(rt);
+        await AsyncStorage.setItem(PENDING_REG_TOKEN_KEY, rt);
+      }
+
       setVerifyMsg("A new verification code has been sent to your email.");
       setResending(false);
     } catch (e) {

@@ -11,7 +11,14 @@ export default function VerifyEmail() {
   ).trim();
   const demoFromQS = usp.get("demo") || "";
 
+  const initialToken = (
+    usp.get("token") ||
+    localStorage.getItem("regToken") ||
+    ""
+  ).trim();
+
   const [email] = useState(initialEmail);
+  const [regToken, setRegToken] = useState(initialToken);
   const [code, setCode] = useState("");
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
@@ -31,22 +38,30 @@ export default function VerifyEmail() {
   }, [email]);
 
   useEffect(() => {
-    if (!email) {
-      setErr("Missing email. Go back to sign up.");
+    if (!email && !regToken) {
+      setErr("Missing email/token. Go back to sign up.");
     }
-  }, [email]);
+  }, [email, regToken]);
 
   async function onVerify(e) {
     e.preventDefault();
-    if (!email) return;
+    if (!email && !regToken) return;
     setErr("");
     setMsg("");
     setLoading(true);
     try {
-      await api.post("/auth/verify-email", { email, code: code.trim() });
+      // ✅ Prefer regToken flow; fallback to legacy email flow
+      const payload = regToken
+        ? { regToken, code: code.trim() }
+        : { email, code: code.trim() };
+
+      await api.post("/auth/verify-email", payload);
+
       setMsg("Email verified! You can now sign in.");
-      // Clear pending state and send user to login
       localStorage.removeItem("pendingVerifyEmail");
+      localStorage.removeItem("regToken");
+      setRegToken("");
+
       setTimeout(() => {
         window.location.href = "/login";
       }, 800);
@@ -61,13 +76,20 @@ export default function VerifyEmail() {
   }
 
   async function onResend() {
-    if (!email) return;
+    if (!email && !regToken) return;
     setErr("");
     setMsg("");
     setResending(true);
     try {
-      const { data } = await api.post("/auth/resend-code", { email });
+      const payload = regToken ? { regToken } : { email };
+      const { data } = await api.post("/auth/resend-code", payload);
       setMsg("A new verification code was sent.");
+
+      if (data?.regToken) {
+        setRegToken(String(data.regToken));
+        localStorage.setItem("regToken", String(data.regToken));
+      }
+
       if (data?.devVerificationCode) {
         setDemoCode(String(data.devVerificationCode));
       }
@@ -86,7 +108,7 @@ export default function VerifyEmail() {
         </h1>
         <p className="mt-2 text-gray-600">
           We sent a 6-digit code to{" "}
-          <span className="font-medium">{emailMasked}</span>.
+          <span className="font-medium">{emailMasked || "your email"}</span>.
         </p>
 
         {demoCode && (
@@ -127,7 +149,7 @@ export default function VerifyEmail() {
 
           <button
             className="w-full bg-[#4f772d] text-white py-2 rounded-full font-semibold shadow-md hover:shadow-lg hover:bg-[#90a955] transition disabled:opacity-60"
-            disabled={loading || !email}
+            disabled={loading || (!email && !regToken)}
           >
             {loading ? "Verifying…" : "Verify"}
           </button>
@@ -138,7 +160,7 @@ export default function VerifyEmail() {
           <button
             onClick={onResend}
             className="text-[#4f772d] underline disabled:opacity-60"
-            disabled={resending || !email}
+            disabled={resending || (!email && !regToken)}
           >
             {resending ? "Resending…" : "Resend code"}
           </button>

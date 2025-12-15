@@ -39,6 +39,9 @@ export default function Login() {
   // =============== email verification modal state ===============
   const [showVerify, setShowVerify] = useState(false);
   const [verifyEmail, setVerifyEmail] = useState(""); // which email to verify
+  const [regToken, setRegToken] = useState(
+    localStorage.getItem("regToken") || ""
+  ); // registration token from backend (new flow)
   const [code, setCode] = useState("");
   const [verifyMsg, setVerifyMsg] = useState("");
   const [verifyErr, setVerifyErr] = useState("");
@@ -127,7 +130,7 @@ export default function Login() {
       const body = e.response?.data || {};
       const errMsg = body.error || "Login failed";
 
-      // ⚠️ Email not verified yet
+      // ⚠️ Email not verified yet (legacy flow)
       if (
         status === 403 &&
         (body.reason === "UNVERIFIED" || body.needsVerification === true)
@@ -165,6 +168,17 @@ export default function Login() {
       const email = (signEmail || "").trim();
       setVerifyEmail(email);
       localStorage.setItem("pendingVerifyEmail", email);
+
+      // ✅ NEW FLOW: regToken comes from backend (account not created yet)
+      if (data?.regToken) {
+        setRegToken(data.regToken);
+        localStorage.setItem("regToken", data.regToken);
+      } else {
+        // If backend didn't return regToken (older backend), clear it
+        setRegToken("");
+        localStorage.removeItem("regToken");
+      }
+
       setShowVerify(true);
     } catch (e) {
       setSignErr(e.response?.data?.error || "Registration failed");
@@ -190,19 +204,21 @@ export default function Login() {
   // =================== VERIFY HANDLERS (modal) ===================
   async function onVerifySubmit(e) {
     e.preventDefault();
-    if (!verifyEmail) return;
+    if (!verifyEmail && !regToken) return;
     setVerifyErr("");
     setVerifyMsg("");
     setVerifying(true);
     try {
-      await api.post(
-        "/auth/verify-email",
-        { email: verifyEmail, code: code.trim() },
-        { withCredentials: true }
-      );
+      // ✅ Prefer regToken flow (no user in DB yet). Fallback to legacy email flow.
+      const payload = regToken
+        ? { regToken, code: code.trim() }
+        : { email: verifyEmail, code: code.trim() };
+
+      await api.post("/auth/verify-email", payload, { withCredentials: true });
+
       setVerifyMsg("Email verified! Signing you in…");
 
-      // Auto-login right after successful verification
+      // New flow: after verify, backend may create account; we can now login.
       const { data } = await api.post(
         "/auth/login",
         { email: verifyEmail, password: signPassword || loginPassword },
@@ -217,6 +233,8 @@ export default function Login() {
       if (data?.token) localStorage.setItem("token", data.token);
 
       localStorage.removeItem("pendingVerifyEmail");
+      localStorage.removeItem("regToken");
+      setRegToken("");
 
       try {
         const meResp = await api.get("/me", { withCredentials: true });
@@ -241,16 +259,24 @@ export default function Login() {
   }
 
   async function onResendCode() {
-    if (!verifyEmail) return;
+    if (!verifyEmail && !regToken) return;
     setVerifyErr("");
     setVerifyMsg("");
     setResending(true);
     try {
-      await api.post(
-        "/auth/resend-code",
-        { email: verifyEmail },
-        { withCredentials: true }
-      );
+      // ✅ Prefer regToken flow. Fallback to legacy email flow.
+      const payload = regToken ? { regToken } : { email: verifyEmail };
+
+      const { data } = await api.post("/auth/resend-code", payload, {
+        withCredentials: true,
+      });
+
+      // If backend rotates/returns a new token, keep it
+      if (data?.regToken) {
+        setRegToken(data.regToken);
+        localStorage.setItem("regToken", data.regToken);
+      }
+
       setVerifyMsg("A new verification code was sent.");
     } catch (e) {
       setVerifyErr(e.response?.data?.error || "Could not resend the code.");
@@ -290,7 +316,7 @@ export default function Login() {
                           type="button"
                           className="underline"
                           onClick={() => onResendCode()}
-                          disabled={!verifyEmail}
+                          disabled={!verifyEmail && !regToken}
                           title="Resend verification code"
                         >
                           Resend code
@@ -563,7 +589,7 @@ export default function Login() {
 
               <button
                 className="w-full bg-[#4f772d] text-white py-2 rounded-full font-semibold shadow-md hover:shadow-lg hover:bg-[#90a955] transition disabled:opacity-60"
-                disabled={verifying || !verifyEmail}
+                disabled={verifying || (!verifyEmail && !regToken)}
               >
                 {verifying ? "Verifying…" : "Verify & Continue"}
               </button>
@@ -574,7 +600,7 @@ export default function Login() {
               <button
                 onClick={onResendCode}
                 className="text-[#4f772d] underline disabled:opacity-60"
-                disabled={resending || !verifyEmail}
+                disabled={resending || (!verifyEmail && !regToken)}
               >
                 {resending ? "Resending…" : "Resend code"}
               </button>

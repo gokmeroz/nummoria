@@ -27,6 +27,10 @@ const TEXT_SOFT = "rgba(148,163,184,0.8)";
 // Consent (local gate)
 const CONSENT_KEY = (userId) => `consent:${String(userId)}`;
 
+// ✅ Verification persistence keys
+const PENDING_VERIFY_EMAIL_KEY = "pendingVerifyEmail";
+const PENDING_REG_TOKEN_KEY = "pendingRegToken";
+
 export default function LoginScreen({ navigation, onLoggedIn }) {
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -39,11 +43,17 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
 
   const [showVerify, setShowVerify] = useState(false);
   const [verifyEmail, setVerifyEmail] = useState("");
+  const [verifyRegToken, setVerifyRegToken] = useState(""); // ✅ NEW
   const [code, setCode] = useState("");
   const [verifyMsg, setVerifyMsg] = useState("");
   const [verifyErr, setVerifyErr] = useState("");
   const [verifying, setVerifying] = useState(false);
   const [resending, setResending] = useState(false);
+
+  // ✅ Define API_BASE (your old code referenced API_BASE but never defined)
+  const API_BASE =
+    (api?.defaults?.baseURL || "").replace(/\/+$/, "") ||
+    "http://localhost:4000";
 
   const maskedEmail = useMemo(() => {
     const email = verifyEmail?.trim();
@@ -59,7 +69,6 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
 
   async function storeUser(data) {
     try {
-      // NOTE: your backend returns data.user.id (as used below)
       if (data?.user?.id) {
         await AsyncStorage.setItem("defaultId", String(data.user.id));
         await AsyncStorage.setItem("userEmail", data.user.email || "");
@@ -75,8 +84,6 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
   }
 
   function goToDashboard() {
-    // Your app sometimes uses App.js switching; sometimes Stack replace.
-    // Support both without breaking existing flows.
     if (typeof onLoggedIn === "function") {
       onLoggedIn();
       return;
@@ -97,18 +104,13 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
   }
 
   async function routeAfterAuth(data) {
-    // 1) Store token/user
     await storeUser(data);
 
-    // 2) Determine userId (prefer response, fallback to AsyncStorage)
     const userId =
       data?.user?.id || (await AsyncStorage.getItem("defaultId")) || null;
 
-    // 3) Enforce consent for first-time users (or anyone missing consent)
     const ok = await hasAcceptedConsent(userId);
     if (!ok) {
-      // You must have a "Terms" screen registered in your navigator.
-      // Pass nextRoute so Terms can redirect back to MainTabs after accept.
       if (navigation?.replace) {
         navigation.replace("Terms", {
           userId: String(userId || ""),
@@ -124,8 +126,27 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
       return;
     }
 
-    // 4) Continue to app
     goToDashboard();
+  }
+
+  async function openVerifyModal(email, regTokenMaybe) {
+    const cleanEmail = (email || "").trim();
+    setVerifyEmail(cleanEmail);
+    setCode("");
+    setVerifyErr("");
+    setVerifyMsg("");
+
+    if (regTokenMaybe) {
+      setVerifyRegToken(String(regTokenMaybe));
+      await AsyncStorage.setItem(PENDING_REG_TOKEN_KEY, String(regTokenMaybe));
+    } else {
+      // try load any existing pending regToken
+      const stored = await AsyncStorage.getItem(PENDING_REG_TOKEN_KEY);
+      setVerifyRegToken(stored || "");
+    }
+
+    await AsyncStorage.setItem(PENDING_VERIFY_EMAIL_KEY, cleanEmail);
+    setShowVerify(true);
   }
 
   async function onLogin() {
@@ -156,7 +177,6 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
 
       setLoginLoading(false);
 
-      // ✅ NEW: gate by consent (first-time must accept)
       await routeAfterAuth(data);
     } catch (e) {
       console.log("[Login] error:", e?.message, e?.response?.data);
@@ -172,16 +192,20 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
         (body.reason === "UNVERIFIED" || body.needsVerification === true)
       ) {
         const email = (loginEmail || "").trim();
-        setVerifyEmail(email);
         setLoginReason("UNVERIFIED");
+
         const message = body.maskedEmail
           ? `Your account is not verified yet. Check your inbox (${body.maskedEmail}) or resend the code.`
           : "Your account is not verified yet. Check your inbox or resend the code.";
         setLoginErr(message);
-        setShowVerify(true);
-      } else {
-        setLoginErr(errMsg);
+
+        // ✅ If backend provides regToken here, store it. Otherwise user can press Resend.
+        await openVerifyModal(email, body?.regToken);
+
+        return;
       }
+
+      setLoginErr(errMsg);
     }
   }
 
@@ -190,8 +214,6 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
       setSocialErr("");
       setSocialLoading(true);
       const next = encodeURIComponent("/dashboard");
-      // NOTE: API_BASE is referenced in your original code but not defined here.
-      // Keeping logic unchanged; ensure API_BASE is defined globally or imported.
       const url = `${API_BASE}/auth/${provider}?next=${next}`;
       const canOpen = await Linking.canOpenURL(url);
 
@@ -209,12 +231,14 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
 
   async function onVerifySubmit() {
     try {
-      if (!verifyEmail || !verifyEmail.trim()) {
+      const email = (verifyEmail || "").trim();
+      if (!email) {
         setVerifyErr("Email is missing.");
         return;
       }
 
-      if (!code || !code.trim()) {
+      const codeTrimmed = (code || "").trim();
+      if (!codeTrimmed) {
         setVerifyErr("Please enter the verification code.");
         return;
       }
@@ -223,24 +247,34 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
       setVerifyMsg("");
       setVerifying(true);
 
+      // ✅ regToken required by backend
+      const storedRegToken =
+        verifyRegToken || (await AsyncStorage.getItem(PENDING_REG_TOKEN_KEY));
+
+      if (!storedRegToken) {
+        setVerifying(false);
+        setVerifyErr("Missing verification token. Please tap “Resend code”.");
+        return;
+      }
+
       await api.post("/auth/verify-email", {
-        email: verifyEmail,
-        code: code.trim(),
+        regToken: storedRegToken,
+        code: codeTrimmed,
       });
 
       setVerifyMsg("Email verified. Signing you in...");
 
       const { data } = await api.post("/auth/login", {
-        email: verifyEmail,
+        email,
         password: loginPassword,
       });
 
-      await AsyncStorage.removeItem("pendingVerifyEmail");
+      await AsyncStorage.removeItem(PENDING_VERIFY_EMAIL_KEY);
+      await AsyncStorage.removeItem(PENDING_REG_TOKEN_KEY);
 
       setVerifying(false);
       setShowVerify(false);
 
-      // ✅ NEW: gate by consent after verification + auto-login
       await routeAfterAuth(data);
     } catch (e) {
       setVerifying(false);
@@ -253,13 +287,27 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
 
   async function onResendCode() {
     try {
-      if (!verifyEmail) return;
+      const email =
+        (verifyEmail || "").trim() ||
+        (await AsyncStorage.getItem(PENDING_VERIFY_EMAIL_KEY)) ||
+        "";
+
+      if (!email) return;
 
       setVerifyErr("");
       setVerifyMsg("");
       setResending(true);
 
-      await api.post("/auth/resend-code", { email: verifyEmail });
+      const resp = await api.post("/auth/resend-code", { email });
+      const data = resp?.data || {};
+
+      // ✅ IMPORTANT: capture regToken if backend returns it
+      if (data?.regToken) {
+        const rt = String(data.regToken);
+        setVerifyRegToken(rt);
+        await AsyncStorage.setItem(PENDING_REG_TOKEN_KEY, rt);
+      }
+
       setVerifyMsg("A new verification code has been sent to your email.");
       setResending(false);
     } catch (e) {
