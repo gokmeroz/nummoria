@@ -220,6 +220,38 @@ export default function UserScreen() {
       setSaving(false);
     }
   }
+  // ───────────────────────────── logout ─────────────────────────────
+  async function logout() {
+    Alert.alert("Log out", "Are you sure you want to log out?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Log out",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            // Clear auth + cached user assets
+            await AsyncStorage.multiRemove([
+              "token",
+              "userAvatarUri",
+              "userName",
+            ]);
+
+            // Clear axios auth header to avoid leaking the old token
+            delete api.defaults.headers.Authorization;
+
+            // Reset navigation to Login
+            navigation.reset({
+              index: 0,
+              routes: [{ name: "Login" }],
+            });
+          } catch (e) {
+            console.warn("Logout failed:", e);
+            Alert.alert("Error", "Could not log out. Please try again.");
+          }
+        },
+      },
+    ]);
+  }
 
   // ───────────────────────────── delete account ─────────────────────────────
   async function deleteMe() {
@@ -465,6 +497,9 @@ export default function UserScreen() {
               </Text>
             </TouchableOpacity>
           </View>
+          <TouchableOpacity onPress={logout} style={styles.logoutOutlineBtn}>
+            <Text style={styles.logoutOutlineText}>Log out</Text>
+          </TouchableOpacity>
         </View>
 
         {/* ACCOUNTS CARD */}
@@ -1084,5 +1119,19 @@ const styles = StyleSheet.create({
     color: "#f9fafb",
     fontSize: 13,
     fontWeight: "600",
+  },
+  logoutOutlineBtn: {
+    marginTop: 10,
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#334155",
+    backgroundColor: "transparent",
+  },
+  logoutOutlineText: {
+    color: TEXT_SOFT,
+    fontWeight: "700",
+    fontSize: 14,
   },
 });
