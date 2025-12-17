@@ -14,10 +14,12 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Image,
 } from "react-native";
 import { Calendar } from "react-native-calendars";
-
+import { useNavigation } from "@react-navigation/native";
 import api from "../lib/api";
+import logo from "../assets/nummoria_logo.png";
 
 const main = "#22c55e";
 const secondary = "#4ade80";
@@ -135,6 +137,7 @@ function Chip({ label, selected, onPress, small }) {
 /* =============================== Screen =============================== */
 
 export default function ReportsScreen() {
+  const navigation = useNavigation();
   // data
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -675,6 +678,14 @@ export default function ReportsScreen() {
             <Text style={styles.headerEyebrow}>Reports</Text>
             <Text style={styles.headerTitle}>Money Flow</Text>
           </View>
+          {/* ✅ NEW: Clickable Nummoria logo → Dashboard */}
+          <TouchableOpacity
+            onPress={() => navigation.navigate("Dashboard")} // ✅ NEW: change route name if needed
+            activeOpacity={0.85}
+            style={styles.headerLogoBtn}
+          >
+            <Image source={logo} style={styles.headerLogoImg} />
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.headerIconBtn}
             onPress={loadAll}
@@ -1732,5 +1743,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#022c22",
     fontWeight: "700",
+  },
+  // ✅ NEW: Header logo button (tap to go Dashboard)
+  headerLogoBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+    backgroundColor: "#020617",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  headerLogoImg: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
   },
 });

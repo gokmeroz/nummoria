@@ -5,35 +5,36 @@ import Constants from "expo-constants";
 
 const DEV_PORT = 4000;
 
-// 🔴 CHANGE THIS IF YOUR IP CHANGES
-const LAN_IP = "http://192.168.1.26:4000";
-
-// Optional override via env
 const ENV_BASE = (process.env.EXPO_PUBLIC_API_URL || "")
   .trim()
   .replace(/\/+$/, "");
 
-function isExpoGoOnRealDevice() {
-  // Expo Go + real phone => hostUri exists and is NOT localhost
+function getHostFromExpo() {
+  // Typical values:
+  // - "192.168.1.5:8081"
+  // - "localhost:8081"
   const hostUri = Constants.expoConfig?.hostUri;
-  return !!hostUri && !hostUri.includes("localhost");
+  if (!hostUri) return null;
+
+  const host = hostUri.split(":")[0]; // take "192.168.1.5"
+  return host || null;
 }
 
 function getDevBaseURL() {
   if (ENV_BASE) return ENV_BASE;
 
-  // Android emulator
-  if (Platform.OS === "android") {
-    return "http://10.0.2.2:4000";
+  // Android emulator -> host machine
+  if (Platform.OS === "android") return `http://10.0.2.2:${DEV_PORT}`;
+
+  // iOS simulator can hit localhost on your Mac
+  // But if you run on a real device, localhost would be the phone (wrong),
+  // so use the Expo host IP when it's not localhost.
+  const host = getHostFromExpo();
+  if (host && host !== "localhost" && host !== "127.0.0.1") {
+    return `http://${host}:${DEV_PORT}`;
   }
 
-  // iOS real device (Expo Go)
-  if (isExpoGoOnRealDevice()) {
-    return LAN_IP;
-  }
-
-  // iOS simulator
-  return "http://localhost:4000";
+  return `http://localhost:${DEV_PORT}`;
 }
 
 const api = axios.create({

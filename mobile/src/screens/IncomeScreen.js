@@ -16,7 +16,9 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Image, // ✅ NEW: for clickable header logo → Dashboard
 } from "react-native";
+import { useNavigation } from "@react-navigation/native";
 
 // ✅ mobile axios instance (points to same backend as web)
 import api from "../lib/api";
@@ -151,6 +153,8 @@ function Chip({ label, selected, onPress, small }) {
 /* =============================== Screen =============================== */
 
 export default function IncomeScreen({ route }) {
+  const navigation = useNavigation(); // ✅ FIX
+
   // optional: coming from Home, e.g. "show this account"
   const accountId = route?.params?.accountId;
 
@@ -983,6 +987,14 @@ export default function IncomeScreen({ route }) {
             <Text style={styles.headerTitle}>Income</Text>
           </View>
           <View style={styles.headerTopRight}>
+            {/* ✅ NEW: Clickable Nummoria logo → Dashboard */}
+            <TouchableOpacity
+              onPress={() => navigation.navigate("Dashboard")} // ✅ NEW: change route name if needed
+              activeOpacity={0.85}
+              style={styles.headerLogoBtn}
+            >
+              <Image source={logo} style={styles.headerLogoImg} />
+            </TouchableOpacity>
             <TouchableOpacity
               style={styles.headerUpcomingBtn}
               onPress={() => setShowUpcoming((v) => !v)}
@@ -2097,5 +2109,23 @@ const styles = StyleSheet.create({
     fontSize: 30,
     lineHeight: 30,
     color: "white",
+  },
+  // ✅ NEW: Header logo button (tap to go Dashboard)
+  headerLogoBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+    backgroundColor: "#020617",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  headerLogoImg: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
   },
 });

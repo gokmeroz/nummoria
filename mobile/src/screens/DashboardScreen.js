@@ -1,5 +1,5 @@
 // mobile/src/screens/DashboardScreen.js
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -16,6 +16,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 
 import api from "../lib/api";
+
+// ✅ NEW: Radial menu FAB
+import RadialMenuFab from "../components/RadialMenuFab";
 
 const { width } = Dimensions.get("window");
 
@@ -108,23 +111,23 @@ function hrefToRouteName(href) {
   switch (href) {
     case "/ai/financial-advice":
     case "/ai/financial-helper":
-      return "Financial Helper"; // Tab name
+      return "Financial Helper";
 
     case "/reports":
     case "Reports":
-      return "Reports"; // Tab name
+      return "Reports";
 
     case "/expenses":
-      return "Expenses"; // Tab name
+      return "Expenses";
 
     case "/income":
-      return "Income"; // (if you ever use this)
+      return "Income";
 
     case "/investments":
-      return "Investments"; // Tab name
+      return "Investments";
 
     case "/investments/performance":
-      return "InvestmentPerformance"; // Stack screen in App.js
+      return "InvestmentPerformance";
 
     default:
       return null;
@@ -142,6 +145,72 @@ export default function DashboardScreen() {
     investments: 0,
   });
   const [loading, setLoading] = useState(true);
+
+  // ==========================================================
+  // OLD VERSION: APPTABS VISIBLE ON DASHBOARD
+  // (Leave tab bar as-is; navigation handled by Tab Navigator)
+  // ==========================================================
+  /*
+  useLayoutEffect(() => {
+    const parent = navigation.getParent?.();
+    if (!parent) return;
+
+    parent.setOptions({
+      tabBarStyle: { display: "none" },
+    });
+
+    return () => {
+      parent.setOptions({
+        tabBarStyle: undefined,
+      });
+    };
+  }, [navigation]);
+  */
+
+  // ==========================================================
+  // NEW VERSION: NO APPTABS + RADIAL MENU FAB (BOTTOM-RIGHT)
+  // ==========================================================
+
+  const radialItems = useMemo(
+    () => [
+      {
+        key: "dashboard",
+        label: "Dashboard",
+        onPress: () => navigation.navigate("Dashboard"),
+      },
+      {
+        key: "aiMentor",
+        label: "AI Mentor",
+        onPress: () => navigation.navigate("Financial Helper"),
+      },
+      {
+        key: "expenses",
+        label: "Expenses",
+        onPress: () => navigation.navigate("Expenses"),
+      },
+      {
+        key: "income",
+        label: "Income",
+        onPress: () => navigation.navigate("Income"),
+      },
+      {
+        key: "investments",
+        label: "Investments",
+        onPress: () => navigation.navigate("Investments"),
+      },
+      {
+        key: "reports",
+        label: "Reports",
+        onPress: () => navigation.navigate("Reports"),
+      },
+      {
+        key: "profile",
+        label: "Profile",
+        onPress: () => navigation.navigate("User"),
+      },
+    ],
+    [navigation]
+  );
 
   useEffect(() => {
     async function init() {
@@ -213,22 +282,14 @@ export default function DashboardScreen() {
           else if (t.type === "investment") invMinor += t.amountMinor || 0;
         }
 
-        const monthlyExpense = minorToMajorNumber(expMinor, baseCurrency);
-        const monthlyIncome = minorToMajorNumber(incMinor, baseCurrency);
-        const monthlyInvestments = minorToMajorNumber(invMinor, baseCurrency);
-
         setSummary({
-          expenses: monthlyExpense,
-          income: monthlyIncome,
-          investments: monthlyInvestments,
+          expenses: minorToMajorNumber(expMinor, baseCurrency),
+          income: minorToMajorNumber(incMinor, baseCurrency),
+          investments: minorToMajorNumber(invMinor, baseCurrency),
         });
       } catch (e) {
         console.warn("Dashboard init failed:", e);
-        setSummary({
-          expenses: 0,
-          income: 0,
-          investments: 0,
-        });
+        setSummary({ expenses: 0, income: 0, investments: 0 });
       } finally {
         setLoading(false);
       }
@@ -256,6 +317,7 @@ export default function DashboardScreen() {
   return (
     <View style={styles.root}>
       <StatusBar barStyle="light-content" />
+
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -438,6 +500,9 @@ export default function DashboardScreen() {
 
         <View style={styles.footerSpace} />
       </ScrollView>
+
+      {/* ✅ NEW VERSION: Bottom-right radial navigation menu */}
+      <RadialMenuFab items={radialItems} placement="bottom-right" />
     </View>
   );
 }

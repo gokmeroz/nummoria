@@ -15,7 +15,8 @@ import * as Device from "expo-device";
 import OnboardingScreen from "./src/screens/OnboardingScreen";
 import LoginScreen from "./src/screens/LoginScreen";
 import SignUpScreen from "./src/screens/SignUpScreen";
-import AppTabs from "./src/navigation/AppTabs";
+// import AppTabs from "./src/navigation/AppTabs";
+import MainStack from "./src/navigation/MainStack";
 import UserScreen from "./src/screens/UserScreen";
 import InvestmentPerformanceScreen from "./src/screens/InvestmentPerformance";
 import TermsScreen from "./src/screens/TermsScreen";
@@ -138,7 +139,7 @@ export default function App() {
         if (!accepted) {
           setInitialRoute("Terms");
         } else {
-          setInitialRoute("MainTabs");
+          setInitialRoute("Main");
         }
 
         // ✅ Register push token ONLY when authenticated
@@ -180,7 +181,7 @@ export default function App() {
       navigation.replace("Terms");
       return;
     }
-    navigation.replace("MainTabs");
+    navigation.replace("Main");
   }
 
   return (
@@ -275,8 +276,8 @@ export default function App() {
         />
 
         {/* Main tabs */}
-        <Stack.Screen name="MainTabs" component={AppTabs} />
-
+        {/* <Stack.Screen name="MainTabs" component={AppTabs} /> */}
+        <Stack.Screen name="Main" component={MainStack} />
         {/* User profile */}
         <Stack.Screen
           name="User"
@@ -298,7 +299,7 @@ export default function App() {
           name="InvestmentPerformance"
           component={InvestmentPerformanceScreen}
           options={{
-            headerShown: true,
+            headerShown: false,
             title: "Market & Performance",
             headerBackTitleVisible: false,
             presentation: "card",

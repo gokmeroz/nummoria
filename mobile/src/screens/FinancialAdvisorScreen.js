@@ -21,11 +21,13 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Image,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as DocumentPicker from "expo-document-picker";
-
+import { useNavigation } from "@react-navigation/native";
 import api from "../lib/api";
+import logo from "../assets/nummoria_logo.png";
 
 const BG_DARK = "#020617";
 const CARD_DARK = "#020819";
@@ -44,6 +46,7 @@ function isEligible(plan) {
 }
 
 export default function FinancialAdvisorScreen() {
+  const navigation = useNavigation();
   // ----------------------------- STATE -----------------------------
   const [fileId, setFileId] = useState(null);
   const [tone, setTone] = useState(null); // load from AsyncStorage
@@ -295,9 +298,14 @@ export default function FinancialAdvisorScreen() {
         {/* Header */}
         <View style={styles.headerCard}>
           <View style={styles.headerLeft}>
-            <View style={styles.headerIcon}>
-              <Text style={styles.headerIconText}>₮</Text>
-            </View>
+            {/* ✅ NEW: Clickable Nummoria logo → Dashboard */}
+            <TouchableOpacity
+              onPress={() => navigation.navigate("Dashboard")} // ✅ NEW: change route name if needed
+              activeOpacity={0.85}
+              style={styles.headerLogoBtn}
+            >
+              <Image source={logo} style={styles.headerLogoImg} />
+            </TouchableOpacity>
             <View>
               <Text style={styles.headerTitle}>AI Financial Advisor</Text>
               <Text style={styles.headerSubtitle}>
@@ -307,7 +315,7 @@ export default function FinancialAdvisorScreen() {
           </View>
 
           {/* Tone chips (top-right) */}
-          <View style={styles.headerToneRow}>
+          {/* <View style={styles.headerToneRow}>
             <Text style={styles.headerToneLabel}>Tone:</Text>
             <ToneChip
               label="Formal"
@@ -319,7 +327,7 @@ export default function FinancialAdvisorScreen() {
               selected={tone === "buddy"}
               onPress={() => setTone("buddy")}
             />
-          </View>
+          </View> */}
         </View>
 
         {/* Banner */}
@@ -679,7 +687,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   headerToneLabel: {
-    fontSize: 11,
+    fontSize: 8,
     color: TEXT_MUTED,
   },
 
@@ -1058,5 +1066,23 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 11,
     color: TEXT_MUTED,
+  },
+  // ✅ NEW: Header logo button (tap to go Dashboard)
+  headerLogoBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+    backgroundColor: "#020617",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  headerLogoImg: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
   },
 });

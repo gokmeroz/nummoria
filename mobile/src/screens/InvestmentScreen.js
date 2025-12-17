@@ -19,6 +19,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Image, // ✅ NEW: for clickable header logo → Dashboard
 } from "react-native";
 import api from "../lib/api";
 import logo from "../assets/nummoria_logo.png";
@@ -797,7 +798,7 @@ export default function InvestmentScreen({ navigation }) {
       <ScrollView contentContainerStyle={styles.scroll}>
         {/* HEADER */}
         <View style={styles.header}>
-          <View>
+          <View style={{ flex: 1, paddingRight: 10 }}>
             <Text style={styles.headerTitle}>Investments</Text>
             <Text style={styles.headerSubtitle}>
               Track your buys and long-term moves.
@@ -805,6 +806,15 @@ export default function InvestmentScreen({ navigation }) {
           </View>
 
           <View style={{ flexDirection: "row", alignItems: "center" }}>
+            {/* ✅ NEW: Clickable Nummoria logo → Dashboard */}
+            <TouchableOpacity
+              onPress={() => navigation.navigate("Dashboard")} // ✅ NEW: change route name if needed
+              activeOpacity={0.85}
+              style={styles.headerLogoBtn}
+            >
+              <Image source={logo} style={styles.headerLogoImg} />
+            </TouchableOpacity>
+
             <TouchableOpacity
               onPress={() => navigation.navigate("InvestmentPerformance")}
               style={[styles.headerRefreshBtn, { marginRight: 8 }]}
@@ -1004,6 +1014,7 @@ export default function InvestmentScreen({ navigation }) {
       />
 
       <Toasts toasts={toasts} onClose={remove} />
+
       <ConfirmDialog />
     </SafeAreaView>
   );
@@ -1026,7 +1037,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "700",
     color: "white",
   },
@@ -1552,5 +1563,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: TEXT_MUTED,
     textAlign: "center",
+  },
+  // ✅ NEW: Header logo button (tap to go Dashboard)
+  headerLogoBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+    backgroundColor: "#020617",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  headerLogoImg: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
   },
 });

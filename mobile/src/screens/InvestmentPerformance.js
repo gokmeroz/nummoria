@@ -1,6 +1,7 @@
 /* eslint-disable no-unused-vars */
 /* eslint-disable no-empty */
 // mobile/src/screens/InvestmentPerformance.js
+
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -11,9 +12,12 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Image,
 } from "react-native";
-import api from "../lib/api";
 import { useNavigation } from "@react-navigation/native";
+
+import api from "../lib/api";
+import logo from "../assets/nummoria_logo.png";
 
 const main = "#4f772d";
 const secondary = "#90a955";
@@ -25,6 +29,7 @@ const TEXT_SOFT = "#e5e7eb";
 
 const DATE_LANG = "en-US";
 
+/* ------------------------------ helpers ------------------------------ */
 function decimalsForCurrency(code) {
   const zero = new Set(["JPY", "KRW", "CLP", "VND"]);
   const three = new Set(["BHD", "IQD", "JOD", "KWD", "OMR", "TND"]);
@@ -32,6 +37,7 @@ function decimalsForCurrency(code) {
   if (three.has(code)) return 3;
   return 2;
 }
+
 function fmtMoneyMinor(minor, cur = "USD") {
   return new Intl.NumberFormat(DATE_LANG, {
     style: "currency",
@@ -40,10 +46,12 @@ function fmtMoneyMinor(minor, cur = "USD") {
     Number(minor || 0) / Math.pow(10, decimalsForCurrency(cur || "USD")) || 0
   );
 }
+
 function fmtPct(val) {
   if (val == null || Number.isNaN(val)) return "-";
   return `${(val * 100).toFixed(2)}%`;
 }
+
 function fmtDateTime(dateLike) {
   if (!dateLike) return "-";
   const d = new Date(dateLike);
@@ -58,30 +66,40 @@ function fmtDateTime(dateLike) {
   })}`;
 }
 
+/* ------------------------------ toast ------------------------------ */
 function useToasts() {
   const [toast, setToast] = useState(null);
+
   const show = useCallback((t) => {
     const obj = { type: t.type || "info", msg: t.msg || String(t) };
     setToast(obj);
     setTimeout(() => setToast(null), 3000);
   }, []);
+
   return { toast, show };
 }
 
 function Toast({ toast }) {
   if (!toast) return null;
+
   const border =
     toast.type === "error"
       ? "#fecaca"
       : toast.type === "success"
       ? "#6ee7b7"
+      : toast.type === "warning"
+      ? "#fde68a"
       : "#4b5563";
+
   const bg =
     toast.type === "error"
       ? "#450a0a"
       : toast.type === "success"
       ? "#022c22"
+      : toast.type === "warning"
+      ? "#3a2a00"
       : "#020617";
+
   return (
     <View style={[styles.toast, { borderColor: border, backgroundColor: bg }]}>
       <Text style={styles.toastType}>{toast.type}</Text>
@@ -90,15 +108,19 @@ function Toast({ toast }) {
   );
 }
 
+/* ------------------------------ rows ------------------------------ */
 function HoldingRow({ h }) {
   const symbol = h.symbol || h.assetSymbol || "—";
   const side = h.side || "long";
+
   const cost = fmtMoneyMinor(h.costMinor, h.currency);
   const value = fmtMoneyMinor(h.valueMinor, h.currency);
   const pl = fmtMoneyMinor(h.plMinor, h.currency);
   const plPct = fmtPct(h.plPct);
+
   const daily = h.dailyChangeMinor;
   const dailyPct = fmtPct(h.dailyChangePct);
+
   const isUp = (h.plMinor || 0) >= 0;
 
   return (
@@ -118,6 +140,7 @@ function HoldingRow({ h }) {
             <Text style={styles.rowSideText}>{side}</Text>
           </View>
         </View>
+
         <Text style={styles.rowCurrency}>
           {h.currency} • {h.units != null ? `${h.units} units` : "size n/a"}
         </Text>
@@ -136,6 +159,7 @@ function HoldingRow({ h }) {
         <Text style={[styles.rowPL, isUp ? styles.rowPLPos : styles.rowPLNeg]}>
           {pl} ({plPct})
         </Text>
+
         {daily != null && (
           <Text
             style={[
@@ -153,9 +177,9 @@ function HoldingRow({ h }) {
   );
 }
 
+/* =============================== screen =============================== */
 export default function InvestmentPerformanceScreen() {
   const navigation = useNavigation();
-
   const { toast, show } = useToasts();
 
   const [loading, setLoading] = useState(true);
@@ -203,16 +227,13 @@ export default function InvestmentPerformanceScreen() {
     for (const h of holdings) {
       const cur = h.currency || "USD";
       if (!m[cur]) {
-        m[cur] = {
-          costMinor: 0,
-          valueMinor: 0,
-          plMinor: 0,
-        };
+        m[cur] = { costMinor: 0, valueMinor: 0, plMinor: 0 };
       }
       m[cur].costMinor += Number(h.costMinor || 0);
       m[cur].valueMinor += Number(h.valueMinor || 0);
       m[cur].plMinor += Number(h.plMinor || 0);
     }
+
     return Object.entries(m).map(([cur, v]) => ({
       cur,
       costMinor: v.costMinor,
@@ -224,6 +245,7 @@ export default function InvestmentPerformanceScreen() {
 
   const holdingsFiltered = useMemo(() => {
     const needle = search.trim().toLowerCase();
+
     const filtered = holdings.filter((h) => {
       if (sideFilter !== "ALL" && (h.side || "long") !== sideFilter)
         return false;
@@ -241,8 +263,7 @@ export default function InvestmentPerformanceScreen() {
       return true;
     });
 
-    // sort by P/L desc
-    filtered.sort((a, b) => (b.plMinor || 0) - (a.plMinor || 0));
+    filtered.sort((a, b) => (b.plMinor || 0) - (a.plMinor || 0)); // P/L desc
     return filtered;
   }, [holdings, search, sideFilter, curFilter]);
 
@@ -252,6 +273,7 @@ export default function InvestmentPerformanceScreen() {
       show({ type: "warning", msg: "Enter a symbol to lookup." });
       return;
     }
+
     try {
       setQuoteLoading(true);
       setQuoteData(null);
@@ -267,6 +289,51 @@ export default function InvestmentPerformanceScreen() {
     }
   };
 
+  /**
+   * ✅ Non-error navigation:
+   * - We do NOT assume route names like "Dashboard" or "MainTabs".
+   * - We jump to the first route of the top-most parent (usually your tabs/home area).
+   * - If anything is missing, we safely fallback to goBack() (never throws).
+   */
+  // add this handler inside InvestmentPerformanceScreen()
+
+  const handleLogoPress = useCallback(() => {
+    // try both common route names (keep both to avoid future renames)
+    const DASH_NAMES = ["Dashboard", "DashboardScreen"];
+
+    try {
+      // climb up through parents and find a navigator that knows Dashboard
+      let nav = navigation;
+
+      while (nav) {
+        const parent = nav.getParent?.();
+        const state = parent?.getState?.();
+
+        if (state?.routeNames?.length) {
+          const match = DASH_NAMES.find((n) => state.routeNames.includes(n));
+          if (match && parent?.navigate) {
+            parent.navigate(match);
+            return;
+          }
+        }
+
+        nav = parent;
+      }
+
+      // last try: current navigator
+      const selfState = navigation.getState?.();
+      const selfMatch = DASH_NAMES.find((n) =>
+        selfState?.routeNames?.includes(n)
+      );
+      if (selfMatch) {
+        navigation.navigate(selfMatch);
+        return;
+      }
+    } catch (e) {
+      // swallow — we never want redbox for a logo press
+    }
+  }, [navigation]);
+
   if (loading) {
     return (
       <SafeAreaView style={[styles.screen, { justifyContent: "center" }]}>
@@ -278,19 +345,48 @@ export default function InvestmentPerformanceScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <TouchableOpacity
-        onPress={() => navigation.goBack()}
-        style={{
-          paddingVertical: 8,
-          paddingHorizontal: 4,
-          marginBottom: 12,
-          flexDirection: "row",
-          alignItems: "center",
-        }}
-      >
-        <Text style={{ fontSize: 18, color: "white", marginRight: 6 }}>←</Text>
-        <Text style={{ fontSize: 14, color: "white" }}>Back</Text>
-      </TouchableOpacity>
+      {/* ✅ Top bar: Logo (safe nav) + Back */}
+      <View style={styles.topBar}>
+        <TouchableOpacity
+          onPress={() => {
+            // Try current navigator first
+            const state = navigation.getState?.();
+            const hasDashboardHere = state?.routeNames?.includes("Dashboard");
+
+            if (hasDashboardHere) {
+              navigation.navigate("Dashboard");
+              return;
+            }
+
+            // Then try parents (most common fix)
+            let parent = navigation.getParent?.();
+            while (parent) {
+              const ps = parent.getState?.();
+              if (ps?.routeNames?.includes("Dashboard")) {
+                parent.navigate("Dashboard");
+                return;
+              }
+              parent = parent.getParent?.();
+            }
+
+            // Safe fallback (never throws)
+            navigation.goBack();
+          }}
+          activeOpacity={0.85}
+          style={styles.headerLogoBtn}
+        >
+          <Image source={logo} style={styles.headerLogoImg} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.backArrow}>←</Text>
+          <Text style={styles.backText}>Back</Text>
+        </TouchableOpacity>
+      </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
@@ -300,6 +396,7 @@ export default function InvestmentPerformanceScreen() {
               See P/L per symbol and by currency.
             </Text>
           </View>
+
           <TouchableOpacity onPress={fetchPerf} style={styles.headerButton}>
             <Text style={styles.headerButtonText}>Refresh</Text>
           </TouchableOpacity>
@@ -318,14 +415,17 @@ export default function InvestmentPerformanceScreen() {
             return (
               <View key={t.cur} style={styles.totalCard}>
                 <Text style={styles.totalLabel}>{t.cur}</Text>
+
                 <Text style={styles.totalMiniLabel}>Value</Text>
                 <Text style={styles.totalValue}>
                   {fmtMoneyMinor(t.valueMinor, t.cur)}
                 </Text>
+
                 <Text style={styles.totalMiniLabel}>Invested</Text>
                 <Text style={styles.totalInvested}>
                   {fmtMoneyMinor(t.costMinor, t.cur)}
                 </Text>
+
                 <Text
                   style={[
                     styles.totalPL,
@@ -339,9 +439,10 @@ export default function InvestmentPerformanceScreen() {
           })}
         </View>
 
-        {/* Filters + search */}
+        {/* Filters */}
         <View style={styles.filterCard}>
           <Text style={styles.filterTitle}>Filters</Text>
+
           <Text style={styles.filterLabel}>Search symbol / tags</Text>
           <TextInput
             value={search}
@@ -410,6 +511,7 @@ export default function InvestmentPerformanceScreen() {
           <Text style={styles.sectionSubtitle}>
             Check a symbol&apos;s latest market price.
           </Text>
+
           <View style={styles.quoteRow}>
             <TextInput
               value={quoteSymbol}
@@ -419,6 +521,7 @@ export default function InvestmentPerformanceScreen() {
               autoCapitalize="characters"
               style={[styles.searchInput, { flex: 1 }]}
             />
+
             <TouchableOpacity
               onPress={handleQuoteLookup}
               disabled={quoteLoading}
@@ -431,19 +534,22 @@ export default function InvestmentPerformanceScreen() {
               )}
             </TouchableOpacity>
           </View>
+
           {quoteData && (
             <View style={styles.quoteResult}>
               <Text style={styles.quoteSymbol}>
                 {quoteData.symbol || quoteSymbol.toUpperCase()}
               </Text>
+
               <Text style={styles.quotePrice}>
-                {quoteData.price != null
+                {quoteData.priceMinor != null
                   ? fmtMoneyMinor(
-                      quoteData.priceMinor ?? quoteData.priceMinor,
+                      quoteData.priceMinor,
                       quoteData.currency || "USD"
                     )
                   : "—"}
               </Text>
+
               {quoteData.changeMinor != null && (
                 <Text
                   style={[
@@ -460,6 +566,7 @@ export default function InvestmentPerformanceScreen() {
                   ({fmtPct(quoteData.changePct)})
                 </Text>
               )}
+
               {quoteData.lastUpdated && (
                 <Text style={styles.quoteUpdated}>
                   Updated {fmtDateTime(quoteData.lastUpdated)}
@@ -486,7 +593,12 @@ export default function InvestmentPerformanceScreen() {
             </View>
           ) : (
             holdingsFiltered.map((h) => (
-              <HoldingRow key={h.symbol + h.currency + (h.side || "")} h={h} />
+              <HoldingRow
+                key={`${h.symbol || h.assetSymbol}-${h.currency}-${
+                  h.side || "long"
+                }`}
+                h={h}
+              />
             ))
           )}
         </View>
@@ -497,6 +609,7 @@ export default function InvestmentPerformanceScreen() {
   );
 }
 
+/* =============================== styles =============================== */
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -506,6 +619,50 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 80,
   },
+
+  // ✅ Top bar (logo + back)
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 6,
+  },
+  backBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+  },
+  backArrow: {
+    fontSize: 18,
+    color: "white",
+    marginRight: 6,
+  },
+  backText: {
+    fontSize: 14,
+    color: "white",
+  },
+
+  // ✅ Clickable logo → safe navigation
+  headerLogoBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+    backgroundColor: "#020617",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerLogoImg: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -535,6 +692,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "500",
   },
+
   asOf: {
     fontSize: 11,
     color: TEXT_MUTED,
@@ -830,19 +988,5 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     color: TEXT_SOFT,
-  },
-  backButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  backArrow: {
-    fontSize: 20,
-    color: "white",
-    marginRight: 6,
-  },
-  backText: {
-    fontSize: 14,
-    color: "white",
   },
 });

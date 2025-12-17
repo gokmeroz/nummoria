@@ -23,9 +23,10 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Image,
 } from "react-native";
 import TextRecognition from "@react-native-ml-kit/text-recognition"; // after install
-
+import { useNavigation } from "@react-navigation/native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 
 // ✅ mobile axios instance (points to same backend as web)
@@ -252,6 +253,8 @@ function Chip({ label, selected, onPress, small }) {
 /* =============================== Screen =============================== */
 
 export default function ExpensesScreen({ route }) {
+  const navigation = useNavigation(); // ✅ FIX
+
   const accountId = route?.params?.accountId;
 
   // --- data ---
@@ -1297,6 +1300,14 @@ export default function ExpensesScreen({ route }) {
             <Text style={styles.headerEyebrow}>Spending overview</Text>
             <Text style={styles.headerTitle}>Expenses</Text>
           </View>
+          <TouchableOpacity
+            onPress={() => navigation.navigate("Dashboard")}
+            activeOpacity={0.85}
+            style={styles.headerLogoBtn}
+          >
+            <Image source={logo} style={styles.headerLogoImg} />
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={styles.headerUpcomingBtn}
             onPress={() => setShowUpcoming((v) => !v)}
@@ -2694,5 +2705,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "white",
     fontWeight: "500",
+  },
+  // ✅ NEW: Header logo button (tap to go Dashboard)
+  headerLogoBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+    backgroundColor: "#020617",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  headerLogoImg: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
   },
 });
