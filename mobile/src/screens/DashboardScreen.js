@@ -146,67 +146,32 @@ export default function DashboardScreen() {
   });
   const [loading, setLoading] = useState(true);
 
-  // ==========================================================
-  // OLD VERSION: APPTABS VISIBLE ON DASHBOARD
-  // (Leave tab bar as-is; navigation handled by Tab Navigator)
-  // ==========================================================
-  /*
-  useLayoutEffect(() => {
-    const parent = navigation.getParent?.();
-    if (!parent) return;
-
-    parent.setOptions({
-      tabBarStyle: { display: "none" },
-    });
-
-    return () => {
-      parent.setOptions({
-        tabBarStyle: undefined,
-      });
-    };
-  }, [navigation]);
-  */
-
-  // ==========================================================
-  // NEW VERSION: NO APPTABS + RADIAL MENU FAB (BOTTOM-RIGHT)
-  // ==========================================================
-
   const radialItems = useMemo(
     () => [
       {
-        key: "dashboard",
-        label: "Dashboard",
-        onPress: () => navigation.navigate("Dashboard"),
-      },
-      {
-        key: "aiMentor",
-        label: "AI Mentor",
-        onPress: () => navigation.navigate("Financial Helper"),
-      },
-      {
-        key: "expenses",
-        label: "Expenses",
-        onPress: () => navigation.navigate("Expenses"),
-      },
-      {
-        key: "income",
-        label: "Income",
-        onPress: () => navigation.navigate("Income"),
-      },
-      {
-        key: "investments",
-        label: "Investments",
-        onPress: () => navigation.navigate("Investments"),
-      },
-      {
         key: "reports",
-        label: "Reports",
+        label: "📄",
         onPress: () => navigation.navigate("Reports"),
       },
       {
-        key: "profile",
-        label: "Profile",
-        onPress: () => navigation.navigate("User"),
+        key: "investments",
+        label: "📈",
+        onPress: () => navigation.navigate("Investments"),
+      },
+      {
+        key: "income",
+        label: "💰",
+        onPress: () => navigation.navigate("Income"),
+      },
+      {
+        key: "expenses",
+        label: "💸",
+        onPress: () => navigation.navigate("Expenses"),
+      },
+      {
+        key: "aiMentor",
+        label: "🤖",
+        onPress: () => navigation.navigate("Financial Helper"),
       },
     ],
     [navigation]
@@ -324,7 +289,7 @@ export default function DashboardScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.topBar}>
-          <Text style={styles.logoText}>Nummoria</Text>
+          <Text style={styles.logoText}>Nummoria AI</Text>
           <TouchableOpacity
             style={styles.userBadge}
             activeOpacity={0.8}
@@ -347,7 +312,7 @@ export default function DashboardScreen() {
             {name ? `, ${name.split(" ")[0]}` : ""} 👋
           </Text>
           <Text style={styles.greetingSubtitle}>
-            Here’s a clear picture of your money today.
+            Here's a clear picture of your money today.
           </Text>
         </View>
 
@@ -412,7 +377,7 @@ export default function DashboardScreen() {
               A clear picture of your money
             </Text>
             <Text style={styles.sectionSubtitle}>
-              This month’s snapshot across expenses, income, and investments.
+              This month's snapshot across expenses, income, and investments.
             </Text>
           </View>
         </View>
@@ -425,7 +390,7 @@ export default function DashboardScreen() {
         ) : (
           <View style={styles.summaryGrid}>
             <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>This Month’s Expenses</Text>
+              <Text style={styles.summaryLabel}>This Month's Expenses</Text>
               <Text style={[styles.summaryValue, styles.expenseValue]}>
                 {formatMoney(summary.expenses, "$")}
               </Text>
@@ -435,7 +400,7 @@ export default function DashboardScreen() {
             </View>
 
             <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>This Month’s Income</Text>
+              <Text style={styles.summaryLabel}>This Month's Income</Text>
               <Text style={[styles.summaryValue, styles.incomeValue]}>
                 {formatMoney(summary.income, "$")}
               </Text>
@@ -484,10 +449,10 @@ export default function DashboardScreen() {
 
         {/* AI helper card */}
         <View style={styles.aiCard}>
-          <Text style={styles.aiTitle}>Ask Nummoria’s AI mentor</Text>
+          <Text style={styles.aiTitle}>Ask Nummoria's AI mentor</Text>
           <Text style={styles.aiText}>
-            “Can I afford this?”, “How much should I invest this month?”, or
-            “What happens if I move to NYC in 3 years?” – ask it in plain
+            "Can I afford this?", "How much should I invest this month?", or
+            "What happens if I move to NYC in 3 years?" – ask it in plain
             language.
           </Text>
           <TouchableOpacity
@@ -517,14 +482,15 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 10,
+    paddingTop: 50,
     paddingBottom: 40,
   },
   topBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 12,
+    marginBottom: 16,
+    marginTop: 8,
   },
   logoText: {
     fontSize: 18,
@@ -532,13 +498,14 @@ const styles = StyleSheet.create({
     color: "#e5e7eb",
   },
   userBadge: {
-    width: 32,
-    height: 32,
+    width: 40,
+    height: 40,
     borderRadius: 999,
     backgroundColor: BRAND_GREEN_SOFT,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
+    zIndex: 10,
   },
   userAvatar: {
     width: "100%",
@@ -546,7 +513,7 @@ const styles = StyleSheet.create({
     resizeMode: "cover",
   },
   userInitial: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "700",
     color: BRAND_GREEN,
   },

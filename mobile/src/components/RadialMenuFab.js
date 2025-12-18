@@ -25,14 +25,11 @@ function polarToCartesian(r, angleDeg) {
  */
 export default function RadialMenuFab({
   items = [],
-  radius = 120,
-
-  // ✅ bottom-right: fan up-left (x negative, y negative)
-  startAngle = -95,
-  endAngle = -175,
-
-  buttonSize = 58,
-  mainSize = 62,
+  radius = 160,
+  startAngle = -100,
+  endAngle = -190,
+  buttonSize = 60,
+  mainSize = 70,
   placement = "bottom-right",
 }) {
   const [open, setOpen] = useState(false);
@@ -70,11 +67,11 @@ export default function RadialMenuFab({
 
   const overlayOpacity = anim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, 0.55],
+    outputRange: [0, 0.65],
   });
   const menuScale = anim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.92, 1],
+    outputRange: [0.85, 1],
   });
 
   const wrapStyle =
@@ -129,7 +126,7 @@ export default function RadialMenuFab({
               ]}
             >
               <TouchableOpacity
-                activeOpacity={0.9}
+                activeOpacity={0.92}
                 onPress={() => closeAndRun(it.onPress)}
                 style={styles.itemBtn}
               >
@@ -160,75 +157,87 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
 
-  // ✅ Bottom-left (fallback)
+  // Bottom-left
   wrapBL: {
     position: "absolute",
-    left: 18,
-    bottom: 18,
+    left: 20,
+    bottom: 35,
     zIndex: 20,
-    width: 280,
-    height: 280,
+    width: 350,
+    height: 350,
     alignItems: "flex-start",
     justifyContent: "flex-end",
   },
   itemWrapBL: {
     position: "absolute",
-    left: 7,
-    bottom: 7,
+    left: 12,
+    bottom: 12,
   },
 
-  // ✅ Bottom-right (requested)
+  // Bottom-right (improved spacing)
   wrapBR: {
     position: "absolute",
-    right: 18,
-    bottom: 18,
+    right: 20,
+    bottom: 40,
     zIndex: 20,
-    width: 280,
-    height: 280,
+    width: 400,
+    height: 400,
     alignItems: "flex-end",
     justifyContent: "flex-end",
   },
   itemWrapBR: {
     position: "absolute",
-    right: 7,
-    bottom: 7,
+    right: 15,
+    bottom: 15,
   },
 
   mainFab: {
-    //backgroundColor: BRAND_MAIN,
     backgroundColor: "#16a34a",
-
     borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
-    shadowOpacity: 0.35,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
+
+    // Enhanced visibility and tap area
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.12)",
+    shadowColor: "#000",
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 12,
   },
   mainIcon: {
-    fontSize: 26,
-    fontWeight: "800",
-    color: "#06110a",
+    fontSize: 32,
+    fontWeight: "900",
+    color: "#ffffff",
+    lineHeight: 32,
   },
+
   itemBtn: {
     flex: 1,
-    borderRadius: 999,
-    backgroundColor: CARD_DARK,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+
+    backgroundColor: "#0a1628",
+    borderWidth: 2.5,
+    borderColor: "#16a34a",
+
     alignItems: "center",
     justifyContent: "center",
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
-    paddingHorizontal: 8,
+
+    // Strong shadow for visibility
+    shadowColor: "#000",
+    shadowOpacity: 0.6,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 10,
   },
   itemText: {
-    color: TEXT_SOFT,
-    fontWeight: "800",
-    fontSize: 10,
+    color: "#ffffff",
+    fontWeight: "700",
+    fontSize: 28,
+    lineHeight: 30,
     textAlign: "center",
   },
 });
