@@ -150,27 +150,32 @@ export default function DashboardScreen() {
     () => [
       {
         key: "reports",
-        label: "📄",
+        icon: "📄",
+        title: "Reports",
         onPress: () => navigation.navigate("Reports"),
       },
       {
         key: "investments",
-        label: "📈",
+        icon: "📈",
+        title: "Investments",
         onPress: () => navigation.navigate("Investments"),
       },
       {
         key: "income",
-        label: "💰",
+        icon: "💰",
+        title: "Income",
         onPress: () => navigation.navigate("Income"),
       },
       {
         key: "expenses",
-        label: "💸",
+        icon: "💸",
+        title: "Expenses",
         onPress: () => navigation.navigate("Expenses"),
       },
       {
         key: "aiMentor",
-        label: "🤖",
+        icon: "🤖",
+        title: "AI Helper",
         onPress: () => navigation.navigate("Financial Helper"),
       },
     ],

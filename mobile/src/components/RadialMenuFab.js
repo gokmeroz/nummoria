@@ -1,3 +1,4 @@
+// mobile/src/components/RadialMenuFab.js
 import React, { useMemo, useRef, useState } from "react";
 import {
   View,
@@ -9,10 +10,6 @@ import {
 } from "react-native";
 
 const BG_DARK = "#020617";
-const CARD_DARK = "#020819";
-const BORDER_DARK = "#0f172a";
-const BRAND_MAIN = "#4f772d";
-const TEXT_SOFT = "rgba(148,163,184,0.95)";
 
 function polarToCartesian(r, angleDeg) {
   const a = (angleDeg * Math.PI) / 180;
@@ -20,8 +17,8 @@ function polarToCartesian(r, angleDeg) {
 }
 
 /**
- * items: [{ key, label, onPress }]
- * placement: "bottom-right" (default)
+ * items: [{ key, icon, title, onPress }]
+ * placement: "bottom-right" (default) | "bottom-left"
  */
 export default function RadialMenuFab({
   items = [],
@@ -69,15 +66,43 @@ export default function RadialMenuFab({
     inputRange: [0, 1],
     outputRange: [0, 0.65],
   });
+
   const menuScale = anim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.85, 1],
+    outputRange: [0.9, 1],
+  });
+
+  const itemOpacity = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
+
+  // Labels appear after opening starts
+  const labelOpacity = anim.interpolate({
+    inputRange: [0, 0.35, 1],
+    outputRange: [0, 0, 1],
+  });
+
+  // Slide toward center (bottom-right => slide left, bottom-left => slide right)
+  const labelSlide = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: placement === "bottom-right" ? [10, 0] : [-10, 0],
   });
 
   const wrapStyle =
     placement === "bottom-right" ? styles.wrapBR : styles.wrapBL;
   const itemWrapStyle =
     placement === "bottom-right" ? styles.itemWrapBR : styles.itemWrapBL;
+
+  // NEW: Put titles slightly TOP-LEFT of each icon (tooltip-style)
+  // For bottom-right placement, "top-left" means up + left (toward screen center).
+  // For bottom-left placement, "top-left" means up + right (toward screen center).
+  const diagGap = 10;
+  const diagX =
+    placement === "bottom-right"
+      ? -(buttonSize * 0.65 + diagGap)
+      : buttonSize * 0.65 + diagGap;
+  const diagY = -(buttonSize * 0.55 + 6);
 
   return (
     <>
@@ -103,10 +128,12 @@ export default function RadialMenuFab({
             inputRange: [0, 1],
             outputRange: [0, y],
           });
-          const opacity = anim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [0, 1],
-          });
+
+          // Keep earlier items on top to avoid label hiding
+          const stackZ = 1000 - idx;
+
+          const icon = it.icon ?? it.label ?? "•";
+          const title = it.title ?? it.text ?? "";
 
           return (
             <Animated.View
@@ -116,7 +143,9 @@ export default function RadialMenuFab({
                 {
                   width: buttonSize,
                   height: buttonSize,
-                  opacity,
+                  opacity: itemOpacity,
+                  zIndex: stackZ,
+                  elevation: stackZ,
                   transform: [
                     { translateX },
                     { translateY },
@@ -128,11 +157,48 @@ export default function RadialMenuFab({
               <TouchableOpacity
                 activeOpacity={0.92}
                 onPress={() => closeAndRun(it.onPress)}
-                style={styles.itemBtn}
+                style={[
+                  styles.itemBtn,
+                  {
+                    width: buttonSize,
+                    height: buttonSize,
+                    borderRadius: buttonSize / 2,
+                  },
+                ]}
               >
-                <Text style={styles.itemText} numberOfLines={2}>
-                  {it.label}
+                <Text style={styles.itemIcon} numberOfLines={1}>
+                  {icon}
                 </Text>
+
+                {open && !!title && (
+                  <Animated.View
+                    pointerEvents="none"
+                    style={[
+                      styles.titlePill,
+                      {
+                        // Diagonal anchor: slightly above + to the "center side"
+                        left: "50%",
+                        top: "50%",
+                        opacity: labelOpacity,
+                        zIndex: 9999,
+                        elevation: 9999,
+                        transform: [
+                          { translateX: diagX }, // base diagonal placement
+                          { translateY: diagY },
+                          { translateX: labelSlide }, // small slide-in polish
+                        ],
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={styles.titleText}
+                      numberOfLines={1}
+                      ellipsizeMode="clip"
+                    >
+                      {title}
+                    </Text>
+                  </Animated.View>
+                )}
               </TouchableOpacity>
             </Animated.View>
           );
@@ -174,14 +240,14 @@ const styles = StyleSheet.create({
     bottom: 12,
   },
 
-  // Bottom-right (improved spacing)
+  // Bottom-right
   wrapBR: {
     position: "absolute",
     right: 20,
     bottom: 40,
     zIndex: 20,
-    width: 400,
-    height: 400,
+    width: 420,
+    height: 420,
     alignItems: "flex-end",
     justifyContent: "flex-end",
   },
@@ -196,8 +262,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
-
-    // Enhanced visibility and tap area
     borderWidth: 2,
     borderColor: "rgba(255,255,255,0.12)",
     shadowColor: "#000",
@@ -214,30 +278,51 @@ const styles = StyleSheet.create({
   },
 
   itemBtn: {
-    flex: 1,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-
     backgroundColor: "#0a1628",
     borderWidth: 2.5,
     borderColor: "#16a34a",
-
     alignItems: "center",
     justifyContent: "center",
-
-    // Strong shadow for visibility
     shadowColor: "#000",
-    shadowOpacity: 0.6,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 7 },
     elevation: 10,
   },
-  itemText: {
+
+  itemIcon: {
     color: "#ffffff",
-    fontWeight: "700",
-    fontSize: 28,
-    lineHeight: 30,
+    fontWeight: "800",
+    fontSize: 26,
+    lineHeight: 28,
     textAlign: "center",
+  },
+
+  // Diagonal tooltip pill (top-left relative to icon)
+  titlePill: {
+    position: "absolute",
+    height: 32,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: "rgba(2, 8, 25, 0.92)",
+    borderWidth: 1,
+    borderColor: "rgba(22,163,74,0.6)",
+    justifyContent: "center",
+    alignSelf: "flex-start",
+    minWidth: 96,
+    maxWidth: 220,
+    shadowColor: "#000",
+    shadowOpacity: 0.34,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 25,
+  },
+
+  titleText: {
+    color: "#e5e7eb",
+    fontSize: 13,
+    fontWeight: "800",
+    letterSpacing: 0.2,
+    includeFontPadding: false,
   },
 });
