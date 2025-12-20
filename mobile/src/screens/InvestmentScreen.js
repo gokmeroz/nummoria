@@ -23,6 +23,7 @@ import {
 } from "react-native";
 import api from "../lib/api";
 import logo from "../assets/nummoria_logo.png";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const main = "#4f772d";
 const secondary = "#90a955";
@@ -37,6 +38,10 @@ const BADGE_BG = "#0f172a";
 const BADGE_BORDER = "#1f2937";
 
 const DATE_LANG = "en-US";
+
+// ✅ FIX: Favorites persistence key + star color
+const FAVORITES_KEY = "@nummoria:favoritesSymbols";
+const FAV_YELLOW = "#fbbf24";
 
 /* ----------------------------- Money helpers -------------------------------- */
 function decimalsForCurrency(code) {
@@ -204,7 +209,16 @@ function Chip({ label, selected, onPress }) {
 }
 
 /* --------------------------------- Row ------------------------------------ */
-function InvestmentRow({ item, onEdit, onDelete, categoryName, accountName }) {
+function InvestmentRow({
+  item,
+  onEdit,
+  onDelete,
+  categoryName,
+  accountName,
+  canFavorite,
+  isFavorite,
+  onToggleFavorite,
+}) {
   const symbol = (item.assetSymbol || "").toUpperCase();
   const units = item.units ?? null;
   const dateLabel = fmtDate(item.date);
@@ -216,6 +230,26 @@ function InvestmentRow({ item, onEdit, onDelete, categoryName, accountName }) {
           <Text style={styles.rowTitle}>
             {symbol ? `${symbol} • ${categoryName}` : categoryName}
           </Text>
+
+          {canFavorite && symbol ? (
+            <TouchableOpacity
+              onPress={() => onToggleFavorite(symbol)}
+              activeOpacity={0.8}
+              style={styles.starBtn}
+            >
+              <Text
+                style={[
+                  styles.starIcon,
+                  isFavorite && {
+                    color: FAV_YELLOW,
+                    textShadowColor: "rgba(0,0,0,0.35)",
+                  },
+                ]}
+              >
+                {isFavorite ? "★" : "☆"}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         <View style={styles.rowSubRow}>
@@ -452,7 +486,6 @@ function InvestmentModal({
                     onPress={() => {
                       setAccountId(a._id);
                       if (!editing) {
-                        // if new investment, sync currency with account by default
                         setCurrency(a.currency || "USD");
                       }
                     }}
@@ -616,6 +649,7 @@ export default function InvestmentScreen({ navigation }) {
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
   const [accounts, setAccounts] = useState([]);
+  const [favoriteSymbols, setFavoriteSymbols] = useState(new Set());
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -659,6 +693,9 @@ export default function InvestmentScreen({ navigation }) {
     return m;
   }, [accounts]);
 
+  const isStockOrCryptoCategoryName = (name) =>
+    name === "Stock Market" || name === "Crypto Currency Exchange";
+
   const loadAll = useCallback(async () => {
     try {
       setLoading(true);
@@ -683,6 +720,54 @@ export default function InvestmentScreen({ navigation }) {
   useEffect(() => {
     loadAll();
   }, [loadAll]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(FAVORITES_KEY);
+        const arr = raw ? JSON.parse(raw) : [];
+        const cleaned = (Array.isArray(arr) ? arr : [])
+          .map((s) =>
+            String(s || "")
+              .toUpperCase()
+              .trim()
+          )
+          .filter(Boolean);
+        setFavoriteSymbols(new Set(cleaned));
+      } catch {
+        setFavoriteSymbols(new Set());
+      }
+    })();
+  }, []);
+
+  const toggleFavorite = useCallback(
+    async (symbol) => {
+      const s = String(symbol || "")
+        .toUpperCase()
+        .trim();
+      if (!s) return;
+
+      setFavoriteSymbols((prev) => {
+        const next = new Set(prev);
+        if (next.has(s)) {
+          next.delete(s);
+          push({ type: "info", msg: `Removed ${s} from favorites.` });
+        } else {
+          next.add(s);
+          push({ type: "success", msg: `Added ${s} to favorites.` });
+        }
+
+        // persist
+        AsyncStorage.setItem(
+          FAVORITES_KEY,
+          JSON.stringify(Array.from(next))
+        ).catch(() => {});
+
+        return next;
+      });
+    },
+    [push]
+  );
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -808,7 +893,7 @@ export default function InvestmentScreen({ navigation }) {
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             {/* ✅ NEW: Clickable Nummoria logo → Dashboard */}
             <TouchableOpacity
-              onPress={() => navigation.navigate("Dashboard")} // ✅ NEW: change route name if needed
+              onPress={() => navigation.navigate("Dashboard")}
               activeOpacity={0.85}
               style={styles.headerLogoBtn}
             >
@@ -816,7 +901,11 @@ export default function InvestmentScreen({ navigation }) {
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => navigation.navigate("InvestmentPerformance")}
+              onPress={() =>
+                navigation.navigate("InvestmentPerformance", {
+                  favorites: Array.from(favoriteSymbols),
+                })
+              }
               style={[styles.headerRefreshBtn, { marginRight: 8 }]}
             >
               <Text
@@ -980,6 +1069,11 @@ export default function InvestmentScreen({ navigation }) {
             rows.map((item) => {
               const catName = categoriesById.get(item.categoryId)?.name || "—";
               const accName = accountsById.get(item.accountId)?.name || "—";
+              const symbol = (item.assetSymbol || "").toUpperCase().trim();
+
+              const canFavorite = isStockOrCryptoCategoryName(catName);
+              const isFavorite = symbol ? favoriteSymbols.has(symbol) : false;
+
               return (
                 <InvestmentRow
                   key={item._id}
@@ -988,6 +1082,9 @@ export default function InvestmentScreen({ navigation }) {
                   onDelete={handleDelete}
                   categoryName={catName}
                   accountName={accName}
+                  canFavorite={canFavorite}
+                  isFavorite={isFavorite}
+                  onToggleFavorite={toggleFavorite}
                 />
               );
             })
@@ -1581,5 +1678,19 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
     resizeMode: "cover",
+  },
+  starBtn: {
+    marginLeft: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+    backgroundColor: "#020617",
+  },
+  starIcon: {
+    fontSize: 18,
+    lineHeight: 18,
+    color: TEXT_MUTED,
   },
 });

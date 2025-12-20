@@ -14,7 +14,8 @@ import {
   View,
   Image,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+// ✅ FIX: import useRoute so route exists
+import { useNavigation, useRoute } from "@react-navigation/native";
 
 import api from "../lib/api";
 import logo from "../assets/nummoria_logo.png";
@@ -180,6 +181,9 @@ function HoldingRow({ h }) {
 /* =============================== screen =============================== */
 export default function InvestmentPerformanceScreen() {
   const navigation = useNavigation();
+  // ✅ FIX: route now exists
+  const route = useRoute();
+
   const { toast, show } = useToasts();
 
   const [loading, setLoading] = useState(true);
@@ -216,6 +220,18 @@ export default function InvestmentPerformanceScreen() {
   }, [fetchPerf]);
 
   const holdings = useMemo(() => data?.holdings || [], [data]);
+  const [listMode, setListMode] = useState("HOLDINGS"); // "HOLDINGS" | "FAVORITES"
+
+  // favorites passed from InvestmentScreen navigation
+  const favorites = (route?.params?.favorites || [])
+    .map((s) =>
+      String(s || "")
+        .toUpperCase()
+        .trim()
+    )
+    .filter(Boolean);
+  const favoritesCount = favorites.length;
+  const favoritesSet = useMemo(() => new Set(favorites), [favorites]);
 
   const currencies = useMemo(() => {
     const s = new Set(holdings.map((h) => h.currency || "USD"));
@@ -266,6 +282,20 @@ export default function InvestmentPerformanceScreen() {
     filtered.sort((a, b) => (b.plMinor || 0) - (a.plMinor || 0)); // P/L desc
     return filtered;
   }, [holdings, search, sideFilter, curFilter]);
+  const favoritesFiltered = useMemo(() => {
+    if (!favoritesSet.size) return [];
+
+    const onlyFav = holdingsFiltered.filter((h) => {
+      const sym = String(h.symbol || h.assetSymbol || "")
+        .toUpperCase()
+        .trim();
+      return favoritesSet.has(sym);
+    });
+
+    return onlyFav;
+  }, [holdingsFiltered, favoritesSet]);
+  const listToRender =
+    listMode === "FAVORITES" ? favoritesFiltered : holdingsFiltered;
 
   const handleQuoteLookup = async () => {
     const symbol = quoteSymbol.trim().toUpperCase();
@@ -289,20 +319,10 @@ export default function InvestmentPerformanceScreen() {
     }
   };
 
-  /**
-   * ✅ Non-error navigation:
-   * - We do NOT assume route names like "Dashboard" or "MainTabs".
-   * - We jump to the first route of the top-most parent (usually your tabs/home area).
-   * - If anything is missing, we safely fallback to goBack() (never throws).
-   */
-  // add this handler inside InvestmentPerformanceScreen()
-
   const handleLogoPress = useCallback(() => {
-    // try both common route names (keep both to avoid future renames)
     const DASH_NAMES = ["Dashboard", "DashboardScreen"];
 
     try {
-      // climb up through parents and find a navigator that knows Dashboard
       let nav = navigation;
 
       while (nav) {
@@ -320,7 +340,6 @@ export default function InvestmentPerformanceScreen() {
         nav = parent;
       }
 
-      // last try: current navigator
       const selfState = navigation.getState?.();
       const selfMatch = DASH_NAMES.find((n) =>
         selfState?.routeNames?.includes(n)
@@ -329,9 +348,7 @@ export default function InvestmentPerformanceScreen() {
         navigation.navigate(selfMatch);
         return;
       }
-    } catch (e) {
-      // swallow — we never want redbox for a logo press
-    }
+    } catch (e) {}
   }, [navigation]);
 
   if (loading) {
@@ -349,7 +366,6 @@ export default function InvestmentPerformanceScreen() {
       <View style={styles.topBar}>
         <TouchableOpacity
           onPress={() => {
-            // Try current navigator first
             const state = navigation.getState?.();
             const hasDashboardHere = state?.routeNames?.includes("Dashboard");
 
@@ -358,7 +374,6 @@ export default function InvestmentPerformanceScreen() {
               return;
             }
 
-            // Then try parents (most common fix)
             let parent = navigation.getParent?.();
             while (parent) {
               const ps = parent.getState?.();
@@ -369,7 +384,6 @@ export default function InvestmentPerformanceScreen() {
               parent = parent.getParent?.();
             }
 
-            // Safe fallback (never throws)
             navigation.goBack();
           }}
           activeOpacity={0.85}
@@ -576,23 +590,61 @@ export default function InvestmentPerformanceScreen() {
           )}
         </View>
 
-        {/* Holdings list */}
+        {/* Holdings / Favorites list */}
         <View style={styles.listCard}>
           <View style={styles.listHeaderRow}>
-            <Text style={styles.listHeaderTitle}>
-              Holdings ({holdingsFiltered.length})
-            </Text>
+            <View style={styles.listHeaderLeft}>
+              <TouchableOpacity
+                onPress={() => setListMode("HOLDINGS")}
+                activeOpacity={0.8}
+                style={[
+                  styles.listHeaderPill,
+                  listMode === "HOLDINGS" && styles.listHeaderPillActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.listHeaderTitle,
+                    listMode !== "HOLDINGS" && styles.listHeaderTitleInactive,
+                  ]}
+                >
+                  Holdings ({holdingsFiltered.length})
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setListMode("FAVORITES")}
+                activeOpacity={0.8}
+                style={[
+                  styles.listHeaderPill,
+                  listMode === "FAVORITES" && styles.listHeaderPillActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.listHeaderMeta,
+                    listMode !== "FAVORITES" && styles.listHeaderMetaInactive,
+                  ]}
+                >
+                  Favorites ({favoritesFiltered.length})
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
-          {holdingsFiltered.length === 0 ? (
+          {listToRender.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>No positions</Text>
+              <Text style={styles.emptyTitle}>
+                {listMode === "FAVORITES" ? "No favorites" : "No positions"}
+              </Text>
               <Text style={styles.emptySubtitle}>
-                Try changing filters or add investments first.
+                {listMode === "FAVORITES"
+                  ? "Add favorites from the Investments screen to see them here."
+                  : "Try changing filters or add investments first."}
               </Text>
             </View>
           ) : (
-            holdingsFiltered.map((h) => (
+            listToRender.map((h) => (
               <HoldingRow
                 key={`${h.symbol || h.assetSymbol}-${h.currency}-${
                   h.side || "long"
@@ -988,5 +1040,45 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     color: TEXT_SOFT,
+  },
+  listHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  listHeaderMeta: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: secondary,
+    opacity: 0.95,
+  },
+  listHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+
+  listHeaderPill: {
+    paddingVertical: 2,
+    paddingHorizontal: 2,
+    borderRadius: 999,
+  },
+  listHeaderPillActive: {
+    backgroundColor: "rgba(79,119,45,0.12)", // main w/ alpha
+  },
+
+  listHeaderTitleInactive: {
+    color: TEXT_MUTED,
+    fontWeight: "600",
+  },
+
+  listHeaderMeta: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: secondary,
+  },
+  listHeaderMetaInactive: {
+    color: TEXT_MUTED,
+    fontWeight: "600",
   },
 });

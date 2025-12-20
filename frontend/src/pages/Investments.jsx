@@ -215,6 +215,53 @@ export default function InvestmentsScreen({ accountId }) {
     tagsCsv: "",
     accountId: "",
   });
+  const FAVORITES_KEY = "nummoria:favInvestments:v1";
+
+  const [favoriteSymbols, setFavoriteSymbols] = useState(() => {
+    try {
+      const raw = localStorage.getItem(FAVORITES_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      const cleaned = (Array.isArray(arr) ? arr : [])
+        .map((s) =>
+          String(s || "")
+            .toUpperCase()
+            .trim()
+        )
+        .filter(Boolean);
+      return new Set(cleaned);
+    } catch {
+      return new Set();
+    }
+  });
+
+  const persistFavorites = (set) => {
+    try {
+      localStorage.setItem(FAVORITES_KEY, JSON.stringify(Array.from(set)));
+    } catch {}
+  };
+
+  const isStockOrCryptoCategoryName = (name) =>
+    name === "Stock Market" || name === "Crypto Currency Exchange";
+
+  const toggleFavorite = (symbol) => {
+    const s = String(symbol || "")
+      .toUpperCase()
+      .trim();
+    if (!s) return;
+
+    setFavoriteSymbols((prev) => {
+      const next = new Set(prev);
+      if (next.has(s)) {
+        next.delete(s);
+        push({ type: "info", msg: `Removed ${s} from favorites.` });
+      } else {
+        next.add(s);
+        push({ type: "success", msg: `Added ${s} to favorites.` });
+      }
+      persistFavorites(next);
+      return next;
+    });
+  };
 
   /* ------------------------------ Money helpers ------------------------------ */
   function decimalsForCurrency(code) {
@@ -1063,7 +1110,9 @@ export default function InvestmentsScreen({ accountId }) {
           </button>
 
           <a
-            href="/investments/performance"
+            href={`/investments/performance?favorites=${encodeURIComponent(
+              Array.from(favoriteSymbols).join(",")
+            )}`}
             className="px-3 py-2 rounded-xl border"
             style={{ borderColor: secondary, color: "white", background: main }}
           >
@@ -1358,6 +1407,8 @@ export default function InvestmentsScreen({ accountId }) {
     const symbol = (item.assetSymbol || "").toUpperCase();
     const units = item.units ?? null;
     const isFuture = new Date(item.date) > startOfUTC(new Date());
+    const canFavorite = isStockOrCryptoCategoryName(catName);
+    const isFavorite = symbol ? favoriteSymbols.has(symbol) : false;
 
     return (
       <div className="p-4 border-b bg-white">
@@ -1365,12 +1416,37 @@ export default function InvestmentsScreen({ accountId }) {
           <div className="min-w-0">
             <div className="font-semibold flex items-center gap-2">
               <span>{symbol ? `${symbol} • ${catName}` : catName}</span>
+
+              {canFavorite && symbol ? (
+                <button
+                  type="button"
+                  onClick={() => toggleFavorite(symbol)}
+                  className="ml-1 inline-flex items-center justify-center w-8 h-8 rounded-full border hover:bg-gray-50"
+                  title={isFavorite ? "Unfavorite" : "Favorite"}
+                  style={{
+                    borderColor: isFavorite ? "#facc15" : "#e5e7eb",
+                  }}
+                >
+                  <span
+                    style={{
+                      color: isFavorite ? "#facc15" : "#9ca3af",
+                      fontSize: 18,
+                      lineHeight: "18px",
+                      fontWeight: 800,
+                    }}
+                  >
+                    {isFavorite ? "★" : "☆"}
+                  </span>
+                </button>
+              ) : null}
+
               {isFuture && (
                 <span className="text-[11px] px-2 py-0.5 rounded-full border border-dashed text-[#2f5d1d]">
                   Upcoming
                 </span>
               )}
             </div>
+
             <div className="text-xs text-gray-500 mb-1">
               <span className="inline-block px-2 py-0.5 rounded-full border">
                 {accName}

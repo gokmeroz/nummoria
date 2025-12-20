@@ -1,6 +1,7 @@
 /* eslint-disable no-unused-vars */
 // frontend/src/pages/InvestmentPerformance.jsx
 import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import api from "../lib/api";
 
 const main = "#4f772d";
@@ -248,6 +249,63 @@ export default function InvestmentPerformance() {
   const [lastRefreshed, setLastRefreshed] = useState(null);
 
   const [sort, setSort] = useState({ key: "symbol", dir: "asc" });
+  // ✅ NEW: list mode toggle (same behavior as mobile)
+  const [listMode, setListMode] = useState("HOLDINGS"); // "HOLDINGS" | "FAVORITES"
+
+  // ✅ NEW: favorites from localStorage (fallback across likely keys)
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // ✅ NEW: favorites from URL (?favorites=AAPL,BTC-USD) + localStorage fallback
+  const favorites = useMemo(() => {
+    // 1) URL param favorites=SYM1,SYM2
+    const sp = new URLSearchParams(location.search);
+    const qp = sp.get("favorites");
+
+    const fromQuery = String(qp || "")
+      .split(",")
+      .map((s) =>
+        String(s || "")
+          .trim()
+          .toUpperCase()
+      )
+      .filter(Boolean);
+
+    if (fromQuery.length) return fromQuery;
+
+    // 2) localStorage fallback
+    const tryKeys = [
+      "favorites",
+      "investmentFavorites",
+      "nummoriaFavorites",
+      "nummoria_investment_favorites",
+      "NummoriaFavorites",
+    ];
+
+    for (const k of tryKeys) {
+      try {
+        const raw = localStorage.getItem(k);
+        if (!raw) continue;
+
+        const parsed = JSON.parse(raw);
+        const arr = Array.isArray(parsed) ? parsed : [];
+
+        const normalized = arr
+          .map((x) =>
+            String(x?.symbol ?? x?.assetSymbol ?? x ?? "")
+              .trim()
+              .toUpperCase()
+          )
+          .filter(Boolean);
+
+        if (normalized.length) return normalized;
+      } catch {
+        // ignore
+      }
+    }
+
+    return [];
+  }, [location.search]);
 
   async function fetchPerf() {
     setLoading(true);
@@ -267,6 +325,30 @@ export default function InvestmentPerformance() {
     fetchPerf();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // ✅ Keep behavior like mobile: if URL has favorites, default to Favorites tab
+  useEffect(() => {
+    const sp = new URLSearchParams(location.search);
+    const hasFav = Boolean(sp.get("favorites"));
+    setListMode(hasFav ? "FAVORITES" : "HOLDINGS");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
+
+  function setMode(mode) {
+    setListMode(mode);
+
+    const sp = new URLSearchParams(location.search);
+
+    if (mode === "FAVORITES") {
+      if (favorites.length) sp.set("favorites", favorites.join(","));
+    } else {
+      sp.delete("favorites");
+    }
+
+    navigate(
+      { search: sp.toString() ? `?${sp.toString()}` : "" },
+      { replace: true }
+    );
+  }
 
   /** Sort first, then filter out INV so toggling sort feels consistent */
   const holdingsSorted = useMemo(() => {
@@ -299,6 +381,20 @@ export default function InvestmentPerformance() {
     () => holdingsSorted.filter((h) => !isInvSymbol(h.symbol)),
     [holdingsSorted]
   );
+  const favoritesSet = useMemo(() => new Set(favorites), [favorites]);
+
+  const favoritesFiltered = useMemo(() => {
+    if (!favoritesSet.size) return [];
+    return holdingsFiltered.filter((h) => {
+      const sym = String(h.symbol || h.assetSymbol || "")
+        .trim()
+        .toUpperCase();
+      return favoritesSet.has(sym);
+    });
+  }, [holdingsFiltered, favoritesSet]);
+
+  const rowsToRender =
+    listMode === "FAVORITES" ? favoritesFiltered : holdingsFiltered;
 
   /** Use filtered rows for “anyQuotes” and empty-state logic */
   const anyQuotes = useMemo(
@@ -309,7 +405,7 @@ export default function InvestmentPerformance() {
   /** ---------- NEW: recompute totals from filtered rows ---------- */
   const totalsFiltered = useMemo(() => {
     const totals = {};
-    for (const h of holdingsFiltered) {
+    for (const h of rowsToRender) {
       const cur = h.currency || "USD";
       if (!totals[cur])
         totals[cur] = { costMinor: 0, valueMinor: 0, plMinor: 0 };
@@ -482,6 +578,28 @@ export default function InvestmentPerformance() {
             </div>
           )}
         </section>
+        <div className="mb-2 flex items-center gap-3 text-sm">
+          <button
+            type="button"
+            onClick={() => setMode("HOLDINGS")}
+            className={`font-semibold ${
+              listMode === "HOLDINGS" ? "text-gray-900" : "text-gray-500"
+            }`}
+          >
+            Holdings ({holdingsFiltered.length})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setMode("FAVORITES")}
+            className={`font-semibold ${
+              listMode === "FAVORITES" ? "text-gray-900" : "text-gray-500"
+            }`}
+            style={listMode === "FAVORITES" ? { color: main } : undefined}
+          >
+            Favorites ({favoritesFiltered.length})
+          </button>
+        </div>
 
         {/* Holdings table (FILTERED) */}
         <section className="rounded-2xl border overflow-x-auto">
@@ -523,17 +641,18 @@ export default function InvestmentPerformance() {
                 </tr>
               )}
 
-              {!loading && holdingsFiltered.length === 0 && (
+              {!loading && rowsToRender.length === 0 && (
                 <tr>
                   <td className="px-4 py-6 text-gray-500" colSpan={8}>
-                    No holdings found. Add some <em>investment</em> transactions
-                    with an <code>assetSymbol</code>.
+                    {listMode === "FAVORITES"
+                      ? "No favorites found in your current holdings."
+                      : "No holdings found. Add some investment transactions with an assetSymbol."}
                   </td>
                 </tr>
               )}
 
               {!loading &&
-                holdingsFiltered.map((h, idx) => {
+                rowsToRender.map((h, idx) => {
                   const dec = decimalsForCurrency(h.currency);
                   const priceStr =
                     typeof h.price === "number"
