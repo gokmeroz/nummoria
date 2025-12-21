@@ -13,8 +13,9 @@ import {
   TouchableOpacity,
   View,
   Image,
+  Modal,
+  Pressable,
 } from "react-native";
-// ✅ FIX: import useRoute so route exists
 import { useNavigation, useRoute } from "@react-navigation/native";
 
 import api from "../lib/api";
@@ -40,12 +41,76 @@ function decimalsForCurrency(code) {
 }
 
 function fmtMoneyMinor(minor, cur = "USD") {
+  if (minor === null || minor === undefined) return "—";
+
+  const currency = cur || "USD";
+  const dec = decimalsForCurrency(currency);
+  const major = Number(minor) / Math.pow(10, dec);
+
+  try {
+    return new Intl.NumberFormat(DATE_LANG, {
+      style: "currency",
+      currency,
+      minimumFractionDigits: dec,
+      maximumFractionDigits: dec,
+    }).format(major);
+  } catch {
+    return `${major.toFixed(dec)} ${currency}`;
+  }
+}
+
+function fmtMoneyMajor(major, cur = "USD") {
+  if (major === null || major === undefined || Number.isNaN(Number(major)))
+    return "—";
+
+  const currency = cur || "USD";
+  const dec = decimalsForCurrency(currency);
+  const val = Number(major);
+
+  try {
+    return new Intl.NumberFormat(DATE_LANG, {
+      style: "currency",
+      currency,
+      minimumFractionDigits: dec,
+      maximumFractionDigits: dec,
+    }).format(val);
+  } catch {
+    return `${val.toFixed(dec)} ${currency}`;
+  }
+}
+
+function fmtNumber(n, digits = 2) {
+  if (n === null || n === undefined || Number.isNaN(Number(n))) return "—";
   return new Intl.NumberFormat(DATE_LANG, {
-    style: "currency",
-    currency: cur || "USD",
-  }).format(
-    Number(minor || 0) / Math.pow(10, decimalsForCurrency(cur || "USD")) || 0
-  );
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(Number(n));
+}
+
+function fmtInt(n) {
+  if (n === null || n === undefined || Number.isNaN(Number(n))) return "—";
+  return Number(n).toLocaleString(DATE_LANG);
+}
+
+function abbreviateNumber(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return "—";
+  const units = ["", "K", "M", "B", "T"];
+  let i = 0;
+  let num = v;
+  while (num >= 1000 && i < units.length - 1) {
+    num /= 1000;
+    i++;
+  }
+  const dp = num >= 100 ? 0 : num >= 10 ? 1 : 2;
+  return `${num.toFixed(dp)}${units[i]}`;
+}
+
+function isInvSymbol(sym) {
+  const s = String(sym || "")
+    .trim()
+    .toUpperCase();
+  return /^INV(\b|[-_])/i.test(s) || s === "INV";
 }
 
 function fmtPct(val) {
@@ -65,6 +130,78 @@ function fmtDateTime(dateLike) {
     hour: "2-digit",
     minute: "2-digit",
   })}`;
+}
+
+/** Normalize quote payloads (backend may return either "minor" fields or Yahoo-like fields) */
+function normalizeQuote(q) {
+  const symbol = q?.symbol || "—";
+  const name = q?.shortName || q?.longName || q?.name || "—";
+
+  const currency =
+    q?.currency || q?.financialCurrency || q?.priceCurrency || "USD";
+
+  // Two possible shapes:
+  // 1) Yahoo-like: regularMarketPrice, regularMarketPreviousClose, regularMarketOpen, etc (major units)
+  // 2) Minor-based: priceMinor, changeMinor, changePct (minor units + pct)
+  const hasYahoo = typeof q?.regularMarketPrice === "number";
+
+  const price = hasYahoo
+    ? q.regularMarketPrice
+    : q?.priceMinor != null
+    ? Number(q.priceMinor) / Math.pow(10, decimalsForCurrency(currency))
+    : null;
+
+  const prevClose = hasYahoo ? q?.regularMarketPreviousClose : null;
+  const open = hasYahoo ? q?.regularMarketOpen : null;
+
+  const dayLow = hasYahoo ? q?.regularMarketDayLow : null;
+  const dayHigh = hasYahoo ? q?.regularMarketDayHigh : null;
+
+  const wkLow = hasYahoo ? q?.fiftyTwoWeekLow : null;
+  const wkHigh = hasYahoo ? q?.fiftyTwoWeekHigh : null;
+
+  const volume = hasYahoo ? q?.regularMarketVolume : q?.volume;
+  const marketCap = hasYahoo ? q?.marketCap : q?.marketCap;
+
+  const exchange = q?.fullExchangeName || q?.exchange || "—";
+
+  let changeMajor = null;
+  let changePct = null;
+
+  if (q?.changeMinor != null) {
+    changeMajor =
+      Number(q.changeMinor) / Math.pow(10, decimalsForCurrency(currency));
+    changePct = typeof q?.changePct === "number" ? q.changePct : null;
+  } else if (
+    hasYahoo &&
+    typeof prevClose === "number" &&
+    typeof price === "number"
+  ) {
+    changeMajor = price - prevClose;
+    changePct = prevClose ? changeMajor / prevClose : null;
+  }
+
+  // Prefer backend's lastUpdated; fallback none.
+  const lastUpdated = q?.lastUpdated || q?.regularMarketTime || null;
+
+  return {
+    symbol,
+    name,
+    currency,
+    price,
+    prevClose,
+    open,
+    dayLow,
+    dayHigh,
+    wkLow,
+    wkHigh,
+    volume,
+    marketCap,
+    exchange,
+    changeMajor,
+    changePct,
+    lastUpdated,
+  };
 }
 
 /* ------------------------------ toast ------------------------------ */
@@ -143,7 +280,8 @@ function HoldingRow({ h }) {
         </View>
 
         <Text style={styles.rowCurrency}>
-          {h.currency} • {h.units != null ? `${h.units} units` : "size n/a"}
+          {h.currency} •{" "}
+          {h.units != null ? `${fmtNumber(h.units, 4)} units` : "size n/a"}
         </Text>
 
         <View style={styles.rowLine}>
@@ -178,10 +316,125 @@ function HoldingRow({ h }) {
   );
 }
 
+/* ------------------------------ quote modal ------------------------------ */
+function QuoteStat({ label, value, valueStyle }) {
+  return (
+    <View style={styles.qStat}>
+      <Text style={styles.qStatLabel}>{label}</Text>
+      <Text style={[styles.qStatValue, valueStyle]} numberOfLines={2}>
+        {String(value)}
+      </Text>
+    </View>
+  );
+}
+
+function QuoteModal({ visible, onClose, quoteData }) {
+  const q = useMemo(() => normalizeQuote(quoteData || {}), [quoteData]);
+  const isUp = (q.changeMajor || 0) > 0;
+  const isDown = (q.changeMajor || 0) < 0;
+
+  const changeStr =
+    q.changeMajor == null
+      ? "—"
+      : `${fmtNumber(q.changeMajor, 2)} (${
+          q.changePct != null ? (q.changePct * 100).toFixed(2) : "—"
+        }%)`;
+
+  const dayRange =
+    q.dayLow != null && q.dayHigh != null ? `${q.dayLow} – ${q.dayHigh}` : "—";
+  const wkRange =
+    q.wkLow != null && q.wkHigh != null ? `${q.wkLow} – ${q.wkHigh}` : "—";
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="fade"
+      transparent
+      onRequestClose={onClose}
+    >
+      <Pressable style={styles.modalOverlay} onPress={onClose}>
+        <Pressable style={styles.modalCard} onPress={() => {}}>
+          <View style={styles.modalHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.modalTitle}>Market Details</Text>
+              <Text style={styles.modalSubtitle}>
+                More quote info (like web)
+              </Text>
+            </View>
+
+            {/* <TouchableOpacity
+              onPress={onClose}
+              style={styles.modalCloseBtn}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.modalCloseText}>✕</Text>
+            </TouchableOpacity> 
+            */}
+          </View>
+
+          <View style={styles.modalTopLine}>
+            <Text style={styles.modalSymbol}>{q.symbol}</Text>
+            <Text style={styles.modalName} numberOfLines={1}>
+              {q.name}
+            </Text>
+          </View>
+
+          <View style={styles.modalPriceRow}>
+            <Text style={styles.modalPrice}>
+              {fmtMoneyMajor(q.price, q.currency)}
+            </Text>
+            <Text
+              style={[
+                styles.modalChange,
+                isUp ? styles.rowPLPos : isDown ? styles.rowPLNeg : null,
+              ]}
+            >
+              {changeStr}
+            </Text>
+          </View>
+
+          {q.lastUpdated ? (
+            <Text style={styles.modalUpdated}>
+              Updated {fmtDateTime(q.lastUpdated)}
+            </Text>
+          ) : null}
+
+          <View style={styles.qGrid}>
+            <QuoteStat label="Symbol" value={q.symbol} />
+            <QuoteStat label="Currency" value={q.currency} />
+            <QuoteStat label="Previous Close" value={q.prevClose ?? "—"} />
+            <QuoteStat label="Open" value={q.open ?? "—"} />
+            <QuoteStat label="Day Range" value={dayRange} />
+            <QuoteStat label="52W Range" value={wkRange} />
+            <QuoteStat
+              label="Volume"
+              value={q.volume != null ? fmtInt(q.volume) : "—"}
+            />
+            <QuoteStat
+              label="Market Cap"
+              value={q.marketCap != null ? abbreviateNumber(q.marketCap) : "—"}
+            />
+            <QuoteStat label="Exchange" value={q.exchange} />
+          </View>
+
+          <View style={styles.modalFooter}>
+            <TouchableOpacity
+              onPress={onClose}
+              style={styles.modalPrimaryBtn}
+              activeOpacity={0.9}
+            >
+              <Text style={styles.modalPrimaryBtnText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 /* =============================== screen =============================== */
 export default function InvestmentPerformanceScreen() {
   const navigation = useNavigation();
-  // ✅ FIX: route now exists
   const route = useRoute();
 
   const { toast, show } = useToasts();
@@ -198,6 +451,7 @@ export default function InvestmentPerformanceScreen() {
   const [quoteSymbol, setQuoteSymbol] = useState("");
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteData, setQuoteData] = useState(null);
+  const [quoteModalOpen, setQuoteModalOpen] = useState(false);
 
   const fetchPerf = useCallback(async () => {
     setLoading(true);
@@ -219,7 +473,12 @@ export default function InvestmentPerformanceScreen() {
     fetchPerf();
   }, [fetchPerf]);
 
-  const holdings = useMemo(() => data?.holdings || [], [data]);
+  // Filter out INV holdings (match web)
+  const holdings = useMemo(() => {
+    const rows = data?.holdings || [];
+    return rows.filter((h) => !isInvSymbol(h.symbol || h.assetSymbol));
+  }, [data]);
+
   const [listMode, setListMode] = useState("HOLDINGS"); // "HOLDINGS" | "FAVORITES"
 
   // favorites passed from InvestmentScreen navigation
@@ -230,33 +489,11 @@ export default function InvestmentPerformanceScreen() {
         .trim()
     )
     .filter(Boolean);
-  const favoritesCount = favorites.length;
   const favoritesSet = useMemo(() => new Set(favorites), [favorites]);
 
   const currencies = useMemo(() => {
     const s = new Set(holdings.map((h) => h.currency || "USD"));
     return ["ALL", ...Array.from(s)];
-  }, [holdings]);
-
-  const totalsByCurrency = useMemo(() => {
-    const m = {};
-    for (const h of holdings) {
-      const cur = h.currency || "USD";
-      if (!m[cur]) {
-        m[cur] = { costMinor: 0, valueMinor: 0, plMinor: 0 };
-      }
-      m[cur].costMinor += Number(h.costMinor || 0);
-      m[cur].valueMinor += Number(h.valueMinor || 0);
-      m[cur].plMinor += Number(h.plMinor || 0);
-    }
-
-    return Object.entries(m).map(([cur, v]) => ({
-      cur,
-      costMinor: v.costMinor,
-      valueMinor: v.valueMinor,
-      plMinor: v.plMinor,
-      plPct: v.costMinor !== 0 ? v.plMinor / Math.abs(v.costMinor || 1) : null,
-    }));
   }, [holdings]);
 
   const holdingsFiltered = useMemo(() => {
@@ -282,20 +519,55 @@ export default function InvestmentPerformanceScreen() {
     filtered.sort((a, b) => (b.plMinor || 0) - (a.plMinor || 0)); // P/L desc
     return filtered;
   }, [holdings, search, sideFilter, curFilter]);
+
   const favoritesFiltered = useMemo(() => {
     if (!favoritesSet.size) return [];
-
-    const onlyFav = holdingsFiltered.filter((h) => {
+    return holdingsFiltered.filter((h) => {
       const sym = String(h.symbol || h.assetSymbol || "")
         .toUpperCase()
         .trim();
       return favoritesSet.has(sym);
     });
-
-    return onlyFav;
   }, [holdingsFiltered, favoritesSet]);
+
   const listToRender =
     listMode === "FAVORITES" ? favoritesFiltered : holdingsFiltered;
+
+  const anyQuotes = useMemo(
+    () => holdings.some((h) => typeof h.price === "number"),
+    [holdings]
+  );
+
+  // Totals should follow current tab + filters (match web behavior)
+  const totalsByCurrency = useMemo(() => {
+    const m = {};
+    const rows = listToRender;
+
+    for (const h of rows) {
+      const cur = h.currency || "USD";
+      if (!m[cur]) m[cur] = { costMinor: 0, valueMinor: null, plMinor: null };
+
+      m[cur].costMinor += Number(h.costMinor || 0);
+
+      if (typeof h.valueMinor === "number") {
+        m[cur].valueMinor = (m[cur].valueMinor ?? 0) + h.valueMinor;
+      }
+      if (typeof h.plMinor === "number") {
+        m[cur].plMinor = (m[cur].plMinor ?? 0) + h.plMinor;
+      }
+    }
+
+    return Object.entries(m).map(([cur, v]) => ({
+      cur,
+      costMinor: v.costMinor,
+      valueMinor: v.valueMinor,
+      plMinor: v.plMinor,
+      plPct:
+        v.plMinor != null && v.costMinor !== 0
+          ? v.plMinor / Math.abs(v.costMinor || 1)
+          : null,
+    }));
+  }, [listToRender]);
 
   const handleQuoteLookup = async () => {
     const symbol = quoteSymbol.trim().toUpperCase();
@@ -311,6 +583,7 @@ export default function InvestmentPerformanceScreen() {
         params: { symbol },
       });
       setQuoteData(qd || null);
+      setQuoteModalOpen(true); // ✅ show the popup
     } catch (e) {
       const msg = e?.response?.data?.error || e.message || "Lookup failed.";
       show({ type: "error", msg });
@@ -318,38 +591,6 @@ export default function InvestmentPerformanceScreen() {
       setQuoteLoading(false);
     }
   };
-
-  const handleLogoPress = useCallback(() => {
-    const DASH_NAMES = ["Dashboard", "DashboardScreen"];
-
-    try {
-      let nav = navigation;
-
-      while (nav) {
-        const parent = nav.getParent?.();
-        const state = parent?.getState?.();
-
-        if (state?.routeNames?.length) {
-          const match = DASH_NAMES.find((n) => state.routeNames.includes(n));
-          if (match && parent?.navigate) {
-            parent.navigate(match);
-            return;
-          }
-        }
-
-        nav = parent;
-      }
-
-      const selfState = navigation.getState?.();
-      const selfMatch = DASH_NAMES.find((n) =>
-        selfState?.routeNames?.includes(n)
-      );
-      if (selfMatch) {
-        navigation.navigate(selfMatch);
-        return;
-      }
-    } catch (e) {}
-  }, [navigation]);
 
   if (loading) {
     return (
@@ -362,7 +603,7 @@ export default function InvestmentPerformanceScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      {/* ✅ Top bar: Logo (safe nav) + Back */}
+      {/* ✅ Top bar: Logo + Back */}
       <View style={styles.topBar}>
         <TouchableOpacity
           onPress={() => {
@@ -421,6 +662,25 @@ export default function InvestmentPerformanceScreen() {
         )}
 
         {err ? <Text style={styles.errorText}>{err}</Text> : null}
+
+        {/* Live quotes unavailable notice (match web semantics) */}
+        {!err && !loading && !anyQuotes && holdings.length > 0 && (
+          <View
+            style={{
+              marginBottom: 10,
+              padding: 10,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: "#fbbf24",
+              backgroundColor: "#92400e33",
+            }}
+          >
+            <Text style={{ color: "#fbbf24", fontSize: 12 }}>
+              Live quotes are disabled or unavailable. Value &amp; P/L shown as
+              “—”.
+            </Text>
+          </View>
+        )}
 
         {/* Totals by currency */}
         <View style={styles.totalsRow}>
@@ -549,45 +809,10 @@ export default function InvestmentPerformanceScreen() {
             </TouchableOpacity>
           </View>
 
-          {quoteData && (
-            <View style={styles.quoteResult}>
-              <Text style={styles.quoteSymbol}>
-                {quoteData.symbol || quoteSymbol.toUpperCase()}
-              </Text>
-
-              <Text style={styles.quotePrice}>
-                {quoteData.priceMinor != null
-                  ? fmtMoneyMinor(
-                      quoteData.priceMinor,
-                      quoteData.currency || "USD"
-                    )
-                  : "—"}
-              </Text>
-
-              {quoteData.changeMinor != null && (
-                <Text
-                  style={[
-                    styles.quoteChange,
-                    (quoteData.changeMinor || 0) >= 0
-                      ? styles.totalPLPos
-                      : styles.totalPLNeg,
-                  ]}
-                >
-                  {fmtMoneyMinor(
-                    quoteData.changeMinor,
-                    quoteData.currency || "USD"
-                  )}{" "}
-                  ({fmtPct(quoteData.changePct)})
-                </Text>
-              )}
-
-              {quoteData.lastUpdated && (
-                <Text style={styles.quoteUpdated}>
-                  Updated {fmtDateTime(quoteData.lastUpdated)}
-                </Text>
-              )}
-            </View>
-          )}
+          {/* Minimal hint (the real info is in the popup) */}
+          <Text style={{ color: TEXT_MUTED, fontSize: 11 }}>
+            Tip: Tap “Check” to open a detailed quote popup.
+          </Text>
         </View>
 
         {/* Holdings / Favorites list */}
@@ -656,6 +881,12 @@ export default function InvestmentPerformanceScreen() {
         </View>
       </ScrollView>
 
+      <QuoteModal
+        visible={quoteModalOpen}
+        onClose={() => setQuoteModalOpen(false)}
+        quoteData={quoteData}
+      />
+
       <Toast toast={toast} />
     </SafeAreaView>
   );
@@ -672,7 +903,7 @@ const styles = StyleSheet.create({
     paddingBottom: 80,
   },
 
-  // ✅ Top bar (logo + back)
+  // Top bar (logo + back)
   topBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -697,7 +928,7 @@ const styles = StyleSheet.create({
     color: "white",
   },
 
-  // ✅ Clickable logo → safe navigation
+  // Clickable logo
   headerLogoBtn: {
     width: 34,
     height: 34,
@@ -891,29 +1122,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "white",
   },
-  quoteResult: {
-    marginTop: 4,
-  },
-  quoteSymbol: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: TEXT_SOFT,
-  },
-  quotePrice: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#e5e7eb",
-    marginTop: 2,
-  },
-  quoteChange: {
-    fontSize: 13,
-    marginTop: 2,
-  },
-  quoteUpdated: {
-    fontSize: 11,
-    color: TEXT_MUTED,
-    marginTop: 2,
-  },
 
   listCard: {
     borderRadius: 16,
@@ -928,11 +1136,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: BORDER_DARK,
-  },
-  listHeaderTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: TEXT_SOFT,
   },
 
   row: {
@@ -1041,37 +1244,29 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: TEXT_SOFT,
   },
-  listHeaderLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  listHeaderMeta: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: secondary,
-    opacity: 0.95,
-  },
-  listHeaderLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
 
+  listHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
   listHeaderPill: {
     paddingVertical: 2,
     paddingHorizontal: 2,
     borderRadius: 999,
   },
   listHeaderPillActive: {
-    backgroundColor: "rgba(79,119,45,0.12)", // main w/ alpha
+    backgroundColor: "rgba(79,119,45,0.12)",
   },
-
+  listHeaderTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: TEXT_SOFT,
+  },
   listHeaderTitleInactive: {
     color: TEXT_MUTED,
     fontWeight: "600",
   },
-
   listHeaderMeta: {
     fontSize: 14,
     fontWeight: "700",
@@ -1080,5 +1275,127 @@ const styles = StyleSheet.create({
   listHeaderMetaInactive: {
     color: TEXT_MUTED,
     fontWeight: "600",
+  },
+
+  /* ------------------ Modal (quote popup) ------------------ */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    padding: 16,
+    justifyContent: "center",
+  },
+  modalCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+    backgroundColor: "#0b1220",
+    padding: 14,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 10,
+  },
+  modalTitle: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  modalSubtitle: {
+    color: TEXT_MUTED,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  modalCloseBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+    backgroundColor: "#020617",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalCloseText: {
+    color: TEXT_SOFT,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  modalTopLine: {
+    marginBottom: 6,
+  },
+  modalSymbol: {
+    color: TEXT_SOFT,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  modalName: {
+    color: TEXT_MUTED,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  modalPriceRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    gap: 10,
+    marginTop: 6,
+  },
+  modalPrice: {
+    color: "white",
+    fontSize: 20,
+    fontWeight: "900",
+  },
+  modalChange: {
+    color: TEXT_SOFT,
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "right",
+  },
+  modalUpdated: {
+    color: TEXT_MUTED,
+    fontSize: 11,
+    marginTop: 6,
+    marginBottom: 10,
+  },
+  qGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  qStat: {
+    width: "48%",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+    backgroundColor: "#020617",
+    padding: 10,
+  },
+  qStatLabel: {
+    color: TEXT_MUTED,
+    fontSize: 10,
+    marginBottom: 4,
+  },
+  qStatValue: {
+    color: TEXT_SOFT,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  modalFooter: {
+    marginTop: 12,
+    flexDirection: "row",
+    justifyContent: "flex-end",
+  },
+  modalPrimaryBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: main,
+  },
+  modalPrimaryBtnText: {
+    color: "white",
+    fontSize: 13,
+    fontWeight: "800",
   },
 });
