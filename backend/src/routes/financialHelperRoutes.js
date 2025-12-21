@@ -1,23 +1,16 @@
+// backend/src/routes/financialHelperRoutes.js
 import { Router } from "express";
-import multer from "multer";
+import { upload, ingestFile } from "../controllers/ingestController.js";
 import * as ctrl from "../controllers/financialHelperController.js";
+import { requireAuth } from "../middlewares/auth.js";
 
 const router = Router();
 
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const name = (file.originalname || "").toLowerCase();
-    const ok =
-      file.mimetype === "application/pdf" ||
-      file.mimetype === "text/csv" ||
-      name.endsWith(".pdf") ||
-      name.endsWith(".csv");
-    cb(ok ? null : new Error("Only PDF or CSV files are allowed"), ok);
-  },
-});
+// ✅ Upload + ingest handled by ingestController (CSV/PDF auto-detect + proper response)
+// IMPORTANT: This must match frontend: fd.append("file", f)
+router.post("/ingest", requireAuth, upload.single("file"), ingestFile);
 
-router.post("/ingest", upload.single("file"), ctrl.ingestPdf);
-router.post("/chat", ctrl.chat);
+// Chat stays in your financialHelperController
+router.post("/chat", requireAuth, ctrl.chat);
+
 export default router;

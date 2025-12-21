@@ -6,7 +6,6 @@ const require = createRequire(import.meta.url);
 const pdf = require("pdf-parse"); // CJS import that works in ESM
 
 import OpenAI from "openai";
-// ✅ Use the official Gemini SDK & call style
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import mongoose from "mongoose";
 import { parse as parseCSV } from "csv-parse/sync";
@@ -15,35 +14,25 @@ import AiAdvisorFile from "../models/AiAdvisorFile.js";
 import { User } from "../models/user.js";
 import { computeMetrics } from "../ai/financialMetrics.js";
 import { parseTransactionsFromText } from "../ai/pdfParser.js";
-
-// NEW: import prompts (Plus/Premium only)
 import { getPromptForSubscription } from "../ai/prompts/index.js";
 
 // ----------------------------------------------------
 // 2. AGENT CONFIGURATION & INITIALIZATION
 // ----------------------------------------------------
-
-// Determine the active agent from environment variable (default to openai)
 const ACTIVE_AGENT = process.env.FINANCIAL_HELPER_AGENT || "openai";
-const GEMINI_MODEL = "gemini-2.5-flash"; // Recommended model for chat
-const OPENAI_MODEL = "gpt-4o-mini"; // Your existing OpenAI model
+const GEMINI_MODEL = "gemini-2.5-flash";
+const OPENAI_MODEL = "gpt-4o-mini";
 
-// ---------- OPENAI (old agent) ----------
 const openai = process.env.OPENAI_API_KEY
   ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   : null;
 
-// ---------- GEMINI (new agent) ----------
 const gemini = process.env.GEMINI_API_KEY
   ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
   : null;
 
 const isDev = process.env.NODE_ENV !== "production";
 
-/**
- * 3. Central function to call the configured LLM.
- * (Signature: accept systemPrompt explicitly)
- */
 async function callLLM(
   systemPrompt,
   context,
@@ -51,7 +40,6 @@ async function callLLM(
   message,
   modelType
 ) {
-  // Structured input for the LLM: keep it simple & deterministic
   const input = [
     "SYSTEM:",
     systemPrompt,
@@ -60,11 +48,9 @@ async function callLLM(
     JSON.stringify({ tonePreference, context, message }, null, 2),
   ].join("\n");
 
-  // --- GEMINI AGENT LOGIC ---
   if (modelType === "gemini" && gemini) {
     const model = gemini.getGenerativeModel({ model: GEMINI_MODEL });
     const response = await model.generateContent(input);
-    // SDK can expose .response.text() or .text(); handle both safely
     const text =
       typeof response?.response?.text === "function"
         ? response.response.text()
@@ -74,11 +60,8 @@ async function callLLM(
     return (text || "").trim() || "Sorry, I couldn’t generate a response.";
   }
 
-  // --- OPENAI AGENT LOGIC ---
   if (modelType === "openai" && openai) {
     try {
-      // Some SDKs expose `responses.create`; try first:
-      // (harmless try; falls back if not present)
       const completion = await openai.responses.create({
         model: OPENAI_MODEL,
         temperature: 0.3,
@@ -90,7 +73,6 @@ async function callLLM(
         "Sorry, I couldn’t generate a response."
       );
     } catch {
-      // Fallback to standard chat completions
       const completion = await openai.chat.completions.create({
         model: OPENAI_MODEL,
         temperature: 0.3,
@@ -107,6 +89,7 @@ async function callLLM(
 }
 
 /* ------------------------- OFFLINE Q&A HELPERS ------------------------- */
+/* (unchanged — your existing helpers stay as-is) */
 
 // Basic month-name map (EN + TR)
 const MONTHS = {
@@ -162,7 +145,6 @@ function parseDateRangeFromQuery(q) {
   if (!q) return null;
   const s = q.toLowerCase();
 
-  // explicit YYYY-MM or YYYY-MM-DD ranges
   const between =
     /between\s+(\d{4}-\d{2}-\d{2})\s+(?:and|to)\s+(\d{4}-\d{2}-\d{2})/.exec(s);
   if (between)
@@ -183,7 +165,6 @@ function parseDateRangeFromQuery(q) {
     };
   }
 
-  // “august 2025”, “ağustos 2025”
   const monthYear = new RegExp(
     `(${Object.keys(MONTHS).join("|")})\\s*(\\d{4})`,
     "i"
@@ -198,7 +179,6 @@ function parseDateRangeFromQuery(q) {
     };
   }
 
-  // relative windows
   if (/last\s+month|gecen\s+ay|geçen\s+ay/.test(s)) {
     const start = startOfMonth(addMonths(new Date(), -1));
     const end = endOfMonth(start);
@@ -299,7 +279,7 @@ function topN(arr, n) {
   return arr.slice(0, n);
 }
 
-// ---------- HELPERS ----------
+// ---------- FILE/CSV HELPERS ----------
 function normalizeAmount(s) {
   if (s == null) return NaN;
   const raw = String(s).replace(/[^0-9.,-]/g, "");
@@ -318,131 +298,10 @@ function normalizeAmount(s) {
   return neg ? -Math.abs(v) : v;
 }
 
-function csvToTxRows(buf) {
-  const text = buf.toString("utf8");
-  const rows = parseCSV(text, {
-    columns: true,
-    skip_empty_lines: true,
-    // try common delimiters
-    delimiter: [",", ";", "\t", "|"],
-    relax_column_count: true,
-    relax_quotes: true,
-  });
-  const out = [];
-
-  for (const r of rows) {
-    const date =
-      r.Date ||
-      r.Tarih ||
-      r["Transaction Date"] ||
-      r["İşlem Tarihi"] ||
-      r["islemTarihi"];
-    const desc =
-      r.Description ||
-      r.Açıklama ||
-      r["Transaction Description"] ||
-      r["Aciklama"] ||
-      r["Islem Aciklama"];
-    const credit = r.Credit || r.Alacak || r["Yatan"] || r["Credit Amount"];
-    const debit = r.Debit || r.Borç || r["Çekilen"] || r["Debit Amount"];
-    const amountRaw =
-      r.Amount || r.Tutar || r["İşlem Tutarı"] || r["Islem Tutari"];
-
-    let amount = NaN;
-    if (amountRaw != null) amount = normalizeAmount(amountRaw);
-    else if (credit != null || debit != null) {
-      const c = normalizeAmount(credit ?? "0");
-      const d = normalizeAmount(debit ?? "0");
-      amount = (isNaN(c) ? 0 : c) - (isNaN(d) ? 0 : d); // credit - debit
-    }
-
-    if (!date || isNaN(amount)) continue;
-
-    const parts = String(date)
-      .replace(/-/g, "/")
-      .replace(/\./g, "/")
-      .split("/");
-    let d, m, y;
-    if (parts[2] && parts[2].length === 4) {
-      const a = +parts[0],
-        b = +parts[1];
-      if (a > 12) {
-        d = a;
-        m = b;
-      } else if (b > 12) {
-        d = b;
-        m = a;
-      } else {
-        m = a;
-        d = b;
-      }
-      y = parts[2];
-    } else {
-      const a = +parts[0],
-        b = +parts[1];
-      y = String(2000 + +(parts[2] || "0"));
-      if (a > 12) {
-        d = a;
-        m = b;
-      } else {
-        m = a;
-        d = b;
-      }
-    }
-    const iso = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(
-      2,
-      "0"
-    )}`;
-
-    out.push({
-      date: iso,
-      description: (desc || "").toString().trim(),
-      category: "Other",
-      amount,
-      type: amount >= 0 ? "income" : "expense",
-    });
-  }
-  return out;
-}
-
-async function simpleRegexExtract(text) {
-  const lines = text
-    .split(/\r?\n/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const DATE = /\b(\d{1,2}[\/\.\-]\d{1,2}[\/\.\-]\d{2,4})\b/;
-  const AMT =
-    /([-+]?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})|[-+]?\d+(?:[.,]\d{2})?)/;
-
-  const txs = [];
-  for (let i = 0; i < lines.length; i++) {
-    const li = lines[i];
-    const d = li.match(DATE);
-    const a = li.match(AMT);
-    if (d && a) {
-      const iso = normalizeDate(d[1]);
-      const amt = normalizeAmount(a[1]);
-      if (!isNaN(amt)) {
-        txs.push({
-          date: iso,
-          description: li
-            .replace(d[0], "")
-            .replace(a[0], "")
-            .replace(/\s{2,}/g, " ")
-            .trim(),
-          category: "Other",
-          amount: amt,
-          type: amt >= 0 ? "income" : "expense",
-        });
-      }
-    }
-  }
-  return txs;
-}
-
 function normalizeDate(s) {
-  const p = s.replace(/-/g, "/").replace(/\./g, "/").split("/");
+  const p = String(s).replace(/-/g, "/").replace(/\./g, "/").split("/");
   let d, m, y;
+
   if (p[2]?.length === 4) {
     const a = +p[0],
       b = +p[1];
@@ -469,10 +328,83 @@ function normalizeDate(s) {
       d = b;
     }
   }
+
   return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
+function csvToTxRows(buf) {
+  const text = buf.toString("utf8");
+
+  // Important: csv-parse/sync does NOT accept an array of delimiters.
+  // We'll implement a small delimiter fallback.
+  const delimiters = [",", ";", "\t", "|"];
+  let rows = [];
+
+  for (const delim of delimiters) {
+    try {
+      rows = parseCSV(text, {
+        columns: true,
+        skip_empty_lines: true,
+        delimiter: delim,
+        relax_column_count: true,
+        relax_quotes: true,
+        trim: true,
+      });
+      // If it parsed into objects with multiple keys, accept it.
+      if (Array.isArray(rows) && rows.length) break;
+    } catch {
+      // try next delimiter
+    }
+  }
+
+  if (!Array.isArray(rows) || rows.length === 0) return [];
+
+  const out = [];
+
+  for (const r of rows) {
+    const date =
+      r.Date ||
+      r.Tarih ||
+      r["Transaction Date"] ||
+      r["İşlem Tarihi"] ||
+      r["islemTarihi"];
+    const desc =
+      r.Description ||
+      r.Açıklama ||
+      r["Transaction Description"] ||
+      r["Aciklama"] ||
+      r["Islem Aciklama"];
+    const credit = r.Credit || r.Alacak || r["Yatan"] || r["Credit Amount"];
+    const debit = r.Debit || r.Borç || r["Çekilen"] || r["Debit Amount"];
+    const amountRaw =
+      r.Amount || r.Tutar || r["İşlem Tutarı"] || r["Islem Tutari"];
+
+    let amount = NaN;
+    if (amountRaw != null) amount = normalizeAmount(amountRaw);
+    else if (credit != null || debit != null) {
+      const c = normalizeAmount(credit ?? "0");
+      const d = normalizeAmount(debit ?? "0");
+      amount = (isNaN(c) ? 0 : c) - (isNaN(d) ? 0 : d);
+    }
+
+    if (!date || isNaN(amount)) continue;
+
+    const iso = normalizeDate(date);
+
+    out.push({
+      date: iso,
+      description: (desc || "").toString().trim(),
+      category: "Other",
+      amount,
+      type: amount >= 0 ? "income" : "expense",
+    });
+  }
+
+  return out;
+}
+
 /* ---------------------- OFFLINE, INTENT-AWARE ANSWERS ---------------------- */
+/* (unchanged — your existing buildRuleBasedReply stays as-is) */
 function buildRuleBasedReply(ctx, tone, userMsg) {
   const txs = ctx.parsedTransactions || [];
   const m = ctx.computedMetrics || {};
@@ -484,20 +416,17 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
       ? "This is educational, not licensed financial advice."
       : "Note: Educational guidance, not licensed financial advice.";
 
-  // If no data, keep it simple and honest:
   if (!txCount) {
     return `${
       tone === "buddy" ? "Heads up:" : "Note:"
     } I don't see any transactions yet. Upload a CSV (preferred) or a text-based PDF so I can run the numbers.\n\n${disclaimer}`;
   }
 
-  // -------------------- 1) Try to answer the user's question --------------------
   const q = (userMsg || "").trim();
   if (q) {
     const range = parseDateRangeFromQuery(q);
     const category = detectCategoryFromQuery(q);
 
-    // intent heuristics
     const askSpend =
       /(how much|ne kadar).*(spend|harca|gider)|total.*(spend|gider)|harcamam|giderim/i.test(
         q
@@ -524,7 +453,6 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
     const end = range?.end || null;
     const label = range?.label || "selected period";
 
-    // SPEND by category or overall
     if (askSpend) {
       const base = filterTx(txs, { start, end, type: "expense", category });
       const total = Math.abs(sumAmounts(base.filter((t) => t.amount < 0)));
@@ -552,7 +480,6 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
       }
     }
 
-    // INCOME
     if (askIncome) {
       const base = filterTx(txs, { start, end, type: "income" });
       const total = sumAmounts(base.filter((t) => t.amount > 0));
@@ -567,7 +494,6 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
       }
     }
 
-    // INVESTMENTS
     if (askInvest) {
       const base = filterTx(txs, { start, end, category: "Investments" });
       const total = Math.abs(sumAmounts(base.filter((t) => t.amount !== 0)));
@@ -581,7 +507,6 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
       }
     }
 
-    // TOP CATEGORIES
     if (askTopCats) {
       const base = filterTx(txs, { start, end });
       if (!base.length) {
@@ -596,7 +521,6 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
       ).join(" • ")}\n\n${disclaimer}`;
     }
 
-    // LARGEST EXPENSES
     if (askLargest) {
       const base = filterTx(txs, { start, end, type: "expense" }).filter(
         (t) => t.amount < 0
@@ -617,9 +541,7 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
       return `${head}\nLargest expenses in ${label}:\n${list}\n\n${disclaimer}`;
     }
 
-    // BURN RATE (monthly)
     if (askBurn) {
-      // if a month window is given, use that; otherwise last month
       let startM,
         endM,
         lbl = label;
@@ -643,7 +565,6 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
       }\n\n${disclaimer}`;
     }
 
-    // TRENDS (month over month, last 3 months)
     if (askTrend) {
       const now = startOfMonth(new Date());
       const m3 = [addMonths(now, -3), addMonths(now, -2), addMonths(now, -1)];
@@ -677,7 +598,6 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
     }
   }
 
-  // -------------------- 2) Fallback to generic summary if unknown --------------------
   const sr = m.savingsRate ?? null;
   const burn = m.monthlyBurn ?? null;
   const stab = m.incomeStability ?? null;
@@ -761,25 +681,75 @@ ${snap}
 ${disclaimer}`;
 }
 
-// ---------- CONTROLLERS ----------
+/* =============================== INGEST (FILE MANAGEMENT) =============================== */
+/**
+ * NOTE: This function name is kept as `ingestPdf` for compatibility with your current route:
+ *   router.post("/ingest", upload.single("file"), ctrl.ingestPdf);
+ *
+ * It now supports BOTH CSV and PDF, returns consistent payloads, and gives clear errors.
+ */
 export async function ingestPdf(req, res) {
   try {
-    if (!req.file || !req.file.buffer) {
-      return res.status(400).json({ error: "No file uploaded" });
+    // 1) Most common real-world cause of req.file missing:
+    //    client sent application/json instead of multipart/form-data
+    const ct = String(req.headers["content-type"] || "").toLowerCase();
+    if (!ct.includes("multipart/form-data")) {
+      return res.status(415).json({
+        ok: false,
+        code: "BAD_CONTENT_TYPE",
+        message:
+          "Upload requires multipart/form-data. Your request did not include a multipart boundary. If you use Axios, do NOT set Content-Type manually; let the browser set it for FormData.",
+      });
     }
 
-    const name = (req.file.originalname || "").toLowerCase();
-    const isCsv = req.file.mimetype === "text/csv" || name.endsWith(".csv");
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({
+        ok: false,
+        code: "NO_FILE",
+        message:
+          "No file received. Make sure the form field name is 'file' (upload.single('file')).",
+      });
+    }
+
+    const original = String(req.file.originalname || "");
+    const name = original.toLowerCase();
+    const mimetype = String(req.file.mimetype || "").toLowerCase();
+
+    const isCsv =
+      mimetype.includes("csv") ||
+      name.endsWith(".csv") ||
+      mimetype === "application/vnd.ms-excel"; // some browsers report CSV like this
+    const isPdf = mimetype === "application/pdf" || name.endsWith(".pdf");
+
+    if (!isCsv && !isPdf) {
+      return res.status(415).json({
+        ok: false,
+        code: "UNSUPPORTED_TYPE",
+        message: "Only PDF or CSV files are allowed.",
+        meta: { mimetype, originalname: original },
+      });
+    }
 
     let parsedTransactions = [];
-    let note;
+    let note = isCsv ? "csv" : "pdf";
 
     if (isCsv) {
       parsedTransactions = csvToTxRows(req.file.buffer);
-      note = "csv";
+
+      if (!parsedTransactions.length) {
+        return res.status(422).json({
+          ok: false,
+          code: "NO_TRANSACTIONS",
+          message:
+            "We couldn't read any transactions from this CSV. Ensure it has headers like Date/Description/Amount (or Credit/Debit).",
+          note,
+        });
+      }
     } else {
+      // PDF: extract text
       const data = await pdf(req.file.buffer);
       const contentText = (data.text || "").replace(/\u0000/g, "");
+
       if (!contentText.trim()) {
         return res.status(400).json({
           ok: false,
@@ -788,22 +758,20 @@ export async function ingestPdf(req, res) {
             "PDF has no extractable text (likely scanned). Export a text-based PDF or CSV.",
         });
       }
-      // NOTE: This now checks for EITHER OPENAI_API_KEY OR GEMINI_API_KEY inside pdfParser.js
+
+      // LLM fallback allowed if either key exists
       parsedTransactions = await parseTransactionsFromText(contentText, {
         useLLMFallback: Boolean(
           process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY
         ),
       });
-      console.log("txCount:", parsedTransactions.length);
-      if (parsedTransactions.length)
-        console.log("firstTx:", parsedTransactions[0]);
 
       if (!parsedTransactions.length) {
         return res.status(422).json({
           ok: false,
           code: "NO_TRANSACTIONS",
           message:
-            "We couldn't read any transactions from this file. Try your bank’s CSV export or another statement format.",
+            "We couldn't read any transactions from this PDF. Try your bank’s CSV export or another statement format.",
           note,
         });
       }
@@ -818,7 +786,7 @@ export async function ingestPdf(req, res) {
         const doc = await AiAdvisorFile.create({
           userId: req.user?._id || req.userId || req.body.userId || null,
           fileName: req.file.originalname,
-          contentText: undefined, // skip storing large text
+          contentText: undefined, // do not store full text to avoid bloat
           parsedTransactions,
           computedMetrics,
         });
@@ -834,40 +802,43 @@ export async function ingestPdf(req, res) {
       if (isDev) console.warn("Mongo save skipped:", e.message);
     }
 
+    const totals = {
+      txCount: parsedTransactions.length,
+      income: parsedTransactions
+        .filter((t) => Number(t.amount) > 0)
+        .reduce((a, b) => a + Number(b.amount || 0), 0),
+      expense: parsedTransactions
+        .filter((t) => Number(t.amount) < 0)
+        .reduce((a, b) => a + Number(b.amount || 0), 0),
+    };
+
     return res.json({
       ok: true,
       fileId,
-      totals: {
-        txCount: parsedTransactions.length,
-        income: parsedTransactions
-          .filter((t) => t.amount > 0)
-          .reduce((a, b) => a + b.amount, 0),
-        expense: parsedTransactions
-          .filter((t) => t.amount < 0)
-          .reduce((a, b) => a + b.amount, 0),
-      },
+      totals,
       computedMetrics,
       note,
     });
   } catch (err) {
     console.error("ingestPdf error:", err);
     return res.status(500).json({
-      error: "Failed to ingest file",
+      ok: false,
+      code: "INGEST_FAILED",
+      message: "Failed to ingest file",
       details: isDev ? String(err.message || err) : undefined,
     });
   }
 }
 
+/* =============================== CHAT (UNCHANGED LOGIC) =============================== */
 export async function chat(req, res) {
   try {
-    // ✅ also check req.userId set by auth middleware
     const userId = req.user?._id || req.userId || req.body.userId || null;
     const { message, tonePreference, fileId } = req.body;
     if (!message && !tonePreference) {
       return res.status(400).json({ error: "Missing message" });
     }
 
-    // Load user's subscription; default to "Plus" if missing/unknown
     let subscription = "Plus";
     if (userId) {
       const user = await User.findById(userId).select("subscription");
@@ -876,10 +847,8 @@ export async function chat(req, res) {
       }
     }
 
-    // Choose the system prompt based on subscription (Plus or Premium)
     const systemPrompt = getPromptForSubscription(subscription);
 
-    // Find latest file (supports dev usage without userId)
     let fileDoc = null;
     if (fileId) fileDoc = await AiAdvisorFile.findById(fileId);
     else if (userId)
@@ -901,7 +870,6 @@ export async function chat(req, res) {
       computedMetrics: fileDoc.computedMetrics || {},
     };
 
-    // 4. UPDATE: No LLM key? Use rule-based fallback.
     if (!openai && !gemini) {
       const reply = buildRuleBasedReply(
         context,
@@ -911,10 +879,8 @@ export async function chat(req, res) {
       return res.json({ reply });
     }
 
-    // The agent to use is determined by the environment variable ACTIVE_AGENT
     const agentToUse = ACTIVE_AGENT;
 
-    // 5. UPDATE: Call the central LLM function with selected systemPrompt
     try {
       const reply = await callLLM(
         systemPrompt,
@@ -951,5 +917,4 @@ export async function chat(req, res) {
   }
 }
 
-// ---------- EXPORTS ----------
 export default { ingestPdf, chat };

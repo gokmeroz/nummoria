@@ -1,6 +1,8 @@
 /* eslint-disable */
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import api from "../lib/api"; // axios instance
+// frontend/src/pages/FinancialAdvisor.jsx
+
+import React, { useEffect, useRef, useState } from "react";
+import api from "../lib/api"; // your axios instance
 
 // ───────────── Plan Gate ─────────────
 const ELIGIBLE_PLANS = new Set(["plus", "premium"]);
@@ -9,39 +11,54 @@ function isEligible(plan) {
   return ELIGIBLE_PLANS.has(String(plan).toLowerCase());
 }
 
-export default function FinancialHelper() {
+export default function FinancialAdvisor() {
   // ----------------------------- STATE -----------------------------
   const [fileId, setFileId] = useState(null);
   const [tone, setTone] = useState(localStorage.getItem("fh_tone") || "");
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
+
   const [uploading, setUploading] = useState(false);
   const [uploadPct, setUploadPct] = useState(0);
-  const [banner, setBanner] = useState(null); // soft in-page banner
+  const [banner, setBanner] = useState(null);
 
-  // NEW: show a waiting animation while the assistant is generating
   const [thinking, setThinking] = useState(false);
 
-  // PLAN: current user's subscription (free/plus/premium)
+  // Auth & plan
   const [plan, setPlan] = useState(null);
   const [planLoading, setPlanLoading] = useState(true);
 
   const fileRef = useRef(null);
-  const askToneIfNeeded = !tone;
+  const chatRef = useRef(null);
 
-  // Fetch plan once (adjust /me path if different in your backend)
+  // ----------------------------- HELPERS -----------------------------
+  function showBanner(msg) {
+    setBanner(String(msg || ""));
+    window.clearTimeout(showBanner._t);
+    showBanner._t = window.setTimeout(() => setBanner(null), 6500);
+  }
+
+  // Fetch plan once
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
         const { data } = await api.get("/me");
         if (!mounted) return;
+
+        console.log("✅ /me response:", data);
+
         const p =
           data?.subscription?.toLowerCase?.() ||
           data?.plan?.toLowerCase?.() ||
+          data?.user?.subscription?.toLowerCase?.() ||
+          data?.user?.plan?.toLowerCase?.() ||
           null;
+
+        console.log("✅ Parsed plan:", p);
         setPlan(p);
-      } catch {
+      } catch (err) {
+        console.error("❌ /me failed:", err);
         setPlan(null);
       } finally {
         if (mounted) setPlanLoading(false);
@@ -52,42 +69,37 @@ export default function FinancialHelper() {
     };
   }, []);
 
-  // local banner helper (safe even if you have a global showBanner elsewhere)
-  function showBanner(msg) {
-    setBanner(String(msg || ""));
-    // auto-hide after 5s
-    window.clearTimeout(showBanner._t);
-    showBanner._t = window.setTimeout(() => setBanner(null), 5000);
-  }
+  // auto-scroll
+  useEffect(() => {
+    chatRef.current?.scrollTo({
+      top: chatRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [messages.length, thinking]);
 
-  // ------------------------- HANDLERS (with gate + waiting flag) -------------------------
+  // ------------------------- FILE UPLOAD -------------------------
   async function handleFileChange(e) {
-    if (!isEligible(plan)) {
-      showBanner(
-        "Uploads require Plus or Premium. Please upgrade to continue."
-      );
-      // allow selecting the same file again to re-trigger onChange later
-      if (e?.target) e.target.value = "";
-      return;
-    }
-
-    const f = e.target.files?.[0];
-    if (!f) return;
-
-    const fd = new FormData();
-    fd.append("file", f); // backend expects 'file'
-
     try {
+      const f = e?.target?.files?.[0];
+      if (!f) return;
+
+      const fd = new FormData();
+      fd.append("file", f);
+
       setUploading(true);
+      setUploadPct(0);
       setBanner(null);
-      const { data } = await api.post("/ai/financial-helper/ingest", fd, {
+
+      const res = await api.post("/ai/financial-helper/ingest", fd, {
         onUploadProgress: (evt) => {
-          if (evt.total)
+          if (evt?.total)
             setUploadPct(Math.round((evt.loaded / evt.total) * 100));
         },
       });
 
-      setFileId(data.fileId || null);
+      const data = res?.data || {};
+      setFileId(data?.fileId || null);
+
       setMessages((m) => [
         ...m,
         {
@@ -97,29 +109,44 @@ export default function FinancialHelper() {
           } transactions loaded.`,
         },
       ]);
+
+      showBanner("Upload successful. File linked to your session.");
     } catch (err) {
+      console.error("Upload error:", err);
+
       const code = err?.response?.data?.code;
-      const msg = err?.response?.data?.message || "Upload failed.";
-      if (code === "NO_TRANSACTIONS") {
-        showBanner(msg + " Tip: Export a CSV from your bank and upload that.");
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        err?.message ||
+        "Upload failed.";
+
+      if (err?.response?.status === 402) {
+        showBanner("Upgrade required to use Financial Advisor uploads.");
+      } else if (err?.response?.status === 413 || code === "LIMIT_FILE_SIZE") {
+        showBanner("File too large. Please upload a smaller PDF/CSV.");
       } else if (code === "PDF_NO_TEXT") {
         showBanner(
-          "This PDF is scanned/image-only. Please export a text-based PDF or CSV."
+          "This PDF is scanned/image-only. Please export a text-based PDF or upload a CSV."
         );
-      } else if (err?.response?.status === 402) {
-        // if backend also enforces upgrade
-        showBanner("Upgrade required to use Financial Advisor.");
+      } else if (code === "NO_TRANSACTIONS") {
+        showBanner(`${msg} Tip: Export a CSV from your bank and upload that.`);
       } else {
         showBanner(msg);
       }
     } finally {
       setUploading(false);
       setUploadPct(0);
-      // allow selecting the same file again to re-trigger onChange
       if (e?.target) e.target.value = "";
     }
   }
 
+  function clearFile() {
+    setFileId(null);
+    showBanner("File unlinked from this session.");
+  }
+
+  // ------------------------- CHAT -------------------------
   async function onSend() {
     if (!isEligible(plan)) {
       showBanner(
@@ -128,12 +155,13 @@ export default function FinancialHelper() {
       return;
     }
 
-    if (!input.trim() && askToneIfNeeded) {
-      if (!tone) return; // pick tone first
+    const tonePref = (tone || "formal").toLowerCase();
+    if (!tone) {
+      setTone(tonePref);
+      localStorage.setItem("fh_tone", tonePref);
+    } else {
+      localStorage.setItem("fh_tone", tonePref);
     }
-
-    const tonePref = tone || "formal";
-    if (!tone) localStorage.setItem("fh_tone", tonePref);
 
     const userMsg = input.trim();
     setMessages((m) => [
@@ -143,7 +171,7 @@ export default function FinancialHelper() {
     setInput("");
 
     try {
-      setThinking(true); // start typing indicator
+      setThinking(true);
       const { data } = await api.post("/ai/financial-helper/chat", {
         message: userMsg || `Start session. Tone: ${tonePref}`,
         tonePreference: tonePref,
@@ -154,35 +182,28 @@ export default function FinancialHelper() {
       const msg =
         err?.response?.data?.error ||
         err?.response?.data?.message ||
-        err.message ||
+        err?.message ||
         "Chat failed";
+
       setMessages((m) => [
         ...m,
         { role: "system", content: `Chat failed: ${msg}` },
       ]);
     } finally {
-      setThinking(false); // stop typing indicator
+      setThinking(false);
     }
   }
 
-  // Enter-to-send (also keeps your onClick)
   function handleComposerKeyDown(e) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if (tone && input.trim() && isEligible(plan)) onSend();
+      if (tone && input.trim() && !thinking && isEligible(plan)) onSend();
     }
   }
 
-  // auto-scroll chat to bottom on new message
-  const chatRef = useRef(null);
-  useEffect(() => {
-    chatRef.current?.scrollTo({
-      top: chatRef.current.scrollHeight,
-      behavior: "smooth",
-    });
-  }, [messages.length, thinking]); // include thinking so the typing bubble stays in view
-
   // ------------------------------- UI -------------------------------
+  const lockedByPlan = !planLoading && !isEligible(plan);
+
   return (
     <div className="min-h-[100dvh] bg-gradient-to-br from-[#f4f8f4] to-[#eef5ea]">
       {/* Top bar */}
@@ -208,11 +229,13 @@ export default function FinancialHelper() {
               selected={tone === "formal"}
               onClick={() => setTone("formal")}
               label="Formal"
+              disabled={planLoading}
             />
             <ToneChip
               selected={tone === "buddy"}
               onClick={() => setTone("buddy")}
               label="Buddy"
+              disabled={planLoading}
             />
           </div>
         </div>
@@ -226,27 +249,6 @@ export default function FinancialHelper() {
       </div>
 
       <div className="mx-auto max-w-4xl px-4 py-6 space-y-6">
-        {/* Tone selector (mobile & first-run) */}
-        {!tone && (
-          <div className="rounded-2xl border bg-white p-4 shadow-sm">
-            <p className="text-sm text-gray-700 mb-3">How should I talk?</p>
-            <div className="flex gap-2">
-              <ToneChip
-                big
-                selected={tone === "formal"}
-                onClick={() => setTone("formal")}
-                label="Formal"
-              />
-              <ToneChip
-                big
-                selected={tone === "buddy"}
-                onClick={() => setTone("buddy")}
-                label="Buddy"
-              />
-            </div>
-          </div>
-        )}
-
         {/* Upload card */}
         <div className="rounded-2xl border bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between gap-3">
@@ -262,23 +264,37 @@ export default function FinancialHelper() {
               <input
                 ref={fileRef}
                 type="file"
-                accept="application/pdf,text/csv,.csv"
+                accept="application/pdf,text/csv,.csv,.pdf"
                 className="hidden"
                 onChange={handleFileChange}
               />
+
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
                 className="px-3 py-2 rounded-xl border text-[#4f772d] border-[#4f772d] hover:bg-[#eef5ea] font-semibold disabled:opacity-60"
-                disabled={uploading || !isEligible(plan) || planLoading}
+                disabled={uploading || planLoading || lockedByPlan}
                 title={
-                  !isEligible(plan) && !planLoading
+                  planLoading
+                    ? "Checking your plan..."
+                    : lockedByPlan
                     ? "Upgrade to Plus or Premium"
                     : "Choose a PDF or CSV"
                 }
               >
                 {uploading ? "Uploading…" : "Choose File"}
               </button>
+
+              {fileId && (
+                <button
+                  type="button"
+                  onClick={clearFile}
+                  className="px-3 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50 font-semibold"
+                  disabled={uploading}
+                >
+                  Remove
+                </button>
+              )}
             </div>
           </div>
 
@@ -295,23 +311,25 @@ export default function FinancialHelper() {
             </div>
           )}
 
-          {/* file status */}
-          <div className="mt-3 flex items-center gap-2 text-xs text-gray-600">
-            <span
-              className={`inline-flex items-center gap-1 px-2 py-1 rounded-full ${
-                fileId ? "bg-emerald-50 text-emerald-700" : "bg-gray-50"
-              }`}
-              title={fileId ? String(fileId) : "No file uploaded yet"}
-            >
-              <Dot ok={!!fileId} />
-              {fileId ? "File linked to session" : "No file yet"}
-            </span>
-            {!planLoading && !isEligible(plan) && (
-              <span className="ml-2 inline-flex items-center rounded-md bg-amber-50 text-amber-800 px-2 py-1">
-                Plus/Premium required
+          {/* status */}
+          {!planLoading && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-600">
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-1 rounded-full ${
+                  fileId ? "bg-emerald-50 text-emerald-700" : "bg-gray-50"
+                }`}
+              >
+                <Dot ok={!!fileId} />
+                {fileId ? "File linked to session" : "No file yet"}
               </span>
-            )}
-          </div>
+
+              {lockedByPlan && (
+                <span className="inline-flex items-center rounded-md bg-amber-50 text-amber-800 px-2 py-1">
+                  Plus/Premium required
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Chat card */}
@@ -321,7 +339,7 @@ export default function FinancialHelper() {
             className="relative h-[52vh] p-4 overflow-auto bg-[linear-gradient(180deg,#ffffff_0%,#fbfdf9_100%)]"
           >
             {messages.length === 0 ? (
-              <div className="h-full grid place-items-center text-gray-500 text-sm">
+              <div className="h-full grid place-items-center text-gray-500 text-sm text-center px-6">
                 {planLoading
                   ? "Checking your plan…"
                   : isEligible(plan)
@@ -333,11 +351,10 @@ export default function FinancialHelper() {
                 {messages.map((m, i) => (
                   <ChatBubble key={i} role={m.role} text={m.content} />
                 ))}
-                {thinking && <TypingBubble />} {/* waiting indicator */}
+                {thinking && <TypingBubble />}
               </div>
             )}
 
-            {/* PLAN GATE OVERLAY */}
             {!planLoading && !isEligible(plan) && (
               <UpgradeOverlay plan={plan} />
             )}
@@ -359,7 +376,9 @@ export default function FinancialHelper() {
                 onKeyDown={handleComposerKeyDown}
                 rows={2}
                 placeholder={
-                  !planLoading && !isEligible(plan)
+                  planLoading
+                    ? "Checking plan…"
+                    : !isEligible(plan)
                     ? "Upgrade to Plus or Premium to chat with the advisor."
                     : tone
                     ? "Ask about your budget, risk, or investments… (Shift+Enter = newline)"
@@ -370,7 +389,6 @@ export default function FinancialHelper() {
               />
               <button
                 type="submit"
-                onClick={(e) => e.currentTarget.blur()}
                 disabled={
                   !tone ||
                   !input.trim() ||
@@ -379,24 +397,10 @@ export default function FinancialHelper() {
                   planLoading
                 }
                 className="px-4 py-2 rounded-xl bg-emerald-700 text-white font-semibold hover:bg-emerald-800 disabled:opacity-60"
-                title={
-                  !isEligible(plan) && !planLoading
-                    ? "Upgrade to use Financial Advisor"
-                    : !tone
-                    ? "Pick a tone first"
-                    : thinking
-                    ? "Waiting for reply…"
-                    : "Send"
-                }
               >
                 {thinking ? "Thinking…" : "Send"}
               </button>
             </div>
-            {!tone && isEligible(plan) && (
-              <div className="pt-1 text-xs text-gray-500">
-                Select a tone above to enable the composer.
-              </div>
-            )}
           </form>
         </div>
       </div>
@@ -406,18 +410,19 @@ export default function FinancialHelper() {
 
 /* ---------------------------- SMALL COMPONENTS ---------------------------- */
 
-function ToneChip({ selected, onClick, label, big }) {
+function ToneChip({ selected, onClick, label, big, disabled }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       className={[
         "rounded-full border px-3",
         big ? "py-2 text-sm" : "py-1 text-xs",
         selected
           ? "bg-[#4f772d] text-white border-[#4f772d]"
           : "bg-white text-[#4f772d] border-[#4f772d] hover:bg-[#eef5ea]",
-        "transition",
+        "transition disabled:opacity-60 disabled:hover:bg-white",
       ].join(" ")}
     >
       {label}
@@ -428,8 +433,6 @@ function ToneChip({ selected, onClick, label, big }) {
 function ChatBubble({ role, text }) {
   const isUser = role === "user";
   const isAssistant = role === "assistant";
-  const isSystem = role === "system";
-
   const base =
     "max-w-[85%] rounded-2xl px-3 py-2 shadow-sm leading-relaxed whitespace-pre-wrap";
   const cls = isUser
@@ -455,7 +458,6 @@ function Dot({ ok }) {
   );
 }
 
-// Minimal typing indicator using Tailwind animate-bounce with staggered delays
 function TypingBubble() {
   return (
     <div className="max-w-[85%] rounded-2xl px-3 py-2 shadow-sm leading-relaxed bg-[#f3f8ef] text-gray-900 border border-[#e3f0da] inline-flex items-center gap-2">
@@ -476,7 +478,6 @@ function TypingBubble() {
   );
 }
 
-// Upgrade overlay displayed when plan is not eligible
 function UpgradeOverlay({ plan }) {
   return (
     <div className="absolute inset-0 bg-white/85 backdrop-blur-sm grid place-items-center p-6">
@@ -484,10 +485,10 @@ function UpgradeOverlay({ plan }) {
         <div className="text-2xl font-bold">Unlock AI Financial Advisor</div>
         <p className="mt-2 text-sm text-gray-600">
           Your current plan{" "}
-          <span className="font-medium">({plan || "free"})</span> doesn’t
+          <span className="font-medium">({plan || "free"})</span> doesn't
           include this feature. Upgrade to{" "}
           <span className="font-semibold">Plus</span> or{" "}
-          <span className="font-semibold">Premium</span> to continue.
+          <span className="font-semibold">Premium</span>.
         </p>
         <div className="mt-4 flex items-center gap-2 justify-center">
           <a
@@ -503,9 +504,6 @@ function UpgradeOverlay({ plan }) {
             Go Premium
           </a>
         </div>
-        <p className="mt-3 text-xs text-gray-500">
-          Plus & Premium include AI insights, savings tips, and more.
-        </p>
       </div>
     </div>
   );
