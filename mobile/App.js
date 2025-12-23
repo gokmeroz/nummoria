@@ -1,16 +1,13 @@
 // mobile/App.js
 import React, { useEffect, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  SafeAreaView,
-  Text,
-  StyleSheet,
-  Platform,
-} from "react-native";
+import { Platform, StyleSheet } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Device from "expo-device";
+
+// NEW: use JS-based splash gate instead of native splash hold
+import SplashGateScreen from "./src/screens/SplashGateScreen";
 
 import OnboardingScreen from "./src/screens/OnboardingScreen";
 import LoginScreen from "./src/screens/LoginScreen";
@@ -51,7 +48,7 @@ export default function App() {
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  // ✅ NEW: we compute the *real* initial route including Terms
+  // ✅ We compute the real next route after splash gate
   const [initialRoute, setInitialRoute] = useState("Login");
 
   // ✅ Register device on backend (requires being authenticated already)
@@ -110,7 +107,7 @@ export default function App() {
           delete api.defaults.headers.Authorization;
         }
 
-        // If onboarding not seen, go onboarding immediately (no need to validate session)
+        // If onboarding not seen, go onboarding
         if (!seen) {
           setIsLoggedIn(false);
           setInitialRoute("Onboarding");
@@ -133,16 +130,11 @@ export default function App() {
           return;
         }
 
-        // ✅ Consent gate (THIS is what you were missing)
+        // Consent gate
         const accepted = await hasAcceptedConsent(userId);
+        setInitialRoute(accepted ? "Main" : "Terms");
 
-        if (!accepted) {
-          setInitialRoute("Terms");
-        } else {
-          setInitialRoute("Main");
-        }
-
-        // ✅ Register push token ONLY when authenticated
+        // Register push token ONLY when authenticated
         if (logged && token) {
           try {
             await registerDeviceOnBackend();
@@ -163,15 +155,6 @@ export default function App() {
     bootstrap();
   }, []);
 
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.loadingRoot}>
-        <ActivityIndicator size="large" color="#22c55e" />
-        <Text style={styles.loadingText}>Loading Nummoria…</Text>
-      </SafeAreaView>
-    );
-  }
-
   // ✅ Centralized post-auth routing (login + signup use the same gate)
   async function routeAfterAuth(navigation) {
     const userId = await AsyncStorage.getItem("defaultId");
@@ -184,12 +167,32 @@ export default function App() {
     navigation.replace("Main");
   }
 
+  // NEW: while booting, still show SplashGate; it will wait 2s and then
+  // navigate to whatever initialRoute we computed (or "Login" by default).
   return (
     <NavigationContainer ref={navigationRef}>
       <Stack.Navigator
         screenOptions={{ headerShown: false }}
-        initialRouteName={initialRoute}
+        initialRouteName="SplashGate" // NEW
       >
+        {/* NEW: Splash gate always first */}
+        <Stack.Screen name="SplashGate">
+          {(props) => (
+            <SplashGateScreen
+              {...props}
+              route={{
+                ...props.route,
+                params: {
+                  ...(props.route?.params || {}),
+                  // If bootstrap finished, use computed route.
+                  // Otherwise, fall back to Login.
+                  nextRoute: loading ? "Login" : initialRoute,
+                },
+              }}
+            />
+          )}
+        </Stack.Screen>
+
         {/* Onboarding */}
         <Stack.Screen name="Onboarding">
           {(props) => (
@@ -212,7 +215,6 @@ export default function App() {
               onLoggedIn={async () => {
                 setIsLoggedIn(true);
 
-                // Ensure api auth header is set (LoginScreen should save token)
                 const token = await AsyncStorage.getItem("token");
                 if (token) {
                   api.defaults.headers.Authorization = `Bearer ${token}`;
@@ -220,7 +222,6 @@ export default function App() {
                   delete api.defaults.headers.Authorization;
                 }
 
-                // Register device now that we are logged in
                 try {
                   await registerDeviceOnBackend();
                 } catch (e) {
@@ -230,7 +231,6 @@ export default function App() {
                   );
                 }
 
-                // ✅ Enforce Terms before letting them into MainTabs
                 await routeAfterAuth(props.navigation);
               }}
             />
@@ -261,23 +261,22 @@ export default function App() {
                   );
                 }
 
-                // ✅ Enforce Terms before letting them into MainTabs
                 await routeAfterAuth(props.navigation);
               }}
             />
           )}
         </Stack.Screen>
 
-        {/* ✅ Terms MUST be inside Navigator */}
+        {/* Terms */}
         <Stack.Screen
           name="Terms"
           component={TermsScreen}
           options={{ headerShown: false, gestureEnabled: false }}
         />
 
-        {/* Main tabs */}
-        {/* <Stack.Screen name="MainTabs" component={AppTabs} /> */}
+        {/* Main */}
         <Stack.Screen name="Main" component={MainStack} />
+
         {/* User profile */}
         <Stack.Screen
           name="User"

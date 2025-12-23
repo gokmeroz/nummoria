@@ -22,7 +22,7 @@ import {
   Image, // ✅ NEW: for clickable header logo → Dashboard
 } from "react-native";
 import api from "../lib/api";
-import logo from "../assets/nummoria_logo.png";
+import logo from "../../assets/nummoria_logo.png";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const main = "#4f772d";

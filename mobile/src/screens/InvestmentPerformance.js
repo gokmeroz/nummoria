@@ -19,7 +19,7 @@ import {
 import { useNavigation, useRoute } from "@react-navigation/native";
 
 import api from "../lib/api";
-import logo from "../assets/nummoria_logo.png";
+import logo from "../../assets/nummoria_logo.png";
 
 const main = "#4f772d";
 const secondary = "#90a955";

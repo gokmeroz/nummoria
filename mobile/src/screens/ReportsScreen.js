@@ -19,7 +19,7 @@ import {
 import { Calendar } from "react-native-calendars";
 import { useNavigation } from "@react-navigation/native";
 import api from "../lib/api";
-import logo from "../assets/nummoria_logo.png";
+import logo from "../../assets/nummoria_logo.png";
 
 const main = "#22c55e";
 const secondary = "#4ade80";

@@ -22,7 +22,7 @@ import { useNavigation } from "@react-navigation/native";
 
 // ✅ mobile axios instance (points to same backend as web)
 import api from "../lib/api";
-import logo from "../assets/nummoria_logo.png";
+import logo from "../../assets/nummoria_logo.png";
 
 const main = "#22c55e";
 const secondary = "#4ade80";

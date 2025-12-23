@@ -30,6 +30,7 @@
     "expo-notifications": "~0.32.15",
     "expo-print": "~15.0.8",
     "expo-sharing": "~14.0.8",
+    "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~2.0.0",
     "global": "^4.4.0",
     "react": "19.1.0",

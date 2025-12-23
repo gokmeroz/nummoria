@@ -1,6 +1,6 @@
 // src/screens/OnboardingScreen.js
 import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
 
 export default function OnboardingScreen({ navigation, onFinish }) {
   async function handleStart() {
@@ -14,6 +14,7 @@ export default function OnboardingScreen({ navigation, onFinish }) {
   return (
     <View style={styles.root}>
       {/* your onboarding UI */}
+      <Image src="./assets/nummoria_logo.png" />
       <Text style={styles.title}>Welcome to Nummoria</Text>
       <TouchableOpacity onPress={handleStart} style={styles.button}>
         <Text style={styles.buttonText}>Get started</Text>

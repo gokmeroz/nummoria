@@ -332,7 +332,7 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
             <View style={styles.brandRow}>
               <View style={styles.logoBadge}>
                 <Image
-                  source={require("../assets/nummoria_logo.png")}
+                  source={require("../../assets/nummoria_logo.png")}
                   style={styles.logo}
                   resizeMode="contain"
                 />

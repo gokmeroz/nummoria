@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
+    "name": "Nummoria",
+    "slug": "nummoria",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/nummoria_logo.png",
@@ -10,12 +10,12 @@
     "splash": {
       "image": "./assets/nummoria_logo.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#020617"
     },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.mobile",
-      "deploymentTarget": "13.0",
+      "deploymentTarget": "15.1",
       "infoPlist": {
         "NSCameraUsageDescription": "This app needs camera access to scan receipt QR codes and automatically fill expense details.",
         "ITSAppUsesNonExemptEncryption": false,

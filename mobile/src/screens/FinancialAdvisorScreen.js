@@ -27,7 +27,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as DocumentPicker from "expo-document-picker";
 import { useNavigation } from "@react-navigation/native";
 import api from "../lib/api";
-import logo from "../assets/nummoria_logo.png";
+import logo from "../../assets/nummoria_logo.png";
 
 const BG_DARK = "#020617";
 const CARD_DARK = "#020819";

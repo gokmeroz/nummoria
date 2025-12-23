@@ -20,7 +20,8 @@ const TEXT_MUTED = "rgba(148,163,184,1)";
 const TEXT_SOFT = "rgba(148,163,184,0.85)";
 
 export default function TermsScreen({ route, navigation }) {
-  const nextRoute = route?.params?.nextRoute || "MainTabs";
+  // NEW: default route must match App.js stack (you use "Main", not "MainTabs")
+  const nextRoute = route?.params?.nextRoute || "Main";
 
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [cookiesAccepted, setCookiesAccepted] = useState(false);
@@ -65,9 +66,12 @@ export default function TermsScreen({ route, navigation }) {
 
     await AsyncStorage.setItem(`consent:${userId}`, JSON.stringify(payload));
 
+    // NEW: guard against older callers still passing "MainTabs"
+    const targetRoute = nextRoute === "MainTabs" ? "Main" : nextRoute;
+
     navigation.reset({
       index: 0,
-      routes: [{ name: nextRoute }],
+      routes: [{ name: targetRoute }], // NEW: ensure valid route name
     });
   }
 
@@ -90,7 +94,7 @@ export default function TermsScreen({ route, navigation }) {
             <View style={styles.brandRow}>
               <View style={styles.logoBadge}>
                 <Image
-                  source={require("../assets/nummoria_logo.png")}
+                  source={require("../../assets/nummoria_logo.png")}
                   style={styles.logo}
                   resizeMode="contain"
                 />

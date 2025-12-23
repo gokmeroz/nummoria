@@ -292,7 +292,7 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
             <View style={styles.heroHeaderRow}>
               <View style={styles.logoBadge}>
                 <Image
-                  source={require("../assets/nummoria_logo.png")}
+                  source={require("../../assets/nummoria_logo.png")}
                   style={styles.logo}
                   resizeMode="contain"
                 />

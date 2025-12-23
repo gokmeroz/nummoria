@@ -30,7 +30,7 @@ const TEXT_MUTED = "rgba(148,163,184,1)";
 const TEXT_SOFT = "rgba(148,163,184,0.8)";
 
 // If you have a local "see it" asset, point this require there:
-const seeItImg = require("../assets/nummoria_logo.png"); // 🔁 change to your hero image later
+const seeItImg = require("../../assets/nummoria_logo.png"); // 🔁 change to your hero image later
 
 // 🔥 Slides config, mirroring your web `slides` array
 const slides = [
