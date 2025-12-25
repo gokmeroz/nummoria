@@ -22,12 +22,15 @@ export default function OnboardingScreen({ navigation, onFinish }) {
     <SafeAreaView style={styles.root}>
       <View style={styles.content}>
         <View style={styles.logoWrap}>
-          {/* ✅ React Native uses `source`, not `src` */}
           <Image source={logo} style={styles.logo} />
           <Text style={styles.title}>Nummoria</Text>
         </View>
 
-        <Text style={styles.title}>Welcome to Nummoria</Text>
+        {/* NEW: Punchline */}
+        <Text style={styles.punchline}>
+          The new way of taking control of your money with AI.{"\n"}One decision
+          at a time.
+        </Text>
 
         <TouchableOpacity
           onPress={handleStart}
@@ -49,12 +52,11 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     alignItems: "center",
-    justifyContent: "flex-end", // keeps CTA low like your screenshot, but not clipped
+    justifyContent: "flex-end",
     paddingHorizontal: 24,
     paddingBottom: 28,
   },
 
-  // Logo should NOT be 100% x 100%
   logoWrap: {
     position: "absolute",
     top: 164,
@@ -75,6 +77,16 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     marginBottom: 14,
     textAlign: "center",
+  },
+
+  // NEW: Punchline styles
+  punchline: {
+    color: "rgba(148,163,184,0.9)",
+    fontSize: 16,
+    textAlign: "center",
+    marginBottom: 22,
+    lineHeight: 22,
+    maxWidth: 320,
   },
 
   button: {
