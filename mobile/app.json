@@ -7,6 +7,7 @@
     "icon": "./assets/nummoria_logo.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "assetBundlePatterns": ["**/*"],
     "splash": {
       "image": "./assets/nummoria_logo.png",
       "resizeMode": "contain",
@@ -19,6 +20,7 @@
       "infoPlist": {
         "NSCameraUsageDescription": "This app needs camera access to scan receipt QR codes and automatically fill expense details.",
         "ITSAppUsesNonExemptEncryption": false,
+
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
         }

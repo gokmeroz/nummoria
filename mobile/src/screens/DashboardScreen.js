@@ -29,8 +29,9 @@ const BRAND_GREEN_SOFT = "rgba(22,163,74,0.15)";
 const TEXT_MUTED = "rgba(148,163,184,1)";
 const TEXT_SOFT = "rgba(148,163,184,0.8)";
 
-// If you have a local "see it" asset, point this require there:
-const seeItImg = require("../../assets/nummoria_logo.png"); // 🔁 change to your hero image later
+// ✅ FIX: asset is in mobile/assets (DashboardScreen is mobile/src/screens)
+// Path: mobile/src/screens -> ../../assets
+const seeItImg = require("../../assets/nummoria_logo.png");
 
 // 🔥 Slides config, mirroring your web `slides` array
 const slides = [
@@ -74,7 +75,8 @@ const slides = [
     dim: true,
   },
   {
-    image: "https://images.unsplash.com/photo-1550547660-d9450f859349",
+    image:
+      "https://images.unsplash.com/photo-1550547660-d9450f859349?w=1920&q=80&auto=format&fit=crop",
     alt: "Hamburger meal display",
     title: "Want fries with that?",
     subtitle: "Check out our new AI based advicer if it is healthy for ya!.",
@@ -210,12 +212,30 @@ export default function DashboardScreen() {
 
         // avatar: backend first, then local cache
         const backendAvatar = me.avatarUrl || me.profilePicture || null;
+
+        // ✅ NEW: debug logs so device tells you what's wrong
+        console.log("Dashboard /me baseURL:", api.defaults.baseURL);
+        console.log("Dashboard /me backendAvatar:", backendAvatar);
+
         if (backendAvatar) {
           const baseURL = api.defaults.baseURL || "";
+          const origin = baseURL.replace(/\/api\/?$/, ""); // strips trailing /api
+
+          // Normalize backend path if it accidentally contains /api prefix
+          const normalizedAvatar =
+            typeof backendAvatar === "string"
+              ? backendAvatar.replace(/^\/api\//, "/")
+              : backendAvatar;
+
           const full =
-            backendAvatar.startsWith("http") || backendAvatar.startsWith("file")
-              ? backendAvatar
-              : `${baseURL}${backendAvatar}`;
+            normalizedAvatar.startsWith("http") ||
+            normalizedAvatar.startsWith("file")
+              ? normalizedAvatar
+              : `${origin}${
+                  normalizedAvatar.startsWith("/") ? "" : "/"
+                }${normalizedAvatar}`;
+
+          console.log("Dashboard /me final avatarUri:", full);
           setAvatarUri(full);
         } else {
           const storedAvatar = await AsyncStorage.getItem("userAvatarUri");
@@ -301,7 +321,17 @@ export default function DashboardScreen() {
             onPress={() => navigation.navigate("User")}
           >
             {avatarUri ? (
-              <Image source={{ uri: avatarUri }} style={styles.userAvatar} />
+              <Image
+                source={{ uri: avatarUri }}
+                style={styles.userAvatar}
+                // ✅ NEW: log why it fails on device (localhost, 404, ATS, etc.)
+                onError={(e) =>
+                  console.warn("Avatar failed to load:", {
+                    avatarUri,
+                    error: e?.nativeEvent,
+                  })
+                }
+              />
             ) : (
               <Text style={styles.userInitial}>
                 {(name || "You").charAt(0).toUpperCase()}
