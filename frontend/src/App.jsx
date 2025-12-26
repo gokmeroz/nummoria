@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars */
 /* eslint-disable no-undef */
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import Guard from "./components/Guard";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
@@ -31,6 +31,12 @@ import SubscriptionManager from "./pages/SubscriptionManager";
 import PurchasePage from "./pages/PurchasePage";
 import WelcomeLanding from "./pages/WelcomeLanding";
 
+//Admin Control Panel imports
+import AdminRoute from "./admin/routes/AdminRoute";
+import AdminLayout from "./admin/components/AdminLayout";
+import AdminUsersPage from "./admin/pages/AdminUsersPage";
+import AdminUserDetailPage from "./admin/pages/AdminUserDetailPage";
+
 export default function App() {
   function handleLogout() {
     localStorage.removeItem("token");
@@ -57,7 +63,14 @@ export default function App() {
 
         {/* OAuth callback can be public */}
         <Route path="/oauth-callback" element={<OAuthCallback />} />
-
+        {/* Admin (self-guarded) */}
+        <Route element={<AdminRoute />}>
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<Navigate to="users" replace />} />
+            <Route path="users" element={<AdminUsersPage />} />
+            <Route path="users/:id" element={<AdminUserDetailPage />} />
+          </Route>
+        </Route>
         {/* Protected */}
         <Route element={<Guard />}>
           <Route element={<Layout onLogout={handleLogout} />}>

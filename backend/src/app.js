@@ -5,7 +5,6 @@ import helmet from "helmet";
 import morgan from "morgan";
 import path from "path";
 import cookieParser from "cookie-parser";
-
 import marketRouter from "./routes/marketRoutes.js";
 import authRoutes from "./routes/auth.js";
 import meRoutes from "./routes/me.js";
@@ -18,6 +17,7 @@ import statsRoutes from "./routes/stats.js";
 import contactRoutes from "./routes/contact.js";
 import ingestRoutes from "./routes/ingestRoutes.js";
 import consentRoutes from "./routes/consentRoutes.js";
+import adminUserRoutes from "./routes/adminUserRoutes.js";
 
 import { consentGate } from "./middlewares/consent.js";
 import { requireAuth } from "./middlewares/auth.js"; // ✅ FIX: define auth
@@ -108,6 +108,7 @@ app.use("/ingest", ingestRoutes);
 // ✅ Notifications infrastructure (auth-protected)
 app.use("/devices", requireAuth, devicesRouter);
 app.use("/notifications", requireAuth, notificationsRouter);
+app.use("/admin", adminUserRoutes);
 
 // ---- error handler ----
 app.use((err, _req, res, _next) => {

@@ -1,10 +1,16 @@
 /* eslint-disable no-unused-vars */
 // src/pages/Login.jsx
 import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom"; // NEW
 import api from "../lib/api";
 import Footer from "../components/Footer";
 
 export default function Login() {
+  // NEW: router helpers for proper post-login redirects
+  const navigate = useNavigate();
+  const location = useLocation();
+  const from = location.state?.from; // e.g. "/admin/users" (set by AdminRoute)
+
   // ───────────── login state ─────────────
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -83,6 +89,30 @@ export default function Login() {
     })();
   }, []);
 
+  // NEW: centralized redirect logic
+  async function goPostLogin() {
+    // 1) If we were sent here by AdminRoute (or any protected page), go back there
+    if (from) {
+      navigate(from, { replace: true });
+      return;
+    }
+
+    // 2) Otherwise: send admins to admin console, users to dashboard
+    try {
+      // AdminRoute uses /auth/me; keep consistent
+      const { data } = await api.get("/me", { withCredentials: true });
+      const user = data?.user ?? data;
+      if (user?.role === "admin") {
+        navigate("/admin/users", { replace: true });
+        return;
+      }
+    } catch (e) {
+      // If /auth/me fails, fall back to dashboard
+    }
+
+    navigate("/dashboard", { replace: true });
+  }
+
   // ====================== LOGIN ======================
   async function onLogin(e) {
     e.preventDefault();
@@ -106,6 +136,7 @@ export default function Login() {
         localStorage.setItem("userEmail", data.user.email || "");
         localStorage.setItem("userName", data.user.name || "");
       }
+
       // Only set token if backend returns it
       if (data?.token) localStorage.setItem("token", data.token);
 
@@ -113,7 +144,9 @@ export default function Login() {
       try {
         const meResp = await api.get("/me", { withCredentials: true });
         setMeProbe({ tried: true, ok: true, body: meResp.data });
-        location.href = "/dashboard"; // all good
+
+        // NEW: navigate based on intended destination / admin role
+        await goPostLogin();
         return;
       } catch (meErr) {
         const body = meErr?.response?.data || {
@@ -121,8 +154,9 @@ export default function Login() {
         };
         console.error("Sanity /me failed after login:", body);
         setMeProbe({ tried: true, ok: false, body });
-        // Still go home so app can try again on mount
-        location.href = "/dashboard";
+
+        // NEW: still attempt to route correctly (don’t hardcode /dashboard)
+        await goPostLogin();
         return;
       }
     } catch (e) {
@@ -192,7 +226,11 @@ export default function Login() {
     try {
       setSocialErr("");
       setSocialLoading(provider);
-      const next = encodeURIComponent(`${window.location.origin}/dashboard`);
+
+      // NEW: preserve intended destination if we were redirected to login
+      const nextPath = from || "/dashboard";
+      const next = encodeURIComponent(`${window.location.origin}${nextPath}`);
+
       const url = `${API_BASE}/auth/${provider}?next=${next}`;
       window.location.href = url;
     } catch (err) {
@@ -247,7 +285,8 @@ export default function Login() {
         });
       }
 
-      location.href = "/dashboard";
+      // NEW: navigate correctly instead of forcing /dashboard
+      await goPostLogin();
     } catch (e) {
       setVerifyErr(
         e.response?.data?.error ||
@@ -393,7 +432,12 @@ export default function Login() {
                     setSocialLoading(true);
                     const apiUrl =
                       import.meta.env.VITE_API_URL || "http://localhost:4000";
-                    window.location.href = `${apiUrl}/auth/google?next=/dashboard`;
+
+                    // NEW: preserve intended destination
+                    const nextPath = from || "/dashboard";
+                    window.location.href = `${apiUrl}/auth/google?next=${encodeURIComponent(
+                      nextPath
+                    )}`;
                   }}
                 >
                   {/* Google G */}
