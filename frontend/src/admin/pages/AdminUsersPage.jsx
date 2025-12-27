@@ -1,9 +1,11 @@
 // frontend/src/admin/pages/AdminUsersPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom"; // NEW
 import { adminSearchUsers } from "../lib/adminApi";
 
 export default function AdminUsersPage() {
+  const navigate = useNavigate(); // NEW
+
   const [q, setQ] = useState("");
   const [includeInactive, setIncludeInactive] = useState(false);
 
@@ -19,6 +21,15 @@ export default function AdminUsersPage() {
 
   // Basic debounce to avoid spamming backend on every keypress
   const debouncedQ = useDebouncedValue(q, 300);
+
+  // NEW: logout handler
+  function handleLogout() {
+    localStorage.removeItem("token");
+    localStorage.removeItem("defaultId");
+    localStorage.removeItem("userEmail");
+    localStorage.removeItem("userName");
+    navigate("/login", { replace: true });
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -63,16 +74,45 @@ export default function AdminUsersPage() {
 
   const headerRight = useMemo(() => {
     return (
-      <label
-        style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14 }}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+        }}
       >
-        <input
-          type="checkbox"
-          checked={includeInactive}
-          onChange={(e) => setIncludeInactive(e.target.checked)}
-        />
-        Include inactive
-      </label>
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            fontSize: 14,
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={includeInactive}
+            onChange={(e) => setIncludeInactive(e.target.checked)}
+          />
+          Include inactive
+        </label>
+
+        {/* NEW: Logout button */}
+        <button
+          onClick={handleLogout}
+          style={{
+            padding: "8px 12px",
+            borderRadius: 10,
+            border: "1px solid rgba(239,68,68,0.45)",
+            background: "rgba(239,68,68,0.08)",
+            color: "#b91c1c",
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          Logout
+        </button>
+      </div>
     );
   }, [includeInactive]);
 
@@ -229,6 +269,8 @@ export default function AdminUsersPage() {
     </div>
   );
 }
+
+/* ───────── helpers ───────── */
 
 function Th({ children }) {
   return (
