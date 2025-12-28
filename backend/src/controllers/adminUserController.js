@@ -41,7 +41,7 @@ export async function adminSearchUsers(req, res) {
 
       // Guard: avoid expensive scans for tiny queries (unless ObjectId)
       if (!isObjectId && q.length < 2) {
-        return res.json({ page, limit, total: 0, items: [] });
+        return res.json({ page, limit, pages: 0, total: 0, items: [] });
       }
 
       if (isObjectId) or.push({ _id: q });
@@ -80,12 +80,13 @@ export async function adminSearchUsers(req, res) {
     res.status(500).json({ message: "Internal server error" });
   }
 }
+
 export async function adminGetUserById(req, res) {
   try {
     const { id } = req.params;
 
     const user = await User.findById(id).select(
-      "name email role profession tz baseCurrency avatarUrl avatarVersion subscription isActive isEmailVerified lastLogin createdAt"
+      "name email role profession tz baseCurrency avatarUrl avatarVersion subscription isActive isEmailVerified lastLogin createdAt emailVerifiedAt googleId githubId twitterId"
     );
 
     if (!user) return res.status(404).json({ message: "User not found" });
@@ -93,6 +94,103 @@ export async function adminGetUserById(req, res) {
     return res.json({ user });
   } catch (err) {
     console.error("adminGetUserById failed:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+/**
+ * PATCH /admin/users/:id/deactivate
+ * Sets isActive=false
+ */
+export async function adminDeactivateUser(req, res) {
+  try {
+    const { id } = req.params;
+
+    // Safety: prevent admin from deactivating themselves
+    const requesterId = req.user?._id?.toString?.() || req.user?.id;
+    if (requesterId && requesterId.toString() === id.toString()) {
+      return res
+        .status(400)
+        .json({ message: "You cannot deactivate your own account." });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      id,
+      { $set: { isActive: false } },
+      { new: true }
+    ).select(
+      "name email role profession tz baseCurrency avatarUrl avatarVersion subscription isActive isEmailVerified lastLogin createdAt emailVerifiedAt googleId githubId twitterId"
+    );
+
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    return res.json({ user });
+  } catch (err) {
+    console.error("adminDeactivateUser failed:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+/**
+ * PATCH /admin/users/:id/reactivate
+ * Sets isActive=true
+ */
+export async function adminReactivateUser(req, res) {
+  try {
+    const { id } = req.params;
+
+    const user = await User.findByIdAndUpdate(
+      id,
+      { $set: { isActive: true } },
+      { new: true }
+    ).select(
+      "name email role profession tz baseCurrency avatarUrl avatarVersion subscription isActive isEmailVerified lastLogin createdAt emailVerifiedAt googleId githubId twitterId"
+    );
+
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    return res.json({ user });
+  } catch (err) {
+    console.error("adminReactivateUser failed:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+/**
+ * DELETE /admin/users/:id/hard
+ * Permanently deletes the user (irreversible)
+ *
+ * Recommended rules:
+ * - cannot delete self
+ * - optional: require user to be inactive first
+ */
+export async function adminHardDeleteUser(req, res) {
+  try {
+    const { id } = req.params;
+
+    const requesterId = req.user?._id?.toString?.() || req.user?.id;
+    if (requesterId && requesterId.toString() === id.toString()) {
+      return res
+        .status(400)
+        .json({ message: "You cannot delete your own account." });
+    }
+
+    const user = await User.findById(id).select("_id isActive email");
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Strong safety default: require inactive first
+    if (user.isActive !== false) {
+      return res.status(400).json({
+        message:
+          "User must be deactivated before hard delete. Deactivate first, then try again.",
+      });
+    }
+
+    await User.deleteOne({ _id: id });
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("adminHardDeleteUser failed:", err);
     return res.status(500).json({ message: "Internal server error" });
   }
 }

@@ -1,8 +1,13 @@
 /* eslint-disable no-unused-vars */
 // frontend/src/admin/pages/AdminUserDetailPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { adminGetUserById } from "../lib/adminApi";
+import { Link, useParams, useNavigate } from "react-router-dom"; // NEW: useNavigate
+import {
+  adminGetUserById,
+  adminDeactivateUser, // NEW
+  adminReactivateUser, // NEW
+  adminHardDeleteUser, // NEW
+} from "../lib/adminApi";
 
 const BORDER = "1px solid rgba(148,163,184,0.15)";
 const BORDER_SOFT = "1px solid rgba(148,163,184,0.12)";
@@ -19,16 +24,21 @@ const TABS = [
 
 export default function AdminUserDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate(); // NEW
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [user, setUser] = useState(null);
 
-  // NEW: tab state
   const [activeTab, setActiveTab] = useState("overview");
-
-  // NEW: small UX helpers
   const [toast, setToast] = useState("");
+
+  // NEW: action loading states
+  const [actionLoading, setActionLoading] = useState({
+    deactivate: false,
+    reactivate: false,
+    hardDelete: false,
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -58,12 +68,10 @@ export default function AdminUserDetailPage() {
     };
   }, [id]);
 
-  // Reset tab when switching users
   useEffect(() => {
     setActiveTab("overview");
   }, [id]);
 
-  // Auto-hide toast
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(""), 1800);
@@ -78,6 +86,7 @@ export default function AdminUserDetailPage() {
   }, [user]);
 
   const email = user?.email || "";
+  const isActive = user?.isActive !== false;
 
   const providers = useMemo(() => {
     if (!user) return [];
@@ -95,6 +104,100 @@ export default function AdminUserDetailPage() {
       setToast(`${label} copied`);
     } catch (e) {
       setToast("Copy failed");
+    }
+  }
+
+  // NEW: user lifecycle actions
+  async function onDeactivate() {
+    if (!userId) return;
+
+    const ok = window.confirm(
+      "Deactivate this user?\n\nThey will be prevented from using the app until reactivated."
+    );
+    if (!ok) return;
+
+    try {
+      setActionLoading((s) => ({ ...s, deactivate: true }));
+      setErr("");
+
+      const res = await adminDeactivateUser(userId);
+      const updated = res?.user ?? res;
+
+      // update local state safely
+      setUser((prev) => ({
+        ...(prev || {}),
+        ...(updated || {}),
+        isActive: false,
+      }));
+      setToast("User deactivated");
+    } catch (e) {
+      setErr(e?.response?.data?.message || "Failed to deactivate user.");
+    } finally {
+      setActionLoading((s) => ({ ...s, deactivate: false }));
+    }
+  }
+
+  async function onReactivate() {
+    if (!userId) return;
+
+    const ok = window.confirm("Reactivate this user?");
+    if (!ok) return;
+
+    try {
+      setActionLoading((s) => ({ ...s, reactivate: true }));
+      setErr("");
+
+      const res = await adminReactivateUser(userId);
+      const updated = res?.user ?? res;
+
+      setUser((prev) => ({
+        ...(prev || {}),
+        ...(updated || {}),
+        isActive: true,
+      }));
+      setToast("User reactivated");
+    } catch (e) {
+      setErr(e?.response?.data?.message || "Failed to reactivate user.");
+    } finally {
+      setActionLoading((s) => ({ ...s, reactivate: false }));
+    }
+  }
+
+  async function onHardDelete() {
+    if (!userId) return;
+
+    // Strong confirmation: type the email (or fallback to DELETE)
+    const expected = (email || "DELETE").trim();
+    const typed = window.prompt(
+      `Permanently delete this user?\n\nThis cannot be undone.\n\nType exactly: ${expected}`
+    );
+
+    if (!typed) return;
+    if (typed.trim() !== expected) {
+      setToast("Confirmation text did not match");
+      return;
+    }
+
+    const ok = window.confirm(
+      "Last confirmation: This will permanently delete the user record. Continue?"
+    );
+    if (!ok) return;
+
+    try {
+      setActionLoading((s) => ({ ...s, hardDelete: true }));
+      setErr("");
+
+      await adminHardDeleteUser(userId);
+
+      setToast("User permanently deleted");
+      // after delete, go back to users list
+      navigate("/admin/users", { replace: true });
+    } catch (e) {
+      setErr(
+        e?.response?.data?.message || "Failed to permanently delete user."
+      );
+    } finally {
+      setActionLoading((s) => ({ ...s, hardDelete: false }));
     }
   }
 
@@ -167,6 +270,36 @@ export default function AdminUserDetailPage() {
           >
             Email User
           </a>
+
+          {/* NEW: lifecycle buttons */}
+          {isActive ? (
+            <button
+              onClick={onDeactivate}
+              disabled={actionLoading.deactivate || loading}
+              style={styles.dangerBtnSoft}
+              title="Deactivate user"
+            >
+              {actionLoading.deactivate ? "Deactivating…" : "Deactivate"}
+            </button>
+          ) : (
+            <button
+              onClick={onReactivate}
+              disabled={actionLoading.reactivate || loading}
+              style={styles.successBtnSoft}
+              title="Reactivate user"
+            >
+              {actionLoading.reactivate ? "Reactivating…" : "Reactivate"}
+            </button>
+          )}
+
+          <button
+            onClick={onHardDelete}
+            disabled={actionLoading.hardDelete || loading}
+            style={styles.dangerBtnHard}
+            title="Permanently delete user"
+          >
+            {actionLoading.hardDelete ? "Deleting…" : "Hard Delete"}
+          </button>
         </div>
       </div>
 
@@ -230,10 +363,10 @@ export default function AdminUserDetailPage() {
 
                 <Divider />
 
-                <Callout title="Next additions">
-                  Accounts • Transactions • Imports • Admin notes • Actions
-                  (disable, role change, resend verification) will appear here
-                  once the backend endpoints are added.
+                <Callout title="Safety recommendation">
+                  For hard delete: we strongly recommend enforcing server-side
+                  rules (admin-only, cannot delete self, optionally require user
+                  inactive first).
                 </Callout>
               </Section>
             ) : null}
@@ -272,7 +405,7 @@ export default function AdminUserDetailPage() {
 
                 <Callout title="Planned actions (backend needed)">
                   Resend verification • Force logout • Password reset assist •
-                  Disable account with reason • Security flags.
+                  Security flags.
                 </Callout>
               </Section>
             ) : null}
@@ -290,8 +423,8 @@ export default function AdminUserDetailPage() {
                 <Divider />
 
                 <Callout title="Planned actions (backend needed)">
-                  Upgrade/downgrade plan • Cancel/extend • Billing history (if
-                  you add it) • Entitlements.
+                  Upgrade/downgrade plan • Cancel/extend • Billing history •
+                  Entitlements.
                 </Callout>
               </Section>
             ) : null}
@@ -300,10 +433,8 @@ export default function AdminUserDetailPage() {
               <Section title="Support Notes">
                 <Callout title="What we will add here">
                   Internal notes per user, with author + timestamp, searchable.
-                  This is the backbone of a support console.
                 </Callout>
 
-                {/* Placeholder UI for notes list */}
                 <div style={{ marginTop: 12 }}>
                   <div style={{ fontSize: 13, color: TEXT_MUTED }}>
                     No notes yet (backend not connected).
@@ -329,8 +460,8 @@ export default function AdminUserDetailPage() {
             {activeTab === "activity" ? (
               <Section title="Activity">
                 <Callout title="What we will add here">
-                  Admin audit trail (who changed what), user activity summary
-                  (last seen, imports, transactions created), and debug signals.
+                  Admin audit trail (who changed what), user activity summary,
+                  and debug signals.
                 </Callout>
 
                 <Divider />
@@ -483,6 +614,39 @@ const styles = {
     fontWeight: 800,
     fontSize: 13,
   },
+
+  // NEW: lifecycle button styles
+  dangerBtnSoft: {
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid rgba(239,68,68,0.45)",
+    background: "rgba(239,68,68,0.08)",
+    color: "#b91c1c",
+    cursor: "pointer",
+    fontWeight: 900,
+    fontSize: 13,
+  },
+  dangerBtnHard: {
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid rgba(239,68,68,0.65)",
+    background: "rgba(239,68,68,0.16)",
+    color: "#991b1b",
+    cursor: "pointer",
+    fontWeight: 900,
+    fontSize: 13,
+  },
+  successBtnSoft: {
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid rgba(34,197,94,0.45)",
+    background: "rgba(34,197,94,0.10)",
+    color: "#166534",
+    cursor: "pointer",
+    fontWeight: 900,
+    fontSize: 13,
+  },
+
   toast: {
     position: "fixed",
     right: 18,

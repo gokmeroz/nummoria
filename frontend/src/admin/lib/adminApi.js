@@ -24,3 +24,28 @@ export async function getMe() {
   const { data } = await api.get("/me", { withCredentials: true });
   return data;
 }
+// NEW: Accounts for a user (admin)
+export async function adminGetUserAccounts(
+  userId,
+  { includeInactive = false } = {}
+) {
+  const { data } = await api.get(`/admin/users/${userId}/accounts`, {
+    params: { includeInactive },
+  });
+  return data;
+}
+// Admin user lifecycle actions
+export async function adminDeactivateUser(userId) {
+  const { data } = await api.patch(`/admin/users/${userId}/deactivate`);
+  return data;
+}
+
+export async function adminReactivateUser(userId) {
+  const { data } = await api.patch(`/admin/users/${userId}/reactivate`);
+  return data;
+}
+
+export async function adminHardDeleteUser(userId) {
+  const { data } = await api.delete(`/admin/users/${userId}/hard`);
+  return data;
+}
