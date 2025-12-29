@@ -357,6 +357,48 @@ export async function verifyEmail(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+// Verify email for an EXISTING user (admin-resend flow)
+export async function verifyExistingEmail(req, res) {
+  try {
+    const { email, code } = req.body;
+    if (!email || !code) {
+      return res.status(400).json({ error: "email and code are required" });
+    }
+
+    const user = await User.findOne({
+      email: email.toLowerCase().trim(),
+    }).select(
+      "+emailVerificationCodeHash +emailVerificationExpiresAt isEmailVerified"
+    );
+    if (!user)
+      return res.status(400).json({ error: "Invalid or expired code" });
+
+    if (user.isEmailVerified) {
+      return res.status(200).json({ message: "Email already verified." });
+    }
+
+    if (!user.emailVerificationCodeHash || !user.emailVerificationExpiresAt) {
+      return res.status(400).json({ error: "Invalid or expired code" });
+    }
+
+    if (user.emailVerificationExpiresAt.getTime() < Date.now()) {
+      return res.status(400).json({ error: "Invalid or expired code" });
+    }
+
+    const ok = await bcrypt.compare(code, user.emailVerificationCodeHash);
+    if (!ok) return res.status(400).json({ error: "Invalid or expired code" });
+
+    user.isEmailVerified = true;
+    user.emailVerifiedAt = new Date();
+    user.emailVerificationCodeHash = undefined;
+    user.emailVerificationExpiresAt = undefined;
+    await user.save();
+
+    return res.json({ message: "Email verified." });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+}
 
 export async function resendCode(req, res) {
   try {
@@ -451,27 +493,40 @@ export async function forgotPassword(req, res) {
 
 export async function resetPassword(req, res) {
   try {
-    const { email, token, newPassword } = req.body;
-    if (!email || !token || !newPassword) {
-      return res
-        .status(400)
-        .json({ error: "email, token, newPassword required" });
+    const { email, userId, token, newPassword } = req.body;
+
+    if ((!email && !userId) || !token || !newPassword) {
+      return res.status(400).json({
+        error: "email or userId, token, newPassword required",
+      });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+    // NEW: allow lookup by userId OR email (backward compatible)
+    const query = userId
+      ? { _id: userId }
+      : { email: String(email).toLowerCase() };
+
+    const user = await User.findOne(query);
+
     if (!user || !user.resetPasswordTokenHash || !user.resetPasswordExpiresAt) {
       return res.status(400).json({ error: "Invalid or expired token" });
     }
+
     if (user.resetPasswordExpiresAt < new Date()) {
       return res.status(400).json({ error: "Invalid or expired token" });
     }
 
+    // bcrypt compare (matches forgotPassword)
     const ok = await bcrypt.compare(token, user.resetPasswordTokenHash);
     if (!ok) return res.status(400).json({ error: "Invalid or expired token" });
 
     user.passwordHash = await bcrypt.hash(newPassword, 10);
     user.resetPasswordTokenHash = null;
     user.resetPasswordExpiresAt = null;
+
+    // NEW: recommended — reset should also kill existing sessions
+    user.authInvalidBefore = new Date();
+
     await user.save();
 
     return res.json({ message: "Password updated" });

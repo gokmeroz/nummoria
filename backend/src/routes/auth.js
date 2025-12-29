@@ -6,6 +6,7 @@ import {
   forgotPassword,
   resetPassword,
   verifyEmail,
+  verifyExistingEmail,
   resendCode,
   googleStart,
   googleCallback,
@@ -25,6 +26,7 @@ router.post("/reset-password", resetPassword);
 
 //Email Verification
 router.post("/verify-email", verifyEmail);
+router.post("/verify-existing-email", verifyExistingEmail);
 router.post("/resend-code", resendCode);
 // Google OAuth
 router.get("/google", googleStart);

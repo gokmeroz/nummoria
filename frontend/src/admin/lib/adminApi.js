@@ -7,45 +7,77 @@ export async function adminSearchUsers({
   page = 1,
   limit = 20,
   includeInactive = false,
-}) {
+} = {}) {
   const { data } = await api.get("/admin/users", {
     params: { q, page, limit, includeInactive },
+    withCredentials: true,
   });
   return data;
 }
 
 export async function adminGetUserById(userId) {
-  const { data } = await api.get(`/admin/users/${userId}`);
+  const { data } = await api.get(`/admin/users/${userId}`, {
+    withCredentials: true,
+  });
   return data;
 }
 
-// If you already have /auth/me, this is the best way for AdminRoute to check role
+// AdminRoute should call the same endpoint your backend actually provides.
+// If your backend is /me, keep this. If it's /auth/me, change the path here.
 export async function getMe() {
   const { data } = await api.get("/me", { withCredentials: true });
   return data;
 }
-// NEW: Accounts for a user (admin)
+
+// (Keep but don’t call until backend exists)
 export async function adminGetUserAccounts(
   userId,
   { includeInactive = false } = {}
 ) {
   const { data } = await api.get(`/admin/users/${userId}/accounts`, {
     params: { includeInactive },
+    withCredentials: true,
   });
   return data;
 }
+
 // Admin user lifecycle actions
 export async function adminDeactivateUser(userId) {
-  const { data } = await api.patch(`/admin/users/${userId}/deactivate`);
+  const { data } = await api.patch(
+    `/admin/users/${userId}/deactivate`,
+    {},
+    { withCredentials: true }
+  );
   return data;
 }
 
 export async function adminReactivateUser(userId) {
-  const { data } = await api.patch(`/admin/users/${userId}/reactivate`);
+  const { data } = await api.patch(
+    `/admin/users/${userId}/reactivate`,
+    {},
+    { withCredentials: true }
+  );
   return data;
 }
 
 export async function adminHardDeleteUser(userId) {
-  const { data } = await api.delete(`/admin/users/${userId}/hard`);
+  const { data } = await api.delete(`/admin/users/${userId}/hard`, {
+    withCredentials: true,
+  });
+  return data;
+}
+// Phase 1 admin actions
+export async function adminResendVerification(userId) {
+  const { data } = await api.post(`/admin/users/${userId}/resend-verification`);
+  return data;
+}
+
+export async function adminForceLogout(userId) {
+  const { data } = await api.post(`/admin/users/${userId}/force-logout`);
+  return data;
+}
+
+export async function adminSendPasswordReset(userId) {
+  const { data } = await api.post(`/admin/users/${userId}/send-password-reset`);
   return data;
 }

@@ -1,12 +1,20 @@
+// backend/src/routes/adminUserRoutes.js
 import express from "express";
 import { requireAuth } from "../middlewares/auth.js";
 import { requireAdmin } from "../middlewares/requireRole.js";
 import {
   adminSearchUsers,
   adminGetUserById,
+
+  // lifecycle
   adminDeactivateUser,
   adminReactivateUser,
   adminHardDeleteUser,
+
+  // NEW: Phase 1
+  adminResendVerification,
+  adminForceLogout,
+  adminSendPasswordReset,
 } from "../controllers/adminUserController.js";
 
 const router = express.Router();
@@ -17,9 +25,14 @@ router.use(requireAdmin);
 router.get("/users", adminSearchUsers);
 router.get("/users/:id", adminGetUserById);
 
-// lifecycle actions
+// lifecycle endpoints
 router.patch("/users/:id/deactivate", adminDeactivateUser);
 router.patch("/users/:id/reactivate", adminReactivateUser);
 router.delete("/users/:id/hard", adminHardDeleteUser);
+
+// NEW: Phase 1 endpoints
+router.post("/users/:id/resend-verification", adminResendVerification);
+router.post("/users/:id/force-logout", adminForceLogout);
+router.post("/users/:id/send-password-reset", adminSendPasswordReset);
 
 export default router;

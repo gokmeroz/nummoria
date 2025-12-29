@@ -9,8 +9,9 @@ const userSchema = new mongoose.Schema(
       required: function () {
         return !this.googleId && !this.twitterId && !this.githubId;
       },
-      select: false, // optional: keep it out of queries by default
+      select: false,
     },
+
     resetPasswordTokenHash: { type: String },
     resetPasswordExpiresAt: { type: Date },
     lastLogin: { type: Date },
@@ -37,6 +38,9 @@ const userSchema = new mongoose.Schema(
     emailVerificationCodeHash: { type: String, select: false },
     emailVerificationExpiresAt: { type: Date, select: false },
     emailVerifiedAt: Date,
+
+    // NEW: force-logout support (invalidate tokens issued before this time)
+    authInvalidBefore: { type: Date, default: null },
   },
   { timestamps: { createdAt: "createdAt", updatedAt: false } }
 );

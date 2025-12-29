@@ -1,7 +1,100 @@
+// backend/src/controllers/adminUserController.js
+import "../config/env.js"; // keep early so env is loaded
+import mongoose from "mongoose";
+import crypto from "crypto";
+import bcrypt from "bcrypt";
+import nodemailer from "nodemailer";
 import { User } from "../models/user.js";
+
+/* ───────────────────────── Mail / URLs ───────────────────────── */
+
+const FRONTEND_URL_RAW = process.env.FRONTEND_URL || "http://localhost:5173";
+const FRONTEND_URL = FRONTEND_URL_RAW.replace(/\/+$/, "");
+
+const transporter = (() => {
+  const url = process.env.SMTP_URL;
+  const host = process.env.SMTP_HOST;
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  const port = process.env.SMTP_PORT
+    ? Number(process.env.SMTP_PORT)
+    : undefined;
+  const secure = String(process.env.SMTP_SECURE || "false") === "true";
+
+  if (url || host) {
+    return nodemailer.createTransport(
+      url
+        ? url
+        : {
+            host,
+            port: port || 587,
+            secure: !!secure,
+            auth: user && pass ? { user, pass } : undefined,
+          }
+    );
+  }
+
+  // Dev-only console fallback (no real emails)
+  return {
+    sendMail: async (opts) => {
+      console.log("[MAIL:DEV-FALLBACK] Not sending real email.", {
+        to: opts.to,
+        subject: opts.subject,
+        text: opts.text,
+      });
+      return { messageId: `dev-${Date.now()}` };
+    },
+  };
+})();
+
+const MAIL_FROM = process.env.MAIL_FROM || "Nummoria <no-reply@nummoria.app>";
+
+async function sendMail({ to, subject, text, html }) {
+  return transporter.sendMail({ from: MAIL_FROM, to, subject, text, html });
+}
+
+function makeVerificationCode() {
+  const n = Math.floor(Math.random() * 1_000_000);
+  return String(n).padStart(6, "0");
+}
+
+function buildVerifyEmailMessage({ email, code }) {
+  const verifyUrl = `${FRONTEND_URL}/verify-email?email=${encodeURIComponent(
+    email
+  )}`;
+  const subject = "Verify your email for Nummoria";
+  const text = `Your Nummoria verification code is ${code}. It expires in 15 minutes.\n\nOpen: ${verifyUrl}`;
+  const html = `
+    <div style="font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif">
+      <h2>Verify your email</h2>
+      <p>Your Nummoria verification code is:</p>
+      <div style="font-size:28px;letter-spacing:6px;font-weight:700">${code}</div>
+      <p style="color:#666">This code expires in 15 minutes.</p>
+      <p><a href="${verifyUrl}" target="_blank" rel="noopener">Open verification page</a></p>
+    </div>
+  `;
+  return { subject, text, html };
+}
+
+/* ───────────────────────── Validation helpers ───────────────────────── */
 
 const ALLOWED_ROLES = new Set(["user", "admin"]);
 const ALLOWED_SUBSCRIPTIONS = new Set(["Standard", "Plus", "Premium"]);
+
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function getActorId(req) {
+  const v = req?.user?._id || req?.user?.id || req?.auth?._id || req?.auth?.id;
+  return v ? String(v) : null;
+}
+
+function isValidObjectId(id) {
+  return mongoose.Types.ObjectId.isValid(String(id || ""));
+}
+
+/* ───────────────────────── Users list / detail ───────────────────────── */
 
 export async function adminSearchUsers(req, res) {
   try {
@@ -18,11 +111,9 @@ export async function adminSearchUsers(req, res) {
 
     const skip = (page - 1) * limit;
 
-    // Default: include active only unless explicitly asked
     const includeInactive = req.query.includeInactive === "true";
     const filters = includeInactive ? {} : { isActive: true };
 
-    // Optional filters (validated)
     if (req.query.role && ALLOWED_ROLES.has(req.query.role)) {
       filters.role = req.query.role;
     }
@@ -39,7 +130,6 @@ export async function adminSearchUsers(req, res) {
     if (q) {
       const isObjectId = /^[0-9a-fA-F]{24}$/.test(q);
 
-      // Guard: avoid expensive scans for tiny queries (unless ObjectId)
       if (!isObjectId && q.length < 2) {
         return res.json({ page, limit, pages: 0, total: 0, items: [] });
       }
@@ -48,12 +138,10 @@ export async function adminSearchUsers(req, res) {
 
       const escaped = escapeRegex(q);
 
-      // Prefer exact-ish email match when user pastes an email
       if (q.includes("@")) {
         or.push({ email: q.toLowerCase() });
       }
 
-      // Starts-with is usually better than contains for search UX and perf
       or.push({ email: { $regex: `^${escaped}`, $options: "i" } });
       or.push({ name: { $regex: escaped, $options: "i" } });
     }
@@ -85,8 +173,12 @@ export async function adminGetUserById(req, res) {
   try {
     const { id } = req.params;
 
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ message: "Invalid user id" });
+    }
+
     const user = await User.findById(id).select(
-      "name email role profession tz baseCurrency avatarUrl avatarVersion subscription isActive isEmailVerified lastLogin createdAt emailVerifiedAt googleId githubId twitterId"
+      "name email role profession tz baseCurrency avatarUrl avatarVersion subscription isActive isEmailVerified emailVerifiedAt lastLogin createdAt googleId githubId twitterId"
     );
 
     if (!user) return res.status(404).json({ message: "User not found" });
@@ -98,31 +190,34 @@ export async function adminGetUserById(req, res) {
   }
 }
 
-/**
- * PATCH /admin/users/:id/deactivate
- * Sets isActive=false
- */
+/* ───────────────────────── lifecycle actions ───────────────────────── */
+
 export async function adminDeactivateUser(req, res) {
   try {
     const { id } = req.params;
 
-    // Safety: prevent admin from deactivating themselves
-    const requesterId = req.user?._id?.toString?.() || req.user?.id;
-    if (requesterId && requesterId.toString() === id.toString()) {
-      return res
-        .status(400)
-        .json({ message: "You cannot deactivate your own account." });
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ message: "Invalid user id" });
     }
 
-    const user = await User.findByIdAndUpdate(
-      id,
-      { $set: { isActive: false } },
-      { new: true }
-    ).select(
-      "name email role profession tz baseCurrency avatarUrl avatarVersion subscription isActive isEmailVerified lastLogin createdAt emailVerifiedAt googleId githubId twitterId"
-    );
+    const actorId = getActorId(req);
+    if (actorId && actorId === String(id)) {
+      return res
+        .status(400)
+        .json({ message: "You cannot deactivate yourself" });
+    }
 
+    const user = await User.findById(id).select(
+      "name email role subscription isActive isEmailVerified lastLogin createdAt"
+    );
     if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (user.isActive === false) {
+      return res.status(400).json({ message: "User is already inactive" });
+    }
+
+    user.isActive = false;
+    await user.save();
 
     return res.json({ user });
   } catch (err) {
@@ -131,23 +226,25 @@ export async function adminDeactivateUser(req, res) {
   }
 }
 
-/**
- * PATCH /admin/users/:id/reactivate
- * Sets isActive=true
- */
 export async function adminReactivateUser(req, res) {
   try {
     const { id } = req.params;
 
-    const user = await User.findByIdAndUpdate(
-      id,
-      { $set: { isActive: true } },
-      { new: true }
-    ).select(
-      "name email role profession tz baseCurrency avatarUrl avatarVersion subscription isActive isEmailVerified lastLogin createdAt emailVerifiedAt googleId githubId twitterId"
-    );
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ message: "Invalid user id" });
+    }
 
+    const user = await User.findById(id).select(
+      "name email role subscription isActive isEmailVerified lastLogin createdAt"
+    );
     if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (user.isActive !== false) {
+      return res.status(400).json({ message: "User is already active" });
+    }
+
+    user.isActive = true;
+    await user.save();
 
     return res.json({ user });
   } catch (err) {
@@ -156,37 +253,40 @@ export async function adminReactivateUser(req, res) {
   }
 }
 
-/**
- * DELETE /admin/users/:id/hard
- * Permanently deletes the user (irreversible)
- *
- * Recommended rules:
- * - cannot delete self
- * - optional: require user to be inactive first
- */
 export async function adminHardDeleteUser(req, res) {
   try {
     const { id } = req.params;
 
-    const requesterId = req.user?._id?.toString?.() || req.user?.id;
-    if (requesterId && requesterId.toString() === id.toString()) {
-      return res
-        .status(400)
-        .json({ message: "You cannot delete your own account." });
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ message: "Invalid user id" });
     }
 
-    const user = await User.findById(id).select("_id isActive email");
+    const actorId = getActorId(req);
+    if (actorId && actorId === String(id)) {
+      return res
+        .status(400)
+        .json({ message: "You cannot permanently delete yourself" });
+    }
+
+    const user = await User.findById(id).select(
+      "email role isActive createdAt"
+    );
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Strong safety default: require inactive first
     if (user.isActive !== false) {
       return res.status(400).json({
         message:
-          "User must be deactivated before hard delete. Deactivate first, then try again.",
+          "User must be inactive before hard delete. Deactivate first, then delete.",
       });
     }
 
-    await User.deleteOne({ _id: id });
+    if (user.role === "admin") {
+      return res
+        .status(403)
+        .json({ message: "Admin users cannot be hard deleted" });
+    }
+
+    await User.deleteOne({ _id: user._id });
 
     return res.json({ ok: true });
   } catch (err) {
@@ -195,6 +295,112 @@ export async function adminHardDeleteUser(req, res) {
   }
 }
 
-function escapeRegex(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/* ───────────────────────── Phase 1 actions ───────────────────────── */
+
+// Resend verification for an existing (unverified) user
+export async function adminResendVerification(req, res) {
+  try {
+    const { id } = req.params;
+
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ message: "Invalid user id" });
+    }
+
+    // IMPORTANT: emailVerificationCodeHash is select:false in schema
+    const user = await User.findById(id).select(
+      "email name isEmailVerified +emailVerificationCodeHash +emailVerificationExpiresAt"
+    );
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (user.isEmailVerified) {
+      return res.status(400).json({ message: "User is already verified" });
+    }
+
+    const code = makeVerificationCode();
+    user.emailVerificationCodeHash = await bcrypt.hash(code, 10);
+    user.emailVerificationExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
+    await user.save();
+
+    const { subject, text, html } = buildVerifyEmailMessage({
+      email: user.email,
+      code,
+    });
+
+    await sendMail({ to: user.email, subject, text, html });
+
+    return res.json({ ok: true, message: "Verification code resent" });
+  } catch (err) {
+    console.error("adminResendVerification failed:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+// Force logout (invalidate all existing sessions)
+export async function adminForceLogout(req, res) {
+  try {
+    const { id } = req.params;
+
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ message: "Invalid user id" });
+    }
+
+    const actorId = getActorId(req);
+    if (actorId && actorId === String(id)) {
+      return res
+        .status(400)
+        .json({ message: "You cannot force logout yourself" });
+    }
+
+    const user = await User.findById(id).select("_id authInvalidBefore");
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    user.authInvalidBefore = new Date();
+    await user.save();
+
+    return res.json({ ok: true, message: "User logged out everywhere" });
+  } catch (err) {
+    console.error("adminForceLogout failed:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+// Reset assist: send password reset link (same flow as forgotPassword)
+export async function adminSendPasswordReset(req, res) {
+  try {
+    const { id } = req.params;
+
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ message: "Invalid user id" });
+    }
+
+    const user = await User.findById(id).select("email name");
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    user.resetPasswordTokenHash = await bcrypt.hash(rawToken, 10);
+    user.resetPasswordExpiresAt = new Date(Date.now() + 30 * 60 * 1000);
+    await user.save();
+
+    const resetUrl = `${FRONTEND_URL}/reset-password?token=${rawToken}&email=${encodeURIComponent(
+      user.email
+    )}`;
+
+    await sendMail({
+      to: user.email,
+      subject: "Password reset",
+      text: `Use this link to reset your password:\n\n${resetUrl}\n\nThis link expires in 30 minutes.`,
+      html: `
+        <div style="font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif">
+          <h2>Password reset</h2>
+          <p>Click the link below to reset your password (expires in 30 minutes):</p>
+          <p><a href="${resetUrl}" target="_blank" rel="noopener">${resetUrl}</a></p>
+        </div>
+      `,
+    });
+
+    return res.json({ ok: true, message: "Password reset email sent" });
+  } catch (err) {
+    console.error("adminSendPasswordReset failed:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
 }

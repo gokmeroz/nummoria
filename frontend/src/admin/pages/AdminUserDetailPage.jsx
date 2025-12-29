@@ -1,12 +1,15 @@
 /* eslint-disable no-unused-vars */
 // frontend/src/admin/pages/AdminUserDetailPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom"; // NEW: useNavigate
+import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   adminGetUserById,
-  adminDeactivateUser, // NEW
-  adminReactivateUser, // NEW
-  adminHardDeleteUser, // NEW
+  adminDeactivateUser,
+  adminReactivateUser,
+  adminHardDeleteUser, // NEW: Phase 1
+  adminResendVerification,
+  adminForceLogout,
+  adminSendPasswordReset,
 } from "../lib/adminApi";
 
 const BORDER = "1px solid rgba(148,163,184,0.15)";
@@ -18,13 +21,12 @@ const TABS = [
   { key: "overview", label: "Overview" },
   { key: "security", label: "Security" },
   { key: "subscription", label: "Subscription" },
-  { key: "support", label: "Support Notes" },
   { key: "activity", label: "Activity" },
 ];
 
 export default function AdminUserDetailPage() {
   const { id } = useParams();
-  const navigate = useNavigate(); // NEW
+  const navigate = useNavigate();
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -33,11 +35,14 @@ export default function AdminUserDetailPage() {
   const [activeTab, setActiveTab] = useState("overview");
   const [toast, setToast] = useState("");
 
-  // NEW: action loading states
   const [actionLoading, setActionLoading] = useState({
     deactivate: false,
     reactivate: false,
     hardDelete: false,
+    // NEW:
+    resendVerification: false,
+    forceLogout: false,
+    sendPasswordReset: false,
   });
 
   useEffect(() => {
@@ -79,14 +84,13 @@ export default function AdminUserDetailPage() {
   }, [toast]);
 
   const userId = user?._id || user?.id || id;
+  const email = user?.email || "";
+  const isActive = user?.isActive !== false;
 
   const displayName = useMemo(() => {
     if (!user) return "";
     return user.name || "(no name)";
   }, [user]);
-
-  const email = user?.email || "";
-  const isActive = user?.isActive !== false;
 
   const providers = useMemo(() => {
     if (!user) return [];
@@ -98,6 +102,8 @@ export default function AdminUserDetailPage() {
     return p;
   }, [user]);
 
+  const avatarUrl = user?.avatarUrl || "";
+
   async function copyToClipboard(value, label) {
     try {
       await navigator.clipboard.writeText(String(value || ""));
@@ -107,7 +113,6 @@ export default function AdminUserDetailPage() {
     }
   }
 
-  // NEW: user lifecycle actions
   async function onDeactivate() {
     if (!userId) return;
 
@@ -123,7 +128,6 @@ export default function AdminUserDetailPage() {
       const res = await adminDeactivateUser(userId);
       const updated = res?.user ?? res;
 
-      // update local state safely
       setUser((prev) => ({
         ...(prev || {}),
         ...(updated || {}),
@@ -166,7 +170,6 @@ export default function AdminUserDetailPage() {
   async function onHardDelete() {
     if (!userId) return;
 
-    // Strong confirmation: type the email (or fallback to DELETE)
     const expected = (email || "DELETE").trim();
     const typed = window.prompt(
       `Permanently delete this user?\n\nThis cannot be undone.\n\nType exactly: ${expected}`
@@ -190,7 +193,6 @@ export default function AdminUserDetailPage() {
       await adminHardDeleteUser(userId);
 
       setToast("User permanently deleted");
-      // after delete, go back to users list
       navigate("/admin/users", { replace: true });
     } catch (e) {
       setErr(
@@ -198,6 +200,69 @@ export default function AdminUserDetailPage() {
       );
     } finally {
       setActionLoading((s) => ({ ...s, hardDelete: false }));
+    }
+  }
+  async function onResendVerification() {
+    if (!userId) return;
+
+    const ok = window.confirm(
+      "Resend email verification code to this user?\n\nOnly works if the user is NOT verified."
+    );
+    if (!ok) return;
+
+    try {
+      setActionLoading((s) => ({ ...s, resendVerification: true }));
+      setErr("");
+      await adminResendVerification(userId);
+      setToast("Verification code resent");
+    } catch (e) {
+      setErr(
+        e?.response?.data?.message || "Failed to resend verification code."
+      );
+    } finally {
+      setActionLoading((s) => ({ ...s, resendVerification: false }));
+    }
+  }
+
+  async function onForceLogout() {
+    if (!userId) return;
+
+    const ok = window.confirm(
+      "Force logout this user everywhere?\n\nTheir current sessions will become invalid."
+    );
+    if (!ok) return;
+
+    try {
+      setActionLoading((s) => ({ ...s, forceLogout: true }));
+      setErr("");
+      await adminForceLogout(userId);
+      setToast("User logged out everywhere");
+    } catch (e) {
+      setErr(e?.response?.data?.message || "Failed to force logout user.");
+    } finally {
+      setActionLoading((s) => ({ ...s, forceLogout: false }));
+    }
+  }
+
+  async function onSendPasswordReset() {
+    if (!userId) return;
+
+    const ok = window.confirm(
+      "Send password reset email to this user?\n\nUse this when the user cannot access their account."
+    );
+    if (!ok) return;
+
+    try {
+      setActionLoading((s) => ({ ...s, sendPasswordReset: true }));
+      setErr("");
+      await adminSendPasswordReset(userId);
+      setToast("Password reset email sent");
+    } catch (e) {
+      setErr(
+        e?.response?.data?.message || "Failed to send password reset email."
+      );
+    } finally {
+      setActionLoading((s) => ({ ...s, sendPasswordReset: false }));
     }
   }
 
@@ -210,33 +275,84 @@ export default function AdminUserDetailPage() {
             ← Back
           </Link>
 
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.15 }}>
-              {displayName}
-            </div>
-            <div style={{ fontSize: 13, color: TEXT_MUTED, marginTop: 2 }}>
-              {email || "—"}{" "}
-              {user?.role ? (
-                <span style={pill(user.role === "admin" ? "admin" : "user")}>
-                  {user.role}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <AvatarCircle name={displayName} avatarUrl={avatarUrl} />
+
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 900, lineHeight: 1.15 }}>
+                {displayName}
+              </div>
+
+              <div style={{ fontSize: 13, color: TEXT_MUTED, marginTop: 2 }}>
+                {email || "—"}{" "}
+                {user?.role ? (
+                  <span style={pill(user.role === "admin" ? "admin" : "user")}>
+                    {user.role}
+                  </span>
+                ) : null}
+                {user?.isActive === false ? (
+                  <span style={pill("inactive")}>inactive</span>
+                ) : (
+                  <span style={pill("active")}>active</span>
+                )}
+                {user?.isEmailVerified ? (
+                  <span style={pill("verified")}>email verified</span>
+                ) : (
+                  <span style={pill("unverified")}>email unverified</span>
+                )}
+              </div>
+
+              <div style={{ fontSize: 12, color: TEXT_MUTED, marginTop: 6 }}>
+                <span style={{ marginRight: 10 }}>
+                  Created: <b>{formatDateTime(user?.createdAt)}</b>
                 </span>
-              ) : null}
-              {user?.isActive === false ? (
-                <span style={pill("inactive")}>inactive</span>
-              ) : (
-                <span style={pill("active")}>active</span>
-              )}
-              {user?.isEmailVerified ? (
-                <span style={pill("verified")}>email verified</span>
-              ) : (
-                <span style={pill("unverified")}>email unverified</span>
-              )}
+                <span style={{ marginRight: 10 }}>
+                  Last login: <b>{formatDateTime(user?.lastLogin)}</b>
+                </span>
+                <span style={{ opacity: 0.9 }}>
+                  ({timeAgo(user?.lastLogin)})
+                </span>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Actions */}
+        {/* Quick actions */}
         <div style={styles.actionRow}>
+          {/* NEW: Phase 1 actions */}
+          {user?.isEmailVerified ? null : (
+            <button
+              onClick={onResendVerification}
+              disabled={actionLoading.resendVerification || loading}
+              style={styles.actionBtn}
+              title="Resend verification code"
+            >
+              {actionLoading.resendVerification
+                ? "Resending…"
+                : "Resend Verification"}
+            </button>
+          )}
+
+          <button
+            onClick={onForceLogout}
+            disabled={actionLoading.forceLogout || loading}
+            style={styles.actionBtn}
+            title="Force logout user everywhere"
+          >
+            {actionLoading.forceLogout ? "Forcing…" : "Force Logout"}
+          </button>
+
+          <button
+            onClick={onSendPasswordReset}
+            disabled={actionLoading.sendPasswordReset || loading}
+            style={styles.actionBtn}
+            title="Send password reset email"
+          >
+            {actionLoading.sendPasswordReset
+              ? "Sending…"
+              : "Send Password Reset"}
+          </button>
+
           <button
             onClick={() => copyToClipboard(userId, "User ID")}
             style={styles.actionBtn}
@@ -255,6 +371,15 @@ export default function AdminUserDetailPage() {
             Copy Email
           </button>
 
+          <button
+            onClick={() => copyToClipboard(avatarUrl, "Avatar URL")}
+            style={styles.actionBtn}
+            disabled={!avatarUrl}
+            title="Copy avatar URL"
+          >
+            Copy Avatar URL
+          </button>
+
           <a
             href={email ? `mailto:${email}` : undefined}
             style={{
@@ -270,36 +395,6 @@ export default function AdminUserDetailPage() {
           >
             Email User
           </a>
-
-          {/* NEW: lifecycle buttons */}
-          {isActive ? (
-            <button
-              onClick={onDeactivate}
-              disabled={actionLoading.deactivate || loading}
-              style={styles.dangerBtnSoft}
-              title="Deactivate user"
-            >
-              {actionLoading.deactivate ? "Deactivating…" : "Deactivate"}
-            </button>
-          ) : (
-            <button
-              onClick={onReactivate}
-              disabled={actionLoading.reactivate || loading}
-              style={styles.successBtnSoft}
-              title="Reactivate user"
-            >
-              {actionLoading.reactivate ? "Reactivating…" : "Reactivate"}
-            </button>
-          )}
-
-          <button
-            onClick={onHardDelete}
-            disabled={actionLoading.hardDelete || loading}
-            style={styles.dangerBtnHard}
-            title="Permanently delete user"
-          >
-            {actionLoading.hardDelete ? "Deleting…" : "Hard Delete"}
-          </button>
         </div>
       </div>
 
@@ -315,7 +410,7 @@ export default function AdminUserDetailPage() {
 
       {err ? (
         <div style={styles.errorBox}>
-          <div style={{ fontWeight: 700, marginBottom: 4 }}>Error</div>
+          <div style={{ fontWeight: 800, marginBottom: 4 }}>Error</div>
           <div>{err}</div>
         </div>
       ) : null}
@@ -338,41 +433,133 @@ export default function AdminUserDetailPage() {
           {/* Tab content */}
           <div style={{ marginTop: 12 }}>
             {activeTab === "overview" ? (
-              <Section title="Overview">
-                <Grid>
-                  <Row label="User ID" value={userId} />
-                  <Row label="Name" value={user.name} />
-                  <Row label="Email" value={user.email} />
-                  <Row label="Role" value={user.role} />
-                  <Row label="Subscription" value={user.subscription} />
-                  <Row label="Providers" value={providers.join(", ")} />
-                  <Row label="Active" value={user.isActive ? "Yes" : "No"} />
-                  <Row
-                    label="Email verified"
-                    value={user.isEmailVerified ? "Yes" : "No"}
-                  />
-                  <Row
-                    label="Last login"
-                    value={formatDateTime(user.lastLogin)}
-                  />
-                  <Row label="Created" value={formatDateTime(user.createdAt)} />
-                  <Row label="TZ" value={user.tz} />
-                  <Row label="Base currency" value={user.baseCurrency} />
-                  <Row label="Profession" value={user.profession || "-"} />
-                </Grid>
+              <div style={styles.twoCol}>
+                <Section title="User Profile">
+                  <Grid>
+                    <Row label="User ID" value={userId} />
+                    <Row label="Name" value={user.name} />
+                    <Row label="Email" value={user.email} />
+                    <Row label="Role" value={user.role} />
+                    <Row label="Subscription" value={user.subscription} />
+                    <Row label="Profession" value={user.profession || "-"} />
+                    <Row label="TZ" value={user.tz || "-"} />
+                    <Row
+                      label="Base currency"
+                      value={user.baseCurrency || "-"}
+                    />
+                  </Grid>
+                </Section>
 
-                <Divider />
+                <Section title="Account Health">
+                  <Grid>
+                    <Row label="Active" value={user.isActive ? "Yes" : "No"} />
+                    <Row
+                      label="Email verified"
+                      value={user.isEmailVerified ? "Yes" : "No"}
+                    />
+                    <Row
+                      label="Verified at"
+                      value={formatDateTime(user.emailVerifiedAt)}
+                    />
+                    <Row label="Providers" value={providers.join(", ")} />
+                    <Row
+                      label="Avatar"
+                      value={
+                        avatarUrl ? (
+                          <a href={avatarUrl} target="_blank" rel="noreferrer">
+                            Open avatar
+                          </a>
+                        ) : (
+                          "-"
+                        )
+                      }
+                    />
+                  </Grid>
 
-                <Callout title="Safety recommendation">
-                  For hard delete: we strongly recommend enforcing server-side
-                  rules (admin-only, cannot delete self, optionally require user
-                  inactive first).
-                </Callout>
-              </Section>
+                  <Divider />
+
+                  <div style={styles.dangerZone}>
+                    <div style={{ fontWeight: 900, marginBottom: 8 }}>
+                      Danger zone
+                    </div>
+
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      {isActive ? (
+                        <button
+                          onClick={onDeactivate}
+                          disabled={actionLoading.deactivate || loading}
+                          style={styles.dangerBtnSoft}
+                        >
+                          {actionLoading.deactivate
+                            ? "Deactivating…"
+                            : "Deactivate"}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={onReactivate}
+                          disabled={actionLoading.reactivate || loading}
+                          style={styles.successBtnSoft}
+                        >
+                          {actionLoading.reactivate
+                            ? "Reactivating…"
+                            : "Reactivate"}
+                        </button>
+                      )}
+
+                      <button
+                        onClick={onHardDelete}
+                        disabled={actionLoading.hardDelete || loading}
+                        style={styles.dangerBtnHard}
+                      >
+                        {actionLoading.hardDelete ? "Deleting…" : "Hard Delete"}
+                      </button>
+                    </div>
+
+                    <div
+                      style={{ marginTop: 10, fontSize: 12, color: TEXT_MUTED }}
+                    >
+                      Hard delete is blocked server-side unless user is
+                      inactive. Admin users are protected from hard delete.
+                    </div>
+                  </div>
+                </Section>
+
+                <Section title="Identifiers (debug)">
+                  <Grid>
+                    <Row
+                      label="Google ID"
+                      value={user.googleId ? maskId(user.googleId) : "-"}
+                    />
+                    <Row
+                      label="GitHub ID"
+                      value={user.githubId ? maskId(user.githubId) : "-"}
+                    />
+                    <Row
+                      label="Twitter/X ID"
+                      value={user.twitterId ? maskId(user.twitterId) : "-"}
+                    />
+                    <Row
+                      label="Avatar version"
+                      value={user.avatarVersion ?? "-"}
+                    />
+                  </Grid>
+
+                  <Divider />
+
+                  <details>
+                    <summary style={{ cursor: "pointer", fontWeight: 800 }}>
+                      Raw user payload
+                    </summary>
+                    <pre style={styles.pre}>
+                      {JSON.stringify(user, null, 2)}
+                    </pre>
+                  </details>
+                </Section>
+              </div>
             ) : null}
 
             {activeTab === "security" ? (
-              <Section title="Security & Identity">
+              <Section title="Security">
                 <Grid>
                   <Row
                     label="Email verified"
@@ -387,25 +574,13 @@ export default function AdminUserDetailPage() {
                     value={formatDateTime(user.lastLogin)}
                   />
                   <Row label="Providers" value={providers.join(", ")} />
-                  <Row
-                    label="Google ID"
-                    value={user.googleId ? "Present" : "-"}
-                  />
-                  <Row
-                    label="GitHub ID"
-                    value={user.githubId ? "Present" : "-"}
-                  />
-                  <Row
-                    label="Twitter/X ID"
-                    value={user.twitterId ? "Present" : "-"}
-                  />
                 </Grid>
 
                 <Divider />
 
-                <Callout title="Planned actions (backend needed)">
-                  Resend verification • Force logout • Password reset assist •
-                  Security flags.
+                <Callout title="Next (Phase 1)">
+                  Add: resend verification, force logout, reset assist
+                  (backend).
                 </Callout>
               </Section>
             ) : null}
@@ -422,56 +597,27 @@ export default function AdminUserDetailPage() {
 
                 <Divider />
 
-                <Callout title="Planned actions (backend needed)">
-                  Upgrade/downgrade plan • Cancel/extend • Billing history •
-                  Entitlements.
+                <Callout title="Next (Phase 2)">
+                  Add: entitlements + billing history (if you track it).
                 </Callout>
-              </Section>
-            ) : null}
-
-            {activeTab === "support" ? (
-              <Section title="Support Notes">
-                <Callout title="What we will add here">
-                  Internal notes per user, with author + timestamp, searchable.
-                </Callout>
-
-                <div style={{ marginTop: 12 }}>
-                  <div style={{ fontSize: 13, color: TEXT_MUTED }}>
-                    No notes yet (backend not connected).
-                  </div>
-
-                  <div style={styles.noteComposer}>
-                    <div style={{ fontWeight: 700, marginBottom: 8 }}>
-                      Add internal note (future)
-                    </div>
-                    <textarea
-                      disabled
-                      placeholder="Add a note… (requires backend endpoint)"
-                      style={styles.textareaDisabled}
-                    />
-                    <button disabled style={styles.btnDisabled}>
-                      Save note
-                    </button>
-                  </div>
-                </div>
               </Section>
             ) : null}
 
             {activeTab === "activity" ? (
               <Section title="Activity">
-                <Callout title="What we will add here">
-                  Admin audit trail (who changed what), user activity summary,
-                  and debug signals.
+                <Callout title="Next (Phase 2/3)">
+                  Show: accounts, recent transactions, imports, admin audit log.
                 </Callout>
 
                 <Divider />
 
-                <details style={{ marginTop: 10 }}>
-                  <summary style={{ cursor: "pointer", fontWeight: 700 }}>
-                    Raw user payload (debug)
-                  </summary>
-                  <pre style={styles.pre}>{JSON.stringify(user, null, 2)}</pre>
-                </details>
+                <Grid>
+                  <Row label="Created" value={formatDateTime(user.createdAt)} />
+                  <Row
+                    label="Last login"
+                    value={formatDateTime(user.lastLogin)}
+                  />
+                </Grid>
               </Section>
             ) : null}
           </div>
@@ -486,7 +632,7 @@ export default function AdminUserDetailPage() {
 function Section({ title, children }) {
   return (
     <div style={styles.section}>
-      <div style={{ fontWeight: 800, marginBottom: 10, fontSize: 14 }}>
+      <div style={{ fontWeight: 900, marginBottom: 10, fontSize: 14 }}>
         {title}
       </div>
       {children}
@@ -528,7 +674,7 @@ function Divider() {
 function Callout({ title, children }) {
   return (
     <div style={styles.callout}>
-      <div style={{ fontWeight: 800, marginBottom: 6 }}>{title}</div>
+      <div style={{ fontWeight: 900, marginBottom: 6 }}>{title}</div>
       <div style={{ fontSize: 13, opacity: 0.9, lineHeight: 1.45 }}>
         {children}
       </div>
@@ -536,13 +682,86 @@ function Callout({ title, children }) {
   );
 }
 
+function AvatarCircle({ name, avatarUrl }) {
+  const initials = useMemo(() => {
+    const v = (name || "").trim();
+    if (!v) return "?";
+    const parts = v.split(/\s+/).filter(Boolean);
+    const a = parts[0]?.[0] || "?";
+    const b = parts.length > 1 ? parts[parts.length - 1][0] : "";
+    return (a + b).toUpperCase();
+  }, [name]);
+
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt="avatar"
+        style={{
+          width: 44,
+          height: 44,
+          borderRadius: 999,
+          objectFit: "cover",
+          border: BORDER,
+        }}
+        onError={(e) => {
+          e.currentTarget.style.display = "none";
+        }}
+      />
+    );
+  }
+
+  return (
+    <div
+      style={{
+        width: 44,
+        height: 44,
+        borderRadius: 999,
+        border: BORDER,
+        background: "rgba(148,163,184,0.08)",
+        display: "grid",
+        placeItems: "center",
+        fontWeight: 900,
+      }}
+      title="No avatar"
+    >
+      {initials}
+    </div>
+  );
+}
+
 /* ───────────────────────── helpers ───────────────────────── */
+
+function maskId(v) {
+  const s = String(v || "");
+  if (s.length <= 10) return s;
+  return `${s.slice(0, 4)}…${s.slice(-4)}`;
+}
 
 function formatDateTime(v) {
   if (!v) return "-";
   const d = new Date(v);
   if (Number.isNaN(d.getTime())) return "-";
   return d.toISOString().replace("T", " ").slice(0, 19) + "Z";
+}
+
+function timeAgo(v) {
+  if (!v) return "no activity";
+  const d = new Date(v);
+  const t = d.getTime();
+  if (Number.isNaN(t)) return "unknown";
+  const diff = Date.now() - t;
+  if (diff < 0) return "in the future";
+
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
 }
 
 function pill(kind) {
@@ -553,7 +772,7 @@ function pill(kind) {
     padding: "2px 8px",
     borderRadius: 999,
     fontSize: 11,
-    fontWeight: 800,
+    fontWeight: 900,
     marginLeft: 8,
     border: BORDER_SOFT,
     background: "transparent",
@@ -581,7 +800,7 @@ function tabBtn(active) {
     background: active ? "rgba(148,163,184,0.10)" : "transparent",
     cursor: "pointer",
     fontSize: 13,
-    fontWeight: 800,
+    fontWeight: 900,
   };
 }
 
@@ -594,7 +813,7 @@ const styles = {
   },
   backLink: {
     textDecoration: "none",
-    fontWeight: 800,
+    fontWeight: 900,
     padding: "8px 10px",
     borderRadius: 10,
     border: BORDER,
@@ -610,38 +829,6 @@ const styles = {
     borderRadius: 10,
     border: "1px solid rgba(148,163,184,0.25)",
     background: "transparent",
-    cursor: "pointer",
-    fontWeight: 800,
-    fontSize: 13,
-  },
-
-  // NEW: lifecycle button styles
-  dangerBtnSoft: {
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid rgba(239,68,68,0.45)",
-    background: "rgba(239,68,68,0.08)",
-    color: "#b91c1c",
-    cursor: "pointer",
-    fontWeight: 900,
-    fontSize: 13,
-  },
-  dangerBtnHard: {
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid rgba(239,68,68,0.65)",
-    background: "rgba(239,68,68,0.16)",
-    color: "#991b1b",
-    cursor: "pointer",
-    fontWeight: 900,
-    fontSize: 13,
-  },
-  successBtnSoft: {
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid rgba(34,197,94,0.45)",
-    background: "rgba(34,197,94,0.10)",
-    color: "#166534",
     cursor: "pointer",
     fontWeight: 900,
     fontSize: 13,
@@ -683,34 +870,6 @@ const styles = {
     border: BORDER,
     background: BG_SOFT,
   },
-  noteComposer: {
-    marginTop: 12,
-    padding: 12,
-    borderRadius: 14,
-    border: BORDER,
-    background: "rgba(148,163,184,0.04)",
-  },
-  textareaDisabled: {
-    width: "100%",
-    minHeight: 90,
-    resize: "vertical",
-    borderRadius: 12,
-    border: "1px solid rgba(148,163,184,0.20)",
-    padding: 10,
-    outline: "none",
-    opacity: 0.7,
-    background: "transparent",
-    marginBottom: 10,
-  },
-  btnDisabled: {
-    padding: "10px 12px",
-    borderRadius: 12,
-    border: "1px solid rgba(148,163,184,0.25)",
-    background: "transparent",
-    cursor: "not-allowed",
-    opacity: 0.6,
-    fontWeight: 800,
-  },
   pre: {
     marginTop: 10,
     padding: 12,
@@ -720,5 +879,47 @@ const styles = {
     overflowX: "auto",
     fontSize: 12,
     lineHeight: 1.45,
+  },
+  twoCol: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: 12,
+  },
+  dangerZone: {
+    padding: 12,
+    borderRadius: 14,
+    border: "1px solid rgba(239,68,68,0.18)",
+    background: "rgba(239,68,68,0.05)",
+  },
+
+  dangerBtnSoft: {
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid rgba(239,68,68,0.45)",
+    background: "rgba(239,68,68,0.08)",
+    color: "#b91c1c",
+    cursor: "pointer",
+    fontWeight: 900,
+    fontSize: 13,
+  },
+  dangerBtnHard: {
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid rgba(239,68,68,0.65)",
+    background: "rgba(239,68,68,0.16)",
+    color: "#991b1b",
+    cursor: "pointer",
+    fontWeight: 900,
+    fontSize: 13,
+  },
+  successBtnSoft: {
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid rgba(34,197,94,0.45)",
+    background: "rgba(34,197,94,0.10)",
+    color: "#166534",
+    cursor: "pointer",
+    fontWeight: 900,
+    fontSize: 13,
   },
 };
