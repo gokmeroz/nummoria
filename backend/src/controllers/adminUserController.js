@@ -5,6 +5,7 @@ import crypto from "crypto";
 import bcrypt from "bcrypt";
 import nodemailer from "nodemailer";
 import { User } from "../models/user.js";
+import { Account } from "../models/account.js";
 
 /* ───────────────────────── Mail / URLs ───────────────────────── */
 
@@ -186,6 +187,39 @@ export async function adminGetUserById(req, res) {
     return res.json({ user });
   } catch (err) {
     console.error("adminGetUserById failed:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+// Admin: get accounts of a user
+export async function adminGetUserAccounts(req, res) {
+  try {
+    const { id } = req.params;
+    const includeInactive = req.query.includeInactive === "true";
+
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ message: "Invalid user id" });
+    }
+
+    const userExists = await User.exists({ _id: id });
+    if (!userExists) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const query = {
+      userId: id,
+      ...(includeInactive ? {} : { isDeleted: false }),
+    };
+
+    const accounts = await Account.find(query)
+      .select(
+        "name type balance currency institution last4 isDeleted createdAt"
+      )
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return res.json({ accounts });
+  } catch (err) {
+    console.error("adminGetUserAccounts failed:", err);
     return res.status(500).json({ message: "Internal server error" });
   }
 }

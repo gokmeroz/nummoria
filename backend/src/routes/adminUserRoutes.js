@@ -5,7 +5,7 @@ import { requireAdmin } from "../middlewares/requireRole.js";
 import {
   adminSearchUsers,
   adminGetUserById,
-
+  adminGetUserAccounts,
   // lifecycle
   adminDeactivateUser,
   adminReactivateUser,
@@ -24,6 +24,7 @@ router.use(requireAdmin);
 
 router.get("/users", adminSearchUsers);
 router.get("/users/:id", adminGetUserById);
+router.get("/users/:id/accounts", adminGetUserAccounts);
 
 // lifecycle endpoints
 router.patch("/users/:id/deactivate", adminDeactivateUser);

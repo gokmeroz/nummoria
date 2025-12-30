@@ -36,7 +36,6 @@ export async function adminGetUserAccounts(
 ) {
   const { data } = await api.get(`/admin/users/${userId}/accounts`, {
     params: { includeInactive },
-    withCredentials: true,
   });
   return data;
 }

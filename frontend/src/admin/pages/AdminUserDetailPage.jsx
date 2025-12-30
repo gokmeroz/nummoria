@@ -6,10 +6,13 @@ import {
   adminGetUserById,
   adminDeactivateUser,
   adminReactivateUser,
-  adminHardDeleteUser, // NEW: Phase 1
+  adminHardDeleteUser,
+  // Phase 1
   adminResendVerification,
   adminForceLogout,
   adminSendPasswordReset,
+  // Accounts
+  adminGetUserAccounts,
 } from "../lib/adminApi";
 
 const BORDER = "1px solid rgba(148,163,184,0.15)";
@@ -19,6 +22,7 @@ const TEXT_MUTED = "rgba(148,163,184,0.85)";
 
 const TABS = [
   { key: "overview", label: "Overview" },
+  { key: "accounts", label: "Accounts" },
   { key: "security", label: "Security" },
   { key: "subscription", label: "Subscription" },
   { key: "activity", label: "Activity" },
@@ -27,6 +31,9 @@ const TABS = [
 export default function AdminUserDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+
+  const [accounts, setAccounts] = useState([]);
+  const [accountsLoading, setAccountsLoading] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -39,12 +46,45 @@ export default function AdminUserDetailPage() {
     deactivate: false,
     reactivate: false,
     hardDelete: false,
-    // NEW:
     resendVerification: false,
     forceLogout: false,
     sendPasswordReset: false,
   });
 
+  // ✅ Define derived IDs BEFORE effects that use them (prevents TDZ crash)
+  const userId = user?._id || user?.id || id;
+  const email = user?.email || "";
+  const isActive = user?.isActive !== false;
+
+  // Fetch accounts ONLY when Accounts tab is active
+  // ✅ Use `id` in deps to avoid "Cannot access userId before initialization"
+  useEffect(() => {
+    if (activeTab !== "accounts") return;
+    if (!id) return;
+
+    let mounted = true;
+    setAccountsLoading(true);
+
+    adminGetUserAccounts(id)
+      .then((res) => {
+        if (!mounted) return;
+        setAccounts(res?.accounts || []);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setAccounts([]);
+      })
+      .finally(() => {
+        if (!mounted) return;
+        setAccountsLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [activeTab, id]);
+
+  // Fetch user
   useEffect(() => {
     let mounted = true;
 
@@ -75,6 +115,7 @@ export default function AdminUserDetailPage() {
 
   useEffect(() => {
     setActiveTab("overview");
+    setAccounts([]); // small UX: clear accounts when switching users
   }, [id]);
 
   useEffect(() => {
@@ -82,10 +123,6 @@ export default function AdminUserDetailPage() {
     const t = setTimeout(() => setToast(""), 1800);
     return () => clearTimeout(t);
   }, [toast]);
-
-  const userId = user?._id || user?.id || id;
-  const email = user?.email || "";
-  const isActive = user?.isActive !== false;
 
   const displayName = useMemo(() => {
     if (!user) return "";
@@ -202,6 +239,7 @@ export default function AdminUserDetailPage() {
       setActionLoading((s) => ({ ...s, hardDelete: false }));
     }
   }
+
   async function onResendVerification() {
     if (!userId) return;
 
@@ -319,7 +357,6 @@ export default function AdminUserDetailPage() {
 
         {/* Quick actions */}
         <div style={styles.actionRow}>
-          {/* NEW: Phase 1 actions */}
           {user?.isEmailVerified ? null : (
             <button
               onClick={onResendVerification}
@@ -558,6 +595,71 @@ export default function AdminUserDetailPage() {
               </div>
             ) : null}
 
+            {activeTab === "accounts" ? (
+              <Section title="Accounts">
+                {accountsLoading ? (
+                  <div style={{ opacity: 0.8 }}>Loading accounts…</div>
+                ) : accounts.length === 0 ? (
+                  <div style={{ fontSize: 13, color: TEXT_MUTED }}>
+                    No accounts found.
+                  </div>
+                ) : (
+                  <div style={{ display: "grid", gap: 10 }}>
+                    {accounts.map((acc) => (
+                      <div
+                        key={acc._id}
+                        style={{
+                          border: BORDER,
+                          borderRadius: 12,
+                          padding: 12,
+                          background: acc.isDeleted
+                            ? "rgba(239,68,68,0.05)"
+                            : "transparent",
+                        }}
+                      >
+                        <div style={{ fontWeight: 800 }}>
+                          {acc.name}{" "}
+                          <span style={pill(acc.type)}>{acc.type}</span>
+                          {acc.isDeleted && (
+                            <span style={pill("inactive")}>deleted</span>
+                          )}
+                        </div>
+
+                        <div style={{ marginTop: 6, fontSize: 13 }}>
+                          Balance:{" "}
+                          <strong>
+                            {Number(acc.balance || 0).toLocaleString()}{" "}
+                            {acc.currency}
+                          </strong>
+                        </div>
+
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: TEXT_MUTED,
+                            marginTop: 4,
+                          }}
+                        >
+                          {acc.institution || "—"}
+                          {acc.last4 ? ` • ****${acc.last4}` : ""}
+                        </div>
+
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: TEXT_MUTED,
+                            marginTop: 4,
+                          }}
+                        >
+                          Created: {formatDateTime(acc.createdAt)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Section>
+            ) : null}
+
             {activeTab === "security" ? (
               <Section title="Security">
                 <Grid>
@@ -578,9 +680,8 @@ export default function AdminUserDetailPage() {
 
                 <Divider />
 
-                <Callout title="Next (Phase 1)">
-                  Add: resend verification, force logout, reset assist
-                  (backend).
+                <Callout title="Phase 1">
+                  Resend verification • Force logout • Reset assist
                 </Callout>
               </Section>
             ) : null}
@@ -594,23 +695,11 @@ export default function AdminUserDetailPage() {
                     value={user.isActive ? "Yes" : "No"}
                   />
                 </Grid>
-
-                <Divider />
-
-                <Callout title="Next (Phase 2)">
-                  Add: entitlements + billing history (if you track it).
-                </Callout>
               </Section>
             ) : null}
 
             {activeTab === "activity" ? (
               <Section title="Activity">
-                <Callout title="Next (Phase 2/3)">
-                  Show: accounts, recent transactions, imports, admin audit log.
-                </Callout>
-
-                <Divider />
-
                 <Grid>
                   <Row label="Created" value={formatDateTime(user.createdAt)} />
                   <Row
@@ -833,7 +922,6 @@ const styles = {
     fontWeight: 900,
     fontSize: 13,
   },
-
   toast: {
     position: "fixed",
     right: 18,
@@ -891,7 +979,6 @@ const styles = {
     border: "1px solid rgba(239,68,68,0.18)",
     background: "rgba(239,68,68,0.05)",
   },
-
   dangerBtnSoft: {
     padding: "10px 12px",
     borderRadius: 10,
