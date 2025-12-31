@@ -15,6 +15,7 @@ import {
   adminResendVerification,
   adminForceLogout,
   adminSendPasswordReset,
+  adminUpdateUserSubscription,
 } from "../controllers/adminUserController.js";
 
 const router = express.Router();
@@ -35,5 +36,6 @@ router.delete("/users/:id/hard", adminHardDeleteUser);
 router.post("/users/:id/resend-verification", adminResendVerification);
 router.post("/users/:id/force-logout", adminForceLogout);
 router.post("/users/:id/send-password-reset", adminSendPasswordReset);
+router.patch("/users/:id/subscription", adminUpdateUserSubscription);
 
 export default router;

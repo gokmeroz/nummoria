@@ -438,3 +438,38 @@ export async function adminSendPasswordReset(req, res) {
     return res.status(500).json({ message: "Internal server error" });
   }
 }
+// NEW: update subscription
+export async function adminUpdateUserSubscription(req, res) {
+  try {
+    const { id } = req.params;
+    const { subscription } = req.body;
+
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ message: "Invalid user id" });
+    }
+
+    const allowed = new Set(["Standard", "Plus", "Premium"]);
+    if (!allowed.has(subscription)) {
+      return res.status(400).json({ message: "Invalid subscription plan" });
+    }
+
+    const user = await User.findById(id).select(
+      "name email subscription isActive isEmailVerified lastLogin createdAt"
+    );
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    user.subscription = subscription;
+    await user.save();
+
+    return res.json({
+      ok: true,
+      user: {
+        _id: user._id,
+        subscription: user.subscription,
+      },
+    });
+  } catch (err) {
+    console.error("adminUpdateUserSubscription failed:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}

@@ -80,3 +80,9 @@ export async function adminSendPasswordReset(userId) {
   const { data } = await api.post(`/admin/users/${userId}/send-password-reset`);
   return data;
 }
+export async function adminUpdateUserSubscription(userId, subscription) {
+  const { data } = await api.patch(`/admin/users/${userId}/subscription`, {
+    subscription,
+  });
+  return data;
+}

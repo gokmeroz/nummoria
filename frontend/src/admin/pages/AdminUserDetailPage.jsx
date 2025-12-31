@@ -13,7 +13,9 @@ import {
   adminSendPasswordReset,
   // Accounts
   adminGetUserAccounts,
+  adminUpdateUserSubscription,
 } from "../lib/adminApi";
+import { color } from "framer-motion";
 
 const BORDER = "1px solid rgba(148,163,184,0.15)";
 const BORDER_SOFT = "1px solid rgba(148,163,184,0.12)";
@@ -49,6 +51,7 @@ export default function AdminUserDetailPage() {
     resendVerification: false,
     forceLogout: false,
     sendPasswordReset: false,
+    updateSubscription: false,
   });
 
   // ✅ Define derived IDs BEFORE effects that use them (prevents TDZ crash)
@@ -303,6 +306,32 @@ export default function AdminUserDetailPage() {
       setActionLoading((s) => ({ ...s, sendPasswordReset: false }));
     }
   }
+  async function onUpdateSubscription(nextPlan) {
+    if (!userId) return;
+
+    const ok = window.confirm(`Change subscription to "${nextPlan}"?`);
+    if (!ok) return;
+
+    try {
+      setActionLoading((s) => ({ ...s, updateSubscription: true }));
+      setErr("");
+
+      const res = await adminUpdateUserSubscription(userId, nextPlan);
+      const updated = res?.user ?? res;
+
+      setUser((prev) => ({
+        ...(prev || {}),
+        ...(updated || {}),
+        subscription: nextPlan,
+      }));
+
+      setToast(`Subscription updated to ${nextPlan}`);
+    } catch (e) {
+      setErr(e?.response?.data?.message || "Failed to update subscription.");
+    } finally {
+      setActionLoading((s) => ({ ...s, updateSubscription: false }));
+    }
+  }
 
   return (
     <div>
@@ -355,83 +384,55 @@ export default function AdminUserDetailPage() {
           </div>
         </div>
 
-        {/* Quick actions */}
         <div style={styles.actionRow}>
-          {user?.isEmailVerified ? null : (
+          {/* LEFT group */}
+          <div style={styles.actionGroupLeft}>
             <button
-              onClick={onResendVerification}
-              disabled={actionLoading.resendVerification || loading}
+              onClick={() => copyToClipboard(userId, "User ID")}
               style={styles.actionBtn}
-              title="Resend verification code"
+              disabled={!userId}
+              title="Copy user id"
             >
-              {actionLoading.resendVerification
-                ? "Resending…"
-                : "Resend Verification"}
+              Copy ID
             </button>
-          )}
 
-          <button
-            onClick={onForceLogout}
-            disabled={actionLoading.forceLogout || loading}
-            style={styles.actionBtn}
-            title="Force logout user everywhere"
-          >
-            {actionLoading.forceLogout ? "Forcing…" : "Force Logout"}
-          </button>
+            <button
+              onClick={() => copyToClipboard(email, "Email")}
+              style={styles.actionBtn}
+              disabled={!email}
+              title="Copy email"
+            >
+              Copy Email
+            </button>
+          </div>
 
-          <button
-            onClick={onSendPasswordReset}
-            disabled={actionLoading.sendPasswordReset || loading}
-            style={styles.actionBtn}
-            title="Send password reset email"
-          >
-            {actionLoading.sendPasswordReset
-              ? "Sending…"
-              : "Send Password Reset"}
-          </button>
+          {/* RIGHT group (pushed to end) */}
+          <div style={styles.actionGroupRight}>
+            <button
+              onClick={() => copyToClipboard(avatarUrl, "Avatar URL")}
+              style={styles.actionBtn}
+              disabled={!avatarUrl}
+              title="Copy avatar URL"
+            >
+              Copy Avatar URL
+            </button>
 
-          <button
-            onClick={() => copyToClipboard(userId, "User ID")}
-            style={styles.actionBtn}
-            disabled={!userId}
-            title="Copy user id"
-          >
-            Copy ID
-          </button>
-
-          <button
-            onClick={() => copyToClipboard(email, "Email")}
-            style={styles.actionBtn}
-            disabled={!email}
-            title="Copy email"
-          >
-            Copy Email
-          </button>
-
-          <button
-            onClick={() => copyToClipboard(avatarUrl, "Avatar URL")}
-            style={styles.actionBtn}
-            disabled={!avatarUrl}
-            title="Copy avatar URL"
-          >
-            Copy Avatar URL
-          </button>
-
-          <a
-            href={email ? `mailto:${email}` : undefined}
-            style={{
-              ...styles.actionBtn,
-              textDecoration: "none",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              pointerEvents: email ? "auto" : "none",
-              opacity: email ? 1 : 0.5,
-            }}
-            title="Open mail client"
-          >
-            Email User
-          </a>
+            <a
+              href={email ? `mailto:${email}` : undefined}
+              style={{
+                ...styles.actionBtn,
+                textDecoration: "none",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                pointerEvents: email ? "auto" : "none",
+                opacity: email ? 1 : 0.5,
+              }}
+              title="Open mail client"
+            >
+              Email User
+            </a>
+          </div>
         </div>
       </div>
 
@@ -680,21 +681,164 @@ export default function AdminUserDetailPage() {
 
                 <Divider />
 
-                <Callout title="Phase 1">
-                  Resend verification • Force logout • Reset assist
-                </Callout>
+                {/* 🔐 Security Actions */}
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontWeight: 900, marginBottom: 8 }}>
+                    Security Actions
+                  </div>
+
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    {!user.isEmailVerified && (
+                      <button
+                        onClick={onResendVerification}
+                        disabled={actionLoading.resendVerification || loading}
+                        style={styles.actionBtnSendVerification}
+                      >
+                        {actionLoading.resendVerification
+                          ? "Resending…"
+                          : "Resend Verification"}
+                      </button>
+                    )}
+
+                    <button
+                      onClick={onForceLogout}
+                      disabled={actionLoading.forceLogout || loading}
+                      style={styles.actionBtnForceLogout}
+                    >
+                      {actionLoading.forceLogout ? "Forcing…" : "Force Logout"}
+                    </button>
+
+                    <button
+                      onClick={onSendPasswordReset}
+                      disabled={actionLoading.sendPasswordReset || loading}
+                      style={styles.actionBtnSendPasswordReset}
+                    >
+                      {actionLoading.sendPasswordReset
+                        ? "Sending…"
+                        : "Send Password Reset"}
+                    </button>
+                  </div>
+
+                  <div
+                    style={{ marginTop: 8, fontSize: 12, color: TEXT_MUTED }}
+                  >
+                    Use these actions only when assisting users with access or
+                    security issues.
+                  </div>
+                </div>
               </Section>
             ) : null}
 
             {activeTab === "subscription" ? (
               <Section title="Subscription">
                 <Grid>
-                  <Row label="Plan" value={user.subscription || "Standard"} />
+                  <Row
+                    label="Current plan"
+                    value={user.subscription || "Standard"}
+                  />
                   <Row
                     label="Active user"
                     value={user.isActive ? "Yes" : "No"}
                   />
                 </Grid>
+
+                <Divider />
+
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ fontWeight: 900, marginBottom: 10 }}>
+                    Manage Subscription
+                  </div>
+
+                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                    {/* STANDARD */}
+                    <button
+                      disabled
+                      style={{
+                        ...styles.actionBtn,
+                        opacity: user.subscription === "Standard" ? 0.6 : 1,
+                        cursor: "default",
+                      }}
+                      title="Default plan"
+                    >
+                      Standard{" "}
+                      {user.subscription === "Standard" ? "(current)" : ""}
+                    </button>
+
+                    {/* PLUS */}
+                    <button
+                      onClick={() => onUpdateSubscription("Plus")}
+                      disabled={
+                        loading ||
+                        actionLoading.updateSubscription ||
+                        user.subscription === "Plus"
+                      }
+                      style={{
+                        ...styles.actionBtnSetPlus,
+                        opacity: user.subscription === "Plus" ? 0.6 : 1,
+                        cursor:
+                          user.subscription === "Plus" ? "default" : "pointer",
+                      }}
+                      title="Upgrade to Plus"
+                    >
+                      {user.subscription === "Plus"
+                        ? "Plus (current)"
+                        : "Set Plus"}
+                    </button>
+
+                    {/* PREMIUM */}
+                    <button
+                      onClick={() => onUpdateSubscription("Premium")}
+                      disabled={
+                        loading ||
+                        actionLoading.updateSubscription ||
+                        user.subscription === "Premium"
+                      }
+                      style={{
+                        ...styles.actionBtnSetPremium,
+                        opacity: user.subscription === "Premium" ? 0.6 : 1,
+                        cursor:
+                          user.subscription === "Premium"
+                            ? "default"
+                            : "pointer",
+                      }}
+                      title="Upgrade to Premium"
+                    >
+                      {user.subscription === "Premium"
+                        ? "Premium (current)"
+                        : "Set Premium"}
+                    </button>
+                  </div>
+
+                  <div
+                    style={{ marginTop: 10, fontSize: 12, color: TEXT_MUTED }}
+                  >
+                    Subscription changes are applied immediately. Billing
+                    enforcement (Stripe, trials, invoices) can be layered on
+                    later without changing this UI.
+                  </div>
+                </div>
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ fontWeight: 900, marginBottom: 10 }}>
+                    Payment History
+                  </div>
+                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                    {/* STANDARD */}
+                    {/* <button
+                      disabled
+                      style={{
+                        ...styles.actionBtn,
+                        opacity: user.subscription === "Standard" ? 0.6 : 1,
+                        cursor: "default",
+                      }}
+                      title="Default plan"
+                    >
+                      Standard{" "}
+                      {user.subscription === "Standard" ? "(current)" : ""}
+                    </button> */}
+
+                    <div>No payment history available. Phase 2 feature.</div>
+                  </div>
+                </div>
               </Section>
             ) : null}
 
@@ -922,6 +1066,56 @@ const styles = {
     fontWeight: 900,
     fontSize: 13,
   },
+  actionBtnSendPasswordReset: {
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid rgba(148,163,184,0.25)",
+    background: "transparent",
+    color: "#2563ebff",
+    cursor: "pointer",
+    fontWeight: 900,
+    fontSize: 13,
+  },
+  actionBtnSendVerification: {
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid rgba(148,163,184,0.25)",
+    background: "transparent",
+    color: "#1cb946ff",
+    cursor: "pointer",
+    fontWeight: 900,
+    fontSize: 13,
+  },
+  actionBtnForceLogout: {
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid rgba(148,163,184,0.25)",
+    color: "#b91c1c",
+    background: "transparent",
+    cursor: "pointer",
+    fontWeight: 900,
+    fontSize: 13,
+  },
+  actionBtnSetPlus: {
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid rgba(148,163,184,0.25)",
+    background: "transparent",
+    color: "##00CEC8",
+    cursor: "pointer",
+    fontWeight: 900,
+    fontSize: 13,
+  },
+  actionBtnSetPremium: {
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid rgba(148,163,184,0.25)",
+    background: "transparent",
+    color: "#660033",
+    cursor: "pointer",
+    fontWeight: 900,
+    fontSize: 13,
+  },
   toast: {
     position: "fixed",
     right: 18,
@@ -1008,5 +1202,18 @@ const styles = {
     cursor: "pointer",
     fontWeight: 900,
     fontSize: 13,
+  },
+  actionGroupLeft: {
+    display: "flex",
+    gap: 10,
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+  actionGroupRight: {
+    display: "flex",
+    gap: 10,
+    alignItems: "center",
+    flexWrap: "wrap",
+    marginLeft: "auto", // <-- pushes this group to the far right
   },
 };
