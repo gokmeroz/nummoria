@@ -817,26 +817,109 @@ export default function AdminUserDetailPage() {
                     later without changing this UI.
                   </div>
                 </div>
-                <div style={{ marginTop: 10 }}>
-                  <div style={{ fontWeight: 900, marginBottom: 10 }}>
-                    Payment History
-                  </div>
-                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                    {/* STANDARD */}
-                    {/* <button
-                      disabled
-                      style={{
-                        ...styles.actionBtn,
-                        opacity: user.subscription === "Standard" ? 0.6 : 1,
-                        cursor: "default",
-                      }}
-                      title="Default plan"
-                    >
-                      Standard{" "}
-                      {user.subscription === "Standard" ? "(current)" : ""}
-                    </button> */}
+                <div style={styles.paymentHistoryWrap}>
+                  <div style={styles.paymentHistoryHeader}>
+                    <div>
+                      <div
+                        style={{
+                          fontWeight: 950,
+                          fontSize: 14,
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        Payment History
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: TEXT_MUTED,
+                          marginTop: 4,
+                        }}
+                      >
+                        We will enhance this in 2026 (Phase 2): invoices,
+                        receipts, and billing provider sync.
+                      </div>
+                    </div>
 
-                    <div>No payment history available. Phase 2 feature.</div>
+                    <span style={styles.phaseBadge} title="Planned feature">
+                      Phase 2
+                    </span>
+                  </div>
+
+                  <div style={styles.paymentHistoryCard}>
+                    <div style={styles.emptyStateRow}>
+                      <div style={styles.emptyStateIcon} aria-hidden="true">
+                        $
+                      </div>
+
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 900, marginBottom: 4 }}>
+                          No payment history yet
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: TEXT_MUTED,
+                            lineHeight: 1.45,
+                          }}
+                        >
+                          Once billing is enabled, you’ll see invoices, amounts,
+                          currency, status (paid/refunded/failed), and receipt
+                          links here.
+                        </div>
+                      </div>
+                    </div>
+
+                    <Divider />
+
+                    {/* Visual placeholders (non-interactive) */}
+                    <div style={styles.fakeTimeline}>
+                      {[
+                        {
+                          label: "Invoice",
+                          hint: "INV-2026-0001",
+                          meta: "Paid • $9.99 • USD",
+                        },
+                        {
+                          label: "Invoice",
+                          hint: "INV-2026-0002",
+                          meta: "Paid • $9.99 • USD",
+                        },
+                        {
+                          label: "Refund",
+                          hint: "RF-2026-0001",
+                          meta: "Refunded • $9.99 • USD",
+                        },
+                      ].map((x, idx) => (
+                        <div key={idx} style={styles.fakeRow}>
+                          <div style={styles.fakeDot} />
+                          <div style={{ flex: 1 }}>
+                            <div
+                              style={{
+                                display: "flex",
+                                gap: 10,
+                                alignItems: "center",
+                              }}
+                            >
+                              <span style={styles.fakePill}>{x.label}</span>
+                              <span style={styles.fakeHint}>{x.hint}</span>
+                            </div>
+                            <div style={styles.fakeMeta}>{x.meta}</div>
+                          </div>
+                          <div style={styles.fakeLink}>Receipt</div>
+                        </div>
+                      ))}
+                      <div
+                        style={{
+                          marginTop: 10,
+                          fontSize: 11,
+                          color: TEXT_MUTED,
+                        }}
+                      >
+                        These rows are placeholders for UI structure. Backend
+                        integration comes in Phase 2.
+                      </div>
+                    </div>
                   </div>
                 </div>
               </Section>
@@ -1215,5 +1298,110 @@ const styles = {
     alignItems: "center",
     flexWrap: "wrap",
     marginLeft: "auto", // <-- pushes this group to the far right
+  },
+  paymentHistoryWrap: {
+    marginTop: 12,
+  },
+
+  paymentHistoryHeader: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 10,
+  },
+
+  phaseBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "6px 10px",
+    borderRadius: 999,
+    border: "1px solid rgba(148,163,184,0.20)",
+    background: "rgba(148,163,184,0.08)",
+    fontSize: 11,
+    fontWeight: 950,
+    letterSpacing: 0.2,
+  },
+
+  paymentHistoryCard: {
+    border: BORDER,
+    borderRadius: 14,
+    padding: 14,
+    background: "rgba(148,163,184,0.04)",
+  },
+
+  emptyStateRow: {
+    display: "flex",
+    gap: 12,
+    alignItems: "center",
+  },
+
+  emptyStateIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    border: "1px solid rgba(148,163,184,0.18)",
+    background: "rgba(148,163,184,0.08)",
+    display: "grid",
+    placeItems: "center",
+    fontWeight: 950,
+  },
+
+  fakeTimeline: {
+    display: "grid",
+    gap: 10,
+  },
+
+  fakeRow: {
+    display: "flex",
+    gap: 10,
+    alignItems: "flex-start",
+    padding: "10px 10px",
+    borderRadius: 12,
+    border: "1px solid rgba(148,163,184,0.14)",
+    background: "rgba(2,6,23,0.03)",
+    opacity: 0.7,
+  },
+
+  fakeDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    marginTop: 6,
+    border: "1px solid rgba(148,163,184,0.25)",
+    background: "rgba(148,163,184,0.14)",
+  },
+
+  fakePill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "2px 8px",
+    borderRadius: 999,
+    border: "1px solid rgba(148,163,184,0.18)",
+    background: "rgba(148,163,184,0.08)",
+    fontSize: 11,
+    fontWeight: 950,
+  },
+
+  fakeHint: {
+    fontSize: 12,
+    fontWeight: 900,
+    color: "rgba(15,23,42,0.65)",
+  },
+
+  fakeMeta: {
+    marginTop: 4,
+    fontSize: 12,
+    color: TEXT_MUTED,
+  },
+
+  fakeLink: {
+    fontSize: 12,
+    fontWeight: 900,
+    color: "rgba(59,130,246,0.9)",
+    opacity: 0.7,
+    userSelect: "none",
   },
 };
