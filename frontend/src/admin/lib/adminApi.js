@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 // frontend/src/admin/lib/adminApi.js
 import api from "../../lib/api";
 
@@ -85,4 +86,22 @@ export async function adminUpdateUserSubscription(userId, subscription) {
     subscription,
   });
   return data;
+}
+export async function adminGetUserActivity(userId, opts = {}) {
+  // If backend endpoint is not implemented yet, return empty list safely.
+  // This prevents the AdminUserDetailPage from crashing.
+  if (!userId) return { items: [] };
+
+  const limit = Number(opts.limit || 50);
+
+  try {
+    // If you later implement backend, this will start working automatically.
+    const res = await api.get(`/admin/users/${userId}/activity`, {
+      params: { limit },
+    });
+    return res.data;
+  } catch (e) {
+    // ✅ Safe fallback so UI never blanks
+    return { items: [] };
+  }
 }

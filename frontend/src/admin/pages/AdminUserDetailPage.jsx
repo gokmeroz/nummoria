@@ -14,8 +14,9 @@ import {
   // Accounts
   adminGetUserAccounts,
   adminUpdateUserSubscription,
+  // Activity (Phase 2-ish but we show feed now)
+  adminGetUserActivity,
 } from "../lib/adminApi";
-import { color } from "framer-motion";
 
 const BORDER = "1px solid rgba(148,163,184,0.15)";
 const BORDER_SOFT = "1px solid rgba(148,163,184,0.12)";
@@ -54,6 +55,11 @@ export default function AdminUserDetailPage() {
     updateSubscription: false,
   });
 
+  // ✅ NEW: activity state
+  const [activityItems, setActivityItems] = useState([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityErr, setActivityErr] = useState("");
+
   // ✅ Define derived IDs BEFORE effects that use them (prevents TDZ crash)
   const userId = user?._id || user?.id || id;
   const email = user?.email || "";
@@ -87,6 +93,36 @@ export default function AdminUserDetailPage() {
     };
   }, [activeTab, id]);
 
+  // ✅ NEW: Fetch activity ONLY when Activity tab is active
+  useEffect(() => {
+    if (activeTab !== "activity") return;
+    if (!userId) return;
+
+    let mounted = true;
+    setActivityLoading(true);
+    setActivityErr("");
+
+    adminGetUserActivity(userId, { limit: 50 })
+      .then((res) => {
+        const items = res?.items || res?.activity || [];
+        if (mounted) setActivityItems(items);
+      })
+      .catch((e) => {
+        if (!mounted) return;
+        setActivityItems([]);
+        setActivityErr(
+          e?.response?.data?.message || "Failed to load activity feed."
+        );
+      })
+      .finally(() => {
+        if (mounted) setActivityLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [activeTab, userId]);
+
   // Fetch user
   useEffect(() => {
     let mounted = true;
@@ -119,6 +155,8 @@ export default function AdminUserDetailPage() {
   useEffect(() => {
     setActiveTab("overview");
     setAccounts([]); // small UX: clear accounts when switching users
+    setActivityItems([]); // ✅ NEW: clear activity when switching users
+    setActivityErr("");
   }, [id]);
 
   useEffect(() => {
@@ -306,6 +344,7 @@ export default function AdminUserDetailPage() {
       setActionLoading((s) => ({ ...s, sendPasswordReset: false }));
     }
   }
+
   async function onUpdateSubscription(nextPlan) {
     if (!userId) return;
 
@@ -350,6 +389,18 @@ export default function AdminUserDetailPage() {
                 {displayName}
               </div>
 
+              <div style={{ fontSize: 12, color: TEXT_MUTED, marginTop: 6 }}>
+                <span style={{ marginRight: 10 }}>
+                  Created: <b>{formatDateTime(user?.createdAt)}</b>
+                </span>
+                <span style={{ marginRight: 10 }}>
+                  Last login: <b>{formatDateTime(user?.lastLogin)}</b>
+                </span>
+                <span style={{ opacity: 0.9 }}>
+                  ({timeAgo(user?.lastLogin)})
+                </span>
+              </div>
+
               <div style={{ fontSize: 13, color: TEXT_MUTED, marginTop: 2 }}>
                 {email || "—"}{" "}
                 {user?.role ? (
@@ -367,18 +418,6 @@ export default function AdminUserDetailPage() {
                 ) : (
                   <span style={pill("unverified")}>email unverified</span>
                 )}
-              </div>
-
-              <div style={{ fontSize: 12, color: TEXT_MUTED, marginTop: 6 }}>
-                <span style={{ marginRight: 10 }}>
-                  Created: <b>{formatDateTime(user?.createdAt)}</b>
-                </span>
-                <span style={{ marginRight: 10 }}>
-                  Last login: <b>{formatDateTime(user?.lastLogin)}</b>
-                </span>
-                <span style={{ opacity: 0.9 }}>
-                  ({timeAgo(user?.lastLogin)})
-                </span>
               </div>
             </div>
           </div>
@@ -817,6 +856,8 @@ export default function AdminUserDetailPage() {
                     later without changing this UI.
                   </div>
                 </div>
+
+                {/* Fancy Payment History (your existing) */}
                 <div style={styles.paymentHistoryWrap}>
                   <div style={styles.paymentHistoryHeader}>
                     <div>
@@ -925,8 +966,93 @@ export default function AdminUserDetailPage() {
               </Section>
             ) : null}
 
+            {/* ✅ UPDATED: Activity tab now shows feed */}
             {activeTab === "activity" ? (
               <Section title="Activity">
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: 12,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: TEXT_MUTED,
+                      lineHeight: 1.45,
+                    }}
+                  >
+                    Recent events across the user’s account: transactions, AI
+                    advisor messages, imports, and auth activity.
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      // simple refresh: re-trigger effect
+                      setActiveTab("overview");
+                      setTimeout(() => setActiveTab("activity"), 0);
+                    }}
+                    style={styles.actionBtn}
+                    title="Refresh activity"
+                  >
+                    Refresh
+                  </button>
+                </div>
+
+                <Divider />
+
+                {activityLoading ? (
+                  <div style={{ opacity: 0.85 }}>Loading activity…</div>
+                ) : activityErr ? (
+                  <div style={styles.errorBox}>
+                    <div style={{ fontWeight: 900, marginBottom: 6 }}>
+                      Activity error
+                    </div>
+                    <div>{activityErr}</div>
+                  </div>
+                ) : activityItems.length === 0 ? (
+                  <div style={styles.emptyCard}>
+                    <div style={{ fontWeight: 950, marginBottom: 6 }}>
+                      No recent activity found
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: TEXT_MUTED,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      When enabled, you’ll see:
+                      <ul
+                        style={{
+                          marginTop: 8,
+                          marginBottom: 0,
+                          paddingLeft: 18,
+                        }}
+                      >
+                        <li>Transactions created/edited</li>
+                        <li>AI Advisor chats/messages</li>
+                        <li>CSV/PDF imports & ingestions</li>
+                        <li>Login / password resets / verification events</li>
+                      </ul>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={styles.activityFeed}>
+                    {activityItems.map((item, idx) => (
+                      <ActivityRow
+                        key={`${item?.id || item?._id || "evt"}_${
+                          item?.ts || item?.createdAt || idx
+                        }`}
+                        item={item}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                <Divider />
+
                 <Grid>
                   <Row label="Created" value={formatDateTime(user.createdAt)} />
                   <Row
@@ -973,6 +1099,73 @@ function Row({ label, value }) {
       </div>
     </>
   );
+}
+
+function ActivityRow({ item }) {
+  const type = item?.type || "unknown";
+  const ts = item?.ts || item?.createdAt || item?.time;
+  const title = item?.title || typeToTitle(type);
+  const subtitle = item?.subtitle || item?.summary || "";
+  const meta = item?.meta || item?.amountText || "";
+
+  return (
+    <div style={styles.activityRow}>
+      <div style={styles.activityIcon} title={type}>
+        {typeToGlyph(type)}
+      </div>
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <div style={{ fontWeight: 950, fontSize: 13 }}>{title}</div>
+          <span style={styles.activityPill}>{type}</span>
+        </div>
+
+        {subtitle ? (
+          <div style={styles.activitySubtitle}>{subtitle}</div>
+        ) : null}
+
+        <div style={styles.activityMetaRow}>
+          <span style={styles.activityTime}>{formatDateTime(ts)}</span>
+          {meta ? <span style={styles.activityMetaSep}>•</span> : null}
+          {meta ? <span style={styles.activityMeta}>{meta}</span> : null}
+        </div>
+      </div>
+
+      {item?.href ? (
+        <a
+          href={item.href}
+          target="_blank"
+          rel="noreferrer"
+          style={styles.activityLink}
+        >
+          Open
+        </a>
+      ) : (
+        <span style={styles.activityLinkDisabled}>—</span>
+      )}
+    </div>
+  );
+}
+
+function typeToTitle(type) {
+  if (type === "transaction") return "Transaction";
+  if (type === "ai_message") return "AI Advisor message";
+  if (type === "ai_chat") return "AI Advisor chat";
+  if (type === "import") return "Import";
+  if (type === "login") return "Login";
+  if (type === "password_reset") return "Password reset";
+  if (type === "verification") return "Verification";
+  return "Activity";
+}
+
+function typeToGlyph(type) {
+  if (type === "transaction") return "₺";
+  if (type === "ai_message" || type === "ai_chat") return "AI";
+  if (type === "import") return "⇪";
+  if (type === "login") return "⎆";
+  if (type === "password_reset") return "↻";
+  if (type === "verification") return "✓";
+  return "•";
 }
 
 function Divider() {
@@ -1179,12 +1372,14 @@ const styles = {
     fontWeight: 900,
     fontSize: 13,
   },
+
+  // ✅ FIXED: "##00CEC8" -> "#00CEC8"
   actionBtnSetPlus: {
     padding: "10px 12px",
     borderRadius: 10,
     border: "1px solid rgba(148,163,184,0.25)",
     background: "transparent",
-    color: "##00CEC8",
+    color: "#00CEC8",
     cursor: "pointer",
     fontWeight: 900,
     fontSize: 13,
@@ -1199,6 +1394,7 @@ const styles = {
     fontWeight: 900,
     fontSize: 13,
   },
+
   toast: {
     position: "fixed",
     right: 18,
@@ -1297,12 +1493,10 @@ const styles = {
     gap: 10,
     alignItems: "center",
     flexWrap: "wrap",
-    marginLeft: "auto", // <-- pushes this group to the far right
-  },
-  paymentHistoryWrap: {
-    marginTop: 12,
+    marginLeft: "auto",
   },
 
+  paymentHistoryWrap: { marginTop: 12 },
   paymentHistoryHeader: {
     display: "flex",
     alignItems: "flex-start",
@@ -1310,7 +1504,6 @@ const styles = {
     gap: 12,
     marginBottom: 10,
   },
-
   phaseBadge: {
     display: "inline-flex",
     alignItems: "center",
@@ -1323,20 +1516,13 @@ const styles = {
     fontWeight: 950,
     letterSpacing: 0.2,
   },
-
   paymentHistoryCard: {
     border: BORDER,
     borderRadius: 14,
     padding: 14,
     background: "rgba(148,163,184,0.04)",
   },
-
-  emptyStateRow: {
-    display: "flex",
-    gap: 12,
-    alignItems: "center",
-  },
-
+  emptyStateRow: { display: "flex", gap: 12, alignItems: "center" },
   emptyStateIcon: {
     width: 38,
     height: 38,
@@ -1348,11 +1534,7 @@ const styles = {
     fontWeight: 950,
   },
 
-  fakeTimeline: {
-    display: "grid",
-    gap: 10,
-  },
-
+  fakeTimeline: { display: "grid", gap: 10 },
   fakeRow: {
     display: "flex",
     gap: 10,
@@ -1363,7 +1545,6 @@ const styles = {
     background: "rgba(2,6,23,0.03)",
     opacity: 0.7,
   },
-
   fakeDot: {
     width: 10,
     height: 10,
@@ -1372,7 +1553,6 @@ const styles = {
     border: "1px solid rgba(148,163,184,0.25)",
     background: "rgba(148,163,184,0.14)",
   },
-
   fakePill: {
     display: "inline-flex",
     alignItems: "center",
@@ -1384,24 +1564,91 @@ const styles = {
     fontSize: 11,
     fontWeight: 950,
   },
-
   fakeHint: {
     fontSize: 12,
     fontWeight: 900,
     color: "rgba(15,23,42,0.65)",
   },
-
-  fakeMeta: {
-    marginTop: 4,
-    fontSize: 12,
-    color: TEXT_MUTED,
-  },
-
+  fakeMeta: { marginTop: 4, fontSize: 12, color: TEXT_MUTED },
   fakeLink: {
     fontSize: 12,
     fontWeight: 900,
     color: "rgba(59,130,246,0.9)",
     opacity: 0.7,
     userSelect: "none",
+  },
+
+  // ✅ NEW: activity styles
+  emptyCard: {
+    padding: 14,
+    borderRadius: 14,
+    border: BORDER,
+    background: BG_SOFT,
+  },
+  activityFeed: { display: "grid", gap: 10 },
+  activityRow: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 12,
+    padding: 12,
+    borderRadius: 14,
+    border: BORDER,
+    background: "rgba(148,163,184,0.04)",
+  },
+  activityIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    border: "1px solid rgba(148,163,184,0.18)",
+    background: "rgba(148,163,184,0.08)",
+    display: "grid",
+    placeItems: "center",
+    fontWeight: 950,
+    fontSize: 12,
+    flex: "0 0 auto",
+  },
+  activityPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "2px 8px",
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 950,
+    border: "1px solid rgba(148,163,184,0.18)",
+    background: "rgba(148,163,184,0.08)",
+  },
+  activitySubtitle: {
+    marginTop: 6,
+    fontSize: 12,
+    color: TEXT_MUTED,
+    lineHeight: 1.45,
+    wordBreak: "break-word",
+  },
+  activityMetaRow: {
+    marginTop: 8,
+    display: "flex",
+    gap: 8,
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+  activityTime: { fontSize: 11, color: TEXT_MUTED },
+  activityMetaSep: { fontSize: 11, color: TEXT_MUTED, opacity: 0.8 },
+  activityMeta: { fontSize: 11, color: TEXT_MUTED },
+  activityLink: {
+    fontSize: 12,
+    fontWeight: 950,
+    textDecoration: "none",
+    padding: "8px 10px",
+    borderRadius: 10,
+    border: "1px solid rgba(148,163,184,0.20)",
+    background: "rgba(148,163,184,0.06)",
+    alignSelf: "center",
+  },
+  activityLinkDisabled: {
+    fontSize: 12,
+    color: TEXT_MUTED,
+    alignSelf: "center",
+    opacity: 0.7,
   },
 };
