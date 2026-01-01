@@ -3,7 +3,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import api from "../lib/api"; // your axios instance
-
+import logo from "../assets/nummoria_logo.png";
 // ───────────── Plan Gate ─────────────
 const ELIGIBLE_PLANS = new Set(["plus", "premium"]);
 function isEligible(plan) {
@@ -210,9 +210,7 @@ export default function FinancialAdvisor() {
       <div className="sticky top-0 z-10 border-b bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60">
         <div className="mx-auto max-w-4xl px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-2xl bg-[#4f772d] grid place-items-center text-white font-bold">
-              ₮
-            </div>
+            <img src={logo} alt="Nummoria Logo" className="h-9 w-9" />
             <div>
               <h1 className="text-xl font-bold tracking-tight">
                 AI Financial Advisor

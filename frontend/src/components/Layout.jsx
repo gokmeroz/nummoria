@@ -46,7 +46,7 @@ export default function Layout({ onLogout }) {
       <header className="sticky top-0 z-50 bg-white border-b">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           {/* Logo + Brand */}
-          <Link to="/" className="flex items-center gap-2">
+          <Link to="/dashboard" className="flex items-center gap-2">
             <img
               src="../src/assets/nummoria_logo.png"
               alt="Nummoria Logo"
