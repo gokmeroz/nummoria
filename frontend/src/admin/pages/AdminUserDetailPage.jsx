@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 /* eslint-disable no-unused-vars */
 // frontend/src/admin/pages/AdminUserDetailPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
@@ -14,9 +15,12 @@ import {
   // Accounts
   adminGetUserAccounts,
   adminUpdateUserSubscription,
-  // Activity (Phase 2-ish but we show feed now)
+  // ✅ NEW: Activity
   adminGetUserActivity,
 } from "../lib/adminApi";
+
+// NOTE: you had this import but didn't use it; also unnecessary.
+// import { color } from "framer-motion";
 
 const BORDER = "1px solid rgba(148,163,184,0.15)";
 const BORDER_SOFT = "1px solid rgba(148,163,184,0.12)";
@@ -55,18 +59,17 @@ export default function AdminUserDetailPage() {
     updateSubscription: false,
   });
 
-  // ✅ NEW: activity state
+  // ✅ Activity state
   const [activityItems, setActivityItems] = useState([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityErr, setActivityErr] = useState("");
 
-  // ✅ Define derived IDs BEFORE effects that use them (prevents TDZ crash)
+  // ✅ Derived IDs BEFORE effects
   const userId = user?._id || user?.id || id;
   const email = user?.email || "";
   const isActive = user?.isActive !== false;
 
   // Fetch accounts ONLY when Accounts tab is active
-  // ✅ Use `id` in deps to avoid "Cannot access userId before initialization"
   useEffect(() => {
     if (activeTab !== "accounts") return;
     if (!id) return;
@@ -93,7 +96,7 @@ export default function AdminUserDetailPage() {
     };
   }, [activeTab, id]);
 
-  // ✅ NEW: Fetch activity ONLY when Activity tab is active
+  // ✅ Fetch activity ONLY when Activity tab is active
   useEffect(() => {
     if (activeTab !== "activity") return;
     if (!userId) return;
@@ -104,8 +107,8 @@ export default function AdminUserDetailPage() {
 
     adminGetUserActivity(userId, { limit: 50 })
       .then((res) => {
-        const items = res?.items || res?.activity || [];
-        if (mounted) setActivityItems(items);
+        if (!mounted) return;
+        setActivityItems(res?.items || []);
       })
       .catch((e) => {
         if (!mounted) return;
@@ -115,7 +118,8 @@ export default function AdminUserDetailPage() {
         );
       })
       .finally(() => {
-        if (mounted) setActivityLoading(false);
+        if (!mounted) return;
+        setActivityLoading(false);
       });
 
     return () => {
@@ -154,8 +158,8 @@ export default function AdminUserDetailPage() {
 
   useEffect(() => {
     setActiveTab("overview");
-    setAccounts([]); // small UX: clear accounts when switching users
-    setActivityItems([]); // ✅ NEW: clear activity when switching users
+    setAccounts([]);
+    setActivityItems([]);
     setActivityErr("");
   }, [id]);
 
@@ -389,18 +393,6 @@ export default function AdminUserDetailPage() {
                 {displayName}
               </div>
 
-              <div style={{ fontSize: 12, color: TEXT_MUTED, marginTop: 6 }}>
-                <span style={{ marginRight: 10 }}>
-                  Created: <b>{formatDateTime(user?.createdAt)}</b>
-                </span>
-                <span style={{ marginRight: 10 }}>
-                  Last login: <b>{formatDateTime(user?.lastLogin)}</b>
-                </span>
-                <span style={{ opacity: 0.9 }}>
-                  ({timeAgo(user?.lastLogin)})
-                </span>
-              </div>
-
               <div style={{ fontSize: 13, color: TEXT_MUTED, marginTop: 2 }}>
                 {email || "—"}{" "}
                 {user?.role ? (
@@ -419,12 +411,23 @@ export default function AdminUserDetailPage() {
                   <span style={pill("unverified")}>email unverified</span>
                 )}
               </div>
+
+              <div style={{ fontSize: 12, color: TEXT_MUTED, marginTop: 6 }}>
+                <span style={{ marginRight: 10 }}>
+                  Created: <b>{formatDateTime(user?.createdAt)}</b>
+                </span>
+                <span style={{ marginRight: 10 }}>
+                  Last login: <b>{formatDateTime(user?.lastLogin)}</b>
+                </span>
+                <span style={{ opacity: 0.9 }}>
+                  ({timeAgo(user?.lastLogin)})
+                </span>
+              </div>
             </div>
           </div>
         </div>
 
         <div style={styles.actionRow}>
-          {/* LEFT group */}
           <div style={styles.actionGroupLeft}>
             <button
               onClick={() => copyToClipboard(userId, "User ID")}
@@ -445,7 +448,6 @@ export default function AdminUserDetailPage() {
             </button>
           </div>
 
-          {/* RIGHT group (pushed to end) */}
           <div style={styles.actionGroupRight}>
             <button
               onClick={() => copyToClipboard(avatarUrl, "Avatar URL")}
@@ -494,7 +496,6 @@ export default function AdminUserDetailPage() {
 
       {!loading && user ? (
         <>
-          {/* Tabs */}
           <div style={styles.tabs}>
             {TABS.map((t) => (
               <button
@@ -507,7 +508,6 @@ export default function AdminUserDetailPage() {
             ))}
           </div>
 
-          {/* Tab content */}
           <div style={{ marginTop: 12 }}>
             {activeTab === "overview" ? (
               <div style={styles.twoCol}>
@@ -720,7 +720,6 @@ export default function AdminUserDetailPage() {
 
                 <Divider />
 
-                {/* 🔐 Security Actions */}
                 <div style={{ marginTop: 8 }}>
                   <div style={{ fontWeight: 900, marginBottom: 8 }}>
                     Security Actions
@@ -789,7 +788,6 @@ export default function AdminUserDetailPage() {
                   </div>
 
                   <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                    {/* STANDARD */}
                     <button
                       disabled
                       style={{
@@ -803,7 +801,6 @@ export default function AdminUserDetailPage() {
                       {user.subscription === "Standard" ? "(current)" : ""}
                     </button>
 
-                    {/* PLUS */}
                     <button
                       onClick={() => onUpdateSubscription("Plus")}
                       disabled={
@@ -824,7 +821,6 @@ export default function AdminUserDetailPage() {
                         : "Set Plus"}
                     </button>
 
-                    {/* PREMIUM */}
                     <button
                       onClick={() => onUpdateSubscription("Premium")}
                       disabled={
@@ -857,7 +853,6 @@ export default function AdminUserDetailPage() {
                   </div>
                 </div>
 
-                {/* Fancy Payment History (your existing) */}
                 <div style={styles.paymentHistoryWrap}>
                   <div style={styles.paymentHistoryHeader}>
                     <div>
@@ -913,7 +908,6 @@ export default function AdminUserDetailPage() {
 
                     <Divider />
 
-                    {/* Visual placeholders (non-interactive) */}
                     <div style={styles.fakeTimeline}>
                       {[
                         {
@@ -966,7 +960,6 @@ export default function AdminUserDetailPage() {
               </Section>
             ) : null}
 
-            {/* ✅ UPDATED: Activity tab now shows feed */}
             {activeTab === "activity" ? (
               <Section title="Activity">
                 <div
@@ -989,9 +982,19 @@ export default function AdminUserDetailPage() {
 
                   <button
                     onClick={() => {
-                      // simple refresh: re-trigger effect
-                      setActiveTab("overview");
-                      setTimeout(() => setActiveTab("activity"), 0);
+                      // refresh by re-triggering effect
+                      setActivityItems([]);
+                      setActivityErr("");
+                      setActivityLoading(true);
+                      adminGetUserActivity(userId, { limit: 50 })
+                        .then((res) => setActivityItems(res?.items || []))
+                        .catch((e) =>
+                          setActivityErr(
+                            e?.response?.data?.message ||
+                              "Failed to load activity feed."
+                          )
+                        )
+                        .finally(() => setActivityLoading(false));
                     }}
                     style={styles.actionBtn}
                     title="Refresh activity"
@@ -1023,7 +1026,7 @@ export default function AdminUserDetailPage() {
                         lineHeight: 1.5,
                       }}
                     >
-                      When enabled, you’ll see:
+                      Once backend aggregation is enabled, you’ll see:
                       <ul
                         style={{
                           marginTop: 8,
@@ -1035,16 +1038,15 @@ export default function AdminUserDetailPage() {
                         <li>AI Advisor chats/messages</li>
                         <li>CSV/PDF imports & ingestions</li>
                         <li>Login / password resets / verification events</li>
+                        <li>Admin actions (force logout, plan changes)</li>
                       </ul>
                     </div>
                   </div>
                 ) : (
                   <div style={styles.activityFeed}>
-                    {activityItems.map((item, idx) => (
+                    {activityItems.map((item) => (
                       <ActivityRow
-                        key={`${item?.id || item?._id || "evt"}_${
-                          item?.ts || item?.createdAt || idx
-                        }`}
+                        key={item._id || item.id || item.ts || Math.random()}
                         item={item}
                       />
                     ))}
@@ -1154,7 +1156,8 @@ function typeToTitle(type) {
   if (type === "import") return "Import";
   if (type === "login") return "Login";
   if (type === "password_reset") return "Password reset";
-  if (type === "verification") return "Verification";
+  if (type === "subscription_change") return "Subscription change";
+  if (type === "admin_action") return "Admin action";
   return "Activity";
 }
 
@@ -1164,7 +1167,8 @@ function typeToGlyph(type) {
   if (type === "import") return "⇪";
   if (type === "login") return "⎆";
   if (type === "password_reset") return "↻";
-  if (type === "verification") return "✓";
+  if (type === "subscription_change") return "★";
+  if (type === "admin_action") return "⚑";
   return "•";
 }
 
@@ -1177,17 +1181,6 @@ function Divider() {
         margin: "14px 0",
       }}
     />
-  );
-}
-
-function Callout({ title, children }) {
-  return (
-    <div style={styles.callout}>
-      <div style={{ fontWeight: 900, marginBottom: 6 }}>{title}</div>
-      <div style={{ fontSize: 13, opacity: 0.9, lineHeight: 1.45 }}>
-        {children}
-      </div>
-    </div>
   );
 }
 
@@ -1240,12 +1233,6 @@ function AvatarCircle({ name, avatarUrl }) {
 }
 
 /* ───────────────────────── helpers ───────────────────────── */
-
-function maskId(v) {
-  const s = String(v || "");
-  if (s.length <= 10) return s;
-  return `${s.slice(0, 4)}…${s.slice(-4)}`;
-}
 
 function formatDateTime(v) {
   if (!v) return "-";
@@ -1342,12 +1329,13 @@ const styles = {
     fontWeight: 900,
     fontSize: 13,
   },
+
   actionBtnSendPasswordReset: {
     padding: "10px 12px",
     borderRadius: 10,
     border: "1px solid rgba(148,163,184,0.25)",
     background: "transparent",
-    color: "#2563ebff",
+    color: "#2563eb",
     cursor: "pointer",
     fontWeight: 900,
     fontSize: 13,
@@ -1357,7 +1345,7 @@ const styles = {
     borderRadius: 10,
     border: "1px solid rgba(148,163,184,0.25)",
     background: "transparent",
-    color: "#1cb946ff",
+    color: "#16a34a",
     cursor: "pointer",
     fontWeight: 900,
     fontSize: 13,
@@ -1373,7 +1361,7 @@ const styles = {
     fontSize: 13,
   },
 
-  // ✅ FIXED: "##00CEC8" -> "#00CEC8"
+  // ✅ FIXED: your previous "##" was invalid CSS and can break visuals
   actionBtnSetPlus: {
     padding: "10px 12px",
     borderRadius: 10,
@@ -1424,12 +1412,6 @@ const styles = {
     border: BORDER,
     borderRadius: 14,
     padding: 14,
-  },
-  callout: {
-    padding: 12,
-    borderRadius: 12,
-    border: BORDER,
-    background: BG_SOFT,
   },
   pre: {
     marginTop: 10,
@@ -1533,7 +1515,6 @@ const styles = {
     placeItems: "center",
     fontWeight: 950,
   },
-
   fakeTimeline: { display: "grid", gap: 10 },
   fakeRow: {
     display: "flex",
@@ -1578,7 +1559,7 @@ const styles = {
     userSelect: "none",
   },
 
-  // ✅ NEW: activity styles
+  // ✅ Activity styles
   emptyCard: {
     padding: 14,
     borderRadius: 14,

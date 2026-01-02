@@ -87,21 +87,31 @@ export async function adminUpdateUserSubscription(userId, subscription) {
   });
   return data;
 }
-export async function adminGetUserActivity(userId, opts = {}) {
-  // If backend endpoint is not implemented yet, return empty list safely.
-  // This prevents the AdminUserDetailPage from crashing.
-  if (!userId) return { items: [] };
+// export async function adminGetUserActivity(userId, opts = {}) {
+//   // If backend endpoint is not implemented yet, return empty list safely.
+//   // This prevents the AdminUserDetailPage from crashing.
+//   if (!userId) return { items: [] };
 
-  const limit = Number(opts.limit || 50);
+//   const limit = Number(opts.limit || 50);
 
-  try {
-    // If you later implement backend, this will start working automatically.
-    const res = await api.get(`/admin/users/${userId}/activity`, {
-      params: { limit },
-    });
-    return res.data;
-  } catch (e) {
-    // ✅ Safe fallback so UI never blanks
-    return { items: [] };
-  }
+//   try {
+//     // If you later implement backend, this will start working automatically.
+//     const res = await api.get(`/admin/users/${userId}/activity`, {
+//       params: { limit },
+//     });
+//     return res.data;
+//   } catch (e) {
+//     // ✅ Safe fallback so UI never blanks
+//     return { items: [] };
+//   }
+// }
+export async function adminGetUserActivity(userId, params = {}) {
+  const q = new URLSearchParams();
+  if (params.limit) q.set("limit", String(params.limit));
+  if (params.cursor) q.set("cursor", String(params.cursor));
+  if (params.types) q.set("types", String(params.types)); // comma string
+
+  const url = `/admin/users/${userId}/activity${q.toString() ? `?${q}` : ""}`;
+  const res = await api.get(url); // assuming your admin api uses axios instance "api"
+  return res.data;
 }
