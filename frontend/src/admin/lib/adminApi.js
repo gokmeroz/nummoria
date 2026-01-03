@@ -105,13 +105,39 @@ export async function adminUpdateUserSubscription(userId, subscription) {
 //     return { items: [] };
 //   }
 // }
-export async function adminGetUserActivity(userId, params = {}) {
-  const q = new URLSearchParams();
-  if (params.limit) q.set("limit", String(params.limit));
-  if (params.cursor) q.set("cursor", String(params.cursor));
-  if (params.types) q.set("types", String(params.types)); // comma string
+// export async function adminGetUserActivity(userId, params = {}) {
+//   const q = new URLSearchParams();
+//   if (params.limit) q.set("limit", String(params.limit));
+//   if (params.cursor) q.set("cursor", String(params.cursor));
+//   if (params.types) q.set("types", String(params.types)); // comma string
 
-  const url = `/admin/users/${userId}/activity${q.toString() ? `?${q}` : ""}`;
-  const res = await api.get(url); // assuming your admin api uses axios instance "api"
+//   const url = `/admin/users/${userId}/activity${q.toString() ? `?${q}` : ""}`;
+//   const res = await api.get(url); // assuming your admin api uses axios instance "api"
+//   return res.data;
+// }
+export async function adminGetUserActivity(userId, params = {}) {
+  const qs = new URLSearchParams();
+  if (params.limit) qs.set("limit", String(params.limit));
+  if (params.cursor) qs.set("cursor", String(params.cursor));
+  if (params.types) qs.set("types", String(params.types)); // comma list
+
+  const url = `/admin/users/${userId}/activity${qs.toString() ? `?${qs}` : ""}`;
+  const res = await api.get(url);
+  return res.data;
+}
+// Add these exports in frontend/src/admin/lib/adminApi.js
+
+export async function adminGetUserNotes(userId) {
+  const res = await api.get(`/admin/users/${userId}/notes`);
+  return res.data;
+}
+
+export async function adminAddUserNote(userId, text) {
+  const res = await api.post(`/admin/users/${userId}/notes`, { text });
+  return res.data;
+}
+
+export async function adminUpdateUserFlags(userId, flags) {
+  const res = await api.put(`/admin/users/${userId}/flags`, { flags });
   return res.data;
 }

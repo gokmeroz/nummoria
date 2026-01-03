@@ -41,6 +41,15 @@ const userSchema = new mongoose.Schema(
 
     // NEW: force-logout support (invalidate tokens issued before this time)
     authInvalidBefore: { type: Date, default: null },
+    // NEW: admin notes
+    adminNotes: [
+      {
+        text: { type: String, default: "" },
+        adminId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
+    flags: { type: [String], default: [] },
   },
   { timestamps: { createdAt: "createdAt", updatedAt: false } }
 );

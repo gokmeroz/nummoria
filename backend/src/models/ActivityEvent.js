@@ -17,10 +17,8 @@ const ActivityEventSchema = new mongoose.Schema(
     subtitle: { type: String, default: "" },
     meta: { type: String, default: "" },
 
-    // Optional: where admin can jump
     href: { type: String, default: "" },
 
-    // Who produced this event (important for admin audit)
     actorType: {
       type: String,
       enum: ["system", "user", "admin"],
@@ -28,7 +26,6 @@ const ActivityEventSchema = new mongoose.Schema(
     },
     actorId: { type: mongoose.Schema.Types.ObjectId, default: null },
 
-    // Optional debug payload (keep small)
     payload: { type: mongoose.Schema.Types.Mixed, default: null },
 
     ts: { type: Date, default: Date.now, index: true },
@@ -36,7 +33,6 @@ const ActivityEventSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Avoid OverwriteModelError in dev/hot reload
 const ActivityEvent =
   mongoose.models.ActivityEvent ||
   mongoose.model("ActivityEvent", ActivityEventSchema);

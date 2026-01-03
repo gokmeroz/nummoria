@@ -1,4 +1,3 @@
-/* eslint-disable no-undef */
 /* eslint-disable no-unused-vars */
 // frontend/src/admin/pages/AdminUserDetailPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
@@ -15,12 +14,11 @@ import {
   // Accounts
   adminGetUserAccounts,
   adminUpdateUserSubscription,
-  // ✅ NEW: Activity
-  adminGetUserActivity,
+  // NEW: notes + flags
+  adminGetUserNotes,
+  adminAddUserNote,
+  adminUpdateUserFlags,
 } from "../lib/adminApi";
-
-// NOTE: you had this import but didn't use it; also unnecessary.
-// import { color } from "framer-motion";
 
 const BORDER = "1px solid rgba(148,163,184,0.15)";
 const BORDER_SOFT = "1px solid rgba(148,163,184,0.12)";
@@ -57,14 +55,19 @@ export default function AdminUserDetailPage() {
     forceLogout: false,
     sendPasswordReset: false,
     updateSubscription: false,
+    // NEW
+    saveFlags: false,
+    addNote: false,
+    loadNotes: false,
   });
 
-  // ✅ Activity state
-  const [activityItems, setActivityItems] = useState([]);
-  const [activityLoading, setActivityLoading] = useState(false);
-  const [activityErr, setActivityErr] = useState("");
+  // NEW: notes + flags state
+  const [notes, setNotes] = useState([]);
+  const [notesErr, setNotesErr] = useState("");
+  const [noteDraft, setNoteDraft] = useState("");
+  const [flagsDraft, setFlagsDraft] = useState("");
 
-  // ✅ Derived IDs BEFORE effects
+  // ✅ Define derived IDs BEFORE effects that use them (prevents TDZ crash)
   const userId = user?._id || user?.id || id;
   const email = user?.email || "";
   const isActive = user?.isActive !== false;
@@ -96,37 +99,6 @@ export default function AdminUserDetailPage() {
     };
   }, [activeTab, id]);
 
-  // ✅ Fetch activity ONLY when Activity tab is active
-  useEffect(() => {
-    if (activeTab !== "activity") return;
-    if (!userId) return;
-
-    let mounted = true;
-    setActivityLoading(true);
-    setActivityErr("");
-
-    adminGetUserActivity(userId, { limit: 50 })
-      .then((res) => {
-        if (!mounted) return;
-        setActivityItems(res?.items || []);
-      })
-      .catch((e) => {
-        if (!mounted) return;
-        setActivityItems([]);
-        setActivityErr(
-          e?.response?.data?.message || "Failed to load activity feed."
-        );
-      })
-      .finally(() => {
-        if (!mounted) return;
-        setActivityLoading(false);
-      });
-
-    return () => {
-      mounted = false;
-    };
-  }, [activeTab, userId]);
-
   // Fetch user
   useEffect(() => {
     let mounted = true;
@@ -141,6 +113,10 @@ export default function AdminUserDetailPage() {
 
         if (!mounted) return;
         setUser(u);
+
+        // NEW: seed flags input from user payload (safe)
+        const flags = Array.isArray(u?.flags) ? u.flags : [];
+        setFlagsDraft(flags.join(", "));
       } catch (e) {
         if (!mounted) return;
         setErr(e?.response?.data?.message || "Failed to load user.");
@@ -159,8 +135,10 @@ export default function AdminUserDetailPage() {
   useEffect(() => {
     setActiveTab("overview");
     setAccounts([]);
-    setActivityItems([]);
-    setActivityErr("");
+    setNotes([]);
+    setNotesErr("");
+    setNoteDraft("");
+    setFlagsDraft("");
   }, [id]);
 
   useEffect(() => {
@@ -194,6 +172,41 @@ export default function AdminUserDetailPage() {
       setToast("Copy failed");
     }
   }
+
+  // NEW: load notes (only when needed)
+  useEffect(() => {
+    if (activeTab !== "overview") return;
+    if (!userId) return;
+
+    let mounted = true;
+    setActionLoading((s) => ({ ...s, loadNotes: true }));
+    setNotesErr("");
+
+    adminGetUserNotes(userId)
+      .then((res) => {
+        if (!mounted) return;
+        const list = res?.notes || [];
+        // newest first
+        list.sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        setNotes(list);
+      })
+      .catch((e) => {
+        if (!mounted) return;
+        setNotes([]);
+        setNotesErr(e?.response?.data?.message || "Failed to load notes.");
+      })
+      .finally(() => {
+        if (!mounted) return;
+        setActionLoading((s) => ({ ...s, loadNotes: false }));
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [activeTab, userId]);
 
   async function onDeactivate() {
     if (!userId) return;
@@ -376,6 +389,61 @@ export default function AdminUserDetailPage() {
     }
   }
 
+  // NEW: Save flags
+  async function onSaveFlags() {
+    if (!userId) return;
+
+    const raw = String(flagsDraft || "");
+    const flags = raw
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean);
+
+    try {
+      setActionLoading((s) => ({ ...s, saveFlags: true }));
+      setErr("");
+
+      const res = await adminUpdateUserFlags(userId, flags);
+      const updatedFlags = res?.flags || [];
+
+      setUser((prev) => ({ ...(prev || {}), flags: updatedFlags }));
+      setFlagsDraft(updatedFlags.join(", "));
+      setToast("Flags updated");
+    } catch (e) {
+      setErr(e?.response?.data?.message || "Failed to update flags.");
+    } finally {
+      setActionLoading((s) => ({ ...s, saveFlags: false }));
+    }
+  }
+
+  // NEW: Add note
+  async function onAddNote() {
+    if (!userId) return;
+    const text = String(noteDraft || "").trim();
+    if (!text) return;
+
+    try {
+      setActionLoading((s) => ({ ...s, addNote: true }));
+      setErr("");
+
+      const res = await adminAddUserNote(userId, text);
+      const list = res?.notes || [];
+
+      list.sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+
+      setNotes(list);
+      setNoteDraft("");
+      setToast("Note added");
+    } catch (e) {
+      setErr(e?.response?.data?.message || "Failed to add note.");
+    } finally {
+      setActionLoading((s) => ({ ...s, addNote: false }));
+    }
+  }
+
   return (
     <div>
       {/* Header */}
@@ -410,6 +478,9 @@ export default function AdminUserDetailPage() {
                 ) : (
                   <span style={pill("unverified")}>email unverified</span>
                 )}
+                {Array.isArray(user?.flags) && user.flags.length ? (
+                  <span style={pill("flagged")}>flagged</span>
+                ) : null}
               </div>
 
               <div style={{ fontSize: 12, color: TEXT_MUTED, marginTop: 6 }}>
@@ -428,6 +499,7 @@ export default function AdminUserDetailPage() {
         </div>
 
         <div style={styles.actionRow}>
+          {/* LEFT group */}
           <div style={styles.actionGroupLeft}>
             <button
               onClick={() => copyToClipboard(userId, "User ID")}
@@ -448,6 +520,7 @@ export default function AdminUserDetailPage() {
             </button>
           </div>
 
+          {/* RIGHT group */}
           <div style={styles.actionGroupRight}>
             <button
               onClick={() => copyToClipboard(avatarUrl, "Avatar URL")}
@@ -496,6 +569,7 @@ export default function AdminUserDetailPage() {
 
       {!loading && user ? (
         <>
+          {/* Tabs */}
           <div style={styles.tabs}>
             {TABS.map((t) => (
               <button
@@ -508,6 +582,7 @@ export default function AdminUserDetailPage() {
             ))}
           </div>
 
+          {/* Tab content */}
           <div style={{ marginTop: 12 }}>
             {activeTab === "overview" ? (
               <div style={styles.twoCol}>
@@ -525,6 +600,188 @@ export default function AdminUserDetailPage() {
                       value={user.baseCurrency || "-"}
                     />
                   </Grid>
+                </Section>
+
+                <Section title="Admin Controls (Tier 1)">
+                  {/* Flags */}
+                  <div style={{ fontWeight: 950, marginBottom: 8 }}>Flags</div>
+
+                  <div
+                    style={{ fontSize: 12, color: TEXT_MUTED, lineHeight: 1.5 }}
+                  >
+                    Use flags to label accounts for review or special handling
+                    (e.g. <b>manual_review</b>, <b>vip</b>, <b>refund_risk</b>).
+                  </div>
+
+                  <div style={{ marginTop: 10 }}>
+                    <div style={styles.flagChipsRow}>
+                      {(Array.isArray(user.flags) ? user.flags : []).length ? (
+                        (user.flags || []).map((f) => (
+                          <span key={f} style={styles.flagChip}>
+                            {f}
+                          </span>
+                        ))
+                      ) : (
+                        <span style={{ fontSize: 12, color: TEXT_MUTED }}>
+                          No flags
+                        </span>
+                      )}
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop: 10,
+                        display: "flex",
+                        gap: 10,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <input
+                        value={flagsDraft}
+                        onChange={(e) => setFlagsDraft(e.target.value)}
+                        placeholder="comma-separated flags (e.g. manual_review, vip)"
+                        style={styles.input}
+                      />
+                      <button
+                        onClick={onSaveFlags}
+                        disabled={actionLoading.saveFlags || loading}
+                        style={styles.primaryBtn}
+                      >
+                        {actionLoading.saveFlags ? "Saving…" : "Save Flags"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <Divider />
+
+                  {/* Notes */}
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 12,
+                    }}
+                  >
+                    <div style={{ fontWeight: 950 }}>Admin Notes</div>
+                    <button
+                      onClick={() => {
+                        // quick reload notes without extra state
+                        setActiveTab("security");
+                        setTimeout(() => setActiveTab("overview"), 0);
+                      }}
+                      style={styles.actionBtn}
+                      title="Refresh notes"
+                    >
+                      Refresh
+                    </button>
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: 8,
+                      fontSize: 12,
+                      color: TEXT_MUTED,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    Append-only notes for support context. Keep it factual and
+                    short.
+                  </div>
+
+                  <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
+                    <textarea
+                      value={noteDraft}
+                      onChange={(e) => setNoteDraft(e.target.value)}
+                      placeholder="Write a note (e.g. user requested billing help; confirmed identity; refunded invoice...)"
+                      style={styles.textarea}
+                      rows={3}
+                    />
+
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 10,
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <button
+                        onClick={onAddNote}
+                        disabled={
+                          actionLoading.addNote || loading || !noteDraft.trim()
+                        }
+                        style={styles.primaryBtn}
+                      >
+                        {actionLoading.addNote ? "Adding…" : "Add Note"}
+                      </button>
+                      <span style={{ fontSize: 12, color: TEXT_MUTED }}>
+                        {noteDraft.trim().length}/1500
+                      </span>
+                    </div>
+
+                    {notesErr ? (
+                      <div style={styles.errorBox}>
+                        <div style={{ fontWeight: 900, marginBottom: 6 }}>
+                          Notes error
+                        </div>
+                        <div>{notesErr}</div>
+                      </div>
+                    ) : actionLoading.loadNotes ? (
+                      <div style={{ fontSize: 12, color: TEXT_MUTED }}>
+                        Loading notes…
+                      </div>
+                    ) : notes.length === 0 ? (
+                      <div style={styles.emptyCard}>
+                        <div style={{ fontWeight: 950, marginBottom: 6 }}>
+                          No notes yet
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: TEXT_MUTED,
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          Add the first note to start building support context
+                          for this user.
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: "grid", gap: 10 }}>
+                        {notes.map((n, idx) => (
+                          <div
+                            key={n._id || `${n.createdAt}-${idx}`}
+                            style={styles.noteCard}
+                          >
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                gap: 10,
+                              }}
+                            >
+                              <div style={{ fontWeight: 950, fontSize: 12 }}>
+                                {n?.adminId?.email || n?.adminEmail || "admin"}
+                              </div>
+                              <div style={{ fontSize: 11, color: TEXT_MUTED }}>
+                                {formatDateTime(n.createdAt)}
+                              </div>
+                            </div>
+                            <div
+                              style={{
+                                marginTop: 8,
+                                fontSize: 13,
+                                lineHeight: 1.5,
+                                whiteSpace: "pre-wrap",
+                              }}
+                            >
+                              {n.text}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </Section>
 
                 <Section title="Account Health">
@@ -852,209 +1109,15 @@ export default function AdminUserDetailPage() {
                     later without changing this UI.
                   </div>
                 </div>
-
-                <div style={styles.paymentHistoryWrap}>
-                  <div style={styles.paymentHistoryHeader}>
-                    <div>
-                      <div
-                        style={{
-                          fontWeight: 950,
-                          fontSize: 14,
-                          lineHeight: 1.2,
-                        }}
-                      >
-                        Payment History
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          color: TEXT_MUTED,
-                          marginTop: 4,
-                        }}
-                      >
-                        We will enhance this in 2026 (Phase 2): invoices,
-                        receipts, and billing provider sync.
-                      </div>
-                    </div>
-
-                    <span style={styles.phaseBadge} title="Planned feature">
-                      Phase 2
-                    </span>
-                  </div>
-
-                  <div style={styles.paymentHistoryCard}>
-                    <div style={styles.emptyStateRow}>
-                      <div style={styles.emptyStateIcon} aria-hidden="true">
-                        $
-                      </div>
-
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 900, marginBottom: 4 }}>
-                          No payment history yet
-                        </div>
-                        <div
-                          style={{
-                            fontSize: 12,
-                            color: TEXT_MUTED,
-                            lineHeight: 1.45,
-                          }}
-                        >
-                          Once billing is enabled, you’ll see invoices, amounts,
-                          currency, status (paid/refunded/failed), and receipt
-                          links here.
-                        </div>
-                      </div>
-                    </div>
-
-                    <Divider />
-
-                    <div style={styles.fakeTimeline}>
-                      {[
-                        {
-                          label: "Invoice",
-                          hint: "INV-2026-0001",
-                          meta: "Paid • $9.99 • USD",
-                        },
-                        {
-                          label: "Invoice",
-                          hint: "INV-2026-0002",
-                          meta: "Paid • $9.99 • USD",
-                        },
-                        {
-                          label: "Refund",
-                          hint: "RF-2026-0001",
-                          meta: "Refunded • $9.99 • USD",
-                        },
-                      ].map((x, idx) => (
-                        <div key={idx} style={styles.fakeRow}>
-                          <div style={styles.fakeDot} />
-                          <div style={{ flex: 1 }}>
-                            <div
-                              style={{
-                                display: "flex",
-                                gap: 10,
-                                alignItems: "center",
-                              }}
-                            >
-                              <span style={styles.fakePill}>{x.label}</span>
-                              <span style={styles.fakeHint}>{x.hint}</span>
-                            </div>
-                            <div style={styles.fakeMeta}>{x.meta}</div>
-                          </div>
-                          <div style={styles.fakeLink}>Receipt</div>
-                        </div>
-                      ))}
-                      <div
-                        style={{
-                          marginTop: 10,
-                          fontSize: 11,
-                          color: TEXT_MUTED,
-                        }}
-                      >
-                        These rows are placeholders for UI structure. Backend
-                        integration comes in Phase 2.
-                      </div>
-                    </div>
-                  </div>
-                </div>
               </Section>
             ) : null}
 
             {activeTab === "activity" ? (
               <Section title="Activity">
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 12,
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: 12,
-                      color: TEXT_MUTED,
-                      lineHeight: 1.45,
-                    }}
-                  >
-                    Recent events across the user’s account: transactions, AI
-                    advisor messages, imports, and auth activity.
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      // refresh by re-triggering effect
-                      setActivityItems([]);
-                      setActivityErr("");
-                      setActivityLoading(true);
-                      adminGetUserActivity(userId, { limit: 50 })
-                        .then((res) => setActivityItems(res?.items || []))
-                        .catch((e) =>
-                          setActivityErr(
-                            e?.response?.data?.message ||
-                              "Failed to load activity feed."
-                          )
-                        )
-                        .finally(() => setActivityLoading(false));
-                    }}
-                    style={styles.actionBtn}
-                    title="Refresh activity"
-                  >
-                    Refresh
-                  </button>
+                <div style={{ fontSize: 12, color: TEXT_MUTED }}>
+                  Tier 1 is Notes + Flags. Activity feed comes next (Tier 1-A).
                 </div>
-
                 <Divider />
-
-                {activityLoading ? (
-                  <div style={{ opacity: 0.85 }}>Loading activity…</div>
-                ) : activityErr ? (
-                  <div style={styles.errorBox}>
-                    <div style={{ fontWeight: 900, marginBottom: 6 }}>
-                      Activity error
-                    </div>
-                    <div>{activityErr}</div>
-                  </div>
-                ) : activityItems.length === 0 ? (
-                  <div style={styles.emptyCard}>
-                    <div style={{ fontWeight: 950, marginBottom: 6 }}>
-                      No recent activity found
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 12,
-                        color: TEXT_MUTED,
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      Once backend aggregation is enabled, you’ll see:
-                      <ul
-                        style={{
-                          marginTop: 8,
-                          marginBottom: 0,
-                          paddingLeft: 18,
-                        }}
-                      >
-                        <li>Transactions created/edited</li>
-                        <li>AI Advisor chats/messages</li>
-                        <li>CSV/PDF imports & ingestions</li>
-                        <li>Login / password resets / verification events</li>
-                        <li>Admin actions (force logout, plan changes)</li>
-                      </ul>
-                    </div>
-                  </div>
-                ) : (
-                  <div style={styles.activityFeed}>
-                    {activityItems.map((item) => (
-                      <ActivityRow
-                        key={item._id || item.id || item.ts || Math.random()}
-                        item={item}
-                      />
-                    ))}
-                  </div>
-                )}
-
-                <Divider />
-
                 <Grid>
                   <Row label="Created" value={formatDateTime(user.createdAt)} />
                   <Row
@@ -1101,75 +1164,6 @@ function Row({ label, value }) {
       </div>
     </>
   );
-}
-
-function ActivityRow({ item }) {
-  const type = item?.type || "unknown";
-  const ts = item?.ts || item?.createdAt || item?.time;
-  const title = item?.title || typeToTitle(type);
-  const subtitle = item?.subtitle || item?.summary || "";
-  const meta = item?.meta || item?.amountText || "";
-
-  return (
-    <div style={styles.activityRow}>
-      <div style={styles.activityIcon} title={type}>
-        {typeToGlyph(type)}
-      </div>
-
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <div style={{ fontWeight: 950, fontSize: 13 }}>{title}</div>
-          <span style={styles.activityPill}>{type}</span>
-        </div>
-
-        {subtitle ? (
-          <div style={styles.activitySubtitle}>{subtitle}</div>
-        ) : null}
-
-        <div style={styles.activityMetaRow}>
-          <span style={styles.activityTime}>{formatDateTime(ts)}</span>
-          {meta ? <span style={styles.activityMetaSep}>•</span> : null}
-          {meta ? <span style={styles.activityMeta}>{meta}</span> : null}
-        </div>
-      </div>
-
-      {item?.href ? (
-        <a
-          href={item.href}
-          target="_blank"
-          rel="noreferrer"
-          style={styles.activityLink}
-        >
-          Open
-        </a>
-      ) : (
-        <span style={styles.activityLinkDisabled}>—</span>
-      )}
-    </div>
-  );
-}
-
-function typeToTitle(type) {
-  if (type === "transaction") return "Transaction";
-  if (type === "ai_message") return "AI Advisor message";
-  if (type === "ai_chat") return "AI Advisor chat";
-  if (type === "import") return "Import";
-  if (type === "login") return "Login";
-  if (type === "password_reset") return "Password reset";
-  if (type === "subscription_change") return "Subscription change";
-  if (type === "admin_action") return "Admin action";
-  return "Activity";
-}
-
-function typeToGlyph(type) {
-  if (type === "transaction") return "₺";
-  if (type === "ai_message" || type === "ai_chat") return "AI";
-  if (type === "import") return "⇪";
-  if (type === "login") return "⎆";
-  if (type === "password_reset") return "↻";
-  if (type === "subscription_change") return "★";
-  if (type === "admin_action") return "⚑";
-  return "•";
 }
 
 function Divider() {
@@ -1234,6 +1228,12 @@ function AvatarCircle({ name, avatarUrl }) {
 
 /* ───────────────────────── helpers ───────────────────────── */
 
+function maskId(v) {
+  const s = String(v || "");
+  if (s.length <= 10) return s;
+  return `${s.slice(0, 4)}…${s.slice(-4)}`;
+}
+
 function formatDateTime(v) {
   if (!v) return "-";
   const d = new Date(v);
@@ -1284,6 +1284,8 @@ function pill(kind) {
     return { ...base, background: "rgba(34,197,94,0.10)" };
   if (kind === "unverified")
     return { ...base, background: "rgba(245,158,11,0.10)" };
+  if (kind === "flagged")
+    return { ...base, background: "rgba(239,68,68,0.08)" };
 
   return base;
 }
@@ -1329,13 +1331,72 @@ const styles = {
     fontWeight: 900,
     fontSize: 13,
   },
-
+  primaryBtn: {
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid rgba(148,163,184,0.25)",
+    background: "rgba(148,163,184,0.10)",
+    cursor: "pointer",
+    fontWeight: 950,
+    fontSize: 13,
+  },
+  input: {
+    flex: 1,
+    minWidth: 260,
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid rgba(148,163,184,0.18)",
+    background: "rgba(2,6,23,0.02)",
+    outline: "none",
+    fontSize: 13,
+    fontWeight: 800,
+  },
+  textarea: {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid rgba(148,163,184,0.18)",
+    background: "rgba(2,6,23,0.02)",
+    outline: "none",
+    fontSize: 13,
+    fontWeight: 700,
+    resize: "vertical",
+  },
+  flagChipsRow: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    marginTop: 8,
+  },
+  flagChip: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "6px 10px",
+    borderRadius: 999,
+    border: "1px solid rgba(148,163,184,0.18)",
+    background: "rgba(148,163,184,0.08)",
+    fontSize: 12,
+    fontWeight: 950,
+  },
+  noteCard: {
+    padding: 12,
+    borderRadius: 14,
+    border: BORDER,
+    background: "rgba(148,163,184,0.04)",
+  },
+  emptyCard: {
+    padding: 14,
+    borderRadius: 14,
+    border: BORDER,
+    background: BG_SOFT,
+  },
   actionBtnSendPasswordReset: {
     padding: "10px 12px",
     borderRadius: 10,
     border: "1px solid rgba(148,163,184,0.25)",
     background: "transparent",
-    color: "#2563eb",
+    color: "#2563ebff",
     cursor: "pointer",
     fontWeight: 900,
     fontSize: 13,
@@ -1345,7 +1406,7 @@ const styles = {
     borderRadius: 10,
     border: "1px solid rgba(148,163,184,0.25)",
     background: "transparent",
-    color: "#16a34a",
+    color: "#1cb946ff",
     cursor: "pointer",
     fontWeight: 900,
     fontSize: 13,
@@ -1360,14 +1421,12 @@ const styles = {
     fontWeight: 900,
     fontSize: 13,
   },
-
-  // ✅ FIXED: your previous "##" was invalid CSS and can break visuals
   actionBtnSetPlus: {
     padding: "10px 12px",
     borderRadius: 10,
     border: "1px solid rgba(148,163,184,0.25)",
     background: "transparent",
-    color: "#00CEC8",
+    color: "#4c1ea6ff",
     cursor: "pointer",
     fontWeight: 900,
     fontSize: 13,
@@ -1377,12 +1436,11 @@ const styles = {
     borderRadius: 10,
     border: "1px solid rgba(148,163,184,0.25)",
     background: "transparent",
-    color: "#660033",
+    color: "#6956d1ff",
     cursor: "pointer",
     fontWeight: 900,
     fontSize: 13,
   },
-
   toast: {
     position: "fixed",
     right: 18,
@@ -1476,160 +1534,5 @@ const styles = {
     alignItems: "center",
     flexWrap: "wrap",
     marginLeft: "auto",
-  },
-
-  paymentHistoryWrap: { marginTop: 12 },
-  paymentHistoryHeader: {
-    display: "flex",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 12,
-    marginBottom: 10,
-  },
-  phaseBadge: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "6px 10px",
-    borderRadius: 999,
-    border: "1px solid rgba(148,163,184,0.20)",
-    background: "rgba(148,163,184,0.08)",
-    fontSize: 11,
-    fontWeight: 950,
-    letterSpacing: 0.2,
-  },
-  paymentHistoryCard: {
-    border: BORDER,
-    borderRadius: 14,
-    padding: 14,
-    background: "rgba(148,163,184,0.04)",
-  },
-  emptyStateRow: { display: "flex", gap: 12, alignItems: "center" },
-  emptyStateIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    border: "1px solid rgba(148,163,184,0.18)",
-    background: "rgba(148,163,184,0.08)",
-    display: "grid",
-    placeItems: "center",
-    fontWeight: 950,
-  },
-  fakeTimeline: { display: "grid", gap: 10 },
-  fakeRow: {
-    display: "flex",
-    gap: 10,
-    alignItems: "flex-start",
-    padding: "10px 10px",
-    borderRadius: 12,
-    border: "1px solid rgba(148,163,184,0.14)",
-    background: "rgba(2,6,23,0.03)",
-    opacity: 0.7,
-  },
-  fakeDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 999,
-    marginTop: 6,
-    border: "1px solid rgba(148,163,184,0.25)",
-    background: "rgba(148,163,184,0.14)",
-  },
-  fakePill: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "2px 8px",
-    borderRadius: 999,
-    border: "1px solid rgba(148,163,184,0.18)",
-    background: "rgba(148,163,184,0.08)",
-    fontSize: 11,
-    fontWeight: 950,
-  },
-  fakeHint: {
-    fontSize: 12,
-    fontWeight: 900,
-    color: "rgba(15,23,42,0.65)",
-  },
-  fakeMeta: { marginTop: 4, fontSize: 12, color: TEXT_MUTED },
-  fakeLink: {
-    fontSize: 12,
-    fontWeight: 900,
-    color: "rgba(59,130,246,0.9)",
-    opacity: 0.7,
-    userSelect: "none",
-  },
-
-  // ✅ Activity styles
-  emptyCard: {
-    padding: 14,
-    borderRadius: 14,
-    border: BORDER,
-    background: BG_SOFT,
-  },
-  activityFeed: { display: "grid", gap: 10 },
-  activityRow: {
-    display: "flex",
-    alignItems: "flex-start",
-    gap: 12,
-    padding: 12,
-    borderRadius: 14,
-    border: BORDER,
-    background: "rgba(148,163,184,0.04)",
-  },
-  activityIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    border: "1px solid rgba(148,163,184,0.18)",
-    background: "rgba(148,163,184,0.08)",
-    display: "grid",
-    placeItems: "center",
-    fontWeight: 950,
-    fontSize: 12,
-    flex: "0 0 auto",
-  },
-  activityPill: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "2px 8px",
-    borderRadius: 999,
-    fontSize: 11,
-    fontWeight: 950,
-    border: "1px solid rgba(148,163,184,0.18)",
-    background: "rgba(148,163,184,0.08)",
-  },
-  activitySubtitle: {
-    marginTop: 6,
-    fontSize: 12,
-    color: TEXT_MUTED,
-    lineHeight: 1.45,
-    wordBreak: "break-word",
-  },
-  activityMetaRow: {
-    marginTop: 8,
-    display: "flex",
-    gap: 8,
-    alignItems: "center",
-    flexWrap: "wrap",
-  },
-  activityTime: { fontSize: 11, color: TEXT_MUTED },
-  activityMetaSep: { fontSize: 11, color: TEXT_MUTED, opacity: 0.8 },
-  activityMeta: { fontSize: 11, color: TEXT_MUTED },
-  activityLink: {
-    fontSize: 12,
-    fontWeight: 950,
-    textDecoration: "none",
-    padding: "8px 10px",
-    borderRadius: 10,
-    border: "1px solid rgba(148,163,184,0.20)",
-    background: "rgba(148,163,184,0.06)",
-    alignSelf: "center",
-  },
-  activityLinkDisabled: {
-    fontSize: 12,
-    color: TEXT_MUTED,
-    alignSelf: "center",
-    opacity: 0.7,
   },
 };
