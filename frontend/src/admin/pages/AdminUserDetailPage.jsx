@@ -138,7 +138,7 @@ export default function AdminUserDetailPage() {
     setNotes([]);
     setNotesErr("");
     setNoteDraft("");
-    setFlagsDraft("");
+    //setFlagsDraft("");
   }, [id]);
 
   useEffect(() => {
@@ -393,18 +393,14 @@ export default function AdminUserDetailPage() {
   async function onSaveFlags() {
     if (!userId) return;
 
-    const raw = String(flagsDraft || "");
-    const flags = raw
-      .split(",")
-      .map((x) => x.trim())
-      .filter(Boolean);
+    const flags = normalizeFlagsDraft(flagsDraft);
 
     try {
       setActionLoading((s) => ({ ...s, saveFlags: true }));
       setErr("");
 
       const res = await adminUpdateUserFlags(userId, flags);
-      const updatedFlags = res?.flags || [];
+      const updatedFlags = Array.isArray(res?.flags) ? res.flags : [];
 
       setUser((prev) => ({ ...(prev || {}), flags: updatedFlags }));
       setFlagsDraft(updatedFlags.join(", "));
@@ -616,8 +612,8 @@ export default function AdminUserDetailPage() {
                   <div style={{ marginTop: 10 }}>
                     <div style={styles.flagChipsRow}>
                       {(Array.isArray(user.flags) ? user.flags : []).length ? (
-                        (user.flags || []).map((f) => (
-                          <span key={f} style={styles.flagChip}>
+                        (user.flags || []).map((f, idx) => (
+                          <span key={`${f}-${idx}`} style={styles.flagChip}>
                             {f}
                           </span>
                         ))
@@ -645,9 +641,15 @@ export default function AdminUserDetailPage() {
                       <button
                         onClick={onSaveFlags}
                         disabled={actionLoading.saveFlags || loading}
-                        style={styles.primaryBtn}
+                        style={{
+                          ...styles.savePillBtn,
+                          ...(actionLoading.saveFlags || loading
+                            ? styles.btnDisabled
+                            : null),
+                        }}
                       >
-                        {actionLoading.saveFlags ? "Saving…" : "Save Flags"}
+                        <BookmarkIcon style={{ width: 16, height: 16 }} />
+                        {actionLoading.saveFlags ? "Saving" : "Save"}
                       </button>
                     </div>
                   </div>
@@ -1301,6 +1303,37 @@ function tabBtn(active) {
     fontWeight: 900,
   };
 }
+function normalizeFlagsDraft(raw) {
+  // Accept comma-separated flags. Emojis are valid.
+  // Disallow commas inside a single flag by definition.
+  return (
+    String(raw || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      // optional: prevent absurdly long flags
+      .map((s) => s.slice(0, 40))
+  );
+}
+// ✅ Add this tiny icon component anywhere in the same file (below helpers is fine)
+
+function BookmarkIcon({ style }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      style={{ display: "block", ...style }}
+    >
+      <path
+        d="M6.5 4.75h11c.966 0 1.75.784 1.75 1.75v14.5l-6.2-3.4a2 2 0 0 0-1.9 0l-6.2 3.4V6.5c0-.966.784-1.75 1.75-1.75Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 const styles = {
   headerRow: {
@@ -1534,5 +1567,25 @@ const styles = {
     alignItems: "center",
     flexWrap: "wrap",
     marginLeft: "auto",
+  }, // ✅ Add these styles into your `styles` object (near primaryBtn/actionBtn)
+
+  savePillBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "8px 12px",
+    borderRadius: 999,
+    border: "1px solid rgba(148,163,184,0.25)",
+    background: "rgba(148,163,184,0.06)",
+    cursor: "pointer",
+    fontWeight: 900,
+    fontSize: 13,
+    lineHeight: 1,
+    userSelect: "none",
+  },
+
+  btnDisabled: {
+    opacity: 0.6,
+    cursor: "not-allowed",
   },
 };

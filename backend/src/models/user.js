@@ -49,7 +49,18 @@ const userSchema = new mongoose.Schema(
         createdAt: { type: Date, default: Date.now },
       },
     ],
-    flags: { type: [String], default: [] },
+    flags: {
+      type: [String],
+      default: [],
+      validate: {
+        validator: (arr) =>
+          Array.isArray(arr) &&
+          arr.every(
+            (s) => typeof s === "string" && s.length >= 1 && s.length <= 40
+          ),
+        message: "Invalid flags.",
+      },
+    },
   },
   { timestamps: { createdAt: "createdAt", updatedAt: false } }
 );
