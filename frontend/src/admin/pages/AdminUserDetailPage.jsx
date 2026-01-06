@@ -388,6 +388,25 @@ export default function AdminUserDetailPage() {
       setActionLoading((s) => ({ ...s, updateSubscription: false }));
     }
   }
+  // ✅ NEW: presets
+  const FLAG_PRESETS = useMemo(
+    () => [
+      { key: "manual_review", label: "🚨 manual_review" },
+      { key: "vip", label: "💎 vip" },
+      { key: "refund_risk", label: "⚠️ refund_risk" },
+      { key: "chargeback", label: "🧾 chargeback" },
+      { key: "trusted", label: "✅ trusted" },
+    ],
+    []
+  );
+
+  // ✅ NEW: derive active preset state from flagsDraft
+  const draftFlagsSet = useMemo(() => {
+    const set = new Set(
+      parseFlagsDraft(flagsDraft).map((x) => x.toLowerCase())
+    );
+    return set;
+  }, [flagsDraft]);
 
   // NEW: Save flags
   async function onSaveFlags() {
@@ -632,6 +651,38 @@ export default function AdminUserDetailPage() {
                         flexWrap: "wrap",
                       }}
                     >
+                      {/* ✅ NEW: quick presets */}
+                      <div
+                        style={{
+                          marginTop: 10,
+                          display: "flex",
+                          gap: 8,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        {FLAG_PRESETS.map((p) => {
+                          const isActive =
+                            draftFlagsSet.has(p.key.toLowerCase()) ||
+                            draftFlagsSet.has(p.label.toLowerCase()); // safety if you ever switch formats
+
+                          return (
+                            <button
+                              key={p.key}
+                              type="button"
+                              onClick={() =>
+                                setFlagsDraft((prev) =>
+                                  toggleDraftFlag(prev, p.label)
+                                )
+                              }
+                              style={presetBtn(isActive)}
+                              title={isActive ? "Remove flag" : "Add flag"}
+                            >
+                              {p.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+
                       <input
                         value={flagsDraft}
                         onChange={(e) => setFlagsDraft(e.target.value)}
@@ -1333,6 +1384,58 @@ function BookmarkIcon({ style }) {
       />
     </svg>
   );
+}
+// ✅ NEW: parse/normalize draft flags (emoji-safe)
+function parseFlagsDraft(raw) {
+  return String(raw || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+// ✅ NEW: serialize flags array back into input
+function serializeFlags(flags) {
+  return (flags || []).join(", ");
+}
+
+// ✅ NEW: toggle a single flag in draft (case-insensitive match)
+function toggleDraftFlag(rawDraft, flag) {
+  const list = parseFlagsDraft(rawDraft);
+
+  const idx = list.findIndex(
+    (x) => x.toLowerCase() === String(flag).toLowerCase()
+  );
+
+  if (idx >= 0) {
+    list.splice(idx, 1);
+  } else {
+    list.push(flag);
+  }
+
+  // de-dupe (case-insensitive) while preserving order
+  const seen = new Set();
+  const out = [];
+  for (const item of list) {
+    const key = item.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+  }
+
+  return serializeFlags(out);
+}
+function presetBtn(active) {
+  return {
+    padding: "8px 10px",
+    borderRadius: 999,
+    border: active ? "1px solid rgba(148,163,184,0.35)" : BORDER,
+    background: active ? "rgba(148,163,184,0.12)" : "rgba(148,163,184,0.05)",
+    cursor: "pointer",
+    fontSize: 12,
+    fontWeight: 900,
+    lineHeight: 1,
+    userSelect: "none",
+  };
 }
 
 const styles = {
