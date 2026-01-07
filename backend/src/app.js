@@ -19,6 +19,7 @@ import ingestRoutes from "./routes/ingestRoutes.js";
 import consentRoutes from "./routes/consentRoutes.js";
 import adminUserRoutes from "./routes/adminUserRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
+import adminActivityRoutes from "./routes/adminActivityRoutes.js";
 import { consentGate } from "./middlewares/consent.js";
 import { requireAuth } from "./middlewares/auth.js"; // ✅ FIX: define auth
 
@@ -110,6 +111,7 @@ app.use("/devices", requireAuth, devicesRouter);
 app.use("/notifications", requireAuth, notificationsRouter);
 app.use("/admin", adminUserRoutes);
 app.use("/admin", adminRoutes);
+app.use("/api", adminActivityRoutes);
 
 // ---- error handler ----
 app.use((err, _req, res, _next) => {

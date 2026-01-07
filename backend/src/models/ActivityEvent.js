@@ -5,36 +5,54 @@ const ActivityEventSchema = new mongoose.Schema(
   {
     userId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      index: true,
       required: true,
+      index: true,
+      ref: "User",
     },
 
-    // transaction | ai_message | ai_chat | import | login | password_reset | subscription_change | admin_action | other
-    type: { type: String, default: "other", index: true },
+    // who performed the action (optional for system events)
+    adminId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+      ref: "User",
+      index: true,
+    },
+    adminEmail: { type: String, default: "" },
 
-    title: { type: String, default: "" },
+    // event classification for filtering
+    type: {
+      type: String,
+      required: true,
+      index: true,
+      // keep this open-ended; you can enforce enum later
+    },
+
+    // authoritative event timestamp (used for cursor pagination)
+    ts: {
+      type: Date,
+      required: true,
+      default: () => new Date(),
+      index: true,
+    },
+
+    title: { type: String, required: true },
     subtitle: { type: String, default: "" },
     meta: { type: String, default: "" },
 
-    href: { type: String, default: "" },
-
-    actorType: {
-      type: String,
-      enum: ["system", "user", "admin"],
-      default: "system",
+    // arbitrary structured data for debugging/auditing
+    payload: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
     },
-    actorId: { type: mongoose.Schema.Types.ObjectId, default: null },
-
-    payload: { type: mongoose.Schema.Types.Mixed, default: null },
-
-    ts: { type: Date, default: Date.now, index: true },
   },
-  { timestamps: true }
+  {
+    minimize: false,
+    timestamps: true, // keeps createdAt/updatedAt too
+  }
 );
 
-const ActivityEvent =
-  mongoose.models.ActivityEvent ||
-  mongoose.model("ActivityEvent", ActivityEventSchema);
+// Efficient pagination: newest first by ts
+ActivityEventSchema.index({ userId: 1, ts: -1 });
+ActivityEventSchema.index({ userId: 1, type: 1, ts: -1 });
 
-export default ActivityEvent;
+export default mongoose.model("ActivityEvent", ActivityEventSchema);

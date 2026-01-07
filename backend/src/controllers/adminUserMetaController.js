@@ -154,6 +154,7 @@ export async function adminUpdateUserFlags(req, res) {
     await logAdminEventSafe({
       userId,
       admin,
+      type: "flags_updated",
       title: "User flags updated",
       subtitle: nextFlags.length ? nextFlags.join(", ") : "cleared",
       meta: admin?.email ? `by ${admin.email}` : "",

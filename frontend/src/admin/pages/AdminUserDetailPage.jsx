@@ -18,6 +18,7 @@ import {
   adminGetUserNotes,
   adminAddUserNote,
   adminUpdateUserFlags,
+  adminGetUserActivity,
 } from "../lib/adminApi";
 
 const BORDER = "1px solid rgba(148,163,184,0.15)";
@@ -71,7 +72,29 @@ export default function AdminUserDetailPage() {
   const userId = user?._id || user?.id || id;
   const email = user?.email || "";
   const isActive = user?.isActive !== false;
+  // ✅ NEW: activity state
+  const [activityItems, setActivityItems] = useState([]);
+  const [activityErr, setActivityErr] = useState("");
+  const [activityCursor, setActivityCursor] = useState(null);
+  const [activityHasMore, setActivityHasMore] = useState(true);
+  const [activityLoading, setActivityLoading] = useState(false);
+  // ✅ NEW: activity type filters
+  const ACTIVITY_TYPES = useMemo(
+    () => [
+      { key: "flags_updated", label: "Flags" },
+      { key: "note_added", label: "Notes" },
+      { key: "user_deactivated", label: "Deactivate" },
+      { key: "user_reactivated", label: "Reactivate" },
+      { key: "force_logout", label: "Force logout" },
+      { key: "password_reset_sent", label: "Password reset" },
+      { key: "verification_resent", label: "Verification" },
+      { key: "subscription_updated", label: "Subscription" },
+      { key: "admin_event", label: "Other" },
+    ],
+    []
+  );
 
+  const [activitySelectedTypes, setActivitySelectedTypes] = useState([]);
   // Fetch accounts ONLY when Accounts tab is active
   useEffect(() => {
     if (activeTab !== "accounts") return;
@@ -139,6 +162,12 @@ export default function AdminUserDetailPage() {
     setNotesErr("");
     setNoteDraft("");
     //setFlagsDraft("");
+    // ✅ reset activity
+    setActivityItems([]);
+    setActivityErr("");
+    setActivityCursor(null);
+    setActivityHasMore(true);
+    setActivitySelectedTypes([]);
   }, [id]);
 
   useEffect(() => {
@@ -172,6 +201,67 @@ export default function AdminUserDetailPage() {
       setToast("Copy failed");
     }
   }
+  async function loadActivity({ reset = false } = {}) {
+    if (!userId) return;
+    if (activityLoading) return;
+
+    try {
+      setActivityLoading(true);
+      setActivityErr("");
+
+      const limit = 50;
+
+      const types =
+        activitySelectedTypes.length > 0
+          ? activitySelectedTypes.join(",")
+          : undefined;
+
+      const cursor = reset ? null : activityCursor;
+
+      const res = await adminGetUserActivity(userId, {
+        limit,
+        cursor: cursor || undefined,
+        types,
+      });
+
+      const incoming = Array.isArray(res?.items) ? res.items : [];
+      const next = res?.nextCursor || null;
+
+      if (reset) {
+        setActivityItems(incoming);
+      } else {
+        // append, avoid duplicates by _id/ts+title fallback
+        setActivityItems((prev) => {
+          const seen = new Set(
+            prev.map((x) => x?._id || `${x?.ts}-${x?.title}-${x?.type}`)
+          );
+          const merged = [...prev];
+          for (const it of incoming) {
+            const key = it?._id || `${it?.ts}-${it?.title}-${it?.type}`;
+            if (seen.has(key)) continue;
+            merged.push(it);
+          }
+          return merged;
+        });
+      }
+
+      setActivityCursor(next);
+      setActivityHasMore(Boolean(next) && incoming.length > 0);
+    } catch (e) {
+      setActivityErr(e?.response?.data?.message || "Failed to load activity.");
+      if (reset) setActivityItems([]);
+    } finally {
+      setActivityLoading(false);
+    }
+  }
+
+  // ✅ load activity when tab opens OR filters change
+  useEffect(() => {
+    if (activeTab !== "activity") return;
+    if (!userId) return;
+    loadActivity({ reset: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, userId, activitySelectedTypes.join("|")]);
 
   // NEW: load notes (only when needed)
   useEffect(() => {
@@ -1167,17 +1257,207 @@ export default function AdminUserDetailPage() {
 
             {activeTab === "activity" ? (
               <Section title="Activity">
-                <div style={{ fontSize: 12, color: TEXT_MUTED }}>
-                  Tier 1 is Notes + Flags. Activity feed comes next (Tier 1-A).
+                <div
+                  style={{ fontSize: 12, color: TEXT_MUTED, lineHeight: 1.5 }}
+                >
+                  Audit timeline for this user (admin + system events). Use
+                  filters to narrow down the feed.
                 </div>
+
                 <Divider />
-                <Grid>
-                  <Row label="Created" value={formatDateTime(user.createdAt)} />
-                  <Row
-                    label="Last login"
-                    value={formatDateTime(user.lastLogin)}
-                  />
-                </Grid>
+
+                {/* Filters */}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {ACTIVITY_TYPES.map((t) => {
+                    const active = activitySelectedTypes.includes(t.key);
+                    return (
+                      <button
+                        key={t.key}
+                        type="button"
+                        onClick={() => {
+                          setActivityItems([]);
+                          setActivityCursor(null);
+                          setActivityHasMore(true);
+                          setActivitySelectedTypes((prev) => {
+                            if (prev.includes(t.key))
+                              return prev.filter((x) => x !== t.key);
+                            return [...prev, t.key];
+                          });
+                        }}
+                        style={chipBtn(active)}
+                        title={active ? "Remove filter" : "Add filter"}
+                      >
+                        {t.label}
+                      </button>
+                    );
+                  })}
+
+                  {activitySelectedTypes.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActivityItems([]);
+                        setActivityCursor(null);
+                        setActivityHasMore(true);
+                        setActivitySelectedTypes([]);
+                      }}
+                      style={chipBtn(false)}
+                      title="Clear filters"
+                    >
+                      Clear
+                    </button>
+                  ) : null}
+                </div>
+
+                <div style={{ marginTop: 12 }}>
+                  {activityErr ? (
+                    <div style={styles.errorBox}>
+                      <div style={{ fontWeight: 900, marginBottom: 6 }}>
+                        Activity error
+                      </div>
+                      <div>{activityErr}</div>
+                    </div>
+                  ) : null}
+
+                  {activityLoading && activityItems.length === 0 ? (
+                    <div style={{ fontSize: 12, color: TEXT_MUTED }}>
+                      Loading activity…
+                    </div>
+                  ) : null}
+
+                  {!activityLoading &&
+                  activityItems.length === 0 &&
+                  !activityErr ? (
+                    <div style={styles.emptyCard}>
+                      <div style={{ fontWeight: 950, marginBottom: 6 }}>
+                        No activity yet
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: TEXT_MUTED,
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        Events will appear here as admins take actions (notes,
+                        flags, security actions) and as system events are added.
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {activityItems.length > 0 ? (
+                    <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
+                      {activityItems.map((ev, idx) => (
+                        <div
+                          key={ev._id || `${ev.ts}-${ev.title}-${idx}`}
+                          style={styles.activityCard}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: 10,
+                              alignItems: "flex-start",
+                            }}
+                          >
+                            <div style={{ display: "grid", gap: 4 }}>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: 8,
+                                  flexWrap: "wrap",
+                                }}
+                              >
+                                <span style={styles.activityTypePill}>
+                                  {ev.type || "event"}
+                                </span>
+                                {ev.adminEmail ? (
+                                  <span style={styles.activityMetaText}>
+                                    by {ev.adminEmail}
+                                  </span>
+                                ) : (
+                                  <span style={styles.activityMetaText}>
+                                    system
+                                  </span>
+                                )}
+                              </div>
+
+                              <div style={{ fontWeight: 950, fontSize: 13 }}>
+                                {ev.title || "(no title)"}
+                              </div>
+
+                              {ev.subtitle ? (
+                                <div
+                                  style={{ fontSize: 12, color: TEXT_MUTED }}
+                                >
+                                  {ev.subtitle}
+                                </div>
+                              ) : null}
+                            </div>
+
+                            <div style={{ fontSize: 11, color: TEXT_MUTED }}>
+                              {formatDateTime(ev.ts)}
+                            </div>
+                          </div>
+
+                          {ev.meta ? (
+                            <div
+                              style={{
+                                marginTop: 8,
+                                fontSize: 12,
+                                color: TEXT_MUTED,
+                              }}
+                            >
+                              {ev.meta}
+                            </div>
+                          ) : null}
+
+                          {/* Payload */}
+                          {ev.payload &&
+                          Object.keys(ev.payload || {}).length ? (
+                            <details style={{ marginTop: 10 }}>
+                              <summary
+                                style={{ cursor: "pointer", fontWeight: 900 }}
+                              >
+                                View payload
+                              </summary>
+                              <pre style={styles.pre}>
+                                {JSON.stringify(ev.payload, null, 2)}
+                              </pre>
+                            </details>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {/* Load more */}
+                  <div style={{ marginTop: 12, display: "flex", gap: 10 }}>
+                    <button
+                      type="button"
+                      onClick={() => loadActivity({ reset: true })}
+                      disabled={activityLoading}
+                      style={styles.actionBtn}
+                      title="Refresh activity"
+                    >
+                      Refresh
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => loadActivity({ reset: false })}
+                      disabled={activityLoading || !activityHasMore}
+                      style={styles.primaryBtn}
+                      title="Load older events"
+                    >
+                      {activityLoading
+                        ? "Loading…"
+                        : activityHasMore
+                        ? "Load more"
+                        : "No more"}
+                    </button>
+                  </div>
+                </div>
               </Section>
             ) : null}
           </div>
@@ -1286,6 +1566,19 @@ function maskId(v) {
   if (s.length <= 10) return s;
   return `${s.slice(0, 4)}…${s.slice(-4)}`;
 }
+function chipBtn(active) {
+  return {
+    padding: "8px 10px",
+    borderRadius: 999,
+    border: active ? "1px solid rgba(148,163,184,0.30)" : BORDER,
+    background: active ? "rgba(148,163,184,0.12)" : "rgba(148,163,184,0.05)",
+    cursor: "pointer",
+    fontSize: 12,
+    fontWeight: 900,
+    lineHeight: 1,
+    userSelect: "none",
+  };
+}
 
 function formatDateTime(v) {
   if (!v) return "-";
@@ -1354,6 +1647,7 @@ function tabBtn(active) {
     fontWeight: 900,
   };
 }
+
 function normalizeFlagsDraft(raw) {
   // Accept comma-separated flags. Emojis are valid.
   // Disallow commas inside a single flag by definition.
@@ -1690,5 +1984,29 @@ const styles = {
   btnDisabled: {
     opacity: 0.6,
     cursor: "not-allowed",
+  },
+  activityCard: {
+    padding: 12,
+    borderRadius: 14,
+    border: BORDER,
+    background: "rgba(148,163,184,0.04)",
+  },
+
+  activityTypePill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "3px 8px",
+    borderRadius: 999,
+    border: "1px solid rgba(148,163,184,0.18)",
+    background: "rgba(148,163,184,0.08)",
+    fontSize: 11,
+    fontWeight: 950,
+  },
+
+  activityMetaText: {
+    fontSize: 11,
+    color: TEXT_MUTED,
+    fontWeight: 800,
   },
 };

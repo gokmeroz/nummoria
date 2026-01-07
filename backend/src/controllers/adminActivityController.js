@@ -23,7 +23,6 @@ function parseLimit(limitRaw) {
   return Math.min(n, 200);
 }
 
-// GET /admin/users/:userId/activity
 export async function adminGetUserActivity(req, res) {
   try {
     const { userId } = req.params;
@@ -32,27 +31,40 @@ export async function adminGetUserActivity(req, res) {
       return res.status(400).json({ message: "Invalid user id." });
     }
 
-    const limit = parseLimit(req.query.limit);
-    const cursor = parseCursor(req.query.cursor);
-    const types = parseTypes(req.query.types);
-    const actorType = req.query.actorType ? String(req.query.actorType) : null;
+    const limit = Math.min(parseInt(req.query.limit || "50", 10), 200);
 
-    const q = { userId: new mongoose.Types.ObjectId(userId) };
+    // cursor is an ISO date string; we page "older than cursor"
+    const cursor = req.query.cursor ? new Date(req.query.cursor) : null;
 
-    if (cursor) q.ts = { $lt: cursor };
-    if (types?.length) q.type = { $in: types };
-    if (actorType) q.actorType = actorType;
+    const types = req.query.types
+      ? String(req.query.types)
+          .split(",")
+          .map((x) => x.trim())
+          .filter(Boolean)
+      : null;
+
+    const q = { userId };
+
+    if (cursor && !Number.isNaN(cursor.getTime())) {
+      q.ts = { $lt: cursor };
+    }
+
+    if (types && types.length) {
+      q.type = { $in: types };
+    }
 
     const items = await ActivityEvent.find(q)
       .sort({ ts: -1 })
       .limit(limit)
-      .lean();
+      .select("type ts title subtitle meta adminEmail adminId payload");
 
-    const nextCursor = items.length
-      ? new Date(items[items.length - 1].ts).toISOString()
-      : null;
+    const nextCursor =
+      items.length > 0 ? items[items.length - 1].ts.toISOString() : null;
 
-    return res.json({ items, nextCursor });
+    return res.json({
+      items,
+      nextCursor,
+    });
   } catch (e) {
     console.error("adminGetUserActivity error:", e);
     return res.status(500).json({ message: "Failed to load activity." });
