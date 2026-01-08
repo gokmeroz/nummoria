@@ -185,7 +185,7 @@ export default function WelcomeLanding() {
                         Net worth
                       </span>
                       <span className="rounded-full bg-emerald-100/70 px-2 py-[2px] text-[9px] font-semibold">
-                        +$482 this month
+                        +$4825 this month
                       </span>
                     </div>
                     <div className="mt-1 text-xl font-extrabold tracking-tight">
@@ -202,14 +202,14 @@ export default function WelcomeLanding() {
                 <div className="mt-3 flex gap-2 px-4">
                   <div className="flex-1 rounded-2xl bg-white/5 p-2">
                     <div className="text-[9px] text-white/40">Checking</div>
-                    <div className="text-sm font-semibold">$2,430</div>
+                    <div className="text-sm font-semibold">$22,430</div>
                     <div className="mt-1 h-1.5 w-full rounded-full bg-white/10">
                       <div className="h-1.5 w-3/5 rounded-full bg-emerald-400" />
                     </div>
                   </div>
                   <div className="flex-1 rounded-2xl bg-white/5 p-2">
                     <div className="text-[9px] text-white/40">Investments</div>
-                    <div className="text-sm font-semibold">$8,920</div>
+                    <div className="text-sm font-semibold">$10,920</div>
                     <div className="mt-1 h-1.5 w-full rounded-full bg-white/10">
                       <div className="h-1.5 w-4/5 rounded-full bg-emerald-300" />
                     </div>
@@ -221,7 +221,7 @@ export default function WelcomeLanding() {
                   <div className="flex-1 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-2 py-2">
                     <div className="flex items-center justify-between text-[9px] text-emerald-200">
                       <span>Expenses</span>
-                      <span>- $910</span>
+                      <span>- $976</span>
                     </div>
                     <div className="mt-1 h-[5px] w-full rounded-full bg-white/5">
                       <div className="h-[5px] w-4/5 rounded-full bg-emerald-400" />
@@ -230,7 +230,7 @@ export default function WelcomeLanding() {
                   <div className="flex-1 rounded-2xl bg-white/5 px-2 py-2">
                     <div className="flex items-center justify-between text-[9px] text-white/60">
                       <span>Income</span>
-                      <span>$1,340</span>
+                      <span>$4,640</span>
                     </div>
                     <div className="mt-1 grid grid-cols-3 gap-[3px]">
                       <span className="h-[6px] rounded bg-emerald-400/70" />
@@ -249,8 +249,8 @@ export default function WelcomeLanding() {
 
                   <div className="space-y-1.5">
                     {[
-                      { label: "Groceries · Migros", amount: "-$42.30" },
-                      { label: "Salary · Halkbank", amount: "+$820.00" },
+                      { label: "Groceries · Supermarket", amount: "-$420.30" },
+                      { label: "Salary · Meta", amount: "+$8200.00" },
                       { label: "Invest · S&P 500", amount: "-$120.00" },
                     ].map((t) => (
                       <div
