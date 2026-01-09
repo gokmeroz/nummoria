@@ -22,6 +22,9 @@ import adminRoutes from "./routes/adminRoutes.js";
 import adminActivityRoutes from "./routes/adminActivityRoutes.js";
 import { consentGate } from "./middlewares/consent.js";
 import { requireAuth } from "./middlewares/auth.js"; // ✅ FIX: define auth
+import autoTransactionRoutes from "./routes/autoTransactionRoutes.js";
+// backend/src/app.js (or wherever routes are mounted)
+import autoTransactionRoutes from "./routes/autoTransactionRoutes.js";
 
 import devicesRouter from "./routes/devices.js";
 import notificationsRouter from "./routes/notifications.js";
@@ -100,6 +103,7 @@ app.use("/me", noCache, meRoutes);
 app.use("/accounts", accountRoutes);
 app.use("/categories", categoryRoutes);
 app.use("/transactions", transactionRoutes);
+app.use("/auto/transactions", autoTransactionRoutes);
 app.use("/investments", investmentPerformance, marketRouter);
 app.use("/ai/financial-helper", financialHelperRoutes);
 app.use("/stats", statsRoutes);

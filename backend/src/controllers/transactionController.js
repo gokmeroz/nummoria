@@ -1,4 +1,4 @@
-// backend/src/controllers/transactionController.js
+//backend/src/controllers/transactionController.js
 import mongoose from "mongoose";
 import { Transaction } from "../models/transaction.js";
 import { Category } from "../models/category.js";
@@ -7,6 +7,7 @@ import {
   upsertTransactionReminderJob,
   removeTransactionReminderJob,
 } from "../utils/reminders.js";
+import { createTransactionCore } from "../utils/transactionCreateCore.js"; // NEW
 
 const { ObjectId } = mongoose.Types;
 
@@ -190,240 +191,19 @@ export async function getTransactionById(req, res) {
 // POST /transactions
 // Body supports optional nextDate: if provided, we will also create a COPY
 // at that date (future), and only affect balances for rows whose date <= today.
+// POST /transactions
 export async function createTransaction(req, res) {
   try {
-    const {
-      accountId,
-      categoryId,
-      type,
-      amountMinor,
-      currency,
-      date,
-      nextDate,
-      description,
-      notes,
-      tags,
-      assetSymbol,
-      units,
-      reminder,
-    } = req.body;
-
-    // Basic validation
-    if (!accountId || !type || currency == null || date == null) {
-      return res
-        .status(400)
-        .json({ error: "accountId, type, currency, and date are required" });
-    }
-    if (!mongoose.Types.ObjectId.isValid(accountId)) {
-      return res.status(400).json({ error: "Invalid accountId" });
-    }
-    if (categoryId && !mongoose.Types.ObjectId.isValid(categoryId)) {
-      return res.status(400).json({ error: "Invalid categoryId" });
-    }
-    const allowedTypes = ["income", "expense", "transfer", "investment"];
-    if (!allowedTypes.includes(type)) {
-      return res.status(400).json({ error: "Invalid type" });
-    }
-    if (typeof amountMinor !== "number" || Number.isNaN(amountMinor)) {
-      return res.status(400).json({ error: "amountMinor must be a number" });
-    }
-
-    // Category ↔ type consistency (if provided)
-    let categoryDoc = null;
-    if (categoryId) {
-      categoryDoc = await Category.findOne({
-        _id: categoryId,
-        userId: req.userId,
-        isDeleted: { $ne: true },
-      })
-        .select("name kind")
-        .lean();
-      if (!categoryDoc)
-        return res.status(400).json({ error: "Category not found" });
-      if (
-        ["income", "expense", "investment"].includes(type) &&
-        categoryDoc.kind !== type
-      ) {
-        return res.status(400).json({
-          error: `Category kind (${categoryDoc.kind}) does not match transaction type (${type})`,
-        });
-      }
-    }
-
-    // Investment-specific validation (conditional)
-    if (type === "investment") {
-      const requiresSymbolUnits = isStockOrCryptoCategory(categoryDoc);
-      const sym = typeof assetSymbol === "string" ? assetSymbol.trim() : "";
-      const unitsNum =
-        typeof units === "number" && !Number.isNaN(units) ? units : null;
-
-      if (requiresSymbolUnits) {
-        if (!sym) {
-          return res
-            .status(400)
-            .json({ error: "assetSymbol is required for stock/crypto" });
-        }
-        if (!(Number.isFinite(unitsNum) && unitsNum > 0)) {
-          return res
-            .status(400)
-            .json({ error: "units must be > 0 for stock/crypto" });
-        }
-      }
-    }
-
-    // Normalize
-    const cleanTags = Array.isArray(tags)
-      ? tags.filter((t) => typeof t === "string" && t.trim() !== "")
-      : [];
-    const cur = normalizeCurrency(currency);
-    const when = startOfUTC(date);
-    const rem = parseReminder(reminder);
-
-    const reminderObj =
-      rem && rem.enabled
-        ? {
-            enabled: true,
-            offsetMinutes: rem.offsetMinutes,
-            remindAt: computeRemindAtUTC(when, rem.offsetMinutes),
-          }
-        : {
-            enabled: false,
-            offsetMinutes: rem?.offsetMinutes ?? 1440,
-            remindAt: null,
-          };
-
-    // Account and currency check
-    const acct = await getAccountOrThrow({ accountId, userId: req.userId });
-    const acctCur = normalizeCurrency(acct.currency || "");
-    if (acctCur !== cur) {
-      return res.status(400).json({
-        error: `Currency mismatch: account is ${acctCur}, transaction is ${cur}. (FX not supported yet)`,
-      });
-    }
-
-    const baseDoc = {
+    // NEW: delegate to shared core (manual + auto)
+    const result = await createTransactionCore({
       userId: req.userId,
-      accountId,
-      categoryId: categoryId || null,
-      type,
-      amountMinor: Math.abs(amountMinor),
-      currency: cur,
-      date: when,
-      nextDate: nextDate ? startOfUTC(nextDate) : undefined, // metadata only
-      description: description || null,
-      notes: notes || null,
-      tags: cleanTags,
-      assetSymbol:
-        typeof assetSymbol === "string" && assetSymbol.trim()
-          ? String(assetSymbol).toUpperCase().trim()
-          : null,
-      units:
-        typeof units === "number" && !Number.isNaN(units)
-          ? Number(units)
-          : null,
-      reminder: reminderObj,
-      isDeleted: false,
-    };
-
-    const created = [];
-
-    // 1) Create the main row (affects balance if date <= today)
-    const delta = shouldAffectBalance(when)
-      ? deltaFor(type, baseDoc.amountMinor)
-      : 0;
-
-    try {
-      if (delta !== 0) {
-        await incBalanceOrThrow({ accountId, userId: req.userId, delta });
-      }
-      const doc = await Transaction.create(baseDoc);
-      created.push(doc.toObject());
-      await applyReminderScheduling({ userId: req.userId, tx: doc });
-    } catch (e) {
-      if (delta !== 0) {
-        try {
-          await incBalanceOrThrow({
-            accountId,
-            userId: req.userId,
-            delta: -delta,
-          });
-        } catch {}
-      }
-      throw e;
-    }
-
-    // 2) Optional future copy
-    if (nextDate) {
-      const plannedDate = startOfUTC(nextDate);
-
-      const exists = await Transaction.exists({
-        userId: req.userId,
-        isDeleted: { $ne: true },
-        accountId,
-        categoryId: categoryId || null,
-        type,
-        amountMinor: Math.abs(amountMinor),
-        currency: cur,
-        date: plannedDate,
-        description: description || null,
-      });
-
-      if (!exists) {
-        const delta2 = shouldAffectBalance(plannedDate)
-          ? deltaFor(type, Math.abs(amountMinor))
-          : 0;
-
-        try {
-          if (delta2 !== 0) {
-            await incBalanceOrThrow({
-              accountId,
-              userId: req.userId,
-              delta: delta2,
-            });
-          }
-
-          const copyReminder =
-            rem && rem.enabled
-              ? {
-                  enabled: true,
-                  offsetMinutes: rem.offsetMinutes,
-                  remindAt: computeRemindAtUTC(plannedDate, rem.offsetMinutes),
-                }
-              : {
-                  enabled: false,
-                  offsetMinutes: rem?.offsetMinutes ?? 1440,
-                  remindAt: null,
-                };
-
-          const copy = await Transaction.create({
-            ...baseDoc,
-            date: plannedDate,
-            nextDate: undefined, // do not chain
-            reminder: copyReminder,
-          });
-          created.push(copy.toObject());
-          await applyReminderScheduling({ userId: req.userId, tx: copy }); // ✅ schedule reminder for the copy too
-        } catch (e2) {
-          if (delta2 !== 0) {
-            try {
-              await incBalanceOrThrow({
-                accountId,
-                userId: req.userId,
-                delta: -delta2,
-              });
-            } catch {}
-          }
-          // ignore extra-copy failure
-        }
-      }
-    }
-
-    return res.status(201).json({ createdCount: created.length, created });
+      body: req.body,
+    });
+    return res.status(201).json(result);
   } catch (err) {
     return res.status(400).json({ error: err.message || "Create failed" });
   }
 }
-
 /* --------------------------------- UPDATE --------------------------------- */
 // PUT /transactions/:id
 export async function updateTransaction(req, res) {
