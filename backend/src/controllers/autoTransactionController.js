@@ -2,7 +2,6 @@
 import mongoose from "mongoose";
 import crypto from "crypto";
 import { Transaction } from "../models/transaction.js";
-import { TransactionDraft } from "../models/transactionDraft.js";
 import { Account } from "../models/account.js";
 import { Category } from "../models/category.js";
 import { createTransactionCore } from "../utils/transactionCreateCore.js"; // NEW

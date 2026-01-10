@@ -23,8 +23,6 @@ import adminActivityRoutes from "./routes/adminActivityRoutes.js";
 import { consentGate } from "./middlewares/consent.js";
 import { requireAuth } from "./middlewares/auth.js"; // ✅ FIX: define auth
 import autoTransactionRoutes from "./routes/autoTransactionRoutes.js";
-// backend/src/app.js (or wherever routes are mounted)
-import autoTransactionRoutes from "./routes/autoTransactionRoutes.js";
 
 import devicesRouter from "./routes/devices.js";
 import notificationsRouter from "./routes/notifications.js";
