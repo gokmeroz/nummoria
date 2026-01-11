@@ -1,6 +1,7 @@
+// src/pages/Investments.jsx
 /* eslint-disable no-empty */
 /* eslint-disable no-unused-vars */
-// src/pages/Investments.jsx
+
 import React, {
   useEffect,
   useMemo,
@@ -10,6 +11,7 @@ import React, {
 } from "react";
 import api from "../lib/api";
 import logoUrl from "../assets/nummoria_logo.png";
+
 /* --------------------------- Investment-only categories --------------------------- */
 const INVESTMENT_CATEGORY_OPTIONS = [
   "Stock Market",
@@ -70,14 +72,15 @@ function useToasts() {
     const id = Math.random().toString(36).slice(2);
     const toast = { id, type: t.type || "info", msg: t.msg || String(t) };
     setToasts((prev) => [...prev, toast]);
-    // auto-dismiss after 3.5s
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((x) => x.id !== id));
-    }, 3500);
+    setTimeout(
+      () => setToasts((prev) => prev.filter((x) => x.id !== id)),
+      3500
+    );
   }, []);
-  const remove = useCallback((id) => {
-    setToasts((prev) => prev.filter((x) => x.id !== id));
-  }, []);
+  const remove = useCallback(
+    (id) => setToasts((prev) => prev.filter((x) => x.id !== id)),
+    []
+  );
   return { toasts, push, remove };
 }
 
@@ -127,9 +130,7 @@ function useConfirm() {
   });
 
   const ask = useCallback((message) => {
-    return new Promise((resolve) => {
-      setState({ open: true, message, resolve });
-    });
+    return new Promise((resolve) => setState({ open: true, message, resolve }));
   }, []);
 
   const onCancel = () => {
@@ -168,6 +169,301 @@ function useConfirm() {
 
   return { ask, ConfirmDialog: Dialog };
 }
+
+/* -------------------------------------------------------------------------- */
+/* ✅ FIX: Move Investment modal OUTSIDE component so it does NOT remount       */
+/*     (same reason as your Expenses auto modal fix).                          */
+/* -------------------------------------------------------------------------- */
+const InvestmentModal = React.memo(function InvestmentModal({
+  open,
+  editing,
+  form,
+  accountId,
+  accounts,
+  categories,
+  categoriesById,
+  onClose,
+  onSaved,
+  push,
+  majorToMinor,
+  minorToMajor,
+}) {
+  const amountRef = useRef(null);
+  const currencyRef = useRef(null);
+  const dateRef = useRef(null);
+  const nextDateRef = useRef(null);
+  const categoryRef = useRef(null);
+  const symbolRef = useRef(null);
+  const unitsRef = useRef(null);
+  const descRef = useRef(null);
+  const tagsRef = useRef(null);
+  const accountRef = useRef(null);
+
+  if (!open) return null;
+
+  const defaultAccId = form.accountId || accountId || accounts[0]?._id || "";
+
+  const submitFromRefs = async () => {
+    const amount = amountRef.current?.value ?? "";
+    const currency = (currencyRef.current?.value ?? "USD").toUpperCase();
+    const date = dateRef.current?.value ?? "";
+    const nextDate = nextDateRef.current?.value ?? "";
+    const categoryId = categoryRef.current?.value ?? "";
+    const rawSymbol = (symbolRef.current?.value ?? "").toUpperCase().trim();
+    const rawUnitsStr = (unitsRef.current?.value ?? "").trim();
+    const rawUnits = rawUnitsStr === "" ? NaN : Number(rawUnitsStr);
+    const description = (descRef.current?.value ?? "").trim();
+    const tagsCsv = tagsRef.current?.value ?? "";
+    const pickedAccountId = accountRef.current?.value ?? "";
+
+    const amountMinor = majorToMinor(amount, currency);
+    if (Number.isNaN(amountMinor)) {
+      push({ type: "warning", msg: "Invalid amount." });
+      return;
+    }
+    if (!categoryId) {
+      push({ type: "warning", msg: "Pick a category." });
+      return;
+    }
+    if (!pickedAccountId) {
+      push({ type: "warning", msg: "Pick an account." });
+      return;
+    }
+
+    const category = categoriesById.get(categoryId);
+    const isStockOrCrypto =
+      !!category &&
+      (category.name === "Stock Market" ||
+        category.name === "Crypto Currency Exchange");
+
+    // Validate ONLY for Stock/Crypto
+    if (isStockOrCrypto) {
+      if (!rawSymbol) {
+        push({
+          type: "warning",
+          msg: "Asset symbol is required for this category.",
+        });
+        return;
+      }
+      if (!(Number.isFinite(rawUnits) && rawUnits > 0)) {
+        push({
+          type: "warning",
+          msg: "Units must be a positive number for this category.",
+        });
+        return;
+      }
+    }
+
+    const payload = {
+      accountId: pickedAccountId,
+      categoryId,
+      type: "investment",
+      amountMinor,
+      currency,
+      date: new Date(date).toISOString(),
+      description: description || null,
+      tags: tagsCsv
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0),
+    };
+
+    // Include symbol/units if required or provided
+    if (isStockOrCrypto || rawSymbol) payload.assetSymbol = rawSymbol;
+    if (isStockOrCrypto || (Number.isFinite(rawUnits) && rawUnits > 0))
+      payload.units = Number(rawUnits);
+
+    if (nextDate) payload.nextDate = new Date(nextDate).toISOString();
+
+    try {
+      if (!editing) {
+        const { data } = await api.post("/transactions", payload);
+        const createdArr = Array.isArray(data?.created) ? data.created : [data];
+        push({ type: "success", msg: "Investment added." });
+        onSaved(createdArr);
+      } else {
+        const { data } = await api.put(`/transactions/${editing._id}`, payload);
+        push({ type: "success", msg: "Investment saved." });
+        onSaved(data);
+      }
+      onClose();
+    } catch (e) {
+      push({
+        type: "error",
+        msg: e?.response?.data?.error || e.message || "Error",
+      });
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-black/40"
+      onKeyDown={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      <div className="w-full max-w-xl bg-white rounded-2xl p-5 space-y-4">
+        <div className="text-lg font-bold">
+          {editing ? "Edit Investment" : "New Investment"}
+        </div>
+
+        {/* Account */}
+        <div className="space-y-1 w-full">
+          <label className="font-semibold text-sm">Account</label>
+          <select
+            ref={accountRef}
+            defaultValue={defaultAccId}
+            className="w-full border rounded-lg px-3 py-2 bg-white"
+            onChange={(e) => {
+              const acc = accounts.find((a) => a._id === e.target.value);
+              if (acc && currencyRef.current)
+                currencyRef.current.value = acc.currency;
+            }}
+          >
+            <option value="">— Pick an account —</option>
+            {accounts.map((a) => (
+              <option key={a._id} value={a._id}>
+                {a.name} · {a.type} · {a.currency}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Total Cost */}
+        <div className="flex gap-3">
+          <div className="space-y-1 w-full">
+            <label className="font-semibold text-sm">Total Cost</label>
+            <input
+              ref={amountRef}
+              defaultValue={form.amount}
+              placeholder="e.g., 1500.00"
+              inputMode="decimal"
+              className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
+            />
+          </div>
+          <div className="space-y-1 w-28">
+            <label className="font-semibold text-sm">Currency</label>
+            <input
+              ref={currencyRef}
+              defaultValue={
+                accounts.find((a) => a._id === defaultAccId)?.currency ||
+                form.currency
+              }
+              maxLength={3}
+              readOnly
+              className="w-full border rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-[#90a955]"
+            />
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          <div className="space-y-1 w-full">
+            <label className="font-semibold text-sm">Asset Symbol</label>
+            <input
+              ref={symbolRef}
+              defaultValue={form.assetSymbol}
+              placeholder="e.g., AAPL, BTC-USD, VOO"
+              className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
+              onBlur={(e) =>
+                (e.target.value = (e.target.value || "").toUpperCase())
+              }
+            />
+          </div>
+          <div className="space-y-1 w-36">
+            <label className="font-semibold text-sm">Units</label>
+            <input
+              ref={unitsRef}
+              defaultValue={form.units}
+              placeholder="e.g., 2.5"
+              inputMode="decimal"
+              className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-1 w-full">
+          <label className="font-semibold text-sm">Date</label>
+          <input
+            ref={dateRef}
+            defaultValue={form.date}
+            type="date"
+            lang={DATE_LANG}
+            className="w-full border rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-[#90a955]"
+          />
+        </div>
+
+        <div className="space-y-1 w-full">
+          <label className="font-semibold text-sm">Next date (optional)</label>
+          <input
+            ref={nextDateRef}
+            defaultValue={form.nextDate || ""}
+            type="date"
+            lang={DATE_LANG}
+            className="w-full border rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-[#90a955]"
+            placeholder="YYYY-MM-DD"
+          />
+          <div className="text-xs text-gray-500">
+            If set, this shows up under{" "}
+            <span className="font-semibold">Upcoming</span> as a planned item.
+          </div>
+        </div>
+
+        <div className="space-y-1 w-full">
+          <label className="font-semibold text-sm">Category</label>
+          <select
+            ref={categoryRef}
+            defaultValue={form.categoryId ?? ""}
+            className="w-full border rounded-lg px-3 py-2 bg-white"
+          >
+            {categories.map((c) => (
+              <option key={c._id} value={c._id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-1 w-full">
+          <label className="font-semibold text-sm">Description</label>
+          <input
+            ref={descRef}
+            defaultValue={form.description}
+            placeholder="Optional memo"
+            className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
+          />
+        </div>
+
+        <div className="space-y-1 w-full">
+          <label className="font-semibold text-sm">
+            Tags (comma-separated)
+          </label>
+          <input
+            ref={tagsRef}
+            defaultValue={form.tagsCsv}
+            placeholder="long-term, dividend"
+            className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
+          />
+        </div>
+
+        <div className="flex gap-3 justify-end pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 border rounded-xl"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={submitFromRefs}
+            className="px-4 py-2 rounded-xl bg-[#4f772d] text-white font-semibold"
+          >
+            {editing ? "Save" : "Add"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
 
 /* ---------------------------------- Screen ---------------------------------- */
 export default function InvestmentsScreen({ accountId }) {
@@ -215,8 +511,8 @@ export default function InvestmentsScreen({ accountId }) {
     tagsCsv: "",
     accountId: "",
   });
-  const FAVORITES_KEY = "nummoria:favInvestments:v1";
 
+  const FAVORITES_KEY = "nummoria:favInvestments:v1";
   const [favoriteSymbols, setFavoriteSymbols] = useState(() => {
     try {
       const raw = localStorage.getItem(FAVORITES_KEY);
@@ -326,11 +622,10 @@ export default function InvestmentsScreen({ accountId }) {
       setTransactions(txRes.data || []);
       setAccounts((accRes.data || []).filter((a) => !a.isDeleted));
     } catch (e) {
-      setErr(e?.response?.data?.error || e.message || "Failed to load data");
-      push({
-        type: "error",
-        msg: e?.response?.data?.error || e.message || "Failed to load data",
-      });
+      const msg =
+        e?.response?.data?.error || e.message || "Failed to load data";
+      setErr(msg);
+      push({ type: "error", msg });
     } finally {
       setLoading(false);
     }
@@ -486,6 +781,7 @@ export default function InvestmentsScreen({ accountId }) {
         return false;
       if (fCategoryId !== "ALL" && String(t.categoryId) !== String(fCategoryId))
         return false;
+
       const cur = t.currency || "USD";
       if (fCurrency !== "ALL" && cur !== fCurrency) return false;
 
@@ -534,7 +830,6 @@ export default function InvestmentsScreen({ accountId }) {
   /* --------------------------- Insights (KPI + Charts) --------------------------- */
   const { statsCurrency, kpis, monthCats, pieData, noteMixedCurrency } =
     useMemo(() => {
-      // Working currency: user-picked or first seen
       const chosen =
         fCurrency !== "ALL" ? fCurrency : rows[0]?.currency || "USD";
       const filteredByCur = rows.filter((r) =>
@@ -559,7 +854,6 @@ export default function InvestmentsScreen({ accountId }) {
       const thisMonth = within(filteredByCur, thisStart, thisEnd);
       const lastMonth = within(filteredByCur, lastStart, lastEnd);
 
-      // Yearly average (to current month)
       const monthsPassed = now.getUTCMonth() + 1;
       let yearMinor = 0;
       for (let m = 0; m < monthsPassed; m++) {
@@ -576,7 +870,6 @@ export default function InvestmentsScreen({ accountId }) {
         yearlyAvg: monthsPassed ? Math.round(yearMinor / monthsPassed) : 0,
       };
 
-      // Bar: ALL categories this month
       const catMap = new Map();
       for (const t of thisMonth) {
         const key = t.categoryId || "—";
@@ -589,7 +882,6 @@ export default function InvestmentsScreen({ accountId }) {
         }))
         .sort((a, b) => b.minor - a.minor);
 
-      // Pie: distribution across filtered range
       const pieMap = new Map();
       for (const t of filteredByCur) {
         const key = t.categoryId || "—";
@@ -626,14 +918,15 @@ export default function InvestmentsScreen({ accountId }) {
       date: new Date().toISOString().slice(0, 10),
       nextDate: "",
       categoryId: categories[0]?._id || "",
-      assetSymbol: "", // <-- empty by default
-      units: "", // <-- empty by default
+      assetSymbol: "",
+      units: "",
       description: "",
       tagsCsv: "",
       accountId: defaultAccId,
     });
     setModalOpen(true);
   }
+
   function openCreateSeed(seed) {
     setEditing(null);
     setForm({
@@ -642,8 +935,8 @@ export default function InvestmentsScreen({ accountId }) {
       date: new Date(seed.date).toISOString().slice(0, 10),
       nextDate: "",
       categoryId: seed.categoryId || "",
-      assetSymbol: (seed.assetSymbol || "").toUpperCase(), // <-- keep or empty
-      units: seed.units ?? "", // <-- keep or empty
+      assetSymbol: (seed.assetSymbol || "").toUpperCase(),
+      units: seed.units ?? "",
       description: seed.description || "",
       tagsCsv: (seed.tags || []).join(", "),
       accountId: seed.accountId || accountId || accounts[0]?._id || "",
@@ -661,8 +954,8 @@ export default function InvestmentsScreen({ accountId }) {
         ? new Date(tx.nextDate).toISOString().slice(0, 10)
         : "",
       categoryId: tx.categoryId || "",
-      assetSymbol: (tx.assetSymbol || "").toUpperCase(), // <-- keep or empty
-      units: tx.units ?? "", // <-- keep or empty
+      assetSymbol: (tx.assetSymbol || "").toUpperCase(),
+      units: tx.units ?? "",
       description: tx.description || "",
       tagsCsv: (tx.tags || []).join(", "),
       accountId: tx.accountId || accountId || accounts[0]?._id || "",
@@ -705,10 +998,9 @@ export default function InvestmentsScreen({ accountId }) {
     );
   }
 
-  /* -------- Mini Charts (pure SVG) -------- */
   function BarChart({ data, currency }) {
     const pad = 36;
-    const perBar = 60; // px per category
+    const perBar = 60;
     const width = Math.max(540, pad * 2 + data.length * perBar);
     const height = 240;
     const max = Math.max(1, ...data.map((d) => d.minor));
@@ -817,6 +1109,7 @@ export default function InvestmentsScreen({ accountId }) {
       const yi0 = cy + hole * Math.sin(a0);
       const xi1 = cx + hole * Math.cos(a1);
       const yi1 = cy + hole * Math.sin(a1);
+
       return {
         d,
         color: `hsl(${(i * 36) % 360} 65% 58%)`,
@@ -1100,6 +1393,7 @@ export default function InvestmentsScreen({ accountId }) {
           >
             + New Investment
           </button>
+
           <button
             type="button"
             onClick={loadAll}
@@ -1158,9 +1452,7 @@ export default function InvestmentsScreen({ accountId }) {
       try {
         setBusy(true);
         for (const name of INVESTMENT_CATEGORY_OPTIONS) {
-          if (!existingNames.has(name)) {
-            await createInvestmentCategory(name);
-          }
+          if (!existingNames.has(name)) await createInvestmentCategory(name);
         }
         await loadAll();
         push({ type: "success", msg: "Investment categories seeded." });
@@ -1423,9 +1715,7 @@ export default function InvestmentsScreen({ accountId }) {
                   onClick={() => toggleFavorite(symbol)}
                   className="ml-1 inline-flex items-center justify-center w-8 h-8 rounded-full border hover:bg-gray-50"
                   title={isFavorite ? "Unfavorite" : "Favorite"}
-                  style={{
-                    borderColor: isFavorite ? "#facc15" : "#e5e7eb",
-                  }}
+                  style={{ borderColor: isFavorite ? "#facc15" : "#e5e7eb" }}
                 >
                   <span
                     style={{
@@ -1455,10 +1745,12 @@ export default function InvestmentsScreen({ accountId }) {
                 <span className="ml-2 text-gray-500">{units} units</span>
               ) : null}
             </div>
+
             <div className="text-sm text-gray-600 truncate">
               {item.description || "No description"}
             </div>
             <div className="text-xs text-gray-400">{fmtDateUTC(item.date)}</div>
+
             {item.tags?.length ? (
               <div className="text-sm text-[#90a955] mt-1">
                 #{item.tags.join("  #")}
@@ -1492,324 +1784,41 @@ export default function InvestmentsScreen({ accountId }) {
     );
   }
 
-  /* --------------------------------- Modal --------------------------------- */
-  function InvestmentModal() {
-    const amountRef = useRef(null);
-    const currencyRef = useRef(null);
-    const dateRef = useRef(null);
-    const nextDateRef = useRef(null);
-    const categoryRef = useRef(null);
-    const symbolRef = useRef(null);
-    const unitsRef = useRef(null);
-    const descRef = useRef(null);
-    const tagsRef = useRef(null);
-    const accountRef = useRef(null);
-
-    if (!modalOpen) return null;
-
-    const submitFromRefs = async () => {
-      const amount = amountRef.current?.value ?? "";
-      const currency = (currencyRef.current?.value ?? "USD").toUpperCase();
-      const date = dateRef.current?.value ?? "";
-      const nextDate = nextDateRef.current?.value ?? "";
-      const categoryId = categoryRef.current?.value ?? "";
-      const rawSymbol = (symbolRef.current?.value ?? "").toUpperCase().trim();
-      const rawUnitsStr = (unitsRef.current?.value ?? "").trim();
-      const rawUnits = rawUnitsStr === "" ? NaN : Number(rawUnitsStr);
-      const description = (descRef.current?.value ?? "").trim();
-      const tagsCsv = tagsRef.current?.value ?? "";
-      const pickedAccountId = accountRef.current?.value ?? "";
-
-      const amountMinor = majorToMinor(amount, currency);
-      if (Number.isNaN(amountMinor)) {
-        push({ type: "warning", msg: "Invalid amount." });
-        return;
-      }
-      if (!categoryId) {
-        push({ type: "warning", msg: "Pick a category." });
-        return;
-      }
-      if (!pickedAccountId) {
-        push({ type: "warning", msg: "Pick an account." });
-        return;
-      }
-
-      const category = categoriesById.get(categoryId);
-      const isStockOrCrypto =
-        !!category &&
-        (category.name === "Stock Market" ||
-          category.name === "Crypto Currency Exchange");
-
-      // Validate ONLY for Stock/Crypto
-      if (isStockOrCrypto) {
-        if (!rawSymbol) {
-          push({
-            type: "warning",
-            msg: "Asset symbol is required for this category.",
-          });
-          return;
-        }
-        if (!(Number.isFinite(rawUnits) && rawUnits > 0)) {
-          push({
-            type: "warning",
-            msg: "Units must be a positive number for this category.",
-          });
-          return;
-        }
-      }
-
-      // Base payload (without symbol/units)
-      const payload = {
-        accountId: pickedAccountId,
-        categoryId,
-        type: "investment",
-        amountMinor,
-        currency,
-        date: new Date(date).toISOString(),
-        description: description || null,
-        tags: tagsCsv
-          .split(",")
-          .map((s) => s.trim())
-          .filter((s) => s.length > 0),
-      };
-
-      // Include symbol/units if required or provided
-      if (isStockOrCrypto || rawSymbol) {
-        payload.assetSymbol = rawSymbol;
-      }
-      if (isStockOrCrypto || (Number.isFinite(rawUnits) && rawUnits > 0)) {
-        payload.units = Number(rawUnits);
-      }
-
-      if (nextDate) payload.nextDate = new Date(nextDate).toISOString();
-
-      try {
-        if (!editing) {
-          const { data } = await api.post("/transactions", payload);
-          const createdArr = Array.isArray(data?.created)
-            ? data.created
-            : [data];
-          setTransactions((prev) => [...createdArr, ...prev]);
-          push({ type: "success", msg: "Investment added." });
-        } else {
-          const { data } = await api.put(
-            `/transactions/${editing._id}`,
-            payload
-          );
-          setTransactions((prev) =>
-            prev.map((t) => (String(t._id) === String(data._id) ? data : t))
-          );
-          push({ type: "success", msg: "Investment saved." });
-        }
-        setModalOpen(false);
-        await loadAll();
-      } catch (e) {
-        push({
-          type: "error",
-          msg: e?.response?.data?.error || e.message || "Error",
-        });
-      }
-    };
-
-    const defaultAccId = form.accountId || accountId || accounts[0]?._id || "";
-
-    return (
-      <div
-        className="fixed inset-0 z-50 grid place-items-center bg-black/40"
-        onKeyDown={(e) => e.stopPropagation()}
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <div className="w-full max-w-xl bg-white rounded-2xl p-5 space-y-4">
-          <div className="text-lg font-bold">
-            {editing ? "Edit Investment" : "New Investment"}
-          </div>
-
-          {/* Account */}
-          <div className="space-y-1 w-full">
-            <label className="font-semibold text-sm">Account</label>
-            <select
-              ref={accountRef}
-              defaultValue={defaultAccId}
-              className="w-full border rounded-lg px-3 py-2 bg-white"
-              onChange={(e) => {
-                const acc = accounts.find((a) => a._id === e.target.value);
-                if (acc && currencyRef.current) {
-                  currencyRef.current.value = acc.currency; // auto-assign on pick
-                }
-              }}
-            >
-              <option value="">— Pick an account —</option>
-              {accounts.map((a) => (
-                <option key={a._id} value={a._id}>
-                  {a.name} · {a.type} · {a.currency}
-                </option>
-              ))}
-            </select>
-          </div>
-          {/* Total Cost */}
-          <div className="flex gap-3">
-            <div className="space-y-1 w_full w-full">
-              <label className="font-semibold text_sm">Total Cost</label>
-              <input
-                ref={amountRef}
-                defaultValue={form.amount}
-                placeholder="e.g., 1500.00"
-                inputMode="decimal"
-                className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
-              />
-            </div>
-            {/* Currency */}
-            <div className="space-y-1 w-28">
-              <label className="font-semibold text-sm">Currency</label>
-              <input
-                ref={currencyRef}
-                defaultValue={
-                  accounts.find((a) => a._id === defaultAccId)?.currency ||
-                  form.currency
-                }
-                maxLength={3}
-                readOnly // keep in sync with account; don't let user edit
-                className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-3">
-            <div className="space-y-1 w-full">
-              <label className="font-semibold text-sm">Asset Symbol</label>
-              <input
-                ref={symbolRef}
-                defaultValue={form.assetSymbol}
-                placeholder="e.g., AAPL, BTC-USD, VOO"
-                className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
-                onBlur={(e) => (e.target.value = e.target.value.toUpperCase())}
-              />
-            </div>
-            <div className="space-y-1 w-36">
-              <label className="font-semibold text-sm">Units</label>
-              <input
-                ref={unitsRef}
-                defaultValue={form.units}
-                placeholder="e.g., 2.5"
-                inputMode="decimal"
-                className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1 w-full">
-            <label className="font-semibold text-sm">Date</label>
-            <input
-              ref={dateRef}
-              defaultValue={form.date}
-              type="date"
-              lang={DATE_LANG}
-              className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
-            />
-          </div>
-
-          <div className="space-y-1 w-full">
-            <label className="font-semibold text-sm">
-              Next date (optional)
-            </label>
-            <input
-              ref={nextDateRef}
-              defaultValue={form.nextDate || ""}
-              type="date"
-              lang={DATE_LANG}
-              className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
-              placeholder="YYYY-MM-DD"
-            />
-            <div className="text-xs text-gray-500">
-              If set, this shows up under{" "}
-              <span className="font-semibold">Upcoming</span> as a planned item.
-            </div>
-          </div>
-
-          <div className="space-y-1 w-full">
-            <label className="font-semibold text-sm">Category</label>
-            <select
-              ref={categoryRef}
-              defaultValue={form.categoryId ?? ""}
-              className="w-full border rounded-lg px-3 py-2 bg-white"
-            >
-              {categories.map((c) => (
-                <option key={c._id} value={c._id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-1 w-full">
-            <label className="font-semibold text-sm">Description</label>
-            <input
-              ref={descRef}
-              defaultValue={form.description}
-              placeholder="Optional memo"
-              className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
-            />
-          </div>
-
-          <div className="space-y-1 w-full">
-            <label className="font-semibold text-sm">
-              Tags (comma-separated)
-            </label>
-            <input
-              ref={tagsRef}
-              defaultValue={form.tagsCsv}
-              placeholder="long-term, dividend"
-              className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
-            />
-          </div>
-
-          <div className="flex gap-3 justify-end pt-2">
-            <button
-              type="button"
-              onClick={() => setModalOpen(false)}
-              className="px-4 py-2 border rounded-xl"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={submitFromRefs}
-              className="px-4 py-2 rounded-xl bg-[#4f772d] text-white font-semibold"
-            >
-              {editing ? "Save" : "Add"}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   /* --------------------------------- Layout -------------------------------- */
   if (loading) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center bg-[#f8faf8] pt-90">
-        {/* Spinner */}
         <div className="relative w-14 h-14 mb-6">
           <div className="absolute inset-0 rounded-full border-4 border-[#cfe3c5]" />
           <div className="absolute inset-0 rounded-full border-4 border-t-[#4f772d] border-transparent animate-spin" />
         </div>
 
-        {/* Logo & text */}
         <div className="flex items-center gap-2 mb-2">
-          {/* fixed: 'justify-items' -> remove */}
           <img src={logoUrl} alt="Nummoria logo" className="w-8 h-8 rounded" />
           <span className="text-2xl font-semibold text-[#4f772d] tracking-tight">
             Nummoria
           </span>
         </div>
 
-        {/* Subtitle */}
         <p className="text-gray-600 text-sm font-medium animate-pulse">
           Loading your investments...
         </p>
       </div>
     );
   }
+
+  // ✅ helper for modal callback
+  const onModalSaved = async (payload) => {
+    // payload can be an array (created) or single updated doc
+    if (Array.isArray(payload)) {
+      setTransactions((prev) => [...payload, ...prev]);
+    } else if (payload && payload._id) {
+      setTransactions((prev) =>
+        prev.map((t) => (String(t._id) === String(payload._id) ? payload : t))
+      );
+    }
+    await loadAll();
+  };
 
   return (
     <div className="min-h-[100dvh] bg-[#f8faf8]">
@@ -1823,9 +1832,7 @@ export default function InvestmentsScreen({ accountId }) {
         </div>
       ) : null}
 
-      {/* === TWO-PANE LAYOUT 50/50 WITH VERTICAL DIVIDER === */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_1px_1fr] gap-4 mx-4">
-        {/* Left: list */}
         <div className="rounded-xl overflow-hidden border">
           {rows.length === 0 ? (
             <div className="p-6 text-center text-gray-600">
@@ -1840,10 +1847,8 @@ export default function InvestmentsScreen({ accountId }) {
           )}
         </div>
 
-        {/* Vertical divider */}
         <div className="hidden lg:block border-l border-gray-300" />
 
-        {/* Right: Insights */}
         <aside className="lg:sticky lg:top-20 min-w-0 h-max space-y-4">
           <div className="p-4 bg-white border rounded-xl">
             <div className="flex items-center justify-between">
@@ -1852,6 +1857,7 @@ export default function InvestmentsScreen({ accountId }) {
                 {(fCurrency !== "ALL" ? fCurrency : rows[0]?.currency) || "—"}
               </span>
             </div>
+
             {noteMixedCurrency && (
               <div className="mt-2 text-xs text-gray-500">
                 KPIs/Charts use{" "}
@@ -1860,7 +1866,6 @@ export default function InvestmentsScreen({ accountId }) {
               </div>
             )}
 
-            {/* KPIs */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
               <div className="p-3 rounded-lg border bg-[#fafdf9]">
                 <div className="text-xs text-gray-600">Last Month</div>
@@ -1883,7 +1888,6 @@ export default function InvestmentsScreen({ accountId }) {
             </div>
           </div>
 
-          {/* Bar: this month by category (ALL) */}
           <div className="p-4 bg-white border rounded-xl">
             <div className="flex items-center justify-between mb-2">
               <div className="font-semibold">This Month by Category</div>
@@ -1900,7 +1904,6 @@ export default function InvestmentsScreen({ accountId }) {
             )}
           </div>
 
-          {/* Pie: distribution (filtered range) */}
           <div className="p-4 bg-white border rounded-xl">
             <div className="font-semibold mb-2">Category Distribution</div>
             {pieData.length ? (
@@ -1915,7 +1918,22 @@ export default function InvestmentsScreen({ accountId }) {
       {/* Global UI helpers */}
       <Toasts toasts={toasts} onClose={remove} />
       <ConfirmDialog />
-      <InvestmentModal />
+
+      {/* ✅ FIXED: Modal is outside component (stable), but controlled via props */}
+      <InvestmentModal
+        open={modalOpen}
+        editing={editing}
+        form={form}
+        accountId={accountId}
+        accounts={accounts}
+        categories={categories}
+        categoriesById={categoriesById}
+        onClose={() => setModalOpen(false)}
+        onSaved={onModalSaved}
+        push={push}
+        majorToMinor={majorToMinor}
+        minorToMajor={minorToMajor}
+      />
     </div>
   );
 }

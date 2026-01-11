@@ -1,6 +1,10 @@
+// frontend/src/pages/incomes.jsx
+/* eslint-disable no-unused-labels */
+/* eslint-disable no-undef */
 /* eslint-disable no-empty */
 /* eslint-disable react-hooks/rules-of-hooks */
 /* eslint-disable no-unused-vars */
+
 import React, {
   useEffect,
   useMemo,
@@ -10,7 +14,8 @@ import React, {
 } from "react";
 import api from "../lib/api";
 import logoUrl from "../assets/nummoria_logo.png";
-/* --------------------------- Income-only categories --------------------------- */
+
+/* --------------------------- income-only categories --------------------------- */
 const INCOME_CATEGORY_OPTIONS = [
   "Salary",
   "Rentals",
@@ -21,11 +26,6 @@ const INCOME_CATEGORY_OPTIONS = [
 
 const main = "#4f772d";
 const secondary = "#90a955";
-
-// Keep kind lowercase to match API/DB
-async function createIncomeCategory(name) {
-  return api.post("/categories", { name, kind: "income" });
-}
 
 /* ------------------------------ Locale control ------------------------------ */
 const DATE_LANG = "en-US";
@@ -61,8 +61,122 @@ function fmtDateUTC(dateLike) {
   });
 }
 
+/* -------------------------------------------------------------------------- */
+/* ✅ Auto modal: kept at MODULE scope to avoid remounting on re-renders        */
+/* -------------------------------------------------------------------------- */
+const AutoQuickAddModal = React.memo(function AutoQuickAddModal({
+  open,
+  accounts,
+  accountId,
+  text,
+  busy,
+  notice,
+  onChangeAccountId,
+  onChangeText,
+  onCancel,
+  onCreate,
+}) {
+  const inputRef = React.useRef(null);
+
+  // focus input when opening
+  React.useEffect(() => {
+    if (open) {
+      // small tick to ensure DOM mounted
+      const t = setTimeout(() => inputRef.current?.focus?.(), 0);
+      return () => clearTimeout(t);
+    }
+  }, [open]);
+
+  React.useEffect(() => {
+    if (!open) return;
+
+    const onKey = (e) => {
+      if (e.key === "Escape") onCancel?.();
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") onCreate?.();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onCancel, onCreate]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-black/40"
+      onMouseDown={(e) => {
+        // click backdrop closes
+        if (e.target === e.currentTarget) onCancel?.();
+      }}
+    >
+      <div className="w-full max-w-xl bg-white rounded-2xl p-5 space-y-4 shadow-xl">
+        <div className="text-lg font-bold">Auto add income</div>
+
+        <div className="space-y-1 w-full">
+          <label className="font-semibold text-sm">Account</label>
+          <select
+            value={accountId}
+            onChange={(e) => onChangeAccountId(e.target.value)}
+            className="w-full border rounded-lg px-3 py-2 bg-white"
+            disabled={busy}
+          >
+            <option value="">— Pick an account —</option>
+            {accounts.map((a) => (
+              <option key={a._id} value={a._id}>
+                {a.name} · {a.type} · {a.currency}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-1 w-full">
+          <label className="font-semibold text-sm">Text</label>
+          <input
+            ref={inputRef}
+            value={text}
+            onChange={(e) => onChangeText(e.target.value)}
+            placeholder="paid 280 TRY coffee"
+            className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
+            disabled={busy}
+          />
+          <div className="text-xs text-gray-500">
+            Examples: <span className="font-medium">paid 280 TRY coffee</span>,{" "}
+            <span className="font-medium">uber 180</span>,{" "}
+            <span className="font-medium">$12 lunch</span>
+          </div>
+        </div>
+
+        {notice ? (
+          <div className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2">
+            {notice}
+          </div>
+        ) : null}
+
+        <div className="flex gap-3 justify-end pt-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 border rounded-xl"
+            disabled={busy}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onCreate}
+            className="px-4 py-2 rounded-xl bg-[#4f772d] text-white font-semibold disabled:opacity-60"
+            disabled={busy}
+            title="Ctrl/⌘ + Enter"
+          >
+            {busy ? "Parsing..." : "Create"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 /* ---------------------------------- Screen ---------------------------------- */
-export default function IncomeScreen({ accountId }) {
+export default function incomesScreen({ accountId }) {
   // data
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -88,9 +202,16 @@ export default function IncomeScreen({ accountId }) {
 
   // modal state (create / edit)
   const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState(null);
+  const [editing, setEditing] = useState(null); // if null => create
 
-  // form seeds (used as defaultValue only)
+  // ✅ Auto modal (fully controlled)
+  const [autoModalOpen, setAutoModalOpen] = useState(false);
+  const [autoBusy, setAutoBusy] = useState(false);
+  const [autoText, setAutoText] = useState("");
+  const [autoAccountId, setAutoAccountId] = useState("");
+  const [autoNotice, setAutoNotice] = useState("");
+
+  // form seeds
   const [form, setForm] = useState({
     amount: "",
     currency: "USD",
@@ -186,6 +307,7 @@ export default function IncomeScreen({ accountId }) {
 
     const filtered = transactions.filter((t) => {
       if ((t.type || "") !== "income") return false;
+
       if (fAccountId !== "ALL" && String(t.accountId) !== String(fAccountId))
         return false;
       if (fCategoryId !== "ALL" && String(t.categoryId) !== String(fCategoryId))
@@ -211,6 +333,7 @@ export default function IncomeScreen({ accountId }) {
         ).join(" ")}`.toLowerCase();
         if (!hay.includes(needle)) return false;
       }
+
       return true;
     });
 
@@ -287,17 +410,13 @@ export default function IncomeScreen({ accountId }) {
         (t.description || "").trim(),
       ].join("|");
 
-    // Actual future rows from DB
     const map = new Map();
     for (const t of transactions) {
       if (t.type !== "income") continue;
       const dt = new Date(t.date);
-      if (dt > today) {
-        map.set(keyOf(t), { ...t, __kind: "actual" });
-      }
+      if (dt > today) map.set(keyOf(t), { ...t, __kind: "actual" });
     }
 
-    // Virtual rows from nextDate (not yet added)
     for (const t of transactions) {
       if (t.type !== "income" || !t.nextDate) continue;
       const nd = new Date(t.nextDate);
@@ -314,12 +433,12 @@ export default function IncomeScreen({ accountId }) {
       if (!map.has(k)) map.set(k, v);
     }
 
-    // Apply filters
     const arr = Array.from(map.values()).filter((t) => {
       if (fAccountId !== "ALL" && String(t.accountId) !== String(fAccountId))
         return false;
       if (fCategoryId !== "ALL" && String(t.categoryId) !== String(fCategoryId))
         return false;
+
       const cur = t.currency || "USD";
       if (fCurrency !== "ALL" && cur !== fCurrency) return false;
 
@@ -368,7 +487,6 @@ export default function IncomeScreen({ accountId }) {
   /* --------- Insights (KPIs + charts; reflects current filters) ----- */
   const { statsCurrency, kpis, monthCats, pieData, noteMixedCurrency } =
     useMemo(() => {
-      // pick a working currency for stats
       const chosen =
         fCurrency !== "ALL" ? fCurrency : rows[0]?.currency || "USD";
 
@@ -394,7 +512,6 @@ export default function IncomeScreen({ accountId }) {
       const thisMonth = within(filteredByCur, thisStart, thisEnd);
       const lastMonth = within(filteredByCur, lastStart, lastEnd);
 
-      // Yearly average (to current month)
       const monthsPassed = now.getUTCMonth() + 1;
       let yearMinor = 0;
       for (let m = 0; m < monthsPassed; m++) {
@@ -411,7 +528,6 @@ export default function IncomeScreen({ accountId }) {
         yearlyAvg: monthsPassed ? Math.round(yearMinor / monthsPassed) : 0,
       };
 
-      // This month by category (ALL categories, not top-N)
       const catMap = new Map();
       for (const t of thisMonth) {
         const key = t.categoryId || "—";
@@ -422,9 +538,8 @@ export default function IncomeScreen({ accountId }) {
           name: categoriesById.get(cid)?.name || "—",
           minor,
         }))
-        .sort((a, b) => b.minor - a.minor); // no slice()
+        .sort((a, b) => b.minor - a.minor);
 
-      // Pie: distribution by category for filtered range
       const pieMap = new Map();
       for (const t of filteredByCur) {
         const key = t.categoryId || "—";
@@ -468,6 +583,34 @@ export default function IncomeScreen({ accountId }) {
     setModalOpen(true);
   }
 
+  // ✅ open auto modal (seed account once, do not reset while typing)
+  function openAuto() {
+    const defaultAccId = accountId || accounts[0]?._id || "";
+    if (!defaultAccId) {
+      window.alert("Create an account first.");
+      return;
+    }
+    setAutoAccountId(defaultAccId);
+    setAutoText("");
+    setAutoNotice("");
+    setAutoModalOpen(true);
+  }
+
+  // keep notice sane: if user changes inputs, clear notice
+  useEffect(() => {
+    if (!autoModalOpen) return;
+    setAutoNotice("");
+    // intentionally only on open
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoModalOpen]);
+
+  useEffect(() => {
+    if (!autoModalOpen) return;
+    // clear notice when user edits
+    setAutoNotice("");
+  }, [autoText, autoAccountId, autoModalOpen]);
+
+  // Seed a "create" from an existing row (useful for virtual upcoming -> Edit)
   function openCreateSeed(seed) {
     setEditing(null);
     setForm({
@@ -513,6 +656,65 @@ export default function IncomeScreen({ accountId }) {
     }
   }
 
+  // ✅ call backend auto endpoint (NO alerts for draft)
+  async function submitAutoText({ text, pickedAccountId }) {
+    const clean = String(text || "").trim();
+    if (!pickedAccountId) {
+      setAutoNotice("Pick an account.");
+      return;
+    }
+    if (!clean) {
+      setAutoNotice("Type something like: 'paid 280 TRY coffee'");
+      return;
+    }
+
+    setAutoBusy(true);
+    try {
+      const { data } = await api.post("/auto/transactions/text", {
+        accountId: pickedAccountId,
+        text: clean,
+        type: "income",
+      });
+
+      if (data?.mode === "posted") {
+        setAutoModalOpen(false);
+        setAutoText("");
+        setAutoNotice("");
+        await loadAll();
+        return;
+      }
+
+      if (data?.mode === "duplicate") {
+        setAutoNotice("Possible duplicate detected. Not auto-created.");
+        return;
+      }
+
+      if (data?.mode === "draft") {
+        // keep modal open + show notice (no blocking popup)
+        setAutoNotice("Draft created. Review it in Drafts.");
+        setAutoText(""); // optional: clear text for next entry
+        await loadAll();
+        return;
+      }
+
+      // fallback
+      setAutoModalOpen(false);
+      setAutoText("");
+      setAutoNotice("");
+      await loadAll();
+    } catch (e) {
+      setAutoNotice(
+        e?.response?.data?.error || e.message || "Auto parse failed"
+      );
+    } finally {
+      setAutoBusy(false);
+    }
+  }
+
+  async function handleAutoCreate() {
+    await submitAutoText({ text: autoText, pickedAccountId: autoAccountId });
+  }
+
   /* --------------------------------- UI Bits -------------------------------- */
   function Chip({ label, selected, onClick }) {
     return (
@@ -531,10 +733,9 @@ export default function IncomeScreen({ accountId }) {
   }
 
   /* -------- Mini Charts (pure SVG) -------- */
-  // More readable bar: auto width, horizontal scroll if many categories
   function BarChart({ data, currency }) {
     const pad = 36;
-    const perBar = 60; // px per category
+    const perBar = 60;
     const width = Math.max(540, pad * 2 + data.length * perBar);
     const height = 240;
     const max = Math.max(1, ...data.map((d) => d.minor));
@@ -548,7 +749,6 @@ export default function IncomeScreen({ accountId }) {
           height={height}
           className="rounded-xl border bg-white"
         >
-          {/* gridlines */}
           {ticks.map((val, i) => {
             const y = height - pad - (val / max) * (height - pad * 2);
             return (
@@ -566,7 +766,6 @@ export default function IncomeScreen({ accountId }) {
               </g>
             );
           })}
-          {/* x-axis */}
           <line
             x1={pad}
             y1={height - pad}
@@ -574,7 +773,6 @@ export default function IncomeScreen({ accountId }) {
             y2={height - pad}
             stroke="#ddd"
           />
-          {/* bars */}
           {data.map((d, i) => {
             const h = (d.minor / max) * (height - pad * 2);
             const x = pad + i * bw + bw * 0.18;
@@ -622,7 +820,6 @@ export default function IncomeScreen({ accountId }) {
   }
 
   function PieChart({ data, currency }) {
-    // larger donut; clearer labels; show % for >= 5%
     const size = 320,
       r = 120,
       hole = 62,
@@ -643,9 +840,7 @@ export default function IncomeScreen({ accountId }) {
       const y0 = cy + r * Math.sin(a0);
       const x1 = cx + r * Math.cos(a1);
       const y1 = cy + r * Math.sin(a1);
-      const pct = d.pct ?? d.minor / total;
 
-      // ring segment path (donut)
       const xi0 = cx + hole * Math.cos(a0);
       const yi0 = cy + hole * Math.sin(a0);
       const xi1 = cx + hole * Math.cos(a1);
@@ -663,7 +858,7 @@ export default function IncomeScreen({ accountId }) {
         d,
         path,
         color: `hsl(${(i * 36) % 360} 65% 58%)`,
-        pct,
+        pct: d.pct ?? d.minor / total,
       };
     });
 
@@ -678,20 +873,8 @@ export default function IncomeScreen({ accountId }) {
                   currency
                 )} (${Math.round(s.pct * 100)}%)`}</title>
               </path>
-              {/* percentage on ring if big enough */}
-              {s.pct >= 0.05 && (
-                <text
-                  textAnchor="middle"
-                  fontSize="12"
-                  fill="#111"
-                  fontWeight="700"
-                >
-                  <textPath href={`#seg${i}`} startOffset="50%"></textPath>
-                </text>
-              )}
             </g>
           ))}
-          {/* center labels */}
           <circle cx={cx} cy={cy} r={hole - 6} fill="#fff" />
           <text x={cx} y={cy - 4} textAnchor="middle" fontSize="13" fill="#666">
             Total
@@ -735,15 +918,15 @@ export default function IncomeScreen({ accountId }) {
   function Header() {
     return (
       <div className="space-y-3 p-4 border-b bg-white">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Income</h1>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-2xl font-bold">Incomes</h1>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setShowUpcoming((v) => !v)}
               className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border"
-              title="Show upcoming (planned / future) income"
+              title="Show upcoming (planned / future) incomes"
             >
               <span>Upcoming</span>
               <span className="text-xs rounded-full px-2 py-0.5 bg-[#e8f5e9] text-[#2f5d1d] border">
@@ -948,6 +1131,16 @@ export default function IncomeScreen({ accountId }) {
           >
             + New income
           </button>
+
+          <button
+            type="button"
+            onClick={openAuto}
+            className="inline-flex items-center px-4 py-2 rounded-xl border font-bold"
+            title="Quick add using text parsing"
+          >
+            Auto
+          </button>
+
           <button
             type="button"
             onClick={loadAll}
@@ -962,6 +1155,10 @@ export default function IncomeScreen({ accountId }) {
   }
 
   /* ----------------------------- Category Manager ---------------------------- */
+  async function createincomeCategory(name) {
+    return api.post("/categories", { name, kind: "income" });
+  }
+
   function CategoryManager() {
     const [selected, setSelected] = useState(INCOME_CATEGORY_OPTIONS[0]);
     const [busy, setBusy] = useState(false);
@@ -974,7 +1171,7 @@ export default function IncomeScreen({ accountId }) {
           window.alert(`Category "${selected}" already exists.`);
           return;
         }
-        await createIncomeCategory(selected);
+        await createincomeCategory(selected);
         await loadAll();
       } catch (e) {
         window.alert(
@@ -991,7 +1188,7 @@ export default function IncomeScreen({ accountId }) {
         setBusy(true);
         for (const name of INCOME_CATEGORY_OPTIONS) {
           if (!existingNames.has(name)) {
-            await createIncomeCategory(name);
+            await createincomeCategory(name);
           }
         }
         await loadAll();
@@ -1063,7 +1260,6 @@ export default function IncomeScreen({ accountId }) {
           tags: v.tags || [],
         });
 
-        // Clear parent's nextDate so it no longer appears as virtual
         if (v.__kind === "virtual" && v.__parentId) {
           try {
             await api.put(`/transactions/${v.__parentId}`, { nextDate: null });
@@ -1097,7 +1293,7 @@ export default function IncomeScreen({ accountId }) {
       <div className="m-4 p-4 border rounded-xl bg-white">
         <div className="flex items-center justify-between mb-3">
           <div className="font-semibold">
-            Upcoming income ({upcoming.length})
+            Upcoming incomes ({upcoming.length})
           </div>
           <button
             type="button"
@@ -1154,7 +1350,7 @@ export default function IncomeScreen({ accountId }) {
 
                   <div className="text-right">
                     <div className="font-bold">
-                      {minorToMajor(u.amountMinor, u.currency)} {u.currency}
+                      -{minorToMajor(u.amountMinor, u.currency)} {u.currency}
                     </div>
                     <div className="mt-2 flex flex-wrap justify-end gap-2">
                       {u.__kind === "virtual" ? (
@@ -1247,13 +1443,13 @@ export default function IncomeScreen({ accountId }) {
 
           <div className="text-right">
             <div className="font-bold">
-              {minorToMajor(item.amountMinor, item.currency)} {item.currency}
+              -{minorToMajor(item.amountMinor, item.currency)} {item.currency}
             </div>
-            <div className="mt-2 flex justify-end">
+            <div className="mt-2 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => openEdit(item)}
-                className="px-3 py-1 border rounded-lg mr-2"
+                className="px-3 py-1 border rounded-lg"
               >
                 Edit
               </button>
@@ -1272,8 +1468,7 @@ export default function IncomeScreen({ accountId }) {
   }
 
   /* --------------------------------- Modal --------------------------------- */
-  function IncomeModal() {
-    // Refs MUST be top-level in the component
+  function incomeModal() {
     const amountRef = useRef(null);
     const currencyRef = useRef(null);
     const dateRef = useRef(null);
@@ -1342,17 +1537,12 @@ export default function IncomeScreen({ accountId }) {
     const defaultAccId = form.accountId || accountId || accounts[0]?._id || "";
 
     return (
-      <div
-        className="fixed inset-0 z-50 grid place-items-center bg-black/40"
-        onKeyDown={(e) => e.stopPropagation()}
-        onMouseDown={(e) => e.stopPropagation()}
-      >
+      <div className="fixed inset-0 z-50 grid place-items-center bg-black/40">
         <div className="w-full max-w-xl bg-white rounded-2xl p-5 space-y-4">
           <div className="text-lg font-bold">
             {editing ? "Edit income" : "New income"}
           </div>
 
-          {/* Account */}
           <div className="space-y-1 w-full">
             <label className="font-semibold text-sm">Account</label>
             <select
@@ -1362,7 +1552,7 @@ export default function IncomeScreen({ accountId }) {
               onChange={(e) => {
                 const acc = accounts.find((a) => a._id === e.target.value);
                 if (acc && currencyRef.current) {
-                  currencyRef.current.value = acc.currency; // auto-assign on pick
+                  currencyRef.current.value = acc.currency;
                 }
               }}
             >
@@ -1374,6 +1564,7 @@ export default function IncomeScreen({ accountId }) {
               ))}
             </select>
           </div>
+
           <div className="flex gap-3">
             <div className="space-y-1 w-full">
               <label className="font-semibold text-sm">Amount</label>
@@ -1385,7 +1576,6 @@ export default function IncomeScreen({ accountId }) {
                 className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
               />
             </div>
-            {/* Currency */}
             <div className="space-y-1 w-28">
               <label className="font-semibold text-sm">Currency</label>
               <input
@@ -1395,7 +1585,7 @@ export default function IncomeScreen({ accountId }) {
                   form.currency
                 }
                 maxLength={3}
-                readOnly // keep in sync with account; don't let user edit
+                readOnly
                 className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
               />
             </div>
@@ -1462,7 +1652,7 @@ export default function IncomeScreen({ accountId }) {
             <input
               ref={tagsRef}
               defaultValue={form.tagsCsv}
-              placeholder="bonus, freelance"
+              placeholder="groceries, reimbursement"
               className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
             />
           </div>
@@ -1492,24 +1682,20 @@ export default function IncomeScreen({ accountId }) {
   if (loading) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center bg-[#f8faf8] pt-90">
-        {/* Spinner */}
         <div className="relative w-14 h-14 mb-6">
           <div className="absolute inset-0 rounded-full border-4 border-[#cfe3c5]" />
           <div className="absolute inset-0 rounded-full border-4 border-t-[#4f772d] border-transparent animate-spin" />
         </div>
 
-        {/* Logo & text */}
         <div className="flex items-center gap-2 mb-2">
-          {/* fixed: 'justify-items' -> remove */}
           <img src={logoUrl} alt="Nummoria logo" className="w-8 h-8 rounded" />
           <span className="text-2xl font-semibold text-[#4f772d] tracking-tight">
             Nummoria
           </span>
         </div>
 
-        {/* Subtitle */}
         <p className="text-gray-600 text-sm font-medium animate-pulse">
-          Loading your income data...
+          Loading your incomes...
         </p>
       </div>
     );
@@ -1527,13 +1713,11 @@ export default function IncomeScreen({ accountId }) {
         </div>
       ) : null}
 
-      {/* === TWO-PANE LAYOUT WITH VERTICAL DIVIDER (the marked border) === */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_1px_1fr] gap-4 mx-4">
-        {/* Left: list (A) */}
         <div className="rounded-xl overflow-hidden border">
           {rows.length === 0 ? (
             <div className="p-6 text-center text-gray-600">
-              No income found. Add your first one or adjust filters.
+              No incomes found. Add your first one or adjust filters.
             </div>
           ) : (
             <div>
@@ -1544,16 +1728,14 @@ export default function IncomeScreen({ accountId }) {
           )}
         </div>
 
-        {/* Center: vertical border (exact split line you asked) */}
         <div className="hidden lg:block border-l border-gray-300" />
 
-        {/* Right: Insights (B) */}
-        <aside className="lg:sticky lg:top-20 h-max space-y-4">
+        <aside className="lg:sticky lg:top-20 min-w-0 h-max space-y-4">
           <div className="p-4 bg-white border rounded-xl">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold">Insights</h2>
               <span className="text-xs px-2 py-0.5 rounded-full border text-gray-600">
-                {statsCurrency}
+                {(fCurrency !== "ALL" ? fCurrency : rows[0]?.currency) || "—"}
               </span>
             </div>
             {noteMixedCurrency && (
@@ -1564,7 +1746,6 @@ export default function IncomeScreen({ accountId }) {
               </div>
             )}
 
-            {/* KPIs */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
               <div className="p-3 rounded-lg border bg-[#fafdf9]">
                 <div className="text-xs text-gray-600">Last Month</div>
@@ -1587,7 +1768,6 @@ export default function IncomeScreen({ accountId }) {
             </div>
           </div>
 
-          {/* Bar: this month by category (ALL categories) */}
           <div className="p-4 bg-white border rounded-xl">
             <div className="flex items-center justify-between mb-2">
               <div className="font-semibold">This Month by Category</div>
@@ -1604,7 +1784,6 @@ export default function IncomeScreen({ accountId }) {
             )}
           </div>
 
-          {/* Pie: distribution (filtered range) — more readable donut */}
           <div className="p-4 bg-white border rounded-xl">
             <div className="font-semibold mb-2">Category Distribution</div>
             {pieData.length ? (
@@ -1616,29 +1795,24 @@ export default function IncomeScreen({ accountId }) {
         </aside>
       </div>
 
-      <IncomeModal />
+      <incomeModal />
+
+      {/* ✅ Stable Auto modal */}
+      <AutoQuickAddModal
+        open={autoModalOpen}
+        accounts={accounts}
+        accountId={autoAccountId}
+        text={autoText}
+        busy={autoBusy}
+        notice={autoNotice}
+        onChangeAccountId={setAutoAccountId}
+        onChangeText={setAutoText}
+        onCancel={() => {
+          if (autoBusy) return;
+          setAutoModalOpen(false);
+        }}
+        onCreate={handleAutoCreate}
+      />
     </div>
   );
 }
-/**const EXPENSE_CATEGORY_OPTIONS = [
-  "Rent",
-  "Housing Payments & Maintenance",
-  "Debt Payments",
-  "Transportation",
-  "Health & Medical",
-  "Utilities",
-  "Groceries",
-  "Dining Out",
-  "Education",
-  "Miscellaneous",
-  "Entertainment",
-  "Travel",
-  "Gifts & Donations",
-  "Personal Care",
-  "Shopping",
-  "Subscriptions",
-  "Taxes",
-  "Insurance",
-  "Business Expenses",
-  "Other Expense",
-]; */
