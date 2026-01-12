@@ -1,13 +1,7 @@
 /* eslint-disable no-unused-vars */
 /* eslint-disable no-empty */
 // mobile/src/screens/InvestmentScreen.js
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -19,7 +13,9 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  Image, // ✅ NEW: for clickable header logo → Dashboard
+  Image,
+  KeyboardAvoidingView, // ✅ NEW: for Auto modal
+  Platform, // ✅ NEW: for Auto modal
 } from "react-native";
 import api from "../lib/api";
 import logo from "../../assets/nummoria_logo.png";
@@ -39,7 +35,7 @@ const BADGE_BORDER = "#1f2937";
 
 const DATE_LANG = "en-US";
 
-// ✅ FIX: Favorites persistence key + star color
+// ✅ Favorites persistence
 const FAVORITES_KEY = "@nummoria:favoritesSymbols";
 const FAV_YELLOW = "#fbbf24";
 
@@ -195,11 +191,9 @@ function Chip({ label, selected, onPress }) {
       onPress={onPress}
       style={[
         styles.chip,
-        selected && {
-          backgroundColor: main,
-          borderColor: secondary,
-        },
+        selected && { backgroundColor: main, borderColor: secondary },
       ]}
+      activeOpacity={0.85}
     >
       <Text style={[styles.chipText, selected && { color: "white" }]}>
         {label}
@@ -339,7 +333,6 @@ function InvestmentModal({
     };
   }, [editing, accounts, categories, defaultAccountId]);
 
-  // -------- controlled state for all fields --------
   const [accountId, setAccountId] = useState(formDefaults.accountId);
   const [currency, setCurrency] = useState(formDefaults.currency);
   const [amount, setAmount] = useState(formDefaults.amount);
@@ -351,7 +344,6 @@ function InvestmentModal({
   const [description, setDescription] = useState(formDefaults.description);
   const [tagsCsv, setTagsCsv] = useState(formDefaults.tagsCsv);
 
-  // whenever editing/defaults change (open new modal), reset the state
   useEffect(() => {
     setAccountId(formDefaults.accountId);
     setCurrency(formDefaults.currency);
@@ -422,15 +414,10 @@ function InvestmentModal({
         .filter((s) => s.length > 0),
     };
 
-    if (isStockOrCrypto || rawSymbol) {
-      payload.assetSymbol = rawSymbol;
-    }
-    if (isStockOrCrypto || (Number.isFinite(rawUnits) && rawUnits > 0)) {
+    if (isStockOrCrypto || rawSymbol) payload.assetSymbol = rawSymbol;
+    if (isStockOrCrypto || (Number.isFinite(rawUnits) && rawUnits > 0))
       payload.units = Number(rawUnits);
-    }
-    if (nextDate) {
-      payload.nextDate = new Date(nextDate).toISOString();
-    }
+    if (nextDate) payload.nextDate = new Date(nextDate).toISOString();
 
     try {
       let saved;
@@ -485,9 +472,7 @@ function InvestmentModal({
                     selected={accountId === a._id}
                     onPress={() => {
                       setAccountId(a._id);
-                      if (!editing) {
-                        setCurrency(a.currency || "USD");
-                      }
+                      if (!editing) setCurrency(a.currency || "USD");
                     }}
                   />
                 ))}
@@ -665,6 +650,12 @@ export default function InvestmentScreen({ navigation }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
 
+  // ✅ AUTO ADD state
+  const [autoOpen, setAutoOpen] = useState(false);
+  const [autoText, setAutoText] = useState("");
+  const [autoAccountId, setAutoAccountId] = useState("");
+  const [autoLoading, setAutoLoading] = useState(false);
+
   const defaultAccountId = accounts[0]?._id || "";
 
   const currencies = useMemo(() => {
@@ -757,7 +748,6 @@ export default function InvestmentScreen({ navigation }) {
           push({ type: "success", msg: `Added ${s} to favorites.` });
         }
 
-        // persist
         AsyncStorage.setItem(
           FAVORITES_KEY,
           JSON.stringify(Array.from(next))
@@ -801,7 +791,6 @@ export default function InvestmentScreen({ navigation }) {
       return true;
     });
 
-    // newest first
     filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
     return filtered;
   }, [
@@ -854,20 +843,64 @@ export default function InvestmentScreen({ navigation }) {
     }
   };
 
+  // ✅ AUTO ADD submit
+  const submitAuto = async () => {
+    const text = String(autoText || "").trim();
+    const accId = autoAccountId || defaultAccountId;
+
+    if (!accId) {
+      Alert.alert("Missing account", "Pick an account for auto add.");
+      return;
+    }
+    if (!text) {
+      Alert.alert(
+        "Missing text",
+        "Type what you want to add (natural language)."
+      );
+      return;
+    }
+
+    try {
+      setAutoLoading(true);
+
+      const { data } = await api.post("/auto/transactions/text", {
+        accountId: accId,
+        text,
+      });
+
+      push({
+        type: "success",
+        msg: data?.created ? "Auto added." : "Parsed. Draft may be created.",
+      });
+
+      setAutoOpen(false);
+      setAutoText("");
+      setAutoAccountId("");
+      await loadAll();
+    } catch (e) {
+      const msg = e?.response?.data?.error || e.message || "Auto add failed.";
+      push({ type: "error", msg });
+      Alert.alert("Auto add failed", msg);
+    } finally {
+      setAutoLoading(false);
+    }
+  };
+
+  const openAuto = () => {
+    setAutoAccountId(defaultAccountId || "");
+    setAutoText("");
+    setAutoOpen(true);
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={[styles.screen, { justifyContent: "center" }]}>
-        <View style={styles.loadingBox}>
-          <View style={styles.spinnerOuter} />
-          <View style={styles.spinnerInner} />
-        </View>
+        <View style={styles.loadingBox} />
         <View style={styles.loadingBrand}>
           <View style={styles.loadingLogoWrap}>
             <View style={styles.loadingLogoBorder}>
               <View style={styles.loadingLogoInner}>
-                <View>
-                  <Text style={styles.loadingLogoText}>N</Text>
-                </View>
+                <Text style={styles.loadingLogoText}>N</Text>
               </View>
             </View>
           </View>
@@ -891,7 +924,6 @@ export default function InvestmentScreen({ navigation }) {
           </View>
 
           <View style={{ flexDirection: "row", alignItems: "center" }}>
-            {/* ✅ NEW: Clickable Nummoria logo → Dashboard */}
             <TouchableOpacity
               onPress={() => navigation.navigate("Dashboard")}
               activeOpacity={0.85}
@@ -911,7 +943,7 @@ export default function InvestmentScreen({ navigation }) {
               <Text
                 style={[
                   styles.headerRefreshText,
-                  { color: "#90a955", fontWeight: "600" },
+                  { color: secondary, fontWeight: "600" },
                 ]}
               >
                 View market
@@ -1092,12 +1124,102 @@ export default function InvestmentScreen({ navigation }) {
         </View>
       </ScrollView>
 
-      {/* PRIMARY ACTION */}
-      <View style={styles.fabContainer}>
+      {/* ✅ FAB STACK: Auto + Add */}
+      <View style={styles.fabStack}>
+        <TouchableOpacity
+          style={[styles.fab, styles.fabAuto]}
+          onPress={openAuto}
+          activeOpacity={0.9}
+        >
+          <Text style={styles.fabAutoText}>Auto</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity style={styles.fab} onPress={openCreate}>
           <Text style={styles.fabPlus}>＋</Text>
         </TouchableOpacity>
       </View>
+
+      {/* ✅ Auto Add Modal */}
+      <Modal
+        visible={autoOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAutoOpen(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalBackdrop}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <View style={styles.modalCard}>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={styles.modalTitle}>Auto add investment</Text>
+
+              <Text style={styles.modalLabel}>Account</Text>
+              {accounts.length === 0 ? (
+                <Text style={styles.modalHelp}>
+                  No active accounts found. Create one first.
+                </Text>
+              ) : (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.filterChipRow}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {accounts.map((a) => (
+                    <Chip
+                      key={a._id}
+                      label={`${a.name} · ${a.currency}`}
+                      selected={autoAccountId === a._id}
+                      onPress={() => setAutoAccountId(a._id)}
+                    />
+                  ))}
+                </ScrollView>
+              )}
+
+              <View style={{ marginTop: 10 }}>
+                <Text style={styles.modalLabel}>Text</Text>
+                <TextInput
+                  value={autoText}
+                  onChangeText={setAutoText}
+                  placeholder="e.g. bought 2 AAPL for 380 usd"
+                  placeholderTextColor={TEXT_MUTED}
+                  style={[styles.modalInput, { minHeight: 80 }]}
+                  multiline
+                />
+                <Text style={styles.modalHelp}>
+                  Tip: include symbol + units + total cost + currency.
+                </Text>
+              </View>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  onPress={() => setAutoOpen(false)}
+                  style={styles.modalBtnGhost}
+                >
+                  <Text style={styles.modalBtnGhostText}>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={submitAuto}
+                  style={[
+                    styles.modalBtnPrimary,
+                    autoLoading && { opacity: 0.75 },
+                  ]}
+                  disabled={autoLoading}
+                >
+                  <Text style={styles.modalBtnPrimaryText}>
+                    {autoLoading ? "Parsing…" : "Create"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       <InvestmentModal
         visible={modalOpen}
@@ -1111,7 +1233,6 @@ export default function InvestmentScreen({ navigation }) {
       />
 
       <Toasts toasts={toasts} onClose={remove} />
-
       <ConfirmDialog />
     </SafeAreaView>
   );
@@ -1119,48 +1240,17 @@ export default function InvestmentScreen({ navigation }) {
 
 /* --------------------------------- Styles --------------------------------- */
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: BG_DARK,
-  },
-  scroll: {
-    padding: 16,
-    paddingBottom: 120,
-  },
+  screen: { flex: 1, backgroundColor: BG_DARK },
+  scroll: { padding: 16, paddingBottom: 140 },
+
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 16,
   },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "white",
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: TEXT_MUTED,
-    marginTop: 4,
-  },
-  headerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  headerMarketBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
-    marginRight: 8,
-  },
-  headerMarketText: {
-    color: secondary,
-    fontSize: 12,
-    fontWeight: "600",
-  },
+  headerTitle: { fontSize: 22, fontWeight: "700", color: "white" },
+  headerSubtitle: { fontSize: 13, color: TEXT_MUTED, marginTop: 4 },
   headerRefreshBtn: {
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -1169,11 +1259,7 @@ const styles = StyleSheet.create({
     borderColor: BORDER_DARK,
     backgroundColor: "#020617",
   },
-  headerRefreshText: {
-    color: TEXT_SOFT,
-    fontSize: 12,
-    fontWeight: "500",
-  },
+  headerRefreshText: { color: TEXT_SOFT, fontSize: 12, fontWeight: "500" },
 
   totalsRow: {
     flexDirection: "row",
@@ -1190,20 +1276,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER_DARK,
   },
-  totalLabel: {
-    fontSize: 11,
-    color: TEXT_MUTED,
-    marginBottom: 4,
-  },
-  totalValue: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#e5e7eb",
-  },
+  totalLabel: { fontSize: 11, color: TEXT_MUTED, marginBottom: 4 },
+  totalValue: { fontSize: 16, fontWeight: "700", color: "#e5e7eb" },
 
-  searchRow: {
-    marginBottom: 8,
-  },
+  searchRow: { marginBottom: 8 },
   searchInput: {
     borderWidth: 1,
     borderColor: BORDER_DARK,
@@ -1229,11 +1305,7 @@ const styles = StyleSheet.create({
     borderColor: CHIP_BORDER,
     backgroundColor: CHIP_BG,
   },
-  chipText: {
-    fontSize: 12,
-    color: TEXT_SOFT,
-    fontWeight: "500",
-  },
+  chipText: { fontSize: 12, color: TEXT_SOFT, fontWeight: "500" },
 
   filtersCard: {
     marginTop: 4,
@@ -1244,24 +1316,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER_DARK,
   },
-  filterField: {
-    marginBottom: 10,
-  },
-  filterLabel: {
-    fontSize: 11,
-    color: TEXT_MUTED,
-    marginBottom: 4,
-  },
-  filterChipRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  filterRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginTop: 4,
-  },
+  filterField: { marginBottom: 10 },
+  filterLabel: { fontSize: 11, color: TEXT_MUTED, marginBottom: 4 },
+  filterChipRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  filterRow: { flexDirection: "row", alignItems: "flex-start", marginTop: 4 },
   filterInput: {
     borderWidth: 1,
     borderColor: BORDER_DARK,
@@ -1284,10 +1342,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER_DARK,
   },
-  filterClearText: {
-    fontSize: 12,
-    color: TEXT_MUTED,
-  },
+  filterClearText: { fontSize: 12, color: TEXT_MUTED },
 
   listCard: {
     borderRadius: 16,
@@ -1296,11 +1351,7 @@ const styles = StyleSheet.create({
     borderColor: BORDER_DARK,
     overflow: "hidden",
   },
-  errorText: {
-    color: "#fecaca",
-    padding: 12,
-    fontSize: 13,
-  },
+  errorText: { color: "#fecaca", padding: 12, fontSize: 13 },
   emptyState: {
     paddingVertical: 24,
     paddingHorizontal: 16,
@@ -1312,11 +1363,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginBottom: 4,
   },
-  emptySubtitle: {
-    color: TEXT_MUTED,
-    fontSize: 13,
-    textAlign: "center",
-  },
+  emptySubtitle: { color: TEXT_MUTED, fontSize: 13, textAlign: "center" },
 
   rowContainer: {
     flexDirection: "row",
@@ -1325,29 +1372,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: BORDER_DARK,
   },
-  rowLeft: {
-    flex: 1,
-    paddingRight: 8,
-  },
-  rowRight: {
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-  },
-  rowTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  rowTitle: {
-    color: "white",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  rowSubRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 4,
-  },
+  rowLeft: { flex: 1, paddingRight: 8 },
+  rowRight: { alignItems: "flex-end", justifyContent: "space-between" },
+  rowTitleRow: { flexDirection: "row", alignItems: "center", marginBottom: 4 },
+  rowTitle: { color: "white", fontSize: 14, fontWeight: "600" },
+  rowSubRow: { flexDirection: "row", alignItems: "center", marginBottom: 4 },
   badge: {
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -1356,40 +1385,14 @@ const styles = StyleSheet.create({
     borderColor: BADGE_BORDER,
     backgroundColor: BADGE_BG,
   },
-  badgeText: {
-    fontSize: 10,
-    color: TEXT_SOFT,
-  },
-  rowUnits: {
-    marginLeft: 8,
-    fontSize: 11,
-    color: TEXT_MUTED,
-  },
-  rowDescription: {
-    fontSize: 12,
-    color: TEXT_SOFT,
-  },
-  rowBottomRow: {
-    marginTop: 4,
-  },
-  rowDate: {
-    fontSize: 11,
-    color: TEXT_MUTED,
-  },
-  rowTags: {
-    marginTop: 2,
-    fontSize: 11,
-    color: secondary,
-  },
-  rowAmount: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#f97316",
-  },
-  rowActions: {
-    flexDirection: "row",
-    marginTop: 6,
-  },
+  badgeText: { fontSize: 10, color: TEXT_SOFT },
+  rowUnits: { marginLeft: 8, fontSize: 11, color: TEXT_MUTED },
+  rowDescription: { fontSize: 12, color: TEXT_SOFT },
+  rowBottomRow: { marginTop: 4 },
+  rowDate: { fontSize: 11, color: TEXT_MUTED },
+  rowTags: { marginTop: 2, fontSize: 11, color: secondary },
+  rowAmount: { fontSize: 14, fontWeight: "700", color: "#f97316" },
+  rowActions: { flexDirection: "row", marginTop: 6 },
   rowBtnOutline: {
     paddingHorizontal: 10,
     paddingVertical: 5,
@@ -1398,10 +1401,7 @@ const styles = StyleSheet.create({
     borderColor: BORDER_DARK,
     marginRight: 6,
   },
-  rowBtnOutlineText: {
-    fontSize: 11,
-    color: TEXT_SOFT,
-  },
+  rowBtnOutlineText: { fontSize: 11, color: TEXT_SOFT },
   rowBtnDanger: {
     paddingHorizontal: 10,
     paddingVertical: 5,
@@ -1409,15 +1409,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#b91c1c",
   },
-  rowBtnDangerText: {
-    fontSize: 11,
-    color: "#fecaca",
-  },
+  rowBtnDangerText: { fontSize: 11, color: "#fecaca" },
 
-  fabContainer: {
+  // ✅ FAB STACK
+  fabStack: {
     position: "absolute",
     right: 16,
     bottom: 24,
+    gap: 10,
+    alignItems: "flex-end",
   },
   fab: {
     width: 52,
@@ -1432,10 +1432,22 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 4,
   },
-  fabPlus: {
-    fontSize: 30,
-    lineHeight: 30,
-    color: "white",
+  fabPlus: { fontSize: 30, lineHeight: 30, color: "white" },
+
+  fabAuto: {
+    width: 52,
+    height: 40,
+    borderRadius: 999,
+    backgroundColor: "#020617",
+    borderWidth: 1,
+    borderColor: main,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  fabAutoText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#d9f99d",
   },
 
   modalBackdrop: {
@@ -1460,14 +1472,8 @@ const styles = StyleSheet.create({
     color: "white",
     marginBottom: 8,
   },
-  modalField: {
-    marginTop: 10,
-  },
-  modalLabel: {
-    fontSize: 12,
-    color: TEXT_MUTED,
-    marginBottom: 4,
-  },
+  modalField: { marginTop: 10 },
+  modalLabel: { fontSize: 12, color: TEXT_MUTED, marginBottom: 4 },
   modalInput: {
     borderWidth: 1,
     borderColor: BORDER_DARK,
@@ -1492,15 +1498,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     backgroundColor: "#020617",
   },
-  modalSelectHint: {
-    fontSize: 11,
-    color: TEXT_MUTED,
-  },
-  modalHelp: {
-    marginTop: 4,
-    fontSize: 11,
-    color: TEXT_MUTED,
-  },
+  modalSelectHint: { fontSize: 11, color: TEXT_MUTED },
+  modalHelp: { marginTop: 4, fontSize: 11, color: TEXT_MUTED },
   modalActions: {
     flexDirection: "row",
     justifyContent: "flex-end",
@@ -1514,28 +1513,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER_DARK,
   },
-  modalBtnGhostText: {
-    fontSize: 13,
-    color: TEXT_MUTED,
-  },
+  modalBtnGhostText: { fontSize: 13, color: TEXT_MUTED },
   modalBtnPrimary: {
     paddingHorizontal: 18,
     paddingVertical: 8,
     borderRadius: 999,
     backgroundColor: main,
   },
-  modalBtnPrimaryText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "white",
-  },
+  modalBtnPrimaryText: { fontSize: 13, fontWeight: "600", color: "white" },
 
-  toastContainer: {
-    position: "absolute",
-    right: 12,
-    bottom: 88,
-    width: "78%",
-  },
+  toastContainer: { position: "absolute", right: 12, bottom: 88, width: "78%" },
   toast: {
     flexDirection: "row",
     alignItems: "center",
@@ -1552,20 +1539,15 @@ const styles = StyleSheet.create({
     color: TEXT_SOFT,
     textTransform: "capitalize",
   },
-  toastMsg: {
-    flex: 1,
-    fontSize: 12,
-    color: TEXT_SOFT,
-  },
-  toastClose: {
-    fontSize: 16,
-    color: TEXT_MUTED,
-    paddingHorizontal: 4,
-  },
+  toastMsg: { flex: 1, fontSize: 12, color: TEXT_SOFT },
+  toastClose: { fontSize: 16, color: TEXT_MUTED, paddingHorizontal: 4 },
 
   confirmBackdrop: {
     position: "absolute",
-    inset: 0,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: "rgba(15,23,42,0.85)",
     alignItems: "center",
     justifyContent: "center",
@@ -1585,16 +1567,8 @@ const styles = StyleSheet.create({
     color: "white",
     marginBottom: 4,
   },
-  confirmText: {
-    fontSize: 13,
-    color: TEXT_MUTED,
-    marginBottom: 12,
-  },
-  confirmRow: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 8,
-  },
+  confirmText: { fontSize: 13, color: TEXT_MUTED, marginBottom: 12 },
+  confirmRow: { flexDirection: "row", justifyContent: "flex-end", gap: 8 },
   confirmBtn: {
     paddingHorizontal: 14,
     paddingVertical: 8,
@@ -1602,10 +1576,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER_DARK,
   },
-  confirmBtnText: {
-    fontSize: 13,
-    color: TEXT_SOFT,
-  },
+  confirmBtnText: { fontSize: 13, color: TEXT_SOFT },
 
   loadingBox: {
     width: 56,
@@ -1616,19 +1587,14 @@ const styles = StyleSheet.create({
     borderTopColor: main,
     marginBottom: 10,
     alignSelf: "center",
-    transform: [{ rotateZ: "0deg" }],
   },
-  spinnerOuter: {},
-  spinnerInner: {},
   loadingBrand: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 4,
   },
-  loadingLogoWrap: {
-    marginRight: 8,
-  },
+  loadingLogoWrap: { marginRight: 8 },
   loadingLogoBorder: {
     width: 32,
     height: 32,
@@ -1646,22 +1612,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  loadingLogoText: {
-    color: "white",
-    fontWeight: "700",
-    fontSize: 16,
-  },
-  loadingTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "white",
-  },
-  loadingSubtitle: {
-    fontSize: 13,
-    color: TEXT_MUTED,
-    textAlign: "center",
-  },
-  // ✅ NEW: Header logo button (tap to go Dashboard)
+  loadingLogoText: { color: "white", fontWeight: "700", fontSize: 16 },
+  loadingTitle: { fontSize: 20, fontWeight: "700", color: "white" },
+  loadingSubtitle: { fontSize: 13, color: TEXT_MUTED, textAlign: "center" },
+
+  // Header logo
   headerLogoBtn: {
     width: 34,
     height: 34,
@@ -1674,11 +1629,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 10,
   },
-  headerLogoImg: {
-    width: "100%",
-    height: "100%",
-    resizeMode: "cover",
-  },
+  headerLogoImg: { width: "100%", height: "100%", resizeMode: "cover" },
+
+  // Favorite star
   starBtn: {
     marginLeft: 10,
     paddingHorizontal: 8,
@@ -1688,9 +1641,5 @@ const styles = StyleSheet.create({
     borderColor: BORDER_DARK,
     backgroundColor: "#020617",
   },
-  starIcon: {
-    fontSize: 18,
-    lineHeight: 18,
-    color: TEXT_MUTED,
-  },
+  starIcon: { fontSize: 18, lineHeight: 18, color: TEXT_MUTED },
 });
