@@ -1,7 +1,13 @@
 // mobile/src/screens/IncomeScreen.js
 /* eslint-disable no-unused-vars */
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef, // ✅ NEW: for scrolling + Auto FAB behavior
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -16,8 +22,9 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  Image, // ✅ NEW: for clickable header logo → Dashboard
+  Image,
 } from "react-native";
+
 import { useNavigation } from "@react-navigation/native";
 
 // ✅ mobile axios instance (points to same backend as web)
@@ -155,6 +162,9 @@ function Chip({ label, selected, onPress, small }) {
 export default function IncomeScreen({ route }) {
   const navigation = useNavigation(); // ✅ FIX
 
+  // ✅ NEW: ScrollView ref (Auto button opens Upcoming + scrolls to top)
+  const scrollRef = useRef(null);
+
   // optional: coming from Home, e.g. "show this account"
   const accountId = route?.params?.accountId;
 
@@ -162,6 +172,11 @@ export default function IncomeScreen({ route }) {
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
   const [accounts, setAccounts] = useState([]);
+  // ✅ AUTO ADD state (match InvestmentScreen)
+  const [autoOpen, setAutoOpen] = useState(false);
+  const [autoText, setAutoText] = useState("");
+  const [autoAccountId, setAutoAccountId] = useState("");
+  const [autoLoading, setAutoLoading] = useState(false);
 
   // --- ui ---
   const [loading, setLoading] = useState(true);
@@ -203,6 +218,7 @@ export default function IncomeScreen({ route }) {
     for (const a of accounts) m.set(a._id, a);
     return m;
   }, [accounts]);
+  const defaultAccountId = accounts[0]?._id || "";
 
   const currencies = useMemo(() => {
     const s = new Set(
@@ -521,6 +537,52 @@ export default function IncomeScreen({ route }) {
   }, [rows, statsCurrency]);
 
   /* ------------------------------- CRUD TX ------------------------------- */
+  // ✅ AUTO ADD open (match InvestmentScreen)
+  const openAutoAdd = useCallback(() => {
+    setAutoAccountId(accountId || defaultAccountId || "");
+    setAutoText("");
+    setAutoOpen(true);
+  }, [accountId, defaultAccountId]);
+
+  // ✅ AUTO ADD submit (match InvestmentScreen)
+  const submitAuto = useCallback(async () => {
+    const text = String(autoText || "").trim();
+    const accId = autoAccountId || accountId || defaultAccountId;
+
+    if (!accId) {
+      Alert.alert("Missing account", "Pick an account for auto add.");
+      return;
+    }
+    if (!text) {
+      Alert.alert(
+        "Missing text",
+        "Type what you want to add (natural language)."
+      );
+      return;
+    }
+
+    try {
+      setAutoLoading(true);
+
+      // same endpoint used by InvestmentScreen
+      await api.post("/auto/transactions/text", {
+        accountId: accId,
+        text,
+      });
+
+      setAutoOpen(false);
+      setAutoText("");
+      setAutoAccountId("");
+
+      await loadAll();
+    } catch (e) {
+      const msg = e?.response?.data?.error || e.message || "Auto add failed.";
+      Alert.alert("Auto add failed", msg);
+    } finally {
+      setAutoLoading(false);
+    }
+  }, [autoText, autoAccountId, accountId, defaultAccountId, loadAll]);
+
   function openCreate() {
     const defaultAccId = accountId || accounts[0]?._id || "";
     const defaultCur =
@@ -654,6 +716,15 @@ export default function IncomeScreen({ route }) {
       await softDelete(item);
     }
   }
+
+  // ✅ NEW: Auto button behavior (match Investments “Auto” chip-FAB)
+  // ✅ Upcoming quick-open (previously openAuto)
+  const openUpcomingAuto = useCallback(() => {
+    setShowUpcoming(true);
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    });
+  }, []);
 
   /* ------------------------------- Row item ------------------------------- */
   function renderRow({ item }) {
@@ -1413,6 +1484,7 @@ export default function IncomeScreen({ route }) {
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView
+        ref={scrollRef} // ✅ NEW
         style={styles.content}
         contentContainerStyle={{ paddingBottom: 32 }}
         showsVerticalScrollIndicator={false}
@@ -1444,12 +1516,127 @@ export default function IncomeScreen({ route }) {
         </View>
       </ScrollView>
 
-      {/* FAB like Expenses / Investments */}
+      {/* ✅ FAB stack (Auto + Add) */}
       <View style={styles.fabContainer}>
+        <TouchableOpacity style={styles.fabAuto} onPress={openAutoAdd}>
+          <Text style={styles.fabAutoText}>Auto</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity style={styles.fab} onPress={openCreate}>
           <Text style={styles.fabPlus}>＋</Text>
         </TouchableOpacity>
       </View>
+      {/* ✅ Auto Add Modal (match InvestmentScreen UX) */}
+      <Modal
+        visible={autoOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAutoOpen(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalBackdrop}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <View style={styles.modalCard}>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={styles.modalTitle}>Auto add income</Text>
+
+              <Text style={styles.modalLabel}>Account</Text>
+              {accounts.length === 0 ? (
+                <Text style={styles.modalHint}>
+                  No active accounts found. Create one first.
+                </Text>
+              ) : (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {accounts.map((a) => (
+                    <TouchableOpacity
+                      key={a._id}
+                      onPress={() => setAutoAccountId(a._id)}
+                      style={[
+                        styles.chip,
+                        autoAccountId === a._id && styles.chipSelected,
+                      ]}
+                      activeOpacity={0.85}
+                    >
+                      <Text
+                        style={[
+                          styles.chipText,
+                          autoAccountId === a._id && styles.chipTextSelected,
+                        ]}
+                      >
+                        {a.name} · {a.currency}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+
+              <View style={{ marginTop: 10 }}>
+                <Text style={styles.modalLabel}>Text</Text>
+                <TextInput
+                  value={autoText}
+                  onChangeText={setAutoText}
+                  placeholder="e.g. salary 2500 usd today, category salary"
+                  placeholderTextColor={TEXT_MUTED}
+                  style={[styles.modalInput, { minHeight: 90 }]}
+                  multiline
+                />
+                <Text style={styles.modalHint}>
+                  Tip: include amount + currency + category + date if possible.
+                </Text>
+              </View>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  onPress={() => setAutoOpen(false)}
+                  style={[styles.modalBtn, styles.modalBtnSecondary]}
+                >
+                  <Text style={styles.modalBtnSecondaryText}>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={submitAuto}
+                  style={[
+                    styles.modalBtn,
+                    styles.modalBtnPrimary,
+                    autoLoading && { opacity: 0.75 },
+                  ]}
+                  disabled={autoLoading}
+                >
+                  <Text style={styles.modalBtnPrimaryText}>
+                    {autoLoading ? "Parsing…" : "Create"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Optional: keep your old behavior accessible */}
+              <TouchableOpacity
+                onPress={() => {
+                  setAutoOpen(false);
+                  openUpcomingAuto();
+                }}
+                style={{ marginTop: 10, alignSelf: "flex-start" }}
+              >
+                <Text
+                  style={[
+                    styles.modalHint,
+                    { textDecorationLine: "underline" },
+                  ]}
+                >
+                  Open Upcoming panel instead
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {IncomeModal()}
     </SafeAreaView>
@@ -2086,12 +2273,37 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
 
-  /* FAB like Expenses / Investments */
+  /* FAB stack */
   fabContainer: {
     position: "absolute",
     right: 16,
     bottom: 24,
+    alignItems: "flex-end",
+    gap: 10,
   },
+
+  // ✅ NEW: Auto mini-FAB (matches Investments “Auto”)
+  fabAuto: {
+    width: 52,
+    height: 52,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#020617",
+    borderWidth: 2,
+    borderColor: "rgba(34,197,94,0.65)",
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  fabAutoText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#bbf7d0",
+  },
+
   fab: {
     width: 52,
     height: 52,
@@ -2110,6 +2322,7 @@ const styles = StyleSheet.create({
     lineHeight: 30,
     color: "white",
   },
+
   // ✅ NEW: Header logo button (tap to go Dashboard)
   headerLogoBtn: {
     width: 34,
