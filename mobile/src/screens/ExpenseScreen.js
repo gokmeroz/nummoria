@@ -6,7 +6,7 @@ import React, {
   useEffect,
   useMemo,
   useState,
-  useRef,
+  useRef, // ✅ NEW: for scrolling + Auto FAB behavior
 } from "react";
 
 import {
@@ -158,13 +158,13 @@ function parseReceiptFromQR(data) {
     description: description || null,
   };
 }
+
 function parseReceiptFromText(rawText) {
   if (!rawText) return null;
 
   const text = rawText.replace(/\s+/g, " ").toUpperCase();
 
   // ----- 1) TOTAL AMOUNT -----
-  // Look for lines containing TOTAL / TOPLAM / GENEL TOPLAM
   const totalRegex = /(GENEL TOPLAM|TOPLAM|TOTAL)[^\d]*([0-9]+[.,][0-9]{2})/;
   const totalMatch = text.match(totalRegex);
 
@@ -198,7 +198,7 @@ function parseReceiptFromText(rawText) {
     dateStr = `${yyyy}-${mm}-${dd}`;
   }
 
-  // ----- 4) SELLER NAME (first line or two, before "TARIH" / "DATE") -----
+  // ----- 4) SELLER NAME -----
   let seller = null;
   const lines = rawText
     .split(/\r?\n/)
@@ -255,12 +255,21 @@ function Chip({ label, selected, onPress, small }) {
 export default function ExpensesScreen({ route }) {
   const navigation = useNavigation(); // ✅ FIX
 
+  // ✅ NEW: ScrollView ref (Upcoming auto scroll)
+  const scrollRef = useRef(null);
+
   const accountId = route?.params?.accountId;
 
   // --- data ---
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
   const [accounts, setAccounts] = useState([]);
+
+  // ✅ NEW: AUTO ADD state (match Income/Investment)
+  const [autoOpen, setAutoOpen] = useState(false);
+  const [autoText, setAutoText] = useState("");
+  const [autoAccountId, setAutoAccountId] = useState("");
+  const [autoLoading, setAutoLoading] = useState(false);
 
   // --- ui ---
   const [loading, setLoading] = useState(true);
@@ -296,9 +305,7 @@ export default function ExpensesScreen({ route }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState("back");
   const [flash, setFlash] = useState("off");
-  // NEW: guard so handler runs only once per open
   const scannedOnceRef = useRef(false);
-  // NEW: track whether we should reopen the modal after closing camera
   const [reopenModalOnClose, setReopenModalOnClose] = useState(false);
   const cameraRef = useRef(null);
 
@@ -314,6 +321,8 @@ export default function ExpensesScreen({ route }) {
     for (const a of accounts) m.set(a._id, a);
     return m;
   }, [accounts]);
+
+  const defaultAccountId = accounts[0]?._id || "";
 
   const currencies = useMemo(() => {
     const s = new Set(
@@ -600,7 +609,6 @@ export default function ExpensesScreen({ route }) {
   }, [rows, fCurrency]);
 
   /* ---------------------- Insights: charts data ---------------------- */
-
   const spendingByCategory = useMemo(() => {
     if (!rows.length) return [];
     const map = new Map();
@@ -662,6 +670,52 @@ export default function ExpensesScreen({ route }) {
   }, [rows, statsCurrency]);
 
   /* ------------------------------- CRUD TX ------------------------------- */
+  // ✅ NEW: AUTO ADD open (match Income/Investment)
+  const openAutoAdd = useCallback(() => {
+    setAutoAccountId(accountId || defaultAccountId || "");
+    setAutoText("");
+    setAutoOpen(true);
+  }, [accountId, defaultAccountId]);
+
+  // ✅ NEW: AUTO ADD submit (match Income/Investment)
+  const submitAuto = useCallback(async () => {
+    const text = String(autoText || "").trim();
+    const accId = autoAccountId || accountId || defaultAccountId;
+
+    if (!accId) {
+      Alert.alert("Missing account", "Pick an account for auto add.");
+      return;
+    }
+    if (!text) {
+      Alert.alert(
+        "Missing text",
+        "Type what you want to add (natural language)."
+      );
+      return;
+    }
+
+    try {
+      setAutoLoading(true);
+
+      // same endpoint used by Investment/Income
+      await api.post("/auto/transactions/text", {
+        accountId: accId,
+        text,
+      });
+
+      setAutoOpen(false);
+      setAutoText("");
+      setAutoAccountId("");
+
+      await loadAll();
+    } catch (e) {
+      const msg = e?.response?.data?.error || e.message || "Auto add failed.";
+      Alert.alert("Auto add failed", msg);
+    } finally {
+      setAutoLoading(false);
+    }
+  }, [autoText, autoAccountId, accountId, defaultAccountId, loadAll]);
+
   function openCreate() {
     const defaultAccId = accountId || accounts[0]?._id || "";
     const defaultCur =
@@ -795,13 +849,20 @@ export default function ExpensesScreen({ route }) {
     }
   }
 
+  // ✅ NEW: Upcoming quick-open + scroll to top (match Income)
+  const openUpcomingAuto = useCallback(() => {
+    setShowUpcoming(true);
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    });
+  }, []);
+
   /* ---------------------- QR scanner handlers (expo-camera) ---------------------- */
   const openScanner = useCallback(async () => {
     console.log("[Expenses] Scan receipt QR pressed");
 
     try {
       if (!permission) {
-        console.log("[Expenses] Permission is undefined, requesting...");
         const res = await requestPermission();
         if (!res.granted) {
           Alert.alert(
@@ -811,7 +872,6 @@ export default function ExpensesScreen({ route }) {
           return;
         }
       } else if (!permission.granted) {
-        console.log("[Expenses] Permission not granted, requesting...");
         const res = await requestPermission();
         if (!res.granted) {
           Alert.alert(
@@ -822,13 +882,10 @@ export default function ExpensesScreen({ route }) {
         }
       }
 
-      console.log("[Expenses] Permission granted, opening camera");
-
       // 🔹 close the expense modal while camera is active
       setModalOpen(false);
-      // reset scan guard
+
       scannedOnceRef.current = false;
-      /* The above code is setting a variable `isScanning` to `true`. */
       setIsScanning(true);
       setScannerVisible(true);
     } catch (e) {
@@ -839,21 +896,17 @@ export default function ExpensesScreen({ route }) {
 
   const handleBarCodeScanned = useCallback(
     ({ type, data }) => {
-      // 🔒 guard: only handle first scan per open
-      if (scannedOnceRef.current) {
-        return;
-      }
+      if (scannedOnceRef.current) return;
       scannedOnceRef.current = true;
 
       const text = String(data || "");
       console.log("[Expenses] QR scanned:", { type, data: text });
 
-      // stop scanner + hide camera
       setIsScanning(false);
       setScannerVisible(false);
       setReopenModalOnClose(false);
 
-      // ---------- CASE 1: simple numeric code128 (receipt ID only) ----------
+      // CASE 1: receipt ID only
       if (type === "code128" && /^\d{10,20}$/.test(text)) {
         setForm((prev) => ({
           ...prev,
@@ -868,11 +921,10 @@ export default function ExpensesScreen({ route }) {
           "Receipt scanned",
           "This barcode only contains a receipt/transaction ID, so I can't auto-fill amount or date, but I attached the ID to the description."
         );
-
         return;
       }
 
-      // ---------- CASE 2: real QR / rich payload that parseReceiptFromQR can handle ----------
+      // CASE 2: structured payload
       try {
         const parsed = parseReceiptFromQR(text);
 
@@ -907,8 +959,8 @@ export default function ExpensesScreen({ route }) {
     },
     [setForm, setModalOpen]
   );
+
   const openOcrScanner = useCallback(async () => {
-    // iOS: do NOT open OCR Camera – MLKit native module is not linked in your Expo iOS build
     if (Platform.OS === "ios") {
       Alert.alert(
         "Smart scan not available on iOS (yet)",
@@ -917,7 +969,6 @@ export default function ExpensesScreen({ route }) {
       return;
     }
 
-    // ANDROID: reuse your permission logic and open camera overlay
     try {
       if (!permission) {
         const res = await requestPermission();
@@ -939,7 +990,6 @@ export default function ExpensesScreen({ route }) {
         }
       }
 
-      // close modal, open camera overlay in OCR mode (no barcode scanning)
       setModalOpen(false);
       setScannerVisible(true);
       setIsScanning(false);
@@ -1105,7 +1155,11 @@ export default function ExpensesScreen({ route }) {
                     <TouchableOpacity
                       key={a._id}
                       onPress={() =>
-                        setForm((f) => ({ ...f, accountId: a._id }))
+                        setForm((f) => ({
+                          ...f,
+                          accountId: a._id,
+                          currency: a.currency || f.currency, // ✅ NEW: keep currency in sync
+                        }))
                       }
                       style={[
                         styles.chip,
@@ -1157,7 +1211,7 @@ export default function ExpensesScreen({ route }) {
               <View style={styles.modalField}>
                 <TouchableOpacity
                   style={styles.scanBtn}
-                  onPress={openScanner} // your existing QR/barcode flow
+                  onPress={openScanner}
                   activeOpacity={0.85}
                 >
                   <Text style={styles.scanBtnText}>
@@ -1289,7 +1343,16 @@ export default function ExpensesScreen({ route }) {
         </KeyboardAvoidingView>
       </Modal>
     );
-  }, [modalOpen, form, editing, accounts, categories, accountId, openScanner]);
+  }, [
+    modalOpen,
+    form,
+    editing,
+    accounts,
+    categories,
+    accountId,
+    openScanner,
+    openOcrScanner, // ✅ NEW: include in deps
+  ]);
 
   /* ------------------------------ Header & Filters ------------------------------ */
   function Header() {
@@ -1300,32 +1363,37 @@ export default function ExpensesScreen({ route }) {
             <Text style={styles.headerEyebrow}>Spending overview</Text>
             <Text style={styles.headerTitle}>Expenses</Text>
           </View>
-          <TouchableOpacity
-            onPress={() => navigation.navigate("Dashboard")}
-            activeOpacity={0.85}
-            style={styles.headerLogoBtn}
-          >
-            <Image source={logo} style={styles.headerLogoImg} />
-          </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.headerUpcomingBtn}
-            onPress={() => setShowUpcoming((v) => !v)}
-          >
-            <Text style={styles.headerUpcomingText}>Upcoming</Text>
-            <View style={styles.headerUpcomingBadge}>
-              <Text style={styles.headerUpcomingBadgeText}>
-                {upcoming.length}
-              </Text>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerIconBtn}
-            onPress={loadAll}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.headerIconPlus}>↻</Text>
-          </TouchableOpacity>
+          {/* ✅ NEW: header right cluster (match Income) */}
+          <View style={styles.headerTopRight}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate("Dashboard")}
+              activeOpacity={0.85}
+              style={styles.headerLogoBtn}
+            >
+              <Image source={logo} style={styles.headerLogoImg} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.headerUpcomingBtn}
+              onPress={() => setShowUpcoming((v) => !v)}
+            >
+              <Text style={styles.headerUpcomingText}>Upcoming</Text>
+              <View style={styles.headerUpcomingBadge}>
+                <Text style={styles.headerUpcomingBadgeText}>
+                  {upcoming.length}
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.headerIconBtn}
+              onPress={loadAll}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.headerIconPlus}>↻</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Search */}
@@ -1624,7 +1692,6 @@ export default function ExpensesScreen({ route }) {
           </Text>
         )}
 
-        {/* KPI row */}
         <View style={styles.insightsKpiRow}>
           <View style={styles.insightsKpi}>
             <Text style={styles.insightsKpiLabel}>Last Month</Text>
@@ -1646,9 +1713,7 @@ export default function ExpensesScreen({ route }) {
           </View>
         </View>
 
-        {/* Charts */}
         <View style={styles.chartsRow}>
-          {/* Category breakdown */}
           <View style={styles.chartCol}>
             <Text style={styles.chartTitle}>By category</Text>
             {!spendingByCategory.length ? (
@@ -1681,7 +1746,6 @@ export default function ExpensesScreen({ route }) {
             )}
           </View>
 
-          {/* Last 7 days */}
           <View style={styles.chartCol}>
             <Text style={styles.chartTitle}>Last 7 days</Text>
             {!dailySeries.points.length || dailySeries.max <= 0 ? (
@@ -1690,7 +1754,7 @@ export default function ExpensesScreen({ route }) {
               <View style={styles.sparklineRow}>
                 {dailySeries.points.map((p) => {
                   const ratio = dailySeries.max ? p.value / dailySeries.max : 0;
-                  const height = 8 + ratio * 32; // 8–40
+                  const height = 8 + ratio * 32;
                   return (
                     <View key={p.label} style={styles.sparkCol}>
                       <View style={styles.sparkBarTrack}>
@@ -1730,6 +1794,7 @@ export default function ExpensesScreen({ route }) {
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView
+        ref={scrollRef} // ✅ NEW
         style={styles.content}
         contentContainerStyle={{ paddingBottom: 32 }}
         showsVerticalScrollIndicator={false}
@@ -1761,26 +1826,140 @@ export default function ExpensesScreen({ route }) {
         </View>
       </ScrollView>
 
-      {/* FAB to add expense */}
+      {/* ✅ FAB stack (Auto + Add) */}
       <View style={styles.fabContainer}>
+        <TouchableOpacity style={styles.fabAuto} onPress={openAutoAdd}>
+          <Text style={styles.fabAutoText}>Auto</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity style={styles.fab} onPress={openCreate}>
           <Text style={styles.fabPlus}>＋</Text>
         </TouchableOpacity>
       </View>
+
+      {/* ✅ Auto Add Modal (match Income/Investment UX) */}
+      <Modal
+        visible={autoOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAutoOpen(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalBackdrop}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <View style={styles.modalCard}>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={styles.modalTitle}>Auto add expense</Text>
+
+              <Text style={styles.modalLabel}>Account</Text>
+              {accounts.length === 0 ? (
+                <Text style={styles.modalHint}>
+                  No active accounts found. Create one first.
+                </Text>
+              ) : (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {accounts.map((a) => (
+                    <TouchableOpacity
+                      key={a._id}
+                      onPress={() => setAutoAccountId(a._id)}
+                      style={[
+                        styles.chip,
+                        autoAccountId === a._id && styles.chipSelected,
+                      ]}
+                      activeOpacity={0.85}
+                    >
+                      <Text
+                        style={[
+                          styles.chipText,
+                          autoAccountId === a._id && styles.chipTextSelected,
+                        ]}
+                      >
+                        {a.name} · {a.currency}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+
+              <View style={{ marginTop: 10 }}>
+                <Text style={styles.modalLabel}>Text</Text>
+                <TextInput
+                  value={autoText}
+                  onChangeText={setAutoText}
+                  placeholder="e.g. groceries 45 usd today, category groceries"
+                  placeholderTextColor={TEXT_MUTED}
+                  style={[styles.modalInput, { minHeight: 90 }]}
+                  multiline
+                />
+                <Text style={styles.modalHint}>
+                  Tip: include amount + currency + category + date if possible.
+                </Text>
+              </View>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  onPress={() => setAutoOpen(false)}
+                  style={[styles.modalBtn, styles.modalBtnSecondary]}
+                >
+                  <Text style={styles.modalBtnSecondaryText}>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={submitAuto}
+                  style={[
+                    styles.modalBtn,
+                    styles.modalBtnPrimary,
+                    autoLoading && { opacity: 0.75 },
+                  ]}
+                  disabled={autoLoading}
+                >
+                  <Text style={styles.modalBtnPrimaryText}>
+                    {autoLoading ? "Parsing…" : "Create"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => {
+                  setAutoOpen(false);
+                  openUpcomingAuto();
+                }}
+                style={{ marginTop: 10, alignSelf: "flex-start" }}
+              >
+                <Text
+                  style={[
+                    styles.modalHint,
+                    { textDecorationLine: "underline" },
+                  ]}
+                >
+                  Open Upcoming panel instead
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {ExpenseModal()}
 
       {/* FULL-SCREEN CAMERA OVERLAY (no RN Modal) */}
       {scannerVisible && (
         <View style={styles.fullCamOverlay}>
-          {/* Top bar */}
           <SafeAreaView style={styles.fullCamTopSafe}>
             <View style={styles.fullCamTopBar}>
               <TouchableOpacity
                 onPress={() => {
                   setScannerVisible(false);
                   setIsScanning(false);
-                  setModalOpen(true); // <--- reopen "New expense" panel
+                  setModalOpen(true);
                 }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
@@ -1789,7 +1968,6 @@ export default function ExpensesScreen({ route }) {
             </View>
           </SafeAreaView>
 
-          {/* Camera */}
           <View style={styles.fullCamBody}>
             <CameraView
               ref={cameraRef}
@@ -1808,13 +1986,10 @@ export default function ExpensesScreen({ route }) {
               }}
               onBarcodeScanned={isScanning ? handleBarCodeScanned : undefined}
             />
-            {/* QR frame */}
             <View style={styles.fullCamFrameOverlay} pointerEvents="none" />
           </View>
 
-          {/* Bottom controls */}
           <View style={styles.fullCamBottomBar}>
-            {/* LEFT: Cancel + Flash side-by-side */}
             <View style={styles.fullCamLeftCluster}>
               <TouchableOpacity
                 style={styles.fullCamBottomIconBtn}
@@ -1822,7 +1997,7 @@ export default function ExpensesScreen({ route }) {
                 onPress={() => {
                   setScannerVisible(false);
                   setIsScanning(false);
-                  setModalOpen(true); // 🔹 reopen New expense modal
+                  setModalOpen(true);
                 }}
               >
                 <Text style={styles.fullCamCancelText}>Cancel</Text>
@@ -1841,14 +2016,12 @@ export default function ExpensesScreen({ route }) {
               </TouchableOpacity>
             </View>
 
-            {/* CENTER: shutter */}
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={async () => {
                 try {
                   if (!cameraRef.current) return;
 
-                  // iOS: do NOT call TextRecognition – the native module isn't linked in your Expo iOS build
                   if (Platform.OS === "ios") {
                     setScannerVisible(false);
                     setModalOpen(true);
@@ -1859,15 +2032,12 @@ export default function ExpensesScreen({ route }) {
                     return;
                   }
 
-                  // ANDROID: full OCR flow with ML Kit
                   const photo = await cameraRef.current.takePictureAsync({
                     base64: false,
                   });
 
-                  // Close camera UI
                   setScannerVisible(false);
 
-                  // Run OCR on-device (Android)
                   const result = await TextRecognition.recognize(photo.uri);
                   const fullText = result?.text || "";
 
@@ -1875,7 +2045,6 @@ export default function ExpensesScreen({ route }) {
 
                   const parsed = parseReceiptFromText(fullText);
 
-                  // Reopen modal
                   setModalOpen(true);
 
                   if (!parsed) {
@@ -1919,7 +2088,6 @@ export default function ExpensesScreen({ route }) {
               />
             </TouchableOpacity>
 
-            {/* RIGHT: flip camera */}
             <TouchableOpacity
               style={styles.fullCamBottomIconBtn}
               activeOpacity={0.7}
@@ -1965,6 +2133,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 10,
   },
+  headerTopRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   headerEyebrow: {
     fontSize: 12,
     color: TEXT_MUTED,
@@ -1975,6 +2148,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: TEXT_HEADING,
   },
+
   headerUpcomingBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -2020,6 +2194,7 @@ const styles = StyleSheet.create({
     color: "#bbf7d0",
     includeFontPadding: false,
   },
+
   searchContainer: {
     marginTop: 8,
     marginBottom: 10,
@@ -2062,6 +2237,12 @@ const styles = StyleSheet.create({
     paddingRight: 8,
   },
 
+  dateRow: {
+    marginTop: 4,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
   totalsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -2072,32 +2253,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     color: TEXT_SOFT,
-  },
-
-  headerActionButtons: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 10,
-    marginBottom: 2,
-  },
-  dateFilterChipRow: {
-    paddingVertical: 4,
-    paddingRight: 8,
-  },
-
-  refreshBtn: {
-    marginLeft: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
-  },
-  refreshBtnText: {
-    color: TEXT_SOFT,
-    fontSize: 13,
-    fontWeight: "500",
   },
 
   /* Chips */
@@ -2296,7 +2451,7 @@ const styles = StyleSheet.create({
   },
   catAmount: {
     fontSize: 12,
-    color: "#fecaca",
+    color: "#bbf7d0",
   },
   catBarTrack: {
     height: 6,
@@ -2307,7 +2462,7 @@ const styles = StyleSheet.create({
   catBarFill: {
     height: "100%",
     borderRadius: 999,
-    backgroundColor: "rgba(239,68,68,0.9)",
+    backgroundColor: "rgba(34,197,94,0.9)",
   },
 
   sparklineRow: {
@@ -2426,7 +2581,7 @@ const styles = StyleSheet.create({
   rowAmount: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#fecaca",
+    color: "#bbf7d0", // green-ish for income
   },
   rowActions: {
     marginTop: 6,
@@ -2538,22 +2693,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  /* Scan button inside modal */
-  scanBtn: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: main,
-    backgroundColor: "#022c22",
-  },
-  scanBtnText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#bbf7d0",
-  },
-
   /* Error */
   errorBox: {
     marginHorizontal: 16,
@@ -2589,13 +2728,44 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: TEXT_MUTED,
   },
+  modalScrollContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingVertical: 40,
+    paddingHorizontal: 16,
+  },
 
-  /* FAB like Investments */
+  /* FAB stack */
   fabContainer: {
     position: "absolute",
     right: 16,
     bottom: 24,
+    alignItems: "flex-end",
+    gap: 10,
   },
+
+  // ✅ NEW: Auto mini-FAB (matches Investments “Auto”)
+  fabAuto: {
+    width: 52,
+    height: 52,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#020617",
+    borderWidth: 2,
+    borderColor: "rgba(34,197,94,0.65)",
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  fabAutoText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#bbf7d0",
+  },
+
   fab: {
     width: 52,
     height: 52,
@@ -2615,97 +2785,6 @@ const styles = StyleSheet.create({
     color: "white",
   },
 
-  /* Full-screen camera sheet (ChatGPT-like) */
-  fullCamOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "black",
-    justifyContent: "flex-end",
-  },
-  fullCamContainer: {
-    flex: 1,
-    backgroundColor: "black",
-  },
-  fullCamTopSafe: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-  },
-  fullCamTopBar: {
-    height: 52,
-    paddingHorizontal: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-start",
-  },
-  fullCamTopText: {
-    fontSize: 24,
-    color: "white",
-  },
-  fullCamBody: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  fullCamFrameOverlay: {
-    width: "70%",
-    aspectRatio: 1,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.9)",
-  },
-  fullCamBottomIconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  fullCamBottomBar: {
-    height: 120,
-    paddingHorizontal: 40,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "black",
-  },
-  fullCamBottomIconText: {
-    fontSize: 24,
-    color: "white",
-  },
-  fullCamShutterOuter: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 4,
-    borderColor: "white",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  fullCamShutterInner: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: "white",
-  },
-  fullCamShutterInnerActive: {
-    backgroundColor: "#22c55e",
-  },
-  fullCamLeftCluster: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  fullCamCancelText: {
-    fontSize: 13,
-    color: "white",
-    fontWeight: "500",
-  },
   // ✅ NEW: Header logo button (tap to go Dashboard)
   headerLogoBtn: {
     width: 34,
