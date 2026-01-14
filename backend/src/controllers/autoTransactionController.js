@@ -231,6 +231,7 @@ export async function autoCreateFromText(req, res) {
 
     // date: default today
     const when = date ? startOfUTC(date) : startOfUTC(new Date());
+    const whenISO = when.toISOString();
     if (!date) reasons.push("Date defaulted to today");
 
     // description
@@ -266,7 +267,7 @@ export async function autoCreateFromText(req, res) {
       type: inferredType,
       amountMinor: Math.round(amount * 100), // IMPORTANT: minor units assumption (2 decimals)
       currency: cur,
-      date: when,
+      date: whenISO,
       description,
       notes: null,
       tags: [],
@@ -439,7 +440,7 @@ export async function updateDraft(req, res) {
       if (Number.isNaN(d.getTime())) {
         return res.status(400).json({ error: "Invalid date" });
       }
-      c.date = startOfUTC(d);
+      c.date = startOfUTC(d); // store Date, not ISO string
     }
 
     if (body.description !== undefined) {
@@ -518,8 +519,40 @@ export async function postDraft(req, res) {
       status: "draft",
     });
     if (!draft) return res.status(404).json({ error: "Draft not found" });
+    const candidateRaw = draft.candidate || {};
 
-    const candidate = draft.candidate;
+    const candidate = {
+      ...candidateRaw,
+
+      // ✅ REQUIRED: schema doesn't store candidate.accountId, so fallback to draft.accountId
+      accountId: candidateRaw.accountId
+        ? String(candidateRaw.accountId)
+        : String(draft.accountId),
+
+      categoryId:
+        candidateRaw.categoryId === null ||
+        candidateRaw.categoryId === undefined
+          ? null
+          : String(candidateRaw.categoryId),
+
+      currency:
+        typeof candidateRaw.currency === "string"
+          ? candidateRaw.currency.trim().toUpperCase()
+          : candidateRaw.currency,
+
+      // keep date as-is (Date or ISO string are both fine for createTransactionCore)
+      date:
+        candidateRaw.date instanceof Date
+          ? candidateRaw.date.toISOString()
+          : candidateRaw.date,
+    };
+
+    console.log("AUTO POST candidate payload:", {
+      accountId: candidate.accountId,
+      type: candidate.type,
+      currency: candidate.currency,
+      date: candidate.date,
+    });
 
     // NEW: Post using the same core as manual POST /transactions
     const result = await createTransactionCore({

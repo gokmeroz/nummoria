@@ -6,42 +6,24 @@ export async function autoCreateFromText({
   text,
   type,
   date,
+  currency, // ✅ NEW
   reminder,
 }) {
-  const res = await api.post("/auto/transactions/text", {
-    accountId,
-    text,
-    type,
-    date,
-    reminder,
-  });
-  return res.data;
-}
+  const res = await api.post(
+    "/auto/transactions/text",
+    {
+      accountId,
+      text,
+      type,
+      date,
+      currency, // ✅ NEW
+      reminder,
+    },
+    {
+      // ✅ Optional but safe: force JSON for this endpoint
+      headers: { "Content-Type": "application/json" },
+    }
+  );
 
-// GET /auto/transactions/drafts
-export async function getAutoDrafts(status = "draft") {
-  const res = await api.get("/auto/transactions/drafts", {
-    params: { status },
-  });
-  return res.data;
-}
-
-// PATCH /auto/transactions/drafts/:id
-export async function updateAutoDraft(id, payload) {
-  const res = await api.patch(`/auto/transactions/drafts/${id}`, payload);
-  return res.data;
-}
-
-// POST /auto/transactions/drafts/:id/post
-export async function postAutoDraft(id) {
-  const res = await api.post(`/auto/transactions/drafts/${id}/post`);
-  return res.data;
-}
-
-// POST /auto/transactions/drafts/:id/reject
-export async function rejectAutoDraft(id, reason) {
-  const res = await api.post(`/auto/transactions/drafts/${id}/reject`, {
-    reason,
-  });
   return res.data;
 }

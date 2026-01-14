@@ -14,6 +14,7 @@ import React, {
 } from "react";
 import api from "../lib/api";
 import logoUrl from "../assets/nummoria_logo.png";
+import { autoCreateFromText } from "../lib/autoTransactionsApi";
 
 /* --------------------------- Expense-only categories --------------------------- */
 const EXPENSE_CATEGORY_OPTIONS = [
@@ -685,10 +686,16 @@ export default function ExpensesScreen({ accountId }) {
 
     setAutoBusy(true);
     try {
-      const { data } = await api.post("/auto/transactions/text", {
+      const acc = accountsById.get(pickedAccountId);
+      const currency = (acc?.currency || "USD").toUpperCase();
+      const date = new Date().toISOString();
+
+      const data = await autoCreateFromText({
         accountId: pickedAccountId,
-        text: clean,
         type: "expense",
+        currency,
+        date,
+        text: clean,
       });
 
       if (data?.mode === "posted") {
