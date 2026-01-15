@@ -14,6 +14,7 @@ import React, {
 } from "react";
 import api from "../lib/api";
 import logoUrl from "../assets/nummoria_logo.png";
+import { autoCreateFromText } from "../lib/autoTransactionsApi";
 
 /* --------------------------- income-only categories --------------------------- */
 const INCOME_CATEGORY_OPTIONS = [
@@ -670,10 +671,16 @@ export default function incomesScreen({ accountId }) {
 
     setAutoBusy(true);
     try {
-      const { data } = await api.post("/auto/transactions/text", {
+      const acc = accountsById.get(pickedAccountId);
+      const currency = (acc?.currency || "USD").toUpperCase();
+      const date = new Date().toISOString();
+
+      const data = await autoCreateFromText({
         accountId: pickedAccountId,
-        text: clean,
         type: "income",
+        currency,
+        date,
+        text: clean,
       });
 
       if (data?.mode === "posted") {
@@ -919,7 +926,7 @@ export default function incomesScreen({ accountId }) {
     return (
       <div className="space-y-3 p-4 border-b bg-white">
         <div className="flex items-center justify-between gap-3">
-          <h1 className="text-2xl font-bold">Incomes</h1>
+          <h1 className="text-2xl font-bold">incomes</h1>
 
           <div className="flex items-center gap-2">
             <button
