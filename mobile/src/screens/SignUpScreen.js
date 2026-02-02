@@ -24,6 +24,10 @@ const BRAND_GREEN = "#22c55e";
 const TEXT_MUTED = "rgba(148,163,184,1)";
 const TEXT_SOFT = "rgba(148,163,184,0.8)";
 
+// ✅ Apple button
+const APPLE_BG = "#000000";
+const APPLE_TEXT = "#ffffff";
+
 // ✅ Verification persistence keys
 const PENDING_VERIFY_EMAIL_KEY = "pendingVerifyEmail";
 const PENDING_REG_TOKEN_KEY = "pendingRegToken";
@@ -142,7 +146,7 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
       Alert.alert(
         "Verify your email",
         "A verification code has been sent to your email. Please verify to continue.",
-        [{ text: "OK" }]
+        [{ text: "OK" }],
       );
     } catch (e) {
       setSignLoading(false);
@@ -156,6 +160,15 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
 
   async function startSocial(provider) {
     try {
+      // ✅ Apple should only be available on iOS
+      if (provider === "apple" && Platform.OS !== "ios") {
+        Alert.alert(
+          "Unavailable",
+          "Sign in with Apple is available on iOS only.",
+        );
+        return;
+      }
+
       setSocialErr("");
       setSocialLoading(true);
 
@@ -243,7 +256,7 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
       setVerifying(false);
       setVerifyErr(
         e?.response?.data?.error ||
-          "Verification failed. Please check the code and try again."
+          "Verification failed. Please check the code and try again.",
       );
     }
   }
@@ -402,6 +415,24 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
                 {socialLoading ? "Redirecting..." : "Sign up with GitHub"}
               </Text>
             </TouchableOpacity>
+
+            {/* ✅ NEW: Apple (iOS only) */}
+            {Platform.OS === "ios" ? (
+              <TouchableOpacity
+                style={[
+                  styles.socialBtn,
+                  styles.appleBtn, // NEW
+                  socialLoading && styles.buttonDisabled,
+                ]}
+                onPress={() => startSocial("apple")}
+                disabled={socialLoading}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.socialText, styles.appleText]}>
+                  {socialLoading ? "Redirecting..." : "Sign up with Apple"}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
 
             <View style={styles.loginRow}>
               <Text style={styles.loginHint}>Already have an account?</Text>
@@ -595,6 +626,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   socialText: { fontSize: 14, color: "#e5e7eb", fontWeight: "500" },
+  // ✅ Apple styles
+  appleBtn: {
+    backgroundColor: APPLE_BG,
+    borderColor: "rgba(255,255,255,0.12)",
+  },
+  appleText: {
+    fontSize: 14,
+    color: APPLE_TEXT,
+    fontWeight: "600",
+  },
+
   loginRow: {
     marginTop: 20,
     flexDirection: "row",

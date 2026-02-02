@@ -24,6 +24,10 @@ const BRAND_GREEN = "#22c55e";
 const TEXT_MUTED = "rgba(148,163,184,1)";
 const TEXT_SOFT = "rgba(148,163,184,0.8)";
 
+// ✅ Apple button
+const APPLE_BG = "#000000";
+const APPLE_TEXT = "#ffffff";
+
 // Consent (local gate)
 const CONSENT_KEY = (userId) => `consent:${String(userId)}`;
 
@@ -121,7 +125,7 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
 
       Alert.alert(
         "Terms required",
-        "You must accept Terms & Conditions and Cookies to continue."
+        "You must accept Terms & Conditions and Cookies to continue.",
       );
       return;
     }
@@ -211,6 +215,15 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
 
   async function startSocial(provider) {
     try {
+      // ✅ Apple should only be available on iOS
+      if (provider === "apple" && Platform.OS !== "ios") {
+        Alert.alert(
+          "Unavailable",
+          "Sign in with Apple is available on iOS only.",
+        );
+        return;
+      }
+
       setSocialErr("");
       setSocialLoading(true);
       const next = encodeURIComponent("/dashboard");
@@ -280,7 +293,7 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
       setVerifying(false);
       setVerifyErr(
         e?.response?.data?.error ||
-          "Verification failed. Please check the code and try again."
+          "Verification failed. Please check the code and try again.",
       );
     }
   }
@@ -415,7 +428,7 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
               onPress={() =>
                 Alert.alert(
                   "Forgot password",
-                  "Password reset flow coming soon."
+                  "Password reset flow coming soon.",
                 )
               }
             >
@@ -455,6 +468,24 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
                 {socialLoading ? "Redirecting..." : "Sign in with GitHub"}
               </Text>
             </TouchableOpacity>
+
+            {/* ✅ NEW: Apple (iOS only) */}
+            {Platform.OS === "ios" ? (
+              <TouchableOpacity
+                style={[
+                  styles.socialBtn,
+                  styles.appleBtn, // NEW
+                  socialLoading && styles.buttonDisabled,
+                ]}
+                onPress={() => startSocial("apple")}
+                disabled={socialLoading}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.socialText, styles.appleText]}>
+                  {socialLoading ? "Redirecting..." : "Sign in with Apple"}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
 
             <View style={styles.signupRow}>
               <Text style={styles.signupHint}>New around here?</Text>
@@ -712,6 +743,27 @@ const styles = StyleSheet.create({
     color: "#e5e7eb",
     fontWeight: "500",
   },
+  // NEW: Apple button styling
+  appleBtn: {
+    backgroundColor: "#000",
+    borderColor: "#000",
+  },
+  appleText: {
+    color: "#fff",
+    fontWeight: "600",
+  },
+
+  // ✅ Apple styles
+  appleBtn: {
+    backgroundColor: APPLE_BG,
+    borderColor: "rgba(255,255,255,0.12)",
+  },
+  appleText: {
+    fontSize: 14,
+    color: APPLE_TEXT,
+    fontWeight: "600",
+  },
+
   signupRow: {
     marginTop: 20,
     flexDirection: "row",
