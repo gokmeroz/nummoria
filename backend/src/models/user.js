@@ -32,6 +32,7 @@ const userSchema = new mongoose.Schema(
     googleId: { type: String, index: true, sparse: true, unique: false },
     twitterId: { type: String, index: true, sparse: true, unique: false },
     githubId: { type: String, index: true, sparse: true, unique: false },
+    appleId: { type: String, index: true },
 
     //Email verification
     isEmailVerified: { type: Boolean, default: false },
@@ -56,13 +57,13 @@ const userSchema = new mongoose.Schema(
         validator: (arr) =>
           Array.isArray(arr) &&
           arr.every(
-            (s) => typeof s === "string" && s.length >= 1 && s.length <= 40
+            (s) => typeof s === "string" && s.length >= 1 && s.length <= 40,
           ),
         message: "Invalid flags.",
       },
     },
   },
-  { timestamps: { createdAt: "createdAt", updatedAt: false } }
+  { timestamps: { createdAt: "createdAt", updatedAt: false } },
 );
 
 export const User = mongoose.model("User", userSchema);

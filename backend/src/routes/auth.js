@@ -14,6 +14,8 @@ import {
   twitterStart,
   githubStart,
   githubCallback,
+  appleStart,
+  appleCallback,
 } from "../controllers/authController.js";
 
 const router = express.Router();
@@ -39,5 +41,9 @@ router.get("/twitter/callback", twitterCallback);
 // Github OAuth
 router.get("/github", githubStart);
 router.get("/github/callback", githubCallback);
+// Apple OAuth
+router.get("/apple", appleStart);
+router.post("/apple/callback", appleCallback); // form_post
+router.get("/apple/callback", appleCallback); // fallback if query-mode ever used
 
 export default router;
