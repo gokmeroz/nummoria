@@ -15,6 +15,7 @@ import {
   Linking,
   Modal,
 } from "react-native";
+import { AntDesign, FontAwesome, Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api from "../lib/api";
 
@@ -453,6 +454,7 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
               disabled={socialLoading}
               activeOpacity={0.7}
             >
+              <AntDesign name="google" size={18} color="#e5e7eb" />
               <Text style={styles.socialText}>
                 {socialLoading ? "Redirecting..." : "Sign in with Google"}
               </Text>
@@ -464,23 +466,24 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
               disabled={socialLoading}
               activeOpacity={0.7}
             >
+              <FontAwesome name="github" size={18} color="#e5e7eb" />
               <Text style={styles.socialText}>
                 {socialLoading ? "Redirecting..." : "Sign in with GitHub"}
               </Text>
             </TouchableOpacity>
 
-            {/* ✅ NEW: Apple (iOS only) */}
             {Platform.OS === "ios" ? (
               <TouchableOpacity
                 style={[
                   styles.socialBtn,
-                  styles.appleBtn, // NEW
+                  styles.appleBtn,
                   socialLoading && styles.buttonDisabled,
                 ]}
                 onPress={() => startSocial("apple")}
                 disabled={socialLoading}
                 activeOpacity={0.7}
               >
+                <Ionicons name="logo-apple" size={18} color="#fff" />
                 <Text style={[styles.socialText, styles.appleText]}>
                   {socialLoading ? "Redirecting..." : "Sign in with Apple"}
                 </Text>
@@ -731,36 +734,30 @@ const styles = StyleSheet.create({
   socialBtn: {
     marginTop: 10,
     paddingVertical: 11,
+    paddingHorizontal: 14,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "rgba(31,41,55,1)",
     backgroundColor: "#020617",
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 10,
   },
+
   socialText: {
     fontSize: 14,
     color: "#e5e7eb",
     fontWeight: "500",
   },
-  // NEW: Apple button styling
+
   appleBtn: {
     backgroundColor: "#000",
-    borderColor: "#000",
-  },
-  appleText: {
-    color: "#fff",
-    fontWeight: "600",
+    borderColor: "rgba(255,255,255,0.15)",
   },
 
-  // ✅ Apple styles
-  appleBtn: {
-    backgroundColor: APPLE_BG,
-    borderColor: "rgba(255,255,255,0.12)",
-  },
   appleText: {
-    fontSize: 14,
-    color: APPLE_TEXT,
+    color: "#fff",
     fontWeight: "600",
   },
 
