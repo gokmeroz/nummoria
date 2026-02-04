@@ -407,7 +407,8 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
+            {/** UNACTIVATED BEFORE PRODUCTION */}
+            {/* <TouchableOpacity
               style={[styles.socialBtn, socialLoading && styles.buttonDisabled]}
               onPress={() => startSocial("github")}
               disabled={socialLoading}
@@ -417,7 +418,7 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
               <Text style={styles.socialText}>
                 {socialLoading ? "Redirecting..." : "Sign in with GitHub"}
               </Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
 
             {Platform.OS === "ios" ? (
               <TouchableOpacity

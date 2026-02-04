@@ -459,8 +459,8 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
                 {socialLoading ? "Redirecting..." : "Sign in with Google"}
               </Text>
             </TouchableOpacity>
-
-            <TouchableOpacity
+            {/**UNACTIVATED BEFORE PRODUCTION */}
+            {/* <TouchableOpacity
               style={[styles.socialBtn, socialLoading && styles.buttonDisabled]}
               onPress={() => startSocial("github")}
               disabled={socialLoading}
@@ -470,7 +470,7 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
               <Text style={styles.socialText}>
                 {socialLoading ? "Redirecting..." : "Sign in with GitHub"}
               </Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
 
             {Platform.OS === "ios" ? (
               <TouchableOpacity
