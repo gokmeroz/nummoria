@@ -132,8 +132,8 @@ export default function RadialMenuFab({
           // Keep earlier items on top to avoid label hiding
           const stackZ = 1000 - idx;
 
-          const icon = it.icon ?? it.label ?? "•";
-          const title = it.title ?? it.text ?? "";
+          const icon = it.icon ?? it.emoji ?? "•";
+          const title = it.title ?? it.text ?? it.label ?? "";
 
           return (
             <Animated.View

@@ -227,7 +227,7 @@ export default function App() {
                 } catch (e) {
                   console.warn(
                     "[push] device register failed after login:",
-                    e?.message || e
+                    e?.message || e,
                   );
                 }
 
@@ -257,7 +257,7 @@ export default function App() {
                 } catch (e) {
                   console.warn(
                     "[push] device register failed after signup:",
-                    e?.message || e
+                    e?.message || e,
                   );
                 }
 

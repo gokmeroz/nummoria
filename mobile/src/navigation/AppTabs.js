@@ -10,6 +10,7 @@ import IncomeScreen from "../screens/IncomeScreen";
 import InvestmentScreen from "../screens/InvestmentScreen";
 import FinancialAdvisorScreen from "../screens/FinancialAdvisorScreen";
 import ReportsScreen from "../screens/ReportsScreen";
+import ScanReceiptScreen from "../screens/ScanReceiptScreen";
 const Tab = createBottomTabNavigator();
 
 const BRAND_CARD = "#020819";
@@ -122,6 +123,19 @@ export default function AppTabs() {
           ),
           tabBarIcon: ({ focused }) => (
             <Text style={{ fontSize: 18 }}>{focused ? "📄" : "📄"}</Text>
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="ScanReceipt"
+        component={ScanReceiptScreen}
+        options={{
+          title: "Scan Receipt",
+          tabBarLabel: ({ focused }) => (
+            <TabLabel label="Scan Receipt" focused={focused} />
+          ),
+          tabBarIcon: ({ focused }) => (
+            <Text style={{ fontSize: 18 }}>{focused ? "📸" : "📸"}</Text>
           ),
         }}
       />

@@ -180,8 +180,14 @@ export default function DashboardScreen() {
         title: "AI Helper",
         onPress: () => navigation.navigate("Financial Helper"),
       },
+      {
+        key: "scanReceipt",
+        icon: "📸",
+        title: "Scan Receipt",
+        onPress: () => navigation.navigate("ScanReceipt"),
+      },
     ],
-    [navigation]
+    [navigation],
   );
 
   useEffect(() => {
@@ -255,7 +261,7 @@ export default function DashboardScreen() {
           23,
           59,
           59,
-          999
+          999,
         );
 
         let expMinor = 0;

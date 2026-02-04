@@ -1,3 +1,4 @@
+// mobile/src/navigation/MainStack.js
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
@@ -7,6 +8,7 @@ import IncomeScreen from "../screens/IncomeScreen";
 import InvestmentsScreen from "../screens/InvestmentScreen";
 import ReportsScreen from "../screens/ReportsScreen";
 import FinancialHelperScreen from "../screens/FinancialAdvisorScreen";
+import ScanReceiptScreen from "../screens/ScanReceiptScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -19,6 +21,7 @@ export default function MainStack() {
       <Stack.Screen name="Investments" component={InvestmentsScreen} />
       <Stack.Screen name="Reports" component={ReportsScreen} />
       <Stack.Screen name="Financial Helper" component={FinancialHelperScreen} />
+      <Stack.Screen name="ScanReceipt" component={ScanReceiptScreen} />
     </Stack.Navigator>
   );
 }
