@@ -38,7 +38,7 @@ async function callLLM(
   context,
   tonePreference,
   message,
-  modelType
+  modelType,
 ) {
   const input = [
     "SYSTEM:",
@@ -55,8 +55,8 @@ async function callLLM(
       typeof response?.response?.text === "function"
         ? response.response.text()
         : typeof response?.text === "function"
-        ? response.text()
-        : "";
+          ? response.text()
+          : "";
     return (text || "").trim() || "Sorry, I couldn’t generate a response.";
   }
 
@@ -167,7 +167,7 @@ function parseDateRangeFromQuery(q) {
 
   const monthYear = new RegExp(
     `(${Object.keys(MONTHS).join("|")})\\s*(\\d{4})`,
-    "i"
+    "i",
   ).exec(s);
   if (monthYear) {
     const m = MONTHS[monthYear[1].toLowerCase()],
@@ -215,7 +215,7 @@ function parseDateRangeFromQuery(q) {
         23,
         59,
         59,
-        999
+        999,
       ),
       label: "yesterday",
     };
@@ -250,7 +250,7 @@ function detectCategoryFromQuery(q) {
 
 function filterTx(
   txs,
-  { start = null, end = null, type = null, category = null } = {}
+  { start = null, end = null, type = null, category = null } = {},
 ) {
   return txs.filter((t) => {
     const d = new Date(t.date);
@@ -429,19 +429,19 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
 
     const askSpend =
       /(how much|ne kadar).*(spend|harca|gider)|total.*(spend|gider)|harcamam|giderim/i.test(
-        q
+        q,
       );
     const askIncome =
       /(how much|ne kadar).*(income|gelir)|total.*(income|gelir)|maa[sş]/i.test(
-        q
+        q,
       );
     const askInvest =
       /(how much|ne kadar).*(invest|yatır)|invest(ed|ment)|yat[ıi]r[ıi]m/i.test(
-        q
+        q,
       );
     const askTopCats =
       /(top|en [cç]ok).*(categories|kategoriler)|category breakdown|dağılım/i.test(
-        q
+        q,
       );
     const askLargest =
       /(largest|biggest|en b[uü]y[uü]k).*(expense|gider)/i.test(q);
@@ -463,11 +463,11 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
         const lines = [
           `${head}`,
           `${bullet} ${catLine}spend in ${label}: ${total.toFixed(
-            2
+            2,
           )} (${cnt} tx, avg ${avg.toFixed(2)}).`,
         ];
         const byCat = groupByCategory(base).map(
-          ([k, v]) => `${k}: ${Math.abs(v).toFixed(2)}`
+          ([k, v]) => `${k}: ${Math.abs(v).toFixed(2)}`,
         );
         if (!category && byCat.length)
           lines.push(`\nBreakdown: ${topN(byCat, 5).join(" • ")}`);
@@ -487,7 +487,7 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
       const avg = cnt ? total / cnt : 0;
       if (cnt) {
         return `${head}\n${bullet} Income in ${label}: ${total.toFixed(
-          2
+          2,
         )} (${cnt} tx, avg ${avg.toFixed(2)}).\n\n${disclaimer}`;
       } else {
         return `${head}\n${bullet} I don't see income in ${label}. If this seems wrong, upload a period covering payroll.\n\n${disclaimer}`;
@@ -500,7 +500,7 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
       const cnt = base.length;
       if (cnt) {
         return `${head}\n${bullet} Investments in ${label}: ${total.toFixed(
-          2
+          2,
         )} (${cnt} tx).\n\n${disclaimer}`;
       } else {
         return `${head}\n${bullet} No investment transactions found in ${label}. Try a wider window or confirm category labels.\n\n${disclaimer}`;
@@ -513,17 +513,17 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
         return `${head}\n${bullet} No transactions in ${label}. Try a wider range.\n\n${disclaimer}`;
       }
       const byCat = groupByCategory(base).map(
-        ([k, v]) => `${k}: ${v.toFixed(2)}`
+        ([k, v]) => `${k}: ${v.toFixed(2)}`,
       );
       return `${head}\n${bullet} Top categories in ${label}: ${topN(
         byCat,
-        5
+        5,
       ).join(" • ")}\n\n${disclaimer}`;
     }
 
     if (askLargest) {
       const base = filterTx(txs, { start, end, type: "expense" }).filter(
-        (t) => t.amount < 0
+        (t) => t.amount < 0,
       );
       base.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
       const top = topN(base, 5);
@@ -534,8 +534,8 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
         .map(
           (t) =>
             `- ${toISO(new Date(t.date))} ${t.description || "—"} (${Math.abs(
-              t.amount
-            ).toFixed(2)})`
+              t.amount,
+            ).toFixed(2)})`,
         )
         .join("\n");
       return `${head}\nLargest expenses in ${label}:\n${list}\n\n${disclaimer}`;
@@ -574,8 +574,8 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
             endM = endOfMonth(d);
           const income = sumAmounts(
             filterTx(txs, { start: startM, end: endM, type: "income" }).filter(
-              (t) => t.amount > 0
-            )
+              (t) => t.amount > 0,
+            ),
           );
           const expense = Math.abs(
             sumAmounts(
@@ -583,14 +583,14 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
                 start: startM,
                 end: endM,
                 type: "expense",
-              }).filter((t) => t.amount < 0)
-            )
+              }).filter((t) => t.amount < 0),
+            ),
           );
           const net = income - expense;
           return `- ${startM.getFullYear()}-${String(
-            startM.getMonth() + 1
+            startM.getMonth() + 1,
           ).padStart(2, "0")}: income ${income.toFixed(
-            2
+            2,
           )} • out ${expense.toFixed(2)} • net ${net.toFixed(2)}`;
         })
         .join("\n");
@@ -614,51 +614,51 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
   if (typeof sr === "number") {
     if (sr < 15)
       recs.push(
-        `Push savings rate toward 20%+. Start with +5% auto-transfer on payday.`
+        `Push savings rate toward 20%+. Start with +5% auto-transfer on payday.`,
       );
     else if (sr < 30)
       recs.push(`Solid savings rate (${sr}%). Nudge +1% each quarter.`);
     else
       recs.push(
-        `Strong savings rate (${sr}%). Maintain ≥20% and review quarterly.`
+        `Strong savings rate (${sr}%). Maintain ≥20% and review quarterly.`,
       );
   }
   if (typeof burn === "number" && burn > 0) {
     recs.push(
       `Monthly burn ≈ ${burn.toFixed(
-        2
-      )}. Set weekly caps for Dining/Groceries/Transport and enable alerts.`
+        2,
+      )}. Set weekly caps for Dining/Groceries/Transport and enable alerts.`,
     );
   }
   if (typeof alloc === "number") {
     if (alloc < 10)
       recs.push(
-        `Low investment allocation (${alloc}%). After 3–6 mo EF, DCA into diversified ETFs.`
+        `Low investment allocation (${alloc}%). After 3–6 mo EF, DCA into diversified ETFs.`,
       );
     else if (alloc > 60)
       recs.push(
-        `High allocation (${alloc}%). Ensure 3–6 months liquidity and rebalance.`
+        `High allocation (${alloc}%). Ensure 3–6 months liquidity and rebalance.`,
       );
     else
       recs.push(
-        `Investment allocation (${alloc}%). Rebalance quarterly to your target mix.`
+        `Investment allocation (${alloc}%). Rebalance quarterly to your target mix.`,
       );
   }
   if (typeof stab === "number" && stab < 70) {
     recs.push(
-      `Income stability ${stab}%. Build/maintain a 3–6 month emergency fund first.`
+      `Income stability ${stab}%. Build/maintain a 3–6 month emergency fund first.`,
     );
   }
   if (typeof risk === "number") {
     recs.push(
       risk < 55
         ? `Risk score ${risk}/100 (riskier). Trim concentrated bets and rebalance.`
-        : `Risk score ${risk}/100 (okay). Rebalance quarterly.`
+        : `Risk score ${risk}/100 (okay). Rebalance quarterly.`,
     );
   }
   if (!recs.length)
     recs.push(
-      `Upload more months (CSV preferred) so I can give sharper, number-backed actions.`
+      `Upload more months (CSV preferred) so I can give sharper, number-backed actions.`,
     );
 
   const snap = [
@@ -762,7 +762,7 @@ export async function ingestPdf(req, res) {
       // LLM fallback allowed if either key exists
       parsedTransactions = await parseTransactionsFromText(contentText, {
         useLLMFallback: Boolean(
-          process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY
+          process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY,
         ),
       });
 
@@ -795,7 +795,7 @@ export async function ingestPdf(req, res) {
         console.warn(
           "Mongo not connected (readyState:",
           mongoose.connection.readyState,
-          ")"
+          ")",
         );
       }
     } catch (e) {
@@ -827,6 +827,97 @@ export async function ingestPdf(req, res) {
       message: "Failed to ingest file",
       details: isDev ? String(err.message || err) : undefined,
     });
+  }
+}
+// ---------------- AI ADVISOR (quota-limited) ----------------
+export async function aiAdvisor(req, res) {
+  try {
+    const userId = req.user?._id || req.user?.id || null;
+    const { message, tonePreference, fileId } = req.body;
+
+    if (!message || !String(message).trim()) {
+      return res.status(400).json({ error: "Missing message" });
+    }
+
+    // Plan prompt selection (your system uses User.subscription = Plus/Premium)
+    let subscription = "Plus";
+    if (userId) {
+      const user = await User.findById(userId).select("subscription");
+      if (user?.subscription === "Premium" || user?.subscription === "Plus") {
+        subscription = user.subscription;
+      } else {
+        // if user exists but has no subscription set, treat as free
+        subscription = "Free";
+      }
+    } else {
+      subscription = "Free";
+    }
+
+    const systemPrompt = getPromptForSubscription(subscription);
+
+    // Optional context (same behavior as chat)
+    let fileDoc = null;
+    if (fileId) fileDoc = await AiAdvisorFile.findById(fileId);
+    else if (userId)
+      fileDoc = await AiAdvisorFile.findOne({ userId }).sort({ createdAt: -1 });
+
+    const context = fileDoc
+      ? {
+          parsedTransactions: fileDoc.parsedTransactions || [],
+          computedMetrics: fileDoc.computedMetrics || {},
+        }
+      : {
+          parsedTransactions: [],
+          computedMetrics: {},
+        };
+
+    // If no API keys, fallback to rule-based (won't be amazing but works)
+    if (!openai && !gemini) {
+      const reply = buildRuleBasedReply(
+        context,
+        tonePreference || "formal",
+        message,
+      );
+      return res.json({
+        reply,
+        quota: req.aiQuota || null,
+      });
+    }
+
+    const agentToUse = ACTIVE_AGENT;
+
+    try {
+      const reply = await callLLM(
+        systemPrompt,
+        context,
+        tonePreference,
+        message,
+        agentToUse,
+      );
+
+      return res.json({
+        reply,
+        quota: req.aiQuota || null, // include remaining/reset info for UI
+      });
+    } catch (e) {
+      // fallback if LLM fails
+      const reply = buildRuleBasedReply(
+        context,
+        tonePreference || "formal",
+        message,
+      );
+
+      return res.json({
+        reply: isDev
+          ? reply +
+            `\n\n(Dev note: AI call to ${agentToUse} failed; served rule-based reply.)`
+          : reply,
+        quota: req.aiQuota || null,
+      });
+    }
+  } catch (err) {
+    console.error("aiAdvisor error:", err);
+    return res.status(500).json({ error: "AI advisor failed" });
   }
 }
 
@@ -874,7 +965,7 @@ export async function chat(req, res) {
       const reply = buildRuleBasedReply(
         context,
         tonePreference || "formal",
-        message
+        message,
       );
       return res.json({ reply });
     }
@@ -887,7 +978,7 @@ export async function chat(req, res) {
         context,
         tonePreference,
         message,
-        agentToUse
+        agentToUse,
       );
       return res.json({ reply });
     } catch (e) {
@@ -895,12 +986,12 @@ export async function chat(req, res) {
         console.warn(
           `${agentToUse} failed, using fallback:`,
           e?.status || e?.code,
-          e?.message
+          e?.message,
         );
       const reply = buildRuleBasedReply(
         context,
         tonePreference || "formal",
-        message
+        message,
       );
       if (isDev) {
         return res.json({
