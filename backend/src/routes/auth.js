@@ -16,6 +16,7 @@ import {
   githubCallback,
   appleStart,
   appleCallback,
+  appleMobile,
 } from "../controllers/authController.js";
 
 const router = express.Router();
@@ -45,5 +46,6 @@ router.get("/github/callback", githubCallback);
 router.get("/apple", appleStart);
 router.post("/apple/callback", appleCallback); // form_post
 router.get("/apple/callback", appleCallback); // fallback if query-mode ever used
+router.post("/apple/mobile", appleMobile);
 
 export default router;

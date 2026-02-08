@@ -1,47 +1,31 @@
 {
   "expo": {
     "name": "Nummoria",
-    "slug": "nummoria",
+    "slug": "mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/nummoria_logo.png",
-    "userInterfaceStyle": "light",
-    "newArchEnabled": true,
-    "assetBundlePatterns": ["**/*"],
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/nummoria_logo.png",
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#020617"
+      "backgroundColor": "#ffffff"
     },
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.mobile",
-      "deploymentTarget": "15.1",
+      "bundleIdentifier": "com.gokmeroz.nummoria",
       "infoPlist": {
         "NSCameraUsageDescription": "This app needs camera access to scan receipt QR codes and automatically fill expense details.",
-        "ITSAppUsesNonExemptEncryption": false,
-
-        "NSAppTransportSecurity": {
-          "NSAllowsArbitraryLoads": true
-        }
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
-      "usesCleartextTraffic": true,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/nummoria_logo.png",
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
-      "permissions": [
-        "CAMERA",
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
-      ],
-      "package": "com.anonymous.mobile"
-    },
-    "web": {
-      "favicon": "./assets/nummoria_logo.png"
+      "package": "com.gokmeroz.nummoria"
     },
     "plugins": [
       [
@@ -50,7 +34,7 @@
           "cameraPermission": "Allow Nummoria to access your camera to scan receipt QR codes."
         }
       ],
-      "expo-build-properties"
+      "expo-apple-authentication"
     ],
     "extra": {
       "eas": {

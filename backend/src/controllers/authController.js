@@ -883,6 +883,127 @@ export async function appleCallback(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+// ───────────────────────── Apple (MOBILE / Expo) ─────────────────────────
+//
+// Mobile flow: Expo gets identityToken from Apple native prompt,
+// then mobile sends identityToken (+ optional fullName) here.
+// No redirect_uri, no client_secret needed.
+export async function appleMobile(req, res) {
+  try {
+    const { identityToken, fullName } = req.body || {};
+
+    if (!identityToken) {
+      return res.status(400).json({ error: "identityToken is required" });
+    }
+
+    if (!APPLE_CLIENT_ID) {
+      return res.status(500).json({
+        error:
+          "APPLE_CLIENT_ID is missing in env (set it to your iOS bundle id).",
+      });
+    }
+
+    // Verify token signature + claims (issuer/audience)
+    const payload = await verifyAppleIdToken(identityToken);
+
+    const appleId = String(payload.sub || "");
+    if (!appleId) {
+      return res.status(400).json({ error: "Apple token missing sub" });
+    }
+
+    // Apple may provide email only on first authorization, sometimes null later
+    const email = (payload.email || "").toLowerCase();
+    const emailVerified =
+      String(payload.email_verified || payload.email_verified === true) ===
+      "true";
+
+    // optional display name (first time only from mobile)
+    const displayName =
+      (fullName && typeof fullName === "string" ? fullName.trim() : "") || "";
+
+    // Find by appleId OR email (if email exists)
+    let user = await User.findOne({
+      $or: [{ appleId }, ...(email ? [{ email }] : [])],
+    });
+
+    if (!user) {
+      const safeEmail = (email || `apple_${appleId}@apple.local`).toLowerCase();
+
+      user = await User.create({
+        email: safeEmail,
+        name: displayName,
+        appleId,
+        lastLogin: new Date(),
+        isActive: true,
+        // if email missing, treat as verified (no email verification needed for Apple)
+        isEmailVerified: email ? !!emailVerified : true,
+        emailVerifiedAt: new Date(),
+      });
+    } else {
+      let changed = false;
+
+      if (!user.appleId) {
+        user.appleId = appleId;
+        changed = true;
+      }
+
+      // Upgrade placeholder email if Apple gives real email later
+      if (email && user.email?.endsWith("@apple.local")) {
+        user.email = email;
+        changed = true;
+      }
+
+      // Set name only if empty
+      if (displayName && !user.name) {
+        user.name = displayName;
+        changed = true;
+      }
+
+      user.lastLogin = new Date();
+      changed = true;
+
+      if (!user.isEmailVerified) {
+        user.isEmailVerified = true;
+        user.emailVerifiedAt = new Date();
+        changed = true;
+      }
+
+      if (changed) await user.save();
+    }
+
+    // Issue your normal JWT for mobile
+    const token = jwt.sign(
+      { id: user._id, email: user.email, role: user.role || "user" },
+      JWT_SECRET,
+      { expiresIn: "8h" },
+    );
+
+    return res.json({
+      ok: true,
+      token,
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        tz: user.tz,
+        baseCurrency: user.baseCurrency,
+        profession: user.profession,
+        createdAt: user.createdAt,
+        lastLogin: user.lastLogin,
+        isActive: user.isActive,
+        isEmailVerified: user.isEmailVerified,
+        subscription: user.subscription,
+      },
+    });
+  } catch (err) {
+    console.log("[APPLE_MOBILE] error:", err?.message);
+    return res.status(400).json({
+      error: "Apple sign-in failed",
+      details: String(err?.message || err),
+    });
+  }
+}
 
 /* ───────────────────────────── Twitter OAuth ──────────────────────────── */
 

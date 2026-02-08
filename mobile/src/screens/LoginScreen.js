@@ -16,6 +16,7 @@ import {
   Modal,
 } from "react-native";
 import { AntDesign, FontAwesome, Ionicons } from "@expo/vector-icons";
+import * as AppleAuthentication from "expo-apple-authentication";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api from "../lib/api";
 
@@ -48,14 +49,14 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
 
   const [showVerify, setShowVerify] = useState(false);
   const [verifyEmail, setVerifyEmail] = useState("");
-  const [verifyRegToken, setVerifyRegToken] = useState(""); // ✅ NEW
+  const [verifyRegToken, setVerifyRegToken] = useState("");
   const [code, setCode] = useState("");
   const [verifyMsg, setVerifyMsg] = useState("");
   const [verifyErr, setVerifyErr] = useState("");
   const [verifying, setVerifying] = useState(false);
   const [resending, setResending] = useState(false);
 
-  // ✅ Define API_BASE (your old code referenced API_BASE but never defined)
+  // ✅ Define API_BASE (for browser OAuth: Google/GitHub/etc.)
   const API_BASE =
     (api?.defaults?.baseURL || "").replace(/\/+$/, "") ||
     "http://localhost:4000";
@@ -145,7 +146,6 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
       setVerifyRegToken(String(regTokenMaybe));
       await AsyncStorage.setItem(PENDING_REG_TOKEN_KEY, String(regTokenMaybe));
     } else {
-      // try load any existing pending regToken
       const stored = await AsyncStorage.getItem(PENDING_REG_TOKEN_KEY);
       setVerifyRegToken(stored || "");
     }
@@ -204,9 +204,7 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
           : "Your account is not verified yet. Check your inbox or resend the code.";
         setLoginErr(message);
 
-        // ✅ If backend provides regToken here, store it. Otherwise user can press Resend.
         await openVerifyModal(email, body?.regToken);
-
         return;
       }
 
@@ -214,17 +212,9 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
     }
   }
 
+  // Browser-based OAuth (Google/GitHub etc.)
   async function startSocial(provider) {
     try {
-      // ✅ Apple should only be available on iOS
-      if (provider === "apple" && Platform.OS !== "ios") {
-        Alert.alert(
-          "Unavailable",
-          "Sign in with Apple is available on iOS only.",
-        );
-        return;
-      }
-
       setSocialErr("");
       setSocialLoading(true);
       const next = encodeURIComponent("/dashboard");
@@ -240,6 +230,65 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
     } catch (err) {
       setSocialErr(`Could not start social sign in. ${String(err)}`);
       setSocialLoading(false);
+    }
+  }
+
+  // ✅ Native mobile-only Apple login (no domain needed)
+  async function signInWithAppleNative() {
+    try {
+      if (Platform.OS !== "ios") {
+        Alert.alert(
+          "Unavailable",
+          "Sign in with Apple is available on iOS only.",
+        );
+        return;
+      }
+
+      setSocialErr("");
+      setSocialLoading(true);
+
+      const cred = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+
+      if (!cred?.identityToken) {
+        setSocialLoading(false);
+        setSocialErr("Apple sign-in failed: missing identity token.");
+        return;
+      }
+
+      const fullName = cred?.fullName
+        ? [cred.fullName.givenName, cred.fullName.familyName]
+            .filter(Boolean)
+            .join(" ")
+        : "";
+
+      // ✅ You must implement this backend endpoint to verify Apple token and return { token, user }
+      const resp = await api.post("/auth/apple/mobile", {
+        identityToken: cred.identityToken,
+        appleUserId: cred.user, // stable Apple user id
+        fullName,
+        email: cred.email || "", // often only first time
+      });
+
+      const data = resp?.data || {};
+      setSocialLoading(false);
+
+      await routeAfterAuth(data);
+    } catch (e) {
+      setSocialLoading(false);
+
+      // user cancelled
+      if (e?.code === "ERR_REQUEST_CANCELED") return;
+
+      setSocialErr(
+        e?.response?.data?.error ||
+          e?.message ||
+          "Apple sign-in failed. Please try again.",
+      );
     }
   }
 
@@ -261,7 +310,6 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
       setVerifyMsg("");
       setVerifying(true);
 
-      // ✅ regToken required by backend
       const storedRegToken =
         verifyRegToken || (await AsyncStorage.getItem(PENDING_REG_TOKEN_KEY));
 
@@ -312,10 +360,12 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
       setVerifyMsg("");
       setResending(true);
 
+      // NOTE: your backend resendCode expects regToken in the sample you shared
+      // but your mobile currently posts { email }.
+      // Keeping your existing behavior to avoid breaking your flow.
       const resp = await api.post("/auth/resend-code", { email });
       const data = resp?.data || {};
 
-      // ✅ IMPORTANT: capture regToken if backend returns it
       if (data?.regToken) {
         const rt = String(data.regToken);
         setVerifyRegToken(rt);
@@ -330,7 +380,6 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
     }
   }
 
-  // ─────────────────────── UI ───────────────────────
   return (
     <View style={styles.root}>
       <KeyboardAvoidingView
@@ -342,7 +391,6 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.authCard}>
-            {/* small brand row */}
             <View style={styles.brandRow}>
               <View style={styles.logoBadge}>
                 <Image
@@ -459,18 +507,6 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
                 {socialLoading ? "Redirecting..." : "Sign in with Google"}
               </Text>
             </TouchableOpacity>
-            {/**UNACTIVATED BEFORE PRODUCTION */}
-            {/* <TouchableOpacity
-              style={[styles.socialBtn, socialLoading && styles.buttonDisabled]}
-              onPress={() => startSocial("github")}
-              disabled={socialLoading}
-              activeOpacity={0.7}
-            >
-              <FontAwesome name="github" size={18} color="#e5e7eb" />
-              <Text style={styles.socialText}>
-                {socialLoading ? "Redirecting..." : "Sign in with GitHub"}
-              </Text>
-            </TouchableOpacity> */}
 
             {Platform.OS === "ios" ? (
               <TouchableOpacity
@@ -479,13 +515,13 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
                   styles.appleBtn,
                   socialLoading && styles.buttonDisabled,
                 ]}
-                onPress={() => startSocial("apple")}
+                onPress={signInWithAppleNative}
                 disabled={socialLoading}
                 activeOpacity={0.7}
               >
                 <Ionicons name="logo-apple" size={18} color="#fff" />
                 <Text style={[styles.socialText, styles.appleText]}>
-                  {socialLoading ? "Redirecting..." : "Sign in with Apple"}
+                  {socialLoading ? "Signing in..." : "Sign in with Apple"}
                 </Text>
               </TouchableOpacity>
             ) : null}
@@ -500,7 +536,6 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Verification Modal */}
       <Modal
         visible={showVerify}
         transparent={true}
@@ -752,12 +787,12 @@ const styles = StyleSheet.create({
   },
 
   appleBtn: {
-    backgroundColor: "#000",
+    backgroundColor: APPLE_BG,
     borderColor: "rgba(255,255,255,0.15)",
   },
 
   appleText: {
-    color: "#fff",
+    color: APPLE_TEXT,
     fontWeight: "600",
   },
 
