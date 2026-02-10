@@ -1,5 +1,6 @@
 // backend/src/controllers/authController.js
 import "../config/env.js"; // <- MUST be first
+
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
@@ -8,7 +9,8 @@ import { User } from "../models/user.js";
 import { requireEnv } from "../config/env.js";
 import { setAuthCookie, clearAuthCookie } from "../utils/cookies.js";
 import { createRegToken, readRegToken } from "../utils/registrationToken.js";
-// NEW: Apple Sign-In verification + client_secret JWT
+
+// Apple Sign-In verification + client_secret JWT
 import { SignJWT, importPKCS8, createRemoteJWKSet, jwtVerify } from "jose";
 
 /* ─────────────────────────── Config & Flags ─────────────────────────── */
@@ -40,13 +42,15 @@ const {
 } = process.env;
 const { GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GITHUB_REDIRECT_URI } =
   process.env;
-// NEW: Apple OAuth env
+
+// Apple OAuth env
 const {
   APPLE_CLIENT_ID,
   APPLE_REDIRECT_URI,
   APPLE_TEAM_ID,
   APPLE_KEY_ID,
   APPLE_PRIVATE_KEY,
+  APPLE_ALLOWED_AUDIENCES, // ✅ NEW: comma-separated allowed audiences for mobile/dev
 } = process.env;
 
 /* ─────────────────────────── Small utils ────────────────────────────── */
@@ -84,12 +88,47 @@ function maskEmail(email = "") {
     u[u.length - 1]
   }@${d}`;
 }
-// NEW: Apple client_secret generation (ES256 JWT) + id_token verification
+
+/* ───────────────────────── Apple helpers ───────────────────────── */
+
 function normalizeApplePrivateKey(k = "") {
   // supports env var with \n
   return String(k).replace(/\\n/g, "\n");
 }
 
+// ✅ Debug helper: decode payload to see aud/iss quickly (NOT a verification)
+function decodeJwtPayloadUnsafe(token) {
+  try {
+    const parts = String(token).split(".");
+    if (parts.length < 2) return null;
+
+    // base64url -> base64
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+    const json = Buffer.from(padded, "base64").toString("utf8");
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+// ✅ Allow multiple audiences for Apple mobile tokens (Expo Go/dev client/testflight differences)
+function getAppleAudiences() {
+  const list = String(APPLE_ALLOWED_AUDIENCES || "")
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean);
+
+  // Always include APPLE_CLIENT_ID at front if set
+  if (APPLE_CLIENT_ID && !list.includes(APPLE_CLIENT_ID)) {
+    list.unshift(APPLE_CLIENT_ID);
+  }
+
+  if (!list.length && APPLE_CLIENT_ID) return [APPLE_CLIENT_ID];
+  return list;
+}
+
+// Apple client_secret generation (ES256 JWT) for web OAuth exchange
 async function createAppleClientSecret() {
   if (
     !APPLE_TEAM_ID ||
@@ -103,7 +142,6 @@ async function createAppleClientSecret() {
   }
 
   const now = Math.floor(Date.now() / 1000);
-  // Apple allows long expirations (up to months). Keep it short-ish for safety.
   const exp = now + 60 * 60; // 1 hour
 
   const pk = await importPKCS8(
@@ -125,13 +163,21 @@ const APPLE_JWKS = createRemoteJWKSet(
   new URL("https://appleid.apple.com/auth/keys"),
 );
 
+// ✅ Verify Apple id_token / identityToken
 async function verifyAppleIdToken(idToken) {
-  // Validates signature and standard claims
+  const audiences = getAppleAudiences();
+  if (!audiences.length) {
+    throw new Error(
+      "Apple audiences not configured. Set APPLE_CLIENT_ID and/or APPLE_ALLOWED_AUDIENCES.",
+    );
+  }
+
   const { payload } = await jwtVerify(idToken, APPLE_JWKS, {
     issuer: "https://appleid.apple.com",
-    audience: APPLE_CLIENT_ID,
+    audience: audiences, // ✅ string[] supported
   });
-  return payload; // contains sub, email (sometimes), email_verified, etc.
+
+  return payload;
 }
 
 /* ─────────────────────────── Mailer (inline) ─────────────────────────── */
@@ -352,6 +398,7 @@ export async function login(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+
 export async function logout(_req, res) {
   clearAuthCookie(res);
   return res.json({ ok: true });
@@ -416,6 +463,7 @@ export async function verifyEmail(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+
 // Verify email for an EXISTING user (admin-resend flow)
 export async function verifyExistingEmail(req, res) {
   try {
@@ -560,7 +608,7 @@ export async function resetPassword(req, res) {
       });
     }
 
-    // NEW: allow lookup by userId OR email (backward compatible)
+    // allow lookup by userId OR email (backward compatible)
     const query = userId
       ? { _id: userId }
       : { email: String(email).toLowerCase() };
@@ -575,7 +623,6 @@ export async function resetPassword(req, res) {
       return res.status(400).json({ error: "Invalid or expired token" });
     }
 
-    // bcrypt compare (matches forgotPassword)
     const ok = await bcrypt.compare(token, user.resetPasswordTokenHash);
     if (!ok) return res.status(400).json({ error: "Invalid or expired token" });
 
@@ -583,7 +630,7 @@ export async function resetPassword(req, res) {
     user.resetPasswordTokenHash = null;
     user.resetPasswordExpiresAt = null;
 
-    // NEW: recommended — reset should also kill existing sessions
+    // recommended — reset should also kill existing sessions
     user.authInvalidBefore = new Date();
 
     await user.save();
@@ -594,6 +641,161 @@ export async function resetPassword(req, res) {
   }
 }
 
+/* ───────────────────────────── Apple OAuth (WEB) ───────────────────────────── */
+
+export async function appleStart(req, res) {
+  try {
+    if (!APPLE_CLIENT_ID || !APPLE_REDIRECT_URI) {
+      return res.status(500).json({
+        error:
+          "Apple OAuth not configured. Set APPLE_CLIENT_ID and APPLE_REDIRECT_URI.",
+      });
+    }
+
+    const state = encodeURIComponent(sanitizeNext(req.query.next || "/"));
+
+    const params = new URLSearchParams({
+      response_type: "code",
+      response_mode: "form_post",
+      client_id: APPLE_CLIENT_ID,
+      redirect_uri: APPLE_REDIRECT_URI,
+      scope: "name email",
+      state,
+    });
+
+    const authUrl = `https://appleid.apple.com/auth/authorize?${params.toString()}`;
+    return res.redirect(authUrl);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+export async function appleCallback(req, res) {
+  try {
+    const code = req.body?.code || req.query?.code;
+    const state = req.body?.state || req.query?.state;
+
+    if (!code) return res.status(400).json({ error: "Missing code" });
+
+    const client_secret = await createAppleClientSecret();
+
+    const tokenParams = new URLSearchParams({
+      client_id: APPLE_CLIENT_ID,
+      client_secret,
+      code,
+      grant_type: "authorization_code",
+      redirect_uri: APPLE_REDIRECT_URI,
+    });
+
+    const tokenResp = await fetch("https://appleid.apple.com/auth/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: tokenParams.toString(),
+    });
+
+    if (!tokenResp.ok) {
+      const t = await tokenResp.text();
+      return res
+        .status(400)
+        .json({ error: "Apple token exchange failed", details: t });
+    }
+
+    const tokens = await tokenResp.json();
+    const id_token = tokens.id_token;
+
+    if (!id_token) {
+      return res.status(400).json({ error: "Missing id_token from Apple" });
+    }
+
+    const payload = await verifyAppleIdToken(id_token);
+
+    const appleId = String(payload.sub || "");
+    const email = (payload.email || "").toLowerCase();
+    const emailVerified =
+      String(payload.email_verified || payload.email_verified === true) ===
+      "true";
+
+    let displayName = "";
+    const userRaw = req.body?.user;
+    if (userRaw) {
+      try {
+        const userObj =
+          typeof userRaw === "string" ? JSON.parse(userRaw) : userRaw;
+        const first = userObj?.name?.firstName || "";
+        const last = userObj?.name?.lastName || "";
+        displayName = `${first} ${last}`.trim();
+      } catch {
+        // ignore
+      }
+    }
+
+    if (!appleId)
+      return res.status(400).json({ error: "Apple token missing sub" });
+
+    let user = await User.findOne({
+      $or: [{ appleId }, ...(email ? [{ email }] : [])],
+    });
+
+    if (!user) {
+      const safeEmail = (email || `apple_${appleId}@apple.local`).toLowerCase();
+
+      user = await User.create({
+        email: safeEmail,
+        name: displayName || "",
+        appleId,
+        lastLogin: new Date(),
+        isActive: true,
+        isEmailVerified: email ? !!emailVerified : true,
+        emailVerifiedAt: new Date(),
+      });
+    } else {
+      let changed = false;
+
+      if (!user.appleId) {
+        user.appleId = appleId;
+        changed = true;
+      }
+
+      if (email && user.email?.endsWith("@apple.local")) {
+        user.email = email;
+        changed = true;
+      }
+
+      if (displayName && !user.name) {
+        user.name = displayName;
+        changed = true;
+      }
+
+      user.lastLogin = new Date();
+      changed = true;
+
+      if (!user.isEmailVerified) {
+        user.isEmailVerified = true;
+        user.emailVerifiedAt = new Date();
+        changed = true;
+      }
+
+      if (changed) await user.save();
+    }
+
+    const token = jwt.sign(
+      { id: user._id, email: user.email, role: user.role || "user" },
+      JWT_SECRET,
+      { expiresIn: "8h" },
+    );
+
+    setAuthCookie(res, token);
+
+    const next = sanitizeNext(state ? decodeURIComponent(state) : "/");
+    const qs = new URLSearchParams({ provider: "apple" });
+    if (next) qs.set("next", next);
+
+    const redirectTo = `${FRONTEND_URL}/oauth-callback?${qs.toString()}`;
+    return res.redirect(redirectTo);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+}
 /* ───────────────────────────── Google OAuth ───────────────────────────── */
 
 export async function googleStart(req, res) {
@@ -707,11 +909,10 @@ export async function googleCallback(req, res) {
       { expiresIn: "8h" },
     );
 
-    // ⬇️ Set cookie; keep token in URL for backward compatibility (front-end can ignore)
     setAuthCookie(res, token);
 
     const next = sanitizeNext(state ? decodeURIComponent(state) : "/");
-    const usp = new URLSearchParams({ provider: "google" /*, token*/ });
+    const usp = new URLSearchParams({ provider: "google" });
     if (next) usp.set("next", next);
     const redirectTo = `${FRONTEND_URL}/oauth-callback?${usp.toString()}`;
     return res.redirect(redirectTo);
@@ -720,169 +921,6 @@ export async function googleCallback(req, res) {
   }
 }
 
-/* ───────────────────────────── Apple OAuth ───────────────────────────── */
-
-export async function appleStart(req, res) {
-  try {
-    if (!APPLE_CLIENT_ID || !APPLE_REDIRECT_URI) {
-      return res.status(500).json({
-        error:
-          "Apple OAuth not configured. Set APPLE_CLIENT_ID and APPLE_REDIRECT_URI.",
-      });
-    }
-
-    const state = encodeURIComponent(sanitizeNext(req.query.next || "/"));
-
-    // NOTE: `name email` is common. Name/email may only come on first consent.
-    // Using form_post lets Apple send `user` JSON (name) on first auth.
-    const params = new URLSearchParams({
-      response_type: "code",
-      response_mode: "form_post",
-      client_id: APPLE_CLIENT_ID,
-      redirect_uri: APPLE_REDIRECT_URI,
-      scope: "name email",
-      state,
-    });
-
-    const authUrl = `https://appleid.apple.com/auth/authorize?${params.toString()}`;
-    return res.redirect(authUrl);
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
-}
-
-export async function appleCallback(req, res) {
-  try {
-    // Apple can POST back when response_mode=form_post
-    const code = req.body?.code || req.query?.code;
-    const state = req.body?.state || req.query?.state;
-
-    if (!code) return res.status(400).json({ error: "Missing code" });
-
-    const client_secret = await createAppleClientSecret();
-
-    const tokenParams = new URLSearchParams({
-      client_id: APPLE_CLIENT_ID,
-      client_secret,
-      code,
-      grant_type: "authorization_code",
-      redirect_uri: APPLE_REDIRECT_URI,
-    });
-
-    const tokenResp = await fetch("https://appleid.apple.com/auth/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: tokenParams.toString(),
-    });
-
-    if (!tokenResp.ok) {
-      const t = await tokenResp.text();
-      return res
-        .status(400)
-        .json({ error: "Apple token exchange failed", details: t });
-    }
-
-    const tokens = await tokenResp.json();
-    const id_token = tokens.id_token;
-
-    if (!id_token) {
-      return res.status(400).json({ error: "Missing id_token from Apple" });
-    }
-
-    const payload = await verifyAppleIdToken(id_token);
-
-    const appleId = String(payload.sub || "");
-    const email = (payload.email || "").toLowerCase(); // may be missing sometimes later
-    const emailVerified =
-      String(payload.email_verified || payload.email_verified === true) ===
-      "true";
-
-    // Name only appears first time via req.body.user (JSON string)
-    let displayName = "";
-    const userRaw = req.body?.user;
-    if (userRaw) {
-      try {
-        const userObj =
-          typeof userRaw === "string" ? JSON.parse(userRaw) : userRaw;
-        const first = userObj?.name?.firstName || "";
-        const last = userObj?.name?.lastName || "";
-        displayName = `${first} ${last}`.trim();
-      } catch {
-        // ignore parse errors
-      }
-    }
-
-    if (!appleId)
-      return res.status(400).json({ error: "Apple token missing sub" });
-
-    // Find user by appleId OR email (if present)
-    let user = await User.findOne({
-      $or: [{ appleId }, ...(email ? [{ email }] : [])],
-    });
-
-    if (!user) {
-      // Apple can hide email (private relay) but often provides one at least first time.
-      const safeEmail = (email || `apple_${appleId}@apple.local`).toLowerCase();
-
-      user = await User.create({
-        email: safeEmail,
-        name: displayName || "",
-        appleId,
-        lastLogin: new Date(),
-        isActive: true,
-        isEmailVerified: email ? !!emailVerified : true,
-        emailVerifiedAt: new Date(),
-      });
-    } else {
-      let changed = false;
-
-      if (!user.appleId) {
-        user.appleId = appleId;
-        changed = true;
-      }
-
-      // If we got an email and user has a placeholder email, upgrade it
-      if (email && user.email?.endsWith("@apple.local")) {
-        user.email = email;
-        changed = true;
-      }
-
-      // Only set name if empty (avoid overwriting user’s custom name)
-      if (displayName && !user.name) {
-        user.name = displayName;
-        changed = true;
-      }
-
-      user.lastLogin = new Date();
-      changed = true;
-
-      if (!user.isEmailVerified) {
-        user.isEmailVerified = true;
-        user.emailVerifiedAt = new Date();
-        changed = true;
-      }
-
-      if (changed) await user.save();
-    }
-
-    const token = jwt.sign(
-      { id: user._id, email: user.email, role: user.role || "user" },
-      JWT_SECRET,
-      { expiresIn: "8h" },
-    );
-
-    setAuthCookie(res, token);
-
-    const next = sanitizeNext(state ? decodeURIComponent(state) : "/");
-    const qs = new URLSearchParams({ provider: "apple" });
-    if (next) qs.set("next", next);
-
-    const redirectTo = `${FRONTEND_URL}/oauth-callback?${qs.toString()}`;
-    return res.redirect(redirectTo);
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
-}
 // ───────────────────────── Apple (MOBILE / Expo) ─────────────────────────
 //
 // Mobile flow: Expo gets identityToken from Apple native prompt,
@@ -924,14 +962,20 @@ export async function appleMobile(req, res) {
     // Find by appleId OR email (if email exists)
     let user = await User.findOne({
       $or: [{ appleId }, ...(email ? [{ email }] : [])],
-    });
+    }).select("+passwordHash"); // ✅ in case your schema hides it
 
     if (!user) {
       const safeEmail = (email || `apple_${appleId}@apple.local`).toLowerCase();
 
+      // ✅ FIX: your User schema requires name + passwordHash
+      // Generate a random passwordHash (user will never use it for login)
+      const randomPw = crypto.randomBytes(32).toString("hex");
+      const passwordHash = await bcrypt.hash(randomPw, 10);
+
       user = await User.create({
         email: safeEmail,
-        name: displayName,
+        name: displayName || "Apple User", // ✅ FIX: name required
+        passwordHash, // ✅ FIX: passwordHash required by your schema
         appleId,
         lastLogin: new Date(),
         isActive: true,
@@ -965,6 +1009,13 @@ export async function appleMobile(req, res) {
       if (!user.isEmailVerified) {
         user.isEmailVerified = true;
         user.emailVerifiedAt = new Date();
+        changed = true;
+      }
+
+      // ✅ If your schema requires passwordHash and you have old users without it:
+      if (!user.passwordHash) {
+        const randomPw = crypto.randomBytes(32).toString("hex");
+        user.passwordHash = await bcrypt.hash(randomPw, 10);
         changed = true;
       }
 
@@ -1108,7 +1159,6 @@ export async function twitterCallback(req, res) {
     let avatarUrl = tw.profile_image_url || null;
     if (avatarUrl) avatarUrl = avatarUrl.replace("_normal", "_400x400");
 
-    // Twitter often lacks email; synthesize a stable local one
     const safeEmail = `${
       (username || "xuser") + "+" + twitterId
     }@x.local`.toLowerCase();
@@ -1160,11 +1210,10 @@ export async function twitterCallback(req, res) {
 
     res.clearCookie("tw_cv", { path: "/" });
 
-    // ⬇️ Set cookie; keep URL params simple
     setAuthCookie(res, token);
 
     const next = sanitizeNext(state ? decodeURIComponent(state) : "/");
-    const usp = new URLSearchParams({ provider: "twitter" /*, token*/ });
+    const usp = new URLSearchParams({ provider: "twitter" });
     if (next) usp.set("next", next);
     const redirectTo = `${FRONTEND_URL}/oauth-callback?${usp.toString()}`;
     return res.redirect(redirectTo);
@@ -1311,11 +1360,10 @@ export async function githubCallback(req, res) {
       { expiresIn: "8h" },
     );
 
-    // ⬇️ Set cookie and redirect (no token in URL needed)
     setAuthCookie(res, token);
 
     const next = sanitizeNext(state ? decodeURIComponent(state) : "/");
-    const qs = new URLSearchParams({ provider: "github" /*, token*/ });
+    const qs = new URLSearchParams({ provider: "github" });
     if (next) qs.set("next", next);
     const redirectTo = `${FRONTEND_URL}/oauth-callback?${qs.toString()}`;
     return res.redirect(redirectTo);

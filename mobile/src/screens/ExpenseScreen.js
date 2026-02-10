@@ -6,7 +6,7 @@ import React, {
   useEffect,
   useMemo,
   useState,
-  useRef, // ✅ NEW: for scrolling + Auto FAB behavior
+  useRef, // ✅ for scrolling + scan guards
 } from "react";
 
 import {
@@ -25,7 +25,7 @@ import {
   View,
   Image,
 } from "react-native";
-import TextRecognition from "@react-native-ml-kit/text-recognition"; // after install
+import TextRecognition from "@react-native-ml-kit/text-recognition"; // Android on-device OCR (in your current setup)
 import { useNavigation } from "@react-navigation/native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 
@@ -56,13 +56,13 @@ function startOfMonthUTC(dateLike) {
 function endOfMonthUTC(dateLike) {
   const d = new Date(dateLike);
   return new Date(
-    Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0, 23, 59, 59, 999)
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0, 23, 59, 59, 999),
   );
 }
 function addMonthsUTC(dateLike, n) {
   const d = new Date(dateLike);
   return new Date(
-    Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, d.getUTCDate())
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, d.getUTCDate()),
   );
 }
 function fmtDateUTC(dateLike) {
@@ -123,17 +123,13 @@ function parseReceiptFromQR(data) {
   // 2) Fallback: first "xx.xx" number
   if (amount == null) {
     const match = data.match(/([0-9]+[.,][0-9]{2})/);
-    if (match) {
-      amount = match[1];
-    }
+    if (match) amount = match[1];
   }
 
   // 3) Currency code
   if (!currency) {
     const curMatch = data.match(/\b(USD|EUR|TRY|GBP)\b/i);
-    if (curMatch) {
-      currency = curMatch[1].toUpperCase();
-    }
+    if (curMatch) currency = curMatch[1].toUpperCase();
   }
 
   // 4) Date
@@ -159,32 +155,58 @@ function parseReceiptFromQR(data) {
   };
 }
 
+/* --------------------- Receipt OCR text parse helper --------------------- */
+/**
+ * NOTE: Receipts vary wildly. This is "best-effort" parsing:
+ * - amount: tries explicit TOTAL patterns, else picks best-looking "total-ish" number
+ * - currency: tries TRY/TL/USD/EUR/GBP symbols/codes
+ * - date: tries ISO or EU formats
+ * - seller: top header lines until a stop keyword
+ */
 function parseReceiptFromText(rawText) {
   if (!rawText) return null;
 
-  const text = rawText.replace(/\s+/g, " ").toUpperCase();
+  const textRaw = String(rawText);
+  const text = textRaw.replace(/\s+/g, " ").toUpperCase();
 
-  // ----- 1) TOTAL AMOUNT -----
-  const totalRegex = /(GENEL TOPLAM|TOPLAM|TOTAL)[^\d]*([0-9]+[.,][0-9]{2})/;
+  // ----- 1) AMOUNT (TOTAL) -----
+  const totalRegex =
+    /(GENEL TOPLAM|TOPLAM|TOPLAM TUTAR|ÖDENECEK|ODENECEK|TOTAL|GRAND TOTAL|AMOUNT)[^\d]*([0-9]+[.,][0-9]{2})/;
   const totalMatch = text.match(totalRegex);
 
   let amount = null;
   if (totalMatch && totalMatch[2]) {
     amount = totalMatch[2].replace(",", ".");
   } else {
-    // Fallback: last money-like pattern in the text
-    const allMoney = [...text.matchAll(/([0-9]+[.,][0-9]{2})/g)];
+    // Collect candidate money patterns
+    const allMoney = [...text.matchAll(/([0-9]{1,6}[.,][0-9]{2})/g)].map(
+      (m) => m[1],
+    );
     if (allMoney.length) {
-      amount = allMoney[allMoney.length - 1][1].replace(",", ".");
+      // Heuristic: prefer the largest numeric value among candidates (often total is largest)
+      const nums = allMoney
+        .map((s) => ({
+          s,
+          n: Number(s.replace(",", ".")),
+        }))
+        .filter((x) => !Number.isNaN(x.n));
+      if (nums.length) {
+        nums.sort((a, b) => b.n - a.n);
+        amount = String(nums[0].s).replace(",", ".");
+      }
     }
   }
 
   // ----- 2) CURRENCY -----
   let currency = null;
-  const curMatch = text.match(/\b(USD|EUR|TRY|TL)\b/);
-  if (curMatch) {
-    currency = curMatch[1] === "TL" ? "TRY" : curMatch[1];
-  }
+  // TRY/TL
+  if (/\b(TRY|TL|₺)\b/.test(text)) currency = "TRY";
+  // USD
+  else if (/\b(USD|\$)\b/.test(text)) currency = "USD";
+  // EUR
+  else if (/\b(EUR|€)\b/.test(text)) currency = "EUR";
+  // GBP
+  else if (/\b(GBP|£)\b/.test(text)) currency = "GBP";
 
   // ----- 3) DATE -----
   let dateStr = null;
@@ -198,20 +220,25 @@ function parseReceiptFromText(rawText) {
     dateStr = `${yyyy}-${mm}-${dd}`;
   }
 
-  // ----- 4) SELLER NAME -----
+  // ----- 4) SELLER / MERCHANT -----
   let seller = null;
-  const lines = rawText
+  const lines = textRaw
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter(Boolean);
 
   if (lines.length) {
     const stopIdx = lines.findIndex((l) =>
-      /TARİH|TARIH|DATE|FİŞ NO|FIS NO|RECEIPT/i.test(l)
+      /TARİH|TARIH|DATE|FİŞ|FIS|FİŞ NO|FIS NO|FATURA|VERGI|VKN|RECEIPT/i.test(
+        l,
+      ),
     );
     const headerLines =
-      stopIdx > 0 ? lines.slice(0, stopIdx) : lines.slice(0, 2);
+      stopIdx > 0 ? lines.slice(0, stopIdx) : lines.slice(0, 3);
+
     seller = headerLines.join(" ").trim();
+    // prevent extremely long garbage seller
+    if (seller.length > 80) seller = seller.slice(0, 80).trim();
   }
 
   if (!amount && !dateStr && !seller) return null;
@@ -222,6 +249,86 @@ function parseReceiptFromText(rawText) {
     date: dateStr || null,
     seller: seller || null,
   };
+}
+
+/* --------------------- Category inference (local rules) --------------------- */
+function normalizeKey(s) {
+  return String(s || "")
+    .toLowerCase()
+    .replace(/[ıİ]/g, "i")
+    .replace(/[şŞ]/g, "s")
+    .replace(/[ğĞ]/g, "g")
+    .replace(/[üÜ]/g, "u")
+    .replace(/[öÖ]/g, "o")
+    .replace(/[çÇ]/g, "c")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function pickCategoryIdByName(categories, wantedNames) {
+  const wanted = wantedNames.map(normalizeKey);
+  for (const w of wanted) {
+    const found = categories.find((c) => normalizeKey(c?.name).includes(w));
+    if (found?._id) return found._id;
+  }
+  return "";
+}
+
+function inferCategoryIdFromReceipt({ seller, rawText }, categories) {
+  if (!Array.isArray(categories) || !categories.length) return "";
+
+  const blob = normalizeKey(`${seller || ""} ${rawText || ""}`);
+
+  // Merchant/keyword → "semantic" category name targets (we map to whatever names you have)
+  const rules = [
+    {
+      rx: /(migros|carrefour|bim|a101|sok|şok|market|supermarket|gross|grocer)/,
+      targets: ["groceries", "grocery", "market", "supermarket", "food"],
+    },
+    {
+      rx: /(starbucks|kahve|coffee|cafe|kafe|restoran|restaurant|burger|pizza|doner|döner|kebab|yemek|lokanta)/,
+      targets: ["dining", "restaurants", "food", "eat out", "cafe"],
+    },
+    {
+      rx: /(opet|shell|bp|petrol|akaryakit|akaryakıt|fuel|gasoline|istasyon)/,
+      targets: ["transport", "fuel", "car", "gas", "vehicle"],
+    },
+    {
+      rx: /(eczane|pharmacy|hastane|hospital|clinic|doktor|doctor|ilac|ilaç)/,
+      targets: ["health", "medical", "pharmacy"],
+    },
+    {
+      rx: /(fatura|electric|elektrik|su|water|dogalgaz|doğalgaz|internet|telekom|vodafone|turkcell|turktelekom|ttnet)/,
+      targets: ["bills", "utilities", "internet", "phone"],
+    },
+    {
+      rx: /(giyim|clothing|zara|hm|h&m|bershka|pull&bear|pull bear|decathlon|nike|adidas)/,
+      targets: ["shopping", "clothing", "apparel"],
+    },
+    {
+      rx: /(sinema|cinema|netflix|spotify|entertainment|eglence|eğlence|game|oyun)/,
+      targets: ["entertainment", "fun"],
+    },
+    {
+      rx: /(otel|hotel|airbnb|flight|ucus|uçuş|thy|turkish airlines|pegasus|travel|seyahat)/,
+      targets: ["travel", "transport"],
+    },
+    {
+      rx: /(egitim|eğitim|course|udemy|coursera|school|okul|university|universite)/,
+      targets: ["education"],
+    },
+  ];
+
+  for (const r of rules) {
+    if (r.rx.test(blob)) {
+      const id = pickCategoryIdByName(categories, r.targets);
+      if (id) return id;
+    }
+  }
+
+  // fallback: if you have a generic "Other" category
+  return pickCategoryIdByName(categories, ["other", "misc", "general"]) || "";
 }
 
 /* ----------------------------- UI Primitives ----------------------------- */
@@ -253,9 +360,9 @@ function Chip({ label, selected, onPress, small }) {
 /* =============================== Screen =============================== */
 
 export default function ExpensesScreen({ route }) {
-  const navigation = useNavigation(); // ✅ FIX
+  const navigation = useNavigation();
 
-  // ✅ NEW: ScrollView ref (Upcoming auto scroll)
+  // ✅ ScrollView ref
   const scrollRef = useRef(null);
 
   const accountId = route?.params?.accountId;
@@ -265,7 +372,7 @@ export default function ExpensesScreen({ route }) {
   const [categories, setCategories] = useState([]);
   const [accounts, setAccounts] = useState([]);
 
-  // ✅ NEW: AUTO ADD state (match Income/Investment)
+  // ✅ AUTO ADD state
   const [autoOpen, setAutoOpen] = useState(false);
   const [autoText, setAutoText] = useState("");
   const [autoAccountId, setAutoAccountId] = useState("");
@@ -299,15 +406,17 @@ export default function ExpensesScreen({ route }) {
     accountId: "",
   });
 
-  // --- QR scanner state (expo-camera) ---
+  // --- QR / camera state (expo-camera) ---
   const [scannerVisible, setScannerVisible] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState("back");
   const [flash, setFlash] = useState("off");
   const scannedOnceRef = useRef(false);
-  const [reopenModalOnClose, setReopenModalOnClose] = useState(false);
   const cameraRef = useRef(null);
+
+  // ✅ NEW: to avoid double OCR taps
+  const ocrBusyRef = useRef(false);
 
   /* ---------------------------- Lookups ---------------------------- */
   const categoriesById = useMemo(() => {
@@ -328,7 +437,7 @@ export default function ExpensesScreen({ route }) {
     const s = new Set(
       transactions
         .filter((t) => t.type === "expense")
-        .map((t) => t.currency || "USD")
+        .map((t) => t.currency || "USD"),
     );
     return ["ALL", ...Array.from(s)];
   }, [transactions]);
@@ -349,7 +458,7 @@ export default function ExpensesScreen({ route }) {
       console.log("[Expenses] data loaded in", Date.now() - t0, "ms");
 
       const cats = (catRes.data || []).filter(
-        (c) => c.kind === "expense" && !c.isDeleted
+        (c) => c.kind === "expense" && !c.isDeleted,
       );
 
       setCategories(cats);
@@ -479,7 +588,7 @@ export default function ExpensesScreen({ route }) {
     return Object.entries(byCur).map(([cur, minor]) => ({
       cur,
       major: (Number(minor) / Math.pow(10, decimalsForCurrency(cur))).toFixed(
-        decimalsForCurrency(cur)
+        decimalsForCurrency(cur),
       ),
     }));
   }, [rows]);
@@ -566,7 +675,7 @@ export default function ExpensesScreen({ route }) {
   const { statsCurrency, kpis, noteMixedCurrency } = useMemo(() => {
     const chosen = fCurrency !== "ALL" ? fCurrency : rows[0]?.currency || "USD";
     const filteredByCur = rows.filter((r) =>
-      chosen ? r.currency === chosen : true
+      chosen ? r.currency === chosen : true,
     );
 
     const now = new Date();
@@ -670,14 +779,12 @@ export default function ExpensesScreen({ route }) {
   }, [rows, statsCurrency]);
 
   /* ------------------------------- CRUD TX ------------------------------- */
-  // ✅ NEW: AUTO ADD open (match Income/Investment)
   const openAutoAdd = useCallback(() => {
     setAutoAccountId(accountId || defaultAccountId || "");
     setAutoText("");
     setAutoOpen(true);
   }, [accountId, defaultAccountId]);
 
-  // ✅ NEW: AUTO ADD submit (match Income/Investment)
   const submitAuto = useCallback(async () => {
     const text = String(autoText || "").trim();
     const accId = autoAccountId || accountId || defaultAccountId;
@@ -689,15 +796,13 @@ export default function ExpensesScreen({ route }) {
     if (!text) {
       Alert.alert(
         "Missing text",
-        "Type what you want to add (natural language)."
+        "Type what you want to add (natural language).",
       );
       return;
     }
 
     try {
       setAutoLoading(true);
-
-      // same endpoint used by Investment/Income
       await api.post("/auto/transactions/text", {
         accountId: accId,
         text,
@@ -777,12 +882,12 @@ export default function ExpensesScreen({ route }) {
           try {
             await api.delete(`/transactions/${tx._id}`);
             setTransactions((prev) =>
-              prev.filter((t) => String(t._id) !== String(tx._id))
+              prev.filter((t) => String(t._id) !== String(tx._id)),
             );
           } catch (e) {
             Alert.alert(
               "Error",
-              e?.response?.data?.error || e.message || "Error deleting"
+              e?.response?.data?.error || e.message || "Error deleting",
             );
           }
         },
@@ -807,12 +912,12 @@ export default function ExpensesScreen({ route }) {
         try {
           const { data: parentUpdated } = await api.put(
             `/transactions/${v.__parentId}`,
-            { nextDate: null }
+            { nextDate: null },
           );
           setTransactions((prev) =>
             prev.map((t) =>
-              String(t._id) === String(parentUpdated._id) ? parentUpdated : t
-            )
+              String(t._id) === String(parentUpdated._id) ? parentUpdated : t,
+            ),
           );
         } catch {
           // ignore
@@ -824,7 +929,7 @@ export default function ExpensesScreen({ route }) {
     } catch (e) {
       Alert.alert(
         "Error",
-        e?.response?.data?.error || e.message || "Add failed"
+        e?.response?.data?.error || e.message || "Add failed",
       );
     }
   }
@@ -836,12 +941,12 @@ export default function ExpensesScreen({ route }) {
           nextDate: null,
         });
         setTransactions((prev) =>
-          prev.map((t) => (String(t._id) === String(data._id) ? data : t))
+          prev.map((t) => (String(t._id) === String(data._id) ? data : t)),
         );
       } catch (e) {
         Alert.alert(
           "Error",
-          e?.response?.data?.error || e.message || "Delete failed"
+          e?.response?.data?.error || e.message || "Delete failed",
         );
       }
     } else {
@@ -849,7 +954,6 @@ export default function ExpensesScreen({ route }) {
     }
   }
 
-  // ✅ NEW: Upcoming quick-open + scroll to top (match Income)
   const openUpcomingAuto = useCallback(() => {
     setShowUpcoming(true);
     requestAnimationFrame(() => {
@@ -857,32 +961,86 @@ export default function ExpensesScreen({ route }) {
     });
   }, []);
 
+  /* ---------------------- Scan helpers ---------------------- */
+
+  // ✅ NEW: if you have/plan a backend OCR endpoint, this works on BOTH iOS + Android.
+  // Endpoint expectation: POST /receipt/parse (multipart) -> { amount, currency, date, seller, description, categoryName? }
+  async function parseReceiptViaBackend(photoUri) {
+    const fd = new FormData();
+    fd.append("file", {
+      uri: photoUri,
+      name: `receipt_${Date.now()}.jpg`,
+      type: "image/jpeg",
+    });
+
+    const res = await api.post("/receipt/parse", fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 30000,
+    });
+
+    return res?.data || null;
+  }
+
+  function applyParsedToForm(parsed, rawTextForCategory) {
+    // currency fallback: picked account currency if available
+    const pickedAccId = form.accountId || accountId || accounts[0]?._id || "";
+    const pickedAccCur =
+      accounts.find((a) => String(a._id) === String(pickedAccId))?.currency ||
+      form.currency ||
+      "USD";
+
+    const inferredCategoryId = inferCategoryIdFromReceipt(
+      {
+        seller: parsed?.seller || parsed?.description || "",
+        rawText: rawTextForCategory || "",
+      },
+      categories,
+    );
+
+    setForm((prev) => ({
+      ...prev,
+      amount: parsed?.amount || prev.amount,
+      currency: (parsed?.currency || pickedAccCur || prev.currency || "USD")
+        .toString()
+        .toUpperCase(),
+      date: parsed?.date || prev.date,
+      description:
+        parsed?.description ||
+        parsed?.seller ||
+        prev.description ||
+        prev.description,
+      categoryId:
+        inferredCategoryId || prev.categoryId || categories[0]?._id || "",
+    }));
+  }
+
   /* ---------------------- QR scanner handlers (expo-camera) ---------------------- */
   const openScanner = useCallback(async () => {
     console.log("[Expenses] Scan receipt QR pressed");
 
     try {
-      if (!permission) {
-        const res = await requestPermission();
-        if (!res.granted) {
-          Alert.alert(
-            "Camera permission needed",
-            "Enable camera access to scan receipt QR codes in your device settings."
-          );
-          return;
+      const ensurePerm = async () => {
+        if (!permission) {
+          const res = await requestPermission();
+          return !!res?.granted;
         }
-      } else if (!permission.granted) {
-        const res = await requestPermission();
-        if (!res.granted) {
-          Alert.alert(
-            "Camera permission needed",
-            "Enable camera access to scan receipt QR codes in your device settings."
-          );
-          return;
+        if (!permission.granted) {
+          const res = await requestPermission();
+          return !!res?.granted;
         }
+        return true;
+      };
+
+      const ok = await ensurePerm();
+      if (!ok) {
+        Alert.alert(
+          "Camera permission needed",
+          "Enable camera access to scan receipt QR codes in your device settings.",
+        );
+        return;
       }
 
-      // 🔹 close the expense modal while camera is active
+      // close modal while camera is active
       setModalOpen(false);
 
       scannedOnceRef.current = false;
@@ -900,14 +1058,16 @@ export default function ExpensesScreen({ route }) {
       scannedOnceRef.current = true;
 
       const text = String(data || "");
-      console.log("[Expenses] QR scanned:", { type, data: text });
+      console.log("[Expenses] code scanned:", { type, data: text });
 
       setIsScanning(false);
       setScannerVisible(false);
-      setReopenModalOnClose(false);
 
-      // CASE 1: receipt ID only
-      if (type === "code128" && /^\d{10,20}$/.test(text)) {
+      // ✅ IMPORTANT: Your CODE128 is basically always an ID.
+      // It will NOT contain total/date/category. So we attach it to description and instruct Smart Scan.
+      const isLikelyIdOnly = type === "code128" && /^[0-9]{10,30}$/.test(text);
+
+      if (isLikelyIdOnly) {
         setForm((prev) => ({
           ...prev,
           description: prev.description?.trim()
@@ -918,81 +1078,68 @@ export default function ExpensesScreen({ route }) {
         setModalOpen(true);
 
         Alert.alert(
-          "Receipt scanned",
-          "This barcode only contains a receipt/transaction ID, so I can't auto-fill amount or date, but I attached the ID to the description."
+          "Barcode scanned (ID only)",
+          "This barcode contains only a receipt/transaction ID. For amount + date + category, use “Smart scan (photo)” and capture the whole receipt.",
         );
         return;
       }
 
-      // CASE 2: structured payload
-      try {
-        const parsed = parseReceiptFromQR(text);
+      // Try structured QR payloads
+      const parsed = parseReceiptFromQR(text);
 
-        if (!parsed) {
-          setModalOpen(true);
-          Alert.alert(
-            "Unsupported code",
-            "I scanned this code, but it doesn't contain structured receipt data (amount/date/currency) I can parse yet."
-          );
-          return;
-        }
-
-        setForm((prev) => ({
-          ...prev,
-          amount: parsed.amount ?? prev.amount,
-          currency: parsed.currency ?? prev.currency,
-          date: parsed.date ?? prev.date,
-          description: parsed.description ?? prev.description,
-        }));
-
+      if (!parsed) {
         setModalOpen(true);
-
         Alert.alert(
-          "Receipt scanned",
-          "I pre-filled the available fields from the code. Please review before saving."
+          "Scanned",
+          "This code doesn’t include total/date/currency in a parsable format. Use “Smart scan (photo)” for full auto-fill.",
         );
-      } catch (e) {
-        console.log("[Expenses] scan parse error", e);
-        setModalOpen(true);
-        Alert.alert("Scan error", e.message || "Failed to parse receipt code.");
+        return;
       }
+
+      setForm((prev) => ({
+        ...prev,
+        amount: parsed.amount ?? prev.amount,
+        currency: parsed.currency ?? prev.currency,
+        date: parsed.date ?? prev.date,
+        description: parsed.description ?? prev.description,
+      }));
+
+      setModalOpen(true);
+
+      Alert.alert(
+        "Receipt scanned",
+        "I pre-filled what was available in the QR payload. Review and save.",
+      );
     },
-    [setForm, setModalOpen]
+    [setForm, setModalOpen],
   );
 
   const openOcrScanner = useCallback(async () => {
-    if (Platform.OS === "ios") {
-      Alert.alert(
-        "Smart scan not available on iOS (yet)",
-        "OCR uses native ML Kit which is currently wired only for Android in your setup. You can still use QR / barcode scan on iOS."
-      );
-      return;
-    }
-
     try {
-      if (!permission) {
-        const res = await requestPermission();
-        if (!res.granted) {
-          Alert.alert(
-            "Camera permission needed",
-            "Enable camera access to scan receipts."
-          );
-          return;
+      const ensurePerm = async () => {
+        if (!permission) {
+          const res = await requestPermission();
+          return !!res?.granted;
         }
-      } else if (!permission.granted) {
-        const res = await requestPermission();
-        if (!res.granted) {
-          Alert.alert(
-            "Camera permission needed",
-            "Enable camera access to scan receipts."
-          );
-          return;
+        if (!permission.granted) {
+          const res = await requestPermission();
+          return !!res?.granted;
         }
+        return true;
+      };
+
+      const ok = await ensurePerm();
+      if (!ok) {
+        Alert.alert(
+          "Camera permission needed",
+          "Enable camera access to scan receipts.",
+        );
+        return;
       }
 
       setModalOpen(false);
       setScannerVisible(true);
-      setIsScanning(false);
+      setIsScanning(false); // ✅ OCR mode (shutter), not barcode scanning
     } catch (e) {
       Alert.alert("Error", e.message || "Failed to open camera.");
     }
@@ -1111,10 +1258,10 @@ export default function ExpensesScreen({ route }) {
         } else {
           const { data } = await api.put(
             `/transactions/${editing._id}`,
-            payload
+            payload,
           );
           setTransactions((prev) =>
-            prev.map((t) => (String(t._id) === String(data._id) ? data : t))
+            prev.map((t) => (String(t._id) === String(data._id) ? data : t)),
           );
         }
         setModalOpen(false);
@@ -1158,7 +1305,7 @@ export default function ExpensesScreen({ route }) {
                         setForm((f) => ({
                           ...f,
                           accountId: a._id,
-                          currency: a.currency || f.currency, // ✅ NEW: keep currency in sync
+                          currency: a.currency || f.currency,
                         }))
                       }
                       style={[
@@ -1207,7 +1354,7 @@ export default function ExpensesScreen({ route }) {
                 </View>
               </View>
 
-              {/* Scan receipt QR */}
+              {/* Scan receipt */}
               <View style={styles.modalField}>
                 <TouchableOpacity
                   style={styles.scanBtn}
@@ -1215,7 +1362,7 @@ export default function ExpensesScreen({ route }) {
                   activeOpacity={0.85}
                 >
                   <Text style={styles.scanBtnText}>
-                    Scan receipt QR / barcode
+                    Scan receipt QR / barcode (ID)
                   </Text>
                 </TouchableOpacity>
 
@@ -1224,13 +1371,15 @@ export default function ExpensesScreen({ route }) {
                   onPress={openOcrScanner}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.scanBtnText}>Smart scan (photo)</Text>
+                  <Text style={styles.scanBtnText}>
+                    Smart scan (photo) → auto-fill
+                  </Text>
                 </TouchableOpacity>
 
                 <Text style={styles.modalHint}>
-                  QR/barcode will attach a receipt ID if possible. Smart scan
-                  reads the whole receipt image and tries to auto-fill amount,
-                  date and seller directly on your device.
+                  Barcode/QR usually contains only an ID. Smart scan reads the
+                  whole receipt to extract total + date + merchant and infers a
+                  category.
                 </Text>
               </View>
 
@@ -1351,7 +1500,7 @@ export default function ExpensesScreen({ route }) {
     categories,
     accountId,
     openScanner,
-    openOcrScanner, // ✅ NEW: include in deps
+    openOcrScanner,
   ]);
 
   /* ------------------------------ Header & Filters ------------------------------ */
@@ -1364,7 +1513,6 @@ export default function ExpensesScreen({ route }) {
             <Text style={styles.headerTitle}>Expenses</Text>
           </View>
 
-          {/* ✅ NEW: header right cluster (match Income) */}
           <View style={styles.headerTopRight}>
             <TouchableOpacity
               onPress={() => navigation.navigate("Dashboard")}
@@ -1396,7 +1544,6 @@ export default function ExpensesScreen({ route }) {
           </View>
         </View>
 
-        {/* Search */}
         <View style={styles.searchContainer}>
           <TextInput
             value={q}
@@ -1407,7 +1554,6 @@ export default function ExpensesScreen({ route }) {
           />
         </View>
 
-        {/* Category chips */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -1429,7 +1575,6 @@ export default function ExpensesScreen({ route }) {
           ))}
         </ScrollView>
 
-        {/* Account + currency filter row */}
         <View style={styles.filterRow}>
           <ScrollView
             horizontal
@@ -1453,6 +1598,7 @@ export default function ExpensesScreen({ route }) {
               />
             ))}
           </ScrollView>
+
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -1471,7 +1617,6 @@ export default function ExpensesScreen({ route }) {
           </ScrollView>
         </View>
 
-        {/* Sorting row */}
         <View style={styles.sortRow}>
           <Text style={styles.sortLabel}>Sorting:</Text>
           <ScrollView
@@ -1507,7 +1652,6 @@ export default function ExpensesScreen({ route }) {
           </ScrollView>
         </View>
 
-        {/* Totals */}
         <View style={styles.totalsRow}>
           {totals.map(({ cur, major }) => (
             <Text key={cur} style={styles.totalsText}>
@@ -1516,7 +1660,6 @@ export default function ExpensesScreen({ route }) {
           ))}
         </View>
 
-        {/* Date filters + Refresh */}
         <View style={styles.headerActionButtons}>
           <ScrollView
             horizontal
@@ -1729,7 +1872,7 @@ export default function ExpensesScreen({ route }) {
                       {fmtMoney(
                         c.major *
                           Math.pow(10, decimalsForCurrency(statsCurrency)),
-                        statsCurrency
+                        statsCurrency,
                       )}
                     </Text>
                   </View>
@@ -1794,7 +1937,7 @@ export default function ExpensesScreen({ route }) {
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView
-        ref={scrollRef} // ✅ NEW
+        ref={scrollRef}
         style={styles.content}
         contentContainerStyle={{ paddingBottom: 32 }}
         showsVerticalScrollIndicator={false}
@@ -1837,7 +1980,7 @@ export default function ExpensesScreen({ route }) {
         </TouchableOpacity>
       </View>
 
-      {/* ✅ Auto Add Modal (match Income/Investment UX) */}
+      {/* ✅ Auto Add Modal */}
       <Modal
         visible={autoOpen}
         transparent
@@ -1950,7 +2093,7 @@ export default function ExpensesScreen({ route }) {
 
       {ExpenseModal()}
 
-      {/* FULL-SCREEN CAMERA OVERLAY (no RN Modal) */}
+      {/* FULL-SCREEN CAMERA OVERLAY */}
       {scannerVisible && (
         <View style={styles.fullCamOverlay}>
           <SafeAreaView style={styles.fullCamTopSafe}>
@@ -2016,57 +2159,113 @@ export default function ExpensesScreen({ route }) {
               </TouchableOpacity>
             </View>
 
+            {/* ✅ OCR SHUTTER (Smart scan) */}
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={async () => {
+                if (ocrBusyRef.current) return;
+                ocrBusyRef.current = true;
+
                 try {
                   if (!cameraRef.current) return;
 
-                  if (Platform.OS === "ios") {
-                    setScannerVisible(false);
-                    setModalOpen(true);
-                    Alert.alert(
-                      "Smart scan not supported on iOS (for now)",
-                      "Because '@react-native-ml-kit/text-recognition' can't be fully linked in your current Expo iOS setup, OCR runs only on Android. You can still use QR / barcode scan or fill fields manually."
-                    );
-                    return;
-                  }
-
                   const photo = await cameraRef.current.takePictureAsync({
                     base64: false,
+                    quality: 0.85,
                   });
 
+                  // close camera overlay while we process
                   setScannerVisible(false);
 
-                  const result = await TextRecognition.recognize(photo.uri);
-                  const fullText = result?.text || "";
+                  // 1) Try on-device OCR (Android in your current setup)
+                  let rawText = "";
+                  let parsed = null;
 
-                  console.log("[Expenses] OCR text:", fullText);
+                  const canUseOnDeviceOcr = Platform.OS !== "ios";
 
-                  const parsed = parseReceiptFromText(fullText);
+                  if (canUseOnDeviceOcr) {
+                    try {
+                      const result = await TextRecognition.recognize(photo.uri);
+                      rawText = result?.text || "";
+                      parsed = parseReceiptFromText(rawText);
+                      console.log("[Expenses] OCR text (device):", rawText);
+                    } catch (e) {
+                      console.log(
+                        "[Expenses] on-device OCR failed:",
+                        e?.message,
+                      );
+                    }
+                  }
 
+                  // 2) If on-device failed OR parsed missing key fields → fallback to backend OCR (works for iOS too)
+                  const missingCritical =
+                    !parsed?.amount || !parsed?.date || !parsed?.seller;
+
+                  if (!parsed || missingCritical) {
+                    try {
+                      const backendParsed = await parseReceiptViaBackend(
+                        photo.uri,
+                      );
+
+                      // backend may already return parsed fields; normalize
+                      // accept both shapes: {amount,currency,date,seller,description,rawText} or nested
+                      const b = backendParsed || {};
+                      const normalized = {
+                        amount: b.amount || b.total || null,
+                        currency: b.currency || null,
+                        date: b.date || null,
+                        seller: b.seller || b.merchant || null,
+                        description: b.description || null,
+                      };
+
+                      // If backend gives rawText too, use it for category inference
+                      rawText = b.rawText || b.text || rawText || "";
+
+                      // only replace if backend has something
+                      parsed = {
+                        amount: normalized.amount || parsed?.amount || null,
+                        currency:
+                          normalized.currency || parsed?.currency || null,
+                        date: normalized.date || parsed?.date || null,
+                        seller: normalized.seller || parsed?.seller || null,
+                        description:
+                          normalized.description || parsed?.seller || null,
+                      };
+                    } catch (e) {
+                      // If iOS and no backend endpoint, explain clearly
+                      if (Platform.OS === "ios") {
+                        setModalOpen(true);
+                        Alert.alert(
+                          "Smart scan needs OCR",
+                          "On iOS, your current app can’t run ML Kit OCR locally. To auto-fill amount/date/category, add backend OCR endpoint /receipt/parse OR move to a custom dev client with ML Kit linked.",
+                        );
+                        return;
+                      }
+                      // Android fallback failed too
+                      console.log("[Expenses] backend OCR failed:", e?.message);
+                    }
+                  }
+
+                  // reopen modal
                   setModalOpen(true);
 
-                  if (!parsed) {
+                  if (
+                    !parsed ||
+                    (!parsed.amount && !parsed.date && !parsed.seller)
+                  ) {
                     Alert.alert(
                       "Could not auto-fill",
-                      "I couldn't confidently detect total / date on this receipt. You can still enter them manually."
+                      "I couldn’t confidently detect total/date/merchant. Try retaking the photo with the full receipt visible, good lighting, and the TOTAL line included.",
                     );
                     return;
                   }
 
-                  setForm((prev) => ({
-                    ...prev,
-                    amount: parsed.amount || prev.amount,
-                    currency: parsed.currency || prev.currency,
-                    date: parsed.date || prev.date,
-                    description:
-                      parsed.seller || prev.description || prev.description,
-                  }));
+                  // ✅ Apply to form INCLUDING category inference
+                  applyParsedToForm(parsed, rawText);
 
                   Alert.alert(
                     "Smart scan complete",
-                    "I tried to fill in total, date and seller from the receipt. Please review before saving."
+                    "Filled amount + date + description and inferred a category. Please review before saving.",
                   );
                 } catch (e) {
                   console.log("[Expenses] OCR error", e);
@@ -2074,8 +2273,10 @@ export default function ExpensesScreen({ route }) {
                   Alert.alert(
                     "Scan error",
                     e.message ||
-                      "I couldn't read this receipt. Try retaking the photo."
+                      "I couldn't read this receipt. Try retaking the photo.",
                   );
+                } finally {
+                  ocrBusyRef.current = false;
                 }
               }}
               style={styles.fullCamShutterOuter}
@@ -2237,12 +2438,6 @@ const styles = StyleSheet.create({
     paddingRight: 8,
   },
 
-  dateRow: {
-    marginTop: 4,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
   totalsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -2253,6 +2448,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     color: TEXT_SOFT,
+  },
+
+  headerActionButtons: {
+    marginTop: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  dateFilterChipRow: {
+    paddingVertical: 4,
+    paddingRight: 8,
+  },
+  refreshBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: BORDER_DARK,
+    backgroundColor: "#020617",
+  },
+  refreshBtnText: {
+    fontSize: 12,
+    color: TEXT_SOFT,
+    fontWeight: "600",
   },
 
   /* Chips */
@@ -2581,7 +2801,7 @@ const styles = StyleSheet.create({
   rowAmount: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#bbf7d0", // green-ish for income
+    color: "#bbf7d0",
   },
   rowActions: {
     marginTop: 6,
@@ -2693,6 +2913,20 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
+  scanBtn: {
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(34,197,94,0.5)",
+    backgroundColor: "#020617",
+    alignItems: "center",
+  },
+  scanBtnText: {
+    color: "#bbf7d0",
+    fontWeight: "700",
+    fontSize: 13,
+  },
+
   /* Error */
   errorBox: {
     marginHorizontal: 16,
@@ -2728,12 +2962,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: TEXT_MUTED,
   },
-  modalScrollContent: {
-    flexGrow: 1,
-    justifyContent: "center",
-    paddingVertical: 40,
-    paddingHorizontal: 16,
-  },
 
   /* FAB stack */
   fabContainer: {
@@ -2743,8 +2971,6 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     gap: 10,
   },
-
-  // ✅ NEW: Auto mini-FAB (matches Investments “Auto”)
   fabAuto: {
     width: 52,
     height: 52,
@@ -2765,7 +2991,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#bbf7d0",
   },
-
   fab: {
     width: 52,
     height: 52,
@@ -2785,7 +3010,6 @@ const styles = StyleSheet.create({
     color: "white",
   },
 
-  // ✅ NEW: Header logo button (tap to go Dashboard)
   headerLogoBtn: {
     width: 34,
     height: 34,
@@ -2802,5 +3026,88 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
     resizeMode: "cover",
+  },
+
+  /* Full camera overlay UI (minimal) */
+  fullCamOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#000",
+  },
+  fullCamTopSafe: {
+    backgroundColor: "rgba(0,0,0,0.35)",
+  },
+  fullCamTopBar: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  fullCamTopText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  fullCamBody: {
+    flex: 1,
+    position: "relative",
+  },
+  fullCamFrameOverlay: {
+    position: "absolute",
+    left: 24,
+    right: 24,
+    top: "20%",
+    bottom: "20%",
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.35)",
+    borderRadius: 18,
+  },
+  fullCamBottomBar: {
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "rgba(0,0,0,0.55)",
+  },
+  fullCamLeftCluster: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  fullCamBottomIconBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(0,0,0,0.25)",
+  },
+  fullCamBottomIconText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  fullCamCancelText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  fullCamShutterOuter: {
+    width: 68,
+    height: 68,
+    borderRadius: 999,
+    borderWidth: 4,
+    borderColor: "rgba(255,255,255,0.8)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  fullCamShutterInner: {
+    width: 48,
+    height: 48,
+    borderRadius: 999,
+  },
+  fullCamShutterInnerActive: {
+    backgroundColor: "rgba(255,255,255,0.92)",
   },
 });

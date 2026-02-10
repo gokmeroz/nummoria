@@ -15,7 +15,7 @@ import {
   Linking,
   Modal,
 } from "react-native";
-import { AntDesign, FontAwesome, Ionicons } from "@expo/vector-icons";
+import { AntDesign } from "@expo/vector-icons";
 import * as AppleAuthentication from "expo-apple-authentication";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api from "../lib/api";
@@ -25,10 +25,6 @@ const CARD_DARK = "#020819";
 const BRAND_GREEN = "#22c55e";
 const TEXT_MUTED = "rgba(148,163,184,1)";
 const TEXT_SOFT = "rgba(148,163,184,0.8)";
-
-// ✅ Apple button
-const APPLE_BG = "#000000";
-const APPLE_TEXT = "#ffffff";
 
 // Consent (local gate)
 const CONSENT_KEY = (userId) => `consent:${String(userId)}`;
@@ -233,7 +229,7 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
     }
   }
 
-  // ✅ Native mobile-only Apple login (no domain needed)
+  // ✅ Native Apple Sign-In (iOS only)
   async function signInWithAppleNative() {
     try {
       if (Platform.OS !== "ios") {
@@ -266,12 +262,10 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
             .join(" ")
         : "";
 
-      // ✅ You must implement this backend endpoint to verify Apple token and return { token, user }
+      // ✅ Mobile-only: backend verifies identityToken, uses payload.sub as appleId
       const resp = await api.post("/auth/apple/mobile", {
         identityToken: cred.identityToken,
-        appleUserId: cred.user, // stable Apple user id
         fullName,
-        email: cred.email || "", // often only first time
       });
 
       const data = resp?.data || {};
@@ -349,21 +343,23 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
 
   async function onResendCode() {
     try {
-      const email =
-        (verifyEmail || "").trim() ||
-        (await AsyncStorage.getItem(PENDING_VERIFY_EMAIL_KEY)) ||
-        "";
+      // ⚠️ your backend expects { regToken }.
+      // This flow only works if verifyRegToken exists.
+      const storedRegToken =
+        verifyRegToken || (await AsyncStorage.getItem(PENDING_REG_TOKEN_KEY));
 
-      if (!email) return;
+      if (!storedRegToken) {
+        setVerifyErr("Missing regToken. Please sign up again.");
+        return;
+      }
 
       setVerifyErr("");
       setVerifyMsg("");
       setResending(true);
 
-      // NOTE: your backend resendCode expects regToken in the sample you shared
-      // but your mobile currently posts { email }.
-      // Keeping your existing behavior to avoid breaking your flow.
-      const resp = await api.post("/auth/resend-code", { email });
+      const resp = await api.post("/auth/resend-code", {
+        regToken: storedRegToken,
+      });
       const data = resp?.data || {};
 
       if (data?.regToken) {
@@ -508,22 +504,22 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
               </Text>
             </TouchableOpacity>
 
+            {/* ✅ Official Apple button (App Store friendly) */}
             {Platform.OS === "ios" ? (
-              <TouchableOpacity
-                style={[
-                  styles.socialBtn,
-                  styles.appleBtn,
-                  socialLoading && styles.buttonDisabled,
-                ]}
-                onPress={signInWithAppleNative}
-                disabled={socialLoading}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="logo-apple" size={18} color="#fff" />
-                <Text style={[styles.socialText, styles.appleText]}>
-                  {socialLoading ? "Signing in..." : "Sign in with Apple"}
-                </Text>
-              </TouchableOpacity>
+              <View style={{ marginTop: 10 }}>
+                <AppleAuthentication.AppleAuthenticationButton
+                  buttonType={
+                    AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN
+                  }
+                  buttonStyle={
+                    AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+                  }
+                  cornerRadius={999}
+                  style={{ width: "100%", height: 44 }}
+                  onPress={signInWithAppleNative}
+                  disabled={socialLoading}
+                />
+              </View>
             ) : null}
 
             <View style={styles.signupRow}>
@@ -784,16 +780,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#e5e7eb",
     fontWeight: "500",
-  },
-
-  appleBtn: {
-    backgroundColor: APPLE_BG,
-    borderColor: "rgba(255,255,255,0.15)",
-  },
-
-  appleText: {
-    color: APPLE_TEXT,
-    fontWeight: "600",
   },
 
   signupRow: {

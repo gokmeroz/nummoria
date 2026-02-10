@@ -12,10 +12,10 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  Linking,
   Modal,
 } from "react-native";
-import { AntDesign, FontAwesome, Ionicons } from "@expo/vector-icons";
+import { AntDesign, Ionicons } from "@expo/vector-icons";
+import * as AppleAuthentication from "expo-apple-authentication";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api from "../lib/api";
 
@@ -25,13 +25,22 @@ const BRAND_GREEN = "#22c55e";
 const TEXT_MUTED = "rgba(148,163,184,1)";
 const TEXT_SOFT = "rgba(148,163,184,0.8)";
 
-// ✅ Apple button
 const APPLE_BG = "#000000";
 const APPLE_TEXT = "#ffffff";
 
-// ✅ Verification persistence keys
 const PENDING_VERIFY_EMAIL_KEY = "pendingVerifyEmail";
 const PENDING_REG_TOKEN_KEY = "pendingRegToken";
+
+// ✅ NEW: cache Apple name (Apple only returns fullName once)
+const APPLE_NAME_CACHE_KEY = "appleFullNameCache";
+
+function buildAppleFullName(fn) {
+  if (!fn) return "";
+  return [fn.givenName, fn.middleName, fn.familyName, fn.nickname]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+}
 
 export default function SignUpScreen({ navigation, onSignedUp }) {
   const [name, setName] = useState("");
@@ -45,7 +54,7 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
 
   const [showVerify, setShowVerify] = useState(false);
   const [verifyEmail, setVerifyEmail] = useState("");
-  const [verifyRegToken, setVerifyRegToken] = useState(""); // ✅ NEW
+  const [verifyRegToken, setVerifyRegToken] = useState("");
   const [code, setCode] = useState("");
   const [verifyMsg, setVerifyMsg] = useState("");
   const [verifyErr, setVerifyErr] = useState("");
@@ -128,7 +137,6 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
 
       setSignLoading(true);
 
-      // ✅ Must capture regToken
       const resp = await api.post("/auth/register", {
         name: name.trim(),
         email: signEmail.trim(),
@@ -141,7 +149,6 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
       setTempPassword(signPassword);
       setSignLoading(false);
 
-      // Persist email + regToken for verify
       await openVerifyModal(signEmail.trim(), regToken);
 
       Alert.alert(
@@ -159,10 +166,10 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
     }
   }
 
-  async function startSocial(provider) {
+  // ✅ Apple Native Signup (no browser)
+  async function signUpWithAppleNative() {
     try {
-      // ✅ Apple should only be available on iOS
-      if (provider === "apple" && Platform.OS !== "ios") {
+      if (Platform.OS !== "ios") {
         Alert.alert(
           "Unavailable",
           "Sign in with Apple is available on iOS only.",
@@ -173,24 +180,58 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
       setSocialErr("");
       setSocialLoading(true);
 
-      const next = encodeURIComponent("/dashboard");
-      const API_BASE =
-        process.env.EXPO_PUBLIC_API_URL?.replace(/\/+$/, "") ||
-        (api?.defaults?.baseURL || "").replace(/\/+$/, "") ||
-        "http://localhost:4000";
+      const cred = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
 
-      const url = `${API_BASE}/auth/${provider}?next=${next}`;
-
-      const canOpen = await Linking.canOpenURL(url);
-      if (canOpen) {
-        await Linking.openURL(url);
-      } else {
-        setSocialErr("Cannot open browser. Please try again.");
+      if (!cred?.identityToken) {
         setSocialLoading(false);
+        setSocialErr("Apple sign-in failed: missing identity token.");
+        return;
       }
-    } catch (err) {
-      setSocialErr(`Could not start social sign in. ${String(err)}`);
+
+      const freshName = buildAppleFullName(cred.fullName);
+
+      if (freshName) {
+        await AsyncStorage.setItem(APPLE_NAME_CACHE_KEY, freshName);
+      }
+
+      const cachedName =
+        freshName || (await AsyncStorage.getItem(APPLE_NAME_CACHE_KEY)) || "";
+
+      const resp = await api.post("/auth/apple/mobile", {
+        identityToken: cred.identityToken,
+        fullName: cachedName,
+      });
+
+      const data = resp?.data || {};
       setSocialLoading(false);
+
+      await storeUser(data);
+
+      if (typeof onSignedUp === "function") {
+        await onSignedUp();
+        return;
+      }
+
+      // fallback
+      const uid = data?.user?.id || (await AsyncStorage.getItem("defaultId"));
+      navigation.replace("Terms", {
+        userId: String(uid || ""),
+        nextRoute: "MainTabs",
+      });
+    } catch (e) {
+      setSocialLoading(false);
+      if (e?.code === "ERR_REQUEST_CANCELED") return;
+
+      setSocialErr(
+        e?.response?.data?.error ||
+          e?.message ||
+          "Apple sign-in failed. Please try again.",
+      );
     }
   }
 
@@ -241,13 +282,11 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
       setVerifying(false);
       setShowVerify(false);
 
-      // ✅ CRITICAL: call App.js onSignedUp so Terms gating can happen there
       if (typeof onSignedUp === "function") {
         await onSignedUp();
         return;
       }
 
-      // Fallback: if App.js isn't gating, go to Terms explicitly
       const uid = data?.user?.id || (await AsyncStorage.getItem("defaultId"));
       navigation.replace("Terms", {
         userId: String(uid || ""),
@@ -264,18 +303,22 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
 
   async function onResendCode() {
     try {
-      const email =
-        (verifyEmail || "").trim() ||
-        (await AsyncStorage.getItem(PENDING_VERIFY_EMAIL_KEY)) ||
-        "";
-
-      if (!email) return;
-
       setVerifyErr("");
       setVerifyMsg("");
       setResending(true);
 
-      const resp = await api.post("/auth/resend-code", { email });
+      const storedRegToken =
+        verifyRegToken || (await AsyncStorage.getItem(PENDING_REG_TOKEN_KEY));
+
+      if (!storedRegToken) {
+        setResending(false);
+        setVerifyErr("Missing verification token. Please sign up again.");
+        return;
+      }
+
+      const resp = await api.post("/auth/resend-code", {
+        regToken: storedRegToken,
+      });
       const data = resp?.data || {};
 
       if (data?.regToken) {
@@ -397,28 +440,20 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
 
             <TouchableOpacity
               style={[styles.socialBtn, socialLoading && styles.buttonDisabled]}
-              onPress={() => startSocial("google")}
+              onPress={() =>
+                Alert.alert(
+                  "Google signup",
+                  "Use your Login screen Google flow for now.",
+                )
+              }
               disabled={socialLoading}
               activeOpacity={0.7}
             >
               <AntDesign name="google" size={18} color="#e5e7eb" />
               <Text style={styles.socialText}>
-                {socialLoading ? "Redirecting..." : "Sign in with Google"}
+                {socialLoading ? "Working..." : "Continue with Google"}
               </Text>
             </TouchableOpacity>
-
-            {/** UNACTIVATED BEFORE PRODUCTION */}
-            {/* <TouchableOpacity
-              style={[styles.socialBtn, socialLoading && styles.buttonDisabled]}
-              onPress={() => startSocial("github")}
-              disabled={socialLoading}
-              activeOpacity={0.7}
-            >
-              <FontAwesome name="github" size={18} color="#e5e7eb" />
-              <Text style={styles.socialText}>
-                {socialLoading ? "Redirecting..." : "Sign in with GitHub"}
-              </Text>
-            </TouchableOpacity> */}
 
             {Platform.OS === "ios" ? (
               <TouchableOpacity
@@ -427,13 +462,13 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
                   styles.appleBtn,
                   socialLoading && styles.buttonDisabled,
                 ]}
-                onPress={() => startSocial("apple")}
+                onPress={signUpWithAppleNative}
                 disabled={socialLoading}
                 activeOpacity={0.7}
               >
                 <Ionicons name="logo-apple" size={18} color="#fff" />
                 <Text style={[styles.socialText, styles.appleText]}>
-                  {socialLoading ? "Redirecting..." : "Sign in with Apple"}
+                  {socialLoading ? "Signing up..." : "Continue with Apple"}
                 </Text>
               </TouchableOpacity>
             ) : null}
@@ -448,7 +483,6 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Verification Modal */}
       <Modal
         visible={showVerify}
         transparent={true}
@@ -632,23 +666,19 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 10,
   },
-
   socialText: {
     fontSize: 14,
     color: "#e5e7eb",
     fontWeight: "500",
   },
-
   appleBtn: {
-    backgroundColor: "#000",
+    backgroundColor: APPLE_BG,
     borderColor: "rgba(255,255,255,0.15)",
   },
-
   appleText: {
-    color: "#fff",
+    color: APPLE_TEXT,
     fontWeight: "600",
   },
-
   loginRow: {
     marginTop: 20,
     flexDirection: "row",
