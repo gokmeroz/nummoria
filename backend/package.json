@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "cross-env ENABLE_QUOTES=true nodemon src/server.js",
-    "worker:dev": "nodemon --exec \"node src/workers/pushWorkerEntry.js\"",
+    "dev": "cross-env ENABLE_QUOTES=true node --watch src/server.js",
+    "worker:dev": "node --watch src/workers/pushWorkerEntry.js",
     "dev:all": "concurrently -k \"npm run dev\" \"npm run worker:dev\"",
     "start": "cross-env ENABLE_QUOTES=true node src/server.js",
     "worker": "node src/workers/pushWorkerEntry.js"
@@ -17,17 +17,18 @@
     "dotenv": "^17.2.4",
     "expo-server-sdk": "^4.0.0",
     "express": "^5.1.0",
+    "express-rate-limit": "^8.2.1",
     "helmet": "^8.1.0",
     "ioredis": "^5.8.2",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.18.1",
     "morgan": "^1.10.1",
-    "node-cron": "^4.2.1"
+    "node-cron": "^4.2.1",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
-    "cross-env": "^10.0.0",
-    "nodemon": "^3.1.11"
+    "cross-env": "^10.0.0"
   },
   "engines": {
     "node": ">=22 <23"
