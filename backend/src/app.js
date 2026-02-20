@@ -7,7 +7,7 @@ import path from "path";
 import cookieParser from "cookie-parser";
 import crypto from "crypto";
 import rateLimit from "express-rate-limit";
-
+import receiptRoutes from "./routes/receiptRoutes.js";
 import marketRouter from "./routes/marketRoutes.js";
 import authRoutes from "./routes/auth.js";
 import meRoutes from "./routes/me.js";
@@ -230,6 +230,7 @@ app.use("/ai/financial-helper", financialHelperRoutes);
 app.use("/stats", statsRoutes);
 app.use("/contact", contactRoutes);
 app.use("/ingest", ingestRoutes);
+app.use("/receipt", receiptRoutes);
 
 // ✅ Notifications infrastructure (auth-protected)
 app.use("/devices", requireAuth, devicesRouter);

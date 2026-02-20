@@ -6,7 +6,7 @@ import React, {
   useEffect,
   useMemo,
   useState,
-  useRef, // ✅ for scrolling + scan guards
+  useRef,
 } from "react";
 
 import {
@@ -156,13 +156,6 @@ function parseReceiptFromQR(data) {
 }
 
 /* --------------------- Receipt OCR text parse helper --------------------- */
-/**
- * NOTE: Receipts vary wildly. This is "best-effort" parsing:
- * - amount: tries explicit TOTAL patterns, else picks best-looking "total-ish" number
- * - currency: tries TRY/TL/USD/EUR/GBP symbols/codes
- * - date: tries ISO or EU formats
- * - seller: top header lines until a stop keyword
- */
 function parseReceiptFromText(rawText) {
   if (!rawText) return null;
 
@@ -178,12 +171,10 @@ function parseReceiptFromText(rawText) {
   if (totalMatch && totalMatch[2]) {
     amount = totalMatch[2].replace(",", ".");
   } else {
-    // Collect candidate money patterns
     const allMoney = [...text.matchAll(/([0-9]{1,6}[.,][0-9]{2})/g)].map(
       (m) => m[1],
     );
     if (allMoney.length) {
-      // Heuristic: prefer the largest numeric value among candidates (often total is largest)
       const nums = allMoney
         .map((s) => ({
           s,
@@ -199,13 +190,9 @@ function parseReceiptFromText(rawText) {
 
   // ----- 2) CURRENCY -----
   let currency = null;
-  // TRY/TL
   if (/\b(TRY|TL|₺)\b/.test(text)) currency = "TRY";
-  // USD
   else if (/\b(USD|\$)\b/.test(text)) currency = "USD";
-  // EUR
   else if (/\b(EUR|€)\b/.test(text)) currency = "EUR";
-  // GBP
   else if (/\b(GBP|£)\b/.test(text)) currency = "GBP";
 
   // ----- 3) DATE -----
@@ -237,7 +224,6 @@ function parseReceiptFromText(rawText) {
       stopIdx > 0 ? lines.slice(0, stopIdx) : lines.slice(0, 3);
 
     seller = headerLines.join(" ").trim();
-    // prevent extremely long garbage seller
     if (seller.length > 80) seller = seller.slice(0, 80).trim();
   }
 
@@ -280,7 +266,6 @@ function inferCategoryIdFromReceipt({ seller, rawText }, categories) {
 
   const blob = normalizeKey(`${seller || ""} ${rawText || ""}`);
 
-  // Merchant/keyword → "semantic" category name targets (we map to whatever names you have)
   const rules = [
     {
       rx: /(migros|carrefour|bim|a101|sok|şok|market|supermarket|gross|grocer)/,
@@ -327,7 +312,6 @@ function inferCategoryIdFromReceipt({ seller, rawText }, categories) {
     }
   }
 
-  // fallback: if you have a generic "Other" category
   return pickCategoryIdByName(categories, ["other", "misc", "general"]) || "";
 }
 
@@ -361,8 +345,6 @@ function Chip({ label, selected, onPress, small }) {
 
 export default function ExpensesScreen({ route }) {
   const navigation = useNavigation();
-
-  // ✅ ScrollView ref
   const scrollRef = useRef(null);
 
   const accountId = route?.params?.accountId;
@@ -377,9 +359,9 @@ export default function ExpensesScreen({ route }) {
   const [autoText, setAutoText] = useState("");
   const [autoAccountId, setAutoAccountId] = useState("");
   const [autoLoading, setAutoLoading] = useState(false);
+  const [scanProcessing, setScanProcessing] = useState(false);
 
   // --- ui ---
-  const [loading, setLoading] = useState(true);
   const [initialDone, setInitialDone] = useState(false);
   const [err, setErr] = useState("");
 
@@ -408,14 +390,14 @@ export default function ExpensesScreen({ route }) {
 
   // --- QR / camera state (expo-camera) ---
   const [scannerVisible, setScannerVisible] = useState(false);
-  const [isScanning, setIsScanning] = useState(false);
+  const [isScanning, setIsScanning] = useState(false); // barcode mode
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState("back");
   const [flash, setFlash] = useState("off");
   const scannedOnceRef = useRef(false);
   const cameraRef = useRef(null);
 
-  // ✅ NEW: to avoid double OCR taps
+  // avoid double OCR taps
   const ocrBusyRef = useRef(false);
 
   /* ---------------------------- Lookups ---------------------------- */
@@ -436,7 +418,7 @@ export default function ExpensesScreen({ route }) {
   const currencies = useMemo(() => {
     const s = new Set(
       transactions
-        .filter((t) => t.type === "expense")
+        .filter((t) => t.type === "expense" && !t.isDeleted)
         .map((t) => t.currency || "USD"),
     );
     return ["ALL", ...Array.from(s)];
@@ -445,7 +427,6 @@ export default function ExpensesScreen({ route }) {
   /* ----------------------------- Data load ----------------------------- */
   const loadAll = useCallback(async () => {
     try {
-      setLoading(true);
       setErr("");
 
       console.log("[Expenses] fetching data...");
@@ -461,15 +442,20 @@ export default function ExpensesScreen({ route }) {
         (c) => c.kind === "expense" && !c.isDeleted,
       );
 
+      const accs = (accRes.data || []).filter((a) => !a.isDeleted);
+
+      const txs = (txRes.data || []).filter(
+        (t) => t.type === "expense" && !t.isDeleted,
+      );
+
       setCategories(cats);
-      setTransactions(txRes.data || []);
-      setAccounts((accRes.data || []).filter((a) => !a.isDeleted));
+      setAccounts(accs);
+      setTransactions(txs);
     } catch (e) {
       console.log("[Expenses] error", e.message);
       setErr(e?.response?.data?.error || e.message || "Failed to load data");
     } finally {
-      setLoading(false);
-      setInitialDone((prev) => (prev ? prev : true));
+      setInitialDone(true);
     }
   }, []);
 
@@ -514,6 +500,7 @@ export default function ExpensesScreen({ route }) {
 
     const filtered = transactions.filter((t) => {
       if ((t.type || "") !== "expense") return false;
+      if (t.isDeleted) return false;
 
       if (fAccountId !== "ALL" && String(t.accountId) !== String(fAccountId))
         return false;
@@ -612,6 +599,7 @@ export default function ExpensesScreen({ route }) {
     // future rows actually in DB
     for (const t of transactions) {
       if (t.type !== "expense") continue;
+      if (t.isDeleted) continue;
       const dt = new Date(t.date);
       if (dt > today) {
         map.set(keyOf(t), { ...t, __kind: "actual" });
@@ -621,6 +609,7 @@ export default function ExpensesScreen({ route }) {
     // virtual rows coming from nextDate
     for (const t of transactions) {
       if (t.type !== "expense" || !t.nextDate) continue;
+      if (t.isDeleted) continue;
       const nd = new Date(t.nextDate);
       if (nd <= today) continue;
 
@@ -963,8 +952,7 @@ export default function ExpensesScreen({ route }) {
 
   /* ---------------------- Scan helpers ---------------------- */
 
-  // ✅ NEW: if you have/plan a backend OCR endpoint, this works on BOTH iOS + Android.
-  // Endpoint expectation: POST /receipt/parse (multipart) -> { amount, currency, date, seller, description, categoryName? }
+  // ✅ Backend OCR endpoint (works on iOS + Android)
   async function parseReceiptViaBackend(photoUri) {
     const fd = new FormData();
     fd.append("file", {
@@ -973,8 +961,8 @@ export default function ExpensesScreen({ route }) {
       type: "image/jpeg",
     });
 
+    // IMPORTANT: do NOT set multipart content-type manually (axios sets boundary)
     const res = await api.post("/receipt/parse", fd, {
-      headers: { "Content-Type": "multipart/form-data" },
       timeout: 30000,
     });
 
@@ -982,7 +970,6 @@ export default function ExpensesScreen({ route }) {
   }
 
   function applyParsedToForm(parsed, rawTextForCategory) {
-    // currency fallback: picked account currency if available
     const pickedAccId = form.accountId || accountId || accounts[0]?._id || "";
     const pickedAccCur =
       accounts.find((a) => String(a._id) === String(pickedAccId))?.currency ||
@@ -1005,14 +992,75 @@ export default function ExpensesScreen({ route }) {
         .toUpperCase(),
       date: parsed?.date || prev.date,
       description:
-        parsed?.description ||
-        parsed?.seller ||
-        prev.description ||
-        prev.description,
+        parsed?.description || parsed?.seller || prev.description || "",
       categoryId:
         inferredCategoryId || prev.categoryId || categories[0]?._id || "",
     }));
   }
+
+  const runSmartScanFromPhoto = useCallback(
+    async (photoUri, { receiptId } = {}) => {
+      let rawText = "";
+      let parsed = null;
+
+      const canUseOnDeviceOcr = Platform.OS !== "ios";
+
+      if (canUseOnDeviceOcr) {
+        try {
+          const result = await TextRecognition.recognize(photoUri);
+          rawText = result?.text || "";
+          parsed = parseReceiptFromText(rawText);
+          console.log("[Expenses] OCR text (device):", rawText);
+        } catch (e) {
+          console.log("[Expenses] on-device OCR failed:", e?.message);
+        }
+      }
+
+      const missingCritical =
+        !parsed?.amount || !parsed?.date || !parsed?.seller;
+
+      if (!parsed || missingCritical) {
+        const backendParsed = await parseReceiptViaBackend(photoUri);
+
+        const b = backendParsed || {};
+        const normalized = {
+          amount: b.amount || b.total || null,
+          currency: b.currency || null,
+          date: b.date || null,
+          seller: b.seller || b.merchant || null,
+          description: b.description || null,
+        };
+
+        rawText = b.rawText || b.text || rawText || "";
+
+        parsed = {
+          amount: normalized.amount || parsed?.amount || null,
+          currency: normalized.currency || parsed?.currency || null,
+          date: normalized.date || parsed?.date || null,
+          seller: normalized.seller || parsed?.seller || null,
+          description: normalized.description || parsed?.seller || null,
+        };
+      }
+
+      if (!parsed || (!parsed.amount && !parsed.date && !parsed.seller)) {
+        return { ok: false, parsed: null, rawText: "" };
+      }
+
+      applyParsedToForm(parsed, rawText);
+
+      if (receiptId) {
+        setForm((prev) => ({
+          ...prev,
+          description: prev.description?.trim()
+            ? `${prev.description} (Receipt ID: ${receiptId})`
+            : `Receipt ID: ${receiptId}`,
+        }));
+      }
+
+      return { ok: true, parsed, rawText };
+    },
+    [accountId, accounts, categories, form.accountId, form.currency],
+  );
 
   /* ---------------------- QR scanner handlers (expo-camera) ---------------------- */
   const openScanner = useCallback(async () => {
@@ -1040,11 +1088,9 @@ export default function ExpensesScreen({ route }) {
         return;
       }
 
-      // close modal while camera is active
       setModalOpen(false);
-
       scannedOnceRef.current = false;
-      setIsScanning(true);
+      setIsScanning(true); // barcode mode
       setScannerVisible(true);
     } catch (e) {
       console.log("[Expenses] openScanner error", e);
@@ -1053,65 +1099,61 @@ export default function ExpensesScreen({ route }) {
   }, [permission, requestPermission]);
 
   const handleBarCodeScanned = useCallback(
-    ({ type, data }) => {
+    async ({ type, data }) => {
       if (scannedOnceRef.current) return;
       scannedOnceRef.current = true;
 
       const text = String(data || "");
       console.log("[Expenses] code scanned:", { type, data: text });
 
-      setIsScanning(false);
-      setScannerVisible(false);
+      setScanProcessing(true);
 
-      // ✅ IMPORTANT: Your CODE128 is basically always an ID.
-      // It will NOT contain total/date/category. So we attach it to description and instruct Smart Scan.
-      const isLikelyIdOnly = type === "code128" && /^[0-9]{10,30}$/.test(text);
+      try {
+        if (!cameraRef.current) throw new Error("Camera not ready");
 
-      if (isLikelyIdOnly) {
-        setForm((prev) => ({
-          ...prev,
-          description: prev.description?.trim()
-            ? `${prev.description} (Receipt ID: ${text})`
-            : `Receipt ID: ${text}`,
-        }));
+        const photo = await cameraRef.current.takePictureAsync({
+          base64: false,
+          quality: 0.85,
+        });
+
+        setIsScanning(false);
+        setScannerVisible(false);
 
         setModalOpen(true);
 
+        const isLikelyIdOnly =
+          type === "code128" && /^[0-9]{10,30}$/.test(text);
+        const receiptId = isLikelyIdOnly ? text : null;
+
+        const { ok } = await runSmartScanFromPhoto(photo.uri, { receiptId });
+
+        if (!ok) {
+          Alert.alert(
+            "Could not auto-fill",
+            "I couldn’t confidently detect total/date/merchant. Retake with the full receipt visible, good lighting, and the TOTAL line included.",
+          );
+          return;
+        }
+
         Alert.alert(
-          "Barcode scanned (ID only)",
-          "This barcode contains only a receipt/transaction ID. For amount + date + category, use “Smart scan (photo)” and capture the whole receipt.",
+          "Receipt captured",
+          "Auto-filled amount + date + description and inferred a category. Review and save.",
         );
-        return;
-      }
-
-      // Try structured QR payloads
-      const parsed = parseReceiptFromQR(text);
-
-      if (!parsed) {
+      } catch (e) {
+        console.log("[Expenses] scan+ocr error", e);
+        setScannerVisible(false);
+        setIsScanning(false);
         setModalOpen(true);
+
         Alert.alert(
-          "Scanned",
-          "This code doesn’t include total/date/currency in a parsable format. Use “Smart scan (photo)” for full auto-fill.",
+          "Scan error",
+          e?.response?.data?.error || e.message || "Failed to scan receipt.",
         );
-        return;
+      } finally {
+        setScanProcessing(false);
       }
-
-      setForm((prev) => ({
-        ...prev,
-        amount: parsed.amount ?? prev.amount,
-        currency: parsed.currency ?? prev.currency,
-        date: parsed.date ?? prev.date,
-        description: parsed.description ?? prev.description,
-      }));
-
-      setModalOpen(true);
-
-      Alert.alert(
-        "Receipt scanned",
-        "I pre-filled what was available in the QR payload. Review and save.",
-      );
     },
-    [setForm, setModalOpen],
+    [runSmartScanFromPhoto],
   );
 
   const openOcrScanner = useCallback(async () => {
@@ -1139,7 +1181,7 @@ export default function ExpensesScreen({ route }) {
 
       setModalOpen(false);
       setScannerVisible(true);
-      setIsScanning(false); // ✅ OCR mode (shutter), not barcode scanning
+      setIsScanning(false); // ✅ OCR mode
     } catch (e) {
       Alert.alert("Error", e.message || "Failed to open camera.");
     }
@@ -2159,10 +2201,12 @@ export default function ExpensesScreen({ route }) {
               </TouchableOpacity>
             </View>
 
-            {/* ✅ OCR SHUTTER (Smart scan) */}
+            {/* ✅ OCR SHUTTER (Smart scan) - disabled in barcode mode */}
             <TouchableOpacity
               activeOpacity={0.7}
+              disabled={isScanning}
               onPress={async () => {
+                if (isScanning) return;
                 if (ocrBusyRef.current) return;
                 ocrBusyRef.current = true;
 
@@ -2174,10 +2218,8 @@ export default function ExpensesScreen({ route }) {
                     quality: 0.85,
                   });
 
-                  // close camera overlay while we process
                   setScannerVisible(false);
 
-                  // 1) Try on-device OCR (Android in your current setup)
                   let rawText = "";
                   let parsed = null;
 
@@ -2197,7 +2239,6 @@ export default function ExpensesScreen({ route }) {
                     }
                   }
 
-                  // 2) If on-device failed OR parsed missing key fields → fallback to backend OCR (works for iOS too)
                   const missingCritical =
                     !parsed?.amount || !parsed?.date || !parsed?.seller;
 
@@ -2207,8 +2248,6 @@ export default function ExpensesScreen({ route }) {
                         photo.uri,
                       );
 
-                      // backend may already return parsed fields; normalize
-                      // accept both shapes: {amount,currency,date,seller,description,rawText} or nested
                       const b = backendParsed || {};
                       const normalized = {
                         amount: b.amount || b.total || null,
@@ -2218,10 +2257,8 @@ export default function ExpensesScreen({ route }) {
                         description: b.description || null,
                       };
 
-                      // If backend gives rawText too, use it for category inference
                       rawText = b.rawText || b.text || rawText || "";
 
-                      // only replace if backend has something
                       parsed = {
                         amount: normalized.amount || parsed?.amount || null,
                         currency:
@@ -2232,7 +2269,6 @@ export default function ExpensesScreen({ route }) {
                           normalized.description || parsed?.seller || null,
                       };
                     } catch (e) {
-                      // If iOS and no backend endpoint, explain clearly
                       if (Platform.OS === "ios") {
                         setModalOpen(true);
                         Alert.alert(
@@ -2241,12 +2277,10 @@ export default function ExpensesScreen({ route }) {
                         );
                         return;
                       }
-                      // Android fallback failed too
                       console.log("[Expenses] backend OCR failed:", e?.message);
                     }
                   }
 
-                  // reopen modal
                   setModalOpen(true);
 
                   if (
@@ -2260,7 +2294,6 @@ export default function ExpensesScreen({ route }) {
                     return;
                   }
 
-                  // ✅ Apply to form INCLUDING category inference
                   applyParsedToForm(parsed, rawText);
 
                   Alert.alert(
@@ -2279,7 +2312,10 @@ export default function ExpensesScreen({ route }) {
                   ocrBusyRef.current = false;
                 }
               }}
-              style={styles.fullCamShutterOuter}
+              style={[
+                styles.fullCamShutterOuter,
+                isScanning && { opacity: 0.35 },
+              ]}
             >
               <View
                 style={[
@@ -2299,6 +2335,26 @@ export default function ExpensesScreen({ route }) {
               <Text style={styles.fullCamBottomIconText}>⟲</Text>
             </TouchableOpacity>
           </View>
+        </View>
+      )}
+
+      {scanProcessing && (
+        <View
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: 0,
+            bottom: 0,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgba(0,0,0,0.35)",
+          }}
+        >
+          <ActivityIndicator size="large" color={main} />
+          <Text style={{ color: "#fff", marginTop: 10, fontWeight: "700" }}>
+            Reading receipt…
+          </Text>
         </View>
       )}
     </SafeAreaView>
