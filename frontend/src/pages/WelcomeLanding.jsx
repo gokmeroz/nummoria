@@ -14,7 +14,7 @@ function useScrollReveal() {
           if (e.isIntersecting) e.target.classList.add("reveal-show");
         });
       },
-      { threshold: 0.2 }
+      { threshold: 0.2 },
     );
     els.forEach((el) => io.observe(el));
     return () => io.disconnect();
@@ -105,17 +105,18 @@ export default function WelcomeLanding() {
           </div>
         </div>
       </header>
+
       {/* HERO */}
       <section id="top" className="relative isolate overflow-hidden">
         <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60%_40%_at_50%_-10%,rgba(79,119,45,0.35),transparent_60%)]" />
         <div className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-10 px-4 pb-24 pt-16 md:grid-cols-2 md:pt-20">
           <div data-reveal="left" className="reveal">
             <h1 className="text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl">
-              Personal finance that actually helps you decide
+              See it. Track it. Decide with clarity.
             </h1>
             <p className="mt-4 text-white/70 sm:text-lg">
-              Track income, expenses, and investments in one clean dashboard.
-              Get insights as you scroll.
+              A dashboard that shows your money like it actually is: income,
+              expenses, investments, and AI guidance—without the noise.
             </p>
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <a
@@ -128,146 +129,171 @@ export default function WelcomeLanding() {
             </div>
             <ul className="mt-6 grid grid-cols-1 gap-2 text-sm text-white/70 sm:grid-cols-2">
               <li className="flex items-center gap-2">
-                <Dot /> Zero-setup onboarding
+                <Dot /> Instant money snapshot
               </li>
               <li className="flex items-center gap-2">
-                <Dot /> Bank-like categories
+                <Dot /> AI advice & reports
               </li>
               <li className="flex items-center gap-2">
-                <Dot /> Investment tracking
+                <Dot /> Expense + income tracking
               </li>
               <li className="flex items-center gap-2">
-                <Dot /> CSV/PDF import
+                <Dot /> Investments overview
               </li>
             </ul>
           </div>
 
-          {/* RIGHT: mobile app mock */}
+          {/* RIGHT: mobile app mock (UPDATED to match real dashboard preview) */}
           <div data-reveal="right" className="relative reveal">
             <div className="relative mx-auto w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-white/5 p-4 shadow-2xl">
-              <div className="mx-auto aspect-[9/19] w-full max-w-[280px] rounded-[28px] bg-[#050908] text-[11px] text-white/80 shadow-[0_0_40px_rgba(16,185,129,0.25)]">
+              <div className="mx-auto aspect-[9/19] w-full max-w-[280px] rounded-[28px] bg-[#020617] text-[11px] text-white/80 shadow-[0_0_40px_rgba(16,185,129,0.22)] overflow-hidden">
                 {/* status bar */}
-                <div className="flex items-center justify-between px-4 pt-3 pb-2 text-[9px] text-white/40">
-                  <span>9:41</span>
+                <div className="flex items-center justify-between px-4 pt-3 pb-2 text-[9px] text-white/55">
+                  <span>16:17</span>
                   <div className="flex items-center gap-1">
-                    <span className="h-1.5 w-3 rounded-full bg-emerald-500/70" />
-                    <span className="h-1.5 w-3 rounded-full bg-white/30" />
-                    <span className="h-1.5 w-3 rounded-full bg-white/30" />
+                    <span className="h-1.5 w-6 rounded-full bg-white/15" />
+                    <span className="h-1.5 w-3 rounded-full bg-white/25" />
+                    <span className="text-[9px] text-white/45">27</span>
                   </div>
                 </div>
 
-                {/* header */}
-                <div className="flex items-center justify-between px-4 pb-3">
-                  <div className="flex items-center gap-2">
-                    <img
-                      src={logoUrl}
-                      alt="Nummoria"
-                      className="h-5 w-5 rounded-lg"
-                    />
-                    <div className="leading-tight">
-                      <div className="text-[10px] text-white/50">Today</div>
-                      <div className="text-xs font-semibold text-white">
-                        Nummoria
+                {/* top header row */}
+                <div className="flex items-center justify-between px-4 pt-1">
+                  <div className="text-[11px] font-semibold text-white/85">
+                    Nummoria AI
+                  </div>
+                  <div className="h-7 w-7 rounded-full bg-white/10 border border-white/10 overflow-hidden">
+                    {/* fake avatar */}
+                    <div className="h-full w-full bg-gradient-to-br from-emerald-400/30 to-white/0" />
+                  </div>
+                </div>
+
+                {/* greeting */}
+                <div className="px-4 pt-3">
+                  <div className="text-[16px] font-extrabold tracking-tight text-white">
+                    Good afternoon, Joe{" "}
+                    <span className="text-white/80">👋</span>
+                  </div>
+                  <div className="mt-1 text-[10px] text-white/55">
+                    Here&apos;s a clear picture of your money today.
+                  </div>
+                </div>
+
+                {/* feature card */}
+                <div className="px-4 pt-4">
+                  <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] p-4">
+                    {/* circular graphic bg */}
+                    <div className="pointer-events-none absolute -right-12 -top-10 h-44 w-44 rounded-full border border-emerald-400/20" />
+                    <div className="pointer-events-none absolute -right-16 -top-6 h-48 w-48 rounded-full border border-emerald-400/15" />
+                    <div className="pointer-events-none absolute -right-10 top-3 h-36 w-36 rounded-full bg-emerald-500/10 blur-[1px]" />
+                    <div className="pointer-events-none absolute right-10 top-10 h-16 w-16 rounded-full border border-emerald-400/20" />
+
+                    <div className="relative">
+                      <div className="text-[9px] font-semibold text-emerald-300/90">
+                        Finance background
+                      </div>
+                      <div className="mt-1 text-[18px] font-extrabold tracking-tight text-white">
+                        See it. Track it.
+                      </div>
+                      <div className="mt-1 text-[9px] leading-relaxed text-white/60">
+                        Real-time visibility into your cash flow, spending, and
+                        investments—all in one place. Stay compliant with your
+                        own rules and never miss a beat.
+                      </div>
+
+                      <div className="mt-3 flex items-center gap-2">
+                        <button
+                          type="button"
+                          className="inline-flex h-8 items-center justify-center rounded-full bg-emerald-500 px-4 text-[9px] font-semibold text-emerald-950 shadow-lg shadow-emerald-500/20 hover:bg-emerald-400 transition"
+                        >
+                          GET ADVICE
+                        </button>
+                        <button
+                          type="button"
+                          className="inline-flex h-8 items-center justify-center rounded-full border border-white/15 bg-white/5 px-4 text-[9px] font-semibold text-white/80 hover:border-white/30 hover:bg-white/10 transition"
+                        >
+                          VIEW REPORTS
+                        </button>
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 rounded-full bg-white/5 px-2 py-1 text-[9px]">
-                    <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                    <span className="text-white/60">On track</span>
+                </div>
+
+                {/* snapshot section */}
+                <div className="px-4 pt-4">
+                  <div className="text-[12px] font-bold text-white/90">
+                    A clear picture of your money
+                  </div>
+                  <div className="mt-1 text-[9px] text-white/50">
+                    This month&apos;s snapshot across expenses, income, and
+                    investments.
                   </div>
                 </div>
 
-                {/* balance card */}
-                <div className="px-4">
-                  <div className="rounded-2xl bg-gradient-to-br from-emerald-500/70 to-emerald-400/60 p-3 text-[10px] text-emerald-950 shadow-lg shadow-emerald-500/40">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[9px] font-medium uppercase tracking-wide">
-                        Net worth
-                      </span>
-                      <span className="rounded-full bg-emerald-100/70 px-2 py-[2px] text-[9px] font-semibold">
-                        +$4825 this month
-                      </span>
+                {/* three cards */}
+                <div className="px-4 pt-3 space-y-2">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2">
+                    <div className="text-[9px] text-white/45">
+                      This Month&apos;s Expenses
                     </div>
-                    <div className="mt-1 text-xl font-extrabold tracking-tight">
-                      $12,840
+                    <div className="mt-0.5 text-[16px] font-extrabold text-rose-400">
+                      $0
                     </div>
-                    <div className="mt-2 flex items-center justify-between text-[9px] text-emerald-950/80">
-                      <span>Income $3,200</span>
-                      <span>Expenses $2,718</span>
+                    <div className="mt-1 text-[9px] text-white/45">
+                      Keep an eye on lifestyle creep.
                     </div>
                   </div>
-                </div>
 
-                {/* accounts row */}
-                <div className="mt-3 flex gap-2 px-4">
-                  <div className="flex-1 rounded-2xl bg-white/5 p-2">
-                    <div className="text-[9px] text-white/40">Checking</div>
-                    <div className="text-sm font-semibold">$22,430</div>
-                    <div className="mt-1 h-1.5 w-full rounded-full bg-white/10">
-                      <div className="h-1.5 w-3/5 rounded-full bg-emerald-400" />
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2">
+                    <div className="text-[9px] text-white/45">
+                      This Month&apos;s Income
+                    </div>
+                    <div className="mt-0.5 text-[16px] font-extrabold text-emerald-400">
+                      $0
+                    </div>
+                    <div className="mt-1 text-[9px] text-white/45">
+                      Aim for a positive savings rate every month.
                     </div>
                   </div>
-                  <div className="flex-1 rounded-2xl bg-white/5 p-2">
-                    <div className="text-[9px] text-white/40">Investments</div>
-                    <div className="text-sm font-semibold">$10,920</div>
-                    <div className="mt-1 h-1.5 w-full rounded-full bg-white/10">
-                      <div className="h-1.5 w-4/5 rounded-full bg-emerald-300" />
-                    </div>
-                  </div>
-                </div>
 
-                {/* expenses vs income chips */}
-                <div className="mt-3 flex gap-2 px-4">
-                  <div className="flex-1 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-2 py-2">
-                    <div className="flex items-center justify-between text-[9px] text-emerald-200">
-                      <span>Expenses</span>
-                      <span>- $976</span>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2">
+                    <div className="text-[9px] text-white/45">
+                      Invested Balance
                     </div>
-                    <div className="mt-1 h-[5px] w-full rounded-full bg-white/5">
-                      <div className="h-[5px] w-4/5 rounded-full bg-emerald-400" />
+                    <div className="mt-0.5 text-[16px] font-extrabold text-sky-400">
+                      $0
                     </div>
-                  </div>
-                  <div className="flex-1 rounded-2xl bg-white/5 px-2 py-2">
-                    <div className="flex items-center justify-between text-[9px] text-white/60">
-                      <span>Income</span>
-                      <span>$4,640</span>
-                    </div>
-                    <div className="mt-1 grid grid-cols-3 gap-[3px]">
-                      <span className="h-[6px] rounded bg-emerald-400/70" />
-                      <span className="h-[6px] rounded bg-emerald-300/70" />
-                      <span className="h-[6px] rounded bg-emerald-200/60" />
+                    <div className="mt-1 text-[9px] text-white/45">
+                      Long-term money working quietly in the background.
                     </div>
                   </div>
                 </div>
 
-                {/* transactions list */}
-                <div className="mt-3 px-4 pb-4">
-                  <div className="mb-1 flex items-center justify-between text-[9px] text-white/45">
-                    <span>Today&apos;s activity</span>
-                    <span>View all</span>
+                {/* bottom area: quick actions + FAB */}
+                <div className="relative mt-4 px-4 pb-4">
+                  <div className="text-[11px] font-bold text-white/85">
+                    Quick actions
                   </div>
 
-                  <div className="space-y-1.5">
-                    {[
-                      { label: "Groceries · Supermarket", amount: "-$420.30" },
-                      { label: "Salary · Meta", amount: "+$8200.00" },
-                      { label: "Invest · S&P 500", amount: "-$120.00" },
-                    ].map((t) => (
-                      <div
-                        key={t.label}
-                        className="flex items-center justify-between rounded-2xl bg-white/5 px-2.5 py-1.5"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="h-6 w-6 rounded-full bg-emerald-500/20" />
-                          <span className="text-[9px] text-white/75">
-                            {t.label}
-                          </span>
-                        </div>
-                        <span className="text-[9px] font-semibold text-white">
-                          {t.amount}
-                        </span>
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="inline-flex h-7 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-3 text-[9px] text-white/75">
+                      Add expense
+                    </span>
+                    <span className="inline-flex h-7 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-3 text-[9px] text-white/75">
+                      Add income
+                    </span>
+                    <span className="inline-flex h-7 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-3 text-[9px] text-white/75">
+                      Open AI Mentor
+                    </span>
+                  </div>
+
+                  {/* floating action button */}
+                  <div className="absolute -right-1 bottom-2">
+                    <div className="h-12 w-12 rounded-full bg-emerald-500 shadow-[0_18px_40px_-18px_rgba(16,185,129,0.9)] flex items-center justify-center">
+                      <div className="h-5 w-5 rounded-md bg-emerald-950/20 border border-emerald-950/20 flex items-center justify-center">
+                        <span className="block h-2.5 w-2.5 bg-white/85 rounded-[3px]" />
                       </div>
-                    ))}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -278,6 +304,7 @@ export default function WelcomeLanding() {
           </div>
         </div>
       </section>
+
       {/* FEATURE ROWS */}
       <FeatureRow
         id="features"
@@ -304,6 +331,7 @@ export default function WelcomeLanding() {
           "CSV import",
         ]}
       />
+
       {/* WHY NUMMORIA */}
       <section id="why" className="mx-auto max-w-6xl px-6 py-20 text-white/80">
         <div data-reveal="up" className="reveal text-center mb-16">
@@ -311,14 +339,12 @@ export default function WelcomeLanding() {
             Why Nummoria?
           </h2>
 
-          {/* Short, punchy intro */}
           <p className="mt-3 max-w-2xl mx-auto text-sm md:text-base text-white/70">
             Managing your money should feel clear, confident and powerful.
             Nummoria gives you a financial lens that shows what is real and what
             matters so you can make decisions with certainty.
           </p>
 
-          {/* Flashcards */}
           <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
             <div className="rounded-3xl bg-white/5 border border-white/10 p-6 text-left backdrop-blur-sm hover:bg-white/10 transition">
               <div className="text-emerald-300 text-xl mb-3">💡</div>
@@ -357,7 +383,6 @@ export default function WelcomeLanding() {
             </div>
           </div>
 
-          {/* Final premium tagline */}
           <p className="mt-12 max-w-2xl mx-auto text-sm md:text-base text-white/70 font-medium">
             If you want to build your financial life with purpose and precision,
             Nummoria is not a tool. It is your advantage.
@@ -399,6 +424,7 @@ export default function WelcomeLanding() {
           </div>
         </div>
       </section>
+
       {/* PRICING */}
       <section id="pricing" className="mx-auto max-w-6xl px-6 py-20">
         <header className="text-center mb-10">
@@ -462,7 +488,8 @@ export default function WelcomeLanding() {
           />
         </div>
       </section>
-      {/* ABOUT (anchor target) */}
+
+      {/* ABOUT */}
       <section
         id="about"
         className="mx-auto max-w-6xl px-4 py-16 text-white/80"
@@ -470,6 +497,7 @@ export default function WelcomeLanding() {
         <h3 className="text-2xl font-bold mb-2">About</h3>
         <p>Built for clarity, speed, and long-term use.</p>
       </section>
+
       {/* MARQUEE */}
       <section className="my-20 border-y border-white/10 py-8">
         <div className="animate-marquee flex gap-8 whitespace-nowrap px-4 text-white/60 [animation-duration:14s]">
@@ -480,7 +508,8 @@ export default function WelcomeLanding() {
           ))}
         </div>
       </section>
-      {/* CTA / CONTACT (anchor target) */}
+
+      {/* CTA / CONTACT */}
       <section id="contact" className="mx-auto max-w-6xl px-4 py-16">
         <div
           data-reveal="up"
@@ -510,6 +539,7 @@ export default function WelcomeLanding() {
           </div>
         </div>
       </section>
+
       {/* FOOTER */}
       <footer className="mx-auto mt-10 max-w-6xl px-4 pb-16 text-xs text-white/60">
         <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-6">
@@ -527,6 +557,7 @@ export default function WelcomeLanding() {
           </nav>
         </div>
       </footer>
+
       {/* Styles for reveal + marquee */}
       <style>{`
         .reveal {opacity: 0; transform: translateY(16px); transition: opacity .6s ease, transform .6s ease;}
@@ -699,7 +730,6 @@ function AccountsMock() {
 function InvestmentsMock() {
   return (
     <div className="flex gap-4 text-xs text-white/75">
-      {/* donut-ish allocation */}
       <div className="flex flex-col items-center justify-center">
         <div className="relative h-28 w-28">
           <div className="absolute inset-0 rounded-full bg-white/5" />
@@ -713,7 +743,6 @@ function InvestmentsMock() {
         <span className="mt-2 text-[10px] text-white/55">+7.4% this month</span>
       </div>
 
-      {/* positions list */}
       <div className="flex-1 space-y-2">
         <div className="flex items-center justify-between mb-1">
           <span className="text-[10px] uppercase tracking-wide text-emerald-300/80">
@@ -723,24 +752,9 @@ function InvestmentsMock() {
         </div>
 
         {[
-          {
-            name: "S&P 500 ETF",
-            pct: "42%",
-            pl: "+$210",
-            bar: "w-[70%]",
-          },
-          {
-            name: "BTC",
-            pct: "31%",
-            pl: "+$95",
-            bar: "w-[52%]",
-          },
-          {
-            name: "AVAX",
-            pct: "12%",
-            pl: "-$24",
-            bar: "w-[28%]",
-          },
+          { name: "S&P 500 ETF", pct: "42%", pl: "+$210", bar: "w-[70%]" },
+          { name: "BTC", pct: "31%", pl: "+$95", bar: "w-[52%]" },
+          { name: "AVAX", pct: "12%", pl: "-$24", bar: "w-[28%]" },
         ].map((p) => (
           <div
             key={p.name}
@@ -830,13 +844,12 @@ function PlanCard({
           : `0 14px 30px -16px rgba(0,0,0,0.12)`,
       }}
     >
-      {/* Header */}
       <div
         className="relative h-40 shrink-0"
         style={{
           background: `linear-gradient(180deg, ${accent}, ${shade(
             accent,
-            -10
+            -10,
           )})`,
         }}
       >
@@ -858,11 +871,8 @@ function PlanCard({
         </div>
       </div>
 
-      {/* Body */}
       <div
-        className={`relative px-6 pb-8 pt-2 flex-1 flex flex-col ${
-          big ? "md:pt-0" : ""
-        }`}
+        className={`relative px-6 pb-8 pt-2 flex-1 flex flex-col ${big ? "md:pt-0" : ""}`}
       >
         <div className="text-center">
           <div className="text-sm tracking-widest font-semibold text-white/70 uppercase">
@@ -870,9 +880,7 @@ function PlanCard({
           </div>
           <div className="mt-2 flex items-end justify-center gap-2">
             <div
-              className={`${
-                big ? "text-5xl md:text-6xl" : "text-4xl"
-              } font-extrabold tracking-tight text-white`}
+              className={`${big ? "text-5xl md:text-6xl" : "text-4xl"} font-extrabold tracking-tight text-white`}
             >
               ${price.toFixed(2)}
             </div>
@@ -880,7 +888,6 @@ function PlanCard({
           </div>
         </div>
 
-        {/* Features + Button */}
         <div className="mt-4 flex flex-col flex-1">
           <ul className="mt-5 space-y-2 text-sm text-left mx-auto max-w-[18rem]">
             {bullets.map((b, i) => (
@@ -901,10 +908,7 @@ function PlanCard({
             }
             className="mt-auto inline-flex items-center justify-center w-full rounded-full h-11 px-5 text-sm font-semibold text-white transition focus:outline-none focus:ring-2"
             style={{
-              background: `linear-gradient(180deg, ${accent}, ${shade(
-                accent,
-                -10
-              )})`,
+              background: `linear-gradient(180deg, ${accent}, ${shade(accent, -10)})`,
               boxShadow: `0 10px 22px -10px ${accentRing}`,
             }}
           >
@@ -912,7 +916,6 @@ function PlanCard({
           </button>
         </div>
 
-        {/* hover ring highlight */}
         <div
           className="pointer-events-none absolute inset-0 rounded-[28px] ring-0 group-hover:ring-4 transition-[ring] duration-300"
           style={{ boxShadow: `inset 0 0 0 1px ${accentSoft}` }}
