@@ -1,0 +1,34 @@
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# env / secrets
+.env
+**/.env
+
+# deps
+node_modules/
+**/node_modules/
+
+# builds
+dist/
+build/
+coverage/
+.tmp/
+.cache/
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# mobile
+**/ios/Pods/
+**/ios/build/
+**/android/.gradle/
+**/android/build/
+**/.expo/
+**/.expo-shared/

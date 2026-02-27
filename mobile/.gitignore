@@ -39,3 +39,15 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# dependencies
+node_modules/
+**/node_modules/
+
+# env files
+.env
+**/.env
+
+# macOS
+.DS_Store
+**/.DS_Store

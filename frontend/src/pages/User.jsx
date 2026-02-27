@@ -5,7 +5,7 @@
 // frontend/src/pages/User.jsx
 import { useEffect, useRef, useState } from "react";
 import api from "../lib/api";
-import { set } from "mongoose";
+// import { set } from "mongoose";
 
 const ACCOUNT_TYPES = ["checking", "savings", "credit", "cash", "other"];
 const CURRENCIES = ["USD", "EUR", "TRY", "GBP"];
@@ -112,7 +112,7 @@ export default function UserPage() {
         setBaseCurrency(meData?.baseCurrency || "USD");
         setTz(meData?.tz || "UTC");
         setAccounts(
-          (Array.isArray(accs) ? accs : []).filter((a) => !a.isDeleted)
+          (Array.isArray(accs) ? accs : []).filter((a) => !a.isDeleted),
         );
       } catch (e) {
         setErr(e.response?.data?.error || "Failed to load profile");
@@ -128,7 +128,7 @@ export default function UserPage() {
       setAccErr("");
       const { data } = await api.get("/accounts");
       setAccounts(
-        (Array.isArray(data) ? data : []).filter((a) => !a.isDeleted)
+        (Array.isArray(data) ? data : []).filter((a) => !a.isDeleted),
       );
     } catch (e) {
       setAccErr(e.response?.data?.error || "Failed to load accounts");
@@ -279,7 +279,7 @@ export default function UserPage() {
           } catch {}
           const ver = Math.max(
             Number(fresh?.avatarVersion || 0),
-            Number(previewVer || 0)
+            Number(previewVer || 0),
           );
           const netUrl = fresh?.avatarUrl || previewUrl;
           const final = { url: netUrl, version: ver };
@@ -302,7 +302,7 @@ export default function UserPage() {
           info.statusText ? " " + info.statusText : ""
         }) at ${info.method || "POST"} ${info.url || "(unknown)"} (base ${
           info.baseURL || "n/a"
-        }): ${info.dataMsg || "No server message"}${triedNote}`
+        }): ${info.dataMsg || "No server message"}${triedNote}`,
       );
 
       // Revert override to previous network avatar if any, else clear
@@ -863,7 +863,7 @@ function AccountModal({ initial, onClose, onSubmit, busy }) {
   const [type, setType] = useState(initial?.type || "checking");
   const [currency, setCurrency] = useState(initial?.currency || "USD");
   const [balanceMajor, setBalanceMajor] = useState(
-    initial ? String((initial.balance || 0) / 100) : "0"
+    initial ? String((initial.balance || 0) / 100) : "0",
   );
   const [institution, setInstitution] = useState(initial?.institution || "");
   const [last4, setLast4] = useState(initial?.last4 || "");
