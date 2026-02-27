@@ -1,18 +1,24 @@
 /* eslint-disable */
-import { s } from "framer-motion/client";
-import React, { useRef } from "react";
+import { useRef, useState } from "react";
 import logo from "../assets/nummoria_logo.png";
 
 /**
- * Pricing page with aligned Buy buttons.
- * - Mouse-follow highlight
- * - Equal-height cards
- * - Buttons pinned to bottom with extra spacing
- * - Tailwind-only
+ * Pricing page (WEB VIEW ONLY)
+ * - Purchases are blocked on web
+ * - Upgrade happens only in the mobile app
  */
+
 const primaryColor = "#991746ff";
 const secondaryColor = "#13e243ff";
+
+// TODO: replace with your real store links
+const IOS_APP_URL = "https://apps.apple.com/app/idYOUR_APP_ID";
+const ANDROID_APP_URL =
+  "https://play.google.com/store/apps/details?id=YOUR_PACKAGE_NAME";
+
 export default function PricingPage() {
+  const [upgradeModal, setUpgradeModal] = useState(null); // { plan: "plus" | "premium" }
+
   return (
     <div className="min-h-[100dvh] bg-gradient-to-br from-[#f6fbf6] via-[#f3f7ef] to-[#eef3ff] text-gray-900">
       <header className="mx-auto max-w-5xl px-6 pt-16 pb-10 text-center">
@@ -22,10 +28,15 @@ export default function PricingPage() {
         <p className="mt-3 text-sm md:text-base text-gray-600">
           Simple pricing. Powerful features. Cancel anytime.
         </p>
+
+        <div className="mt-6 inline-block bg-blue-100 border border-blue-300 rounded-lg px-4 py-3 text-sm text-blue-800">
+          📱 <strong>Web is view-only:</strong> upgrades are available only in
+          our mobile app (iOS / Android).
+        </div>
       </header>
 
       <main className="mx-auto max-w-6xl px-6 pb-24">
-        <div className="grid gap-6 md:grid-cols-3 items-stretch">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 items-stretch">
           <PlanCard
             title="Standard"
             price={0}
@@ -34,13 +45,14 @@ export default function PricingPage() {
             bullets={["Track Transactions", "Get Reports", "Basic support"]}
             accent="#aed121ff"
             icon="✈️"
+            onRequestUpgrade={() => {}}
           />
 
           <PlanCard
             title="Plus"
             price={4.99}
             period="/month"
-            cta="Buy"
+            cta="Get on Mobile"
             bullets={[
               "Track Transactions",
               "Get Reports",
@@ -50,19 +62,19 @@ export default function PricingPage() {
             accent={secondaryColor}
             icon="🚀"
             featured
-            big
+            onRequestUpgrade={() => setUpgradeModal({ plan: "plus" })}
           />
 
           <PlanCard
             title="Premium"
             price={9.99}
             period="/month"
-            cta="Buy"
+            cta="Get on Mobile"
             bullets={[
               "Track Transactions",
               "Get Reports",
               "Basic support",
-              "More Advance AI Financial Helper",
+              "Advanced AI Financial Helper",
               "Priority support",
               "Early access to new features",
               "Custom insights",
@@ -71,9 +83,95 @@ export default function PricingPage() {
             ]}
             accent={primaryColor}
             icon="🛸"
+            onRequestUpgrade={() => setUpgradeModal({ plan: "premium" })}
           />
         </div>
       </main>
+
+      <UpgradeOnlyModal
+        open={!!upgradeModal}
+        plan={upgradeModal?.plan}
+        onClose={() => setUpgradeModal(null)}
+      />
+    </div>
+  );
+}
+
+function UpgradeOnlyModal({ open, plan, onClose }) {
+  if (!open) return null;
+
+  const planLabel = plan === "premium" ? "Premium" : "Plus";
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center px-4"
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+
+      <div className="relative w-full max-w-lg rounded-3xl bg-white shadow-2xl border border-gray-200 overflow-hidden">
+        <div className="p-6 sm:p-8">
+          <div className="flex items-start gap-4">
+            <img
+              src={logo}
+              alt="Nummoria"
+              className="h-10 w-10 rounded-xl object-contain bg-gray-50 border"
+            />
+            <div className="flex-1">
+              <div className="text-lg sm:text-xl font-extrabold">
+                Upgrade to {planLabel} in the mobile app
+              </div>
+              <p className="mt-1 text-sm text-gray-600">
+                For security and platform compliance, purchases are only
+                available on iOS/Android. Web is view-only.
+              </p>
+            </div>
+
+            <button
+              onClick={onClose}
+              className="rounded-full h-9 w-9 inline-flex items-center justify-center text-gray-500 hover:bg-gray-100"
+              aria-label="Close"
+              type="button"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <a
+              href={IOS_APP_URL}
+              className="inline-flex items-center justify-center rounded-2xl h-12 px-5 font-semibold text-white bg-black hover:bg-black/90"
+            >
+              Download on iOS
+            </a>
+            <a
+              href={ANDROID_APP_URL}
+              className="inline-flex items-center justify-center rounded-2xl h-12 px-5 font-semibold text-white bg-green-600 hover:bg-green-700"
+            >
+              Get it on Android
+            </a>
+          </div>
+
+          <div className="mt-5 text-xs text-gray-500">
+            Already installed? Open the app → Settings → Subscription to
+            upgrade.
+          </div>
+        </div>
+
+        <div className="px-6 sm:px-8 pb-6">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full rounded-2xl h-11 font-semibold border border-gray-200 hover:bg-gray-50"
+          >
+            Not now
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -87,11 +185,10 @@ function PlanCard({
   accent = "#4f772d",
   icon = "✨",
   featured = false,
-  big = false,
+  onRequestUpgrade,
 }) {
   const ref = useRef(null);
 
-  // Mouse-follow glow & parallax
   const onMouseMove = (e) => {
     const el = ref.current;
     if (!el) return;
@@ -104,10 +201,16 @@ function PlanCard({
     const ry = (px / rect.width - 0.5) * 8;
     el.style.transform = `perspective(900px) rotateX(${rx}deg) rotateY(${ry}deg) scale(1.02)`;
   };
+
   const onMouseLeave = () => {
     const el = ref.current;
     if (!el) return;
     el.style.transform = "";
+  };
+
+  const handleClick = () => {
+    if (title === "Standard") return;
+    if (typeof onRequestUpgrade === "function") onRequestUpgrade();
   };
 
   const accentRing = hexToRGBA(accent, 0.25);
@@ -126,23 +229,17 @@ function PlanCard({
         featured ? "ring-2" : "ring-1",
       ].join(" ")}
       style={{
-        backgroundImage: `
-          radial-gradient(200px 200px at var(--x) var(--y), ${accentSoft}, transparent 60%)
-        `,
+        backgroundImage: `radial-gradient(200px 200px at var(--x) var(--y), ${accentSoft}, transparent 60%)`,
         borderColor: accentSoft,
         boxShadow: featured
           ? `0 20px 40px -16px ${accentRing}`
           : `0 14px 30px -16px rgba(0,0,0,0.12)`,
       }}
     >
-      {/* Header */}
       <div
         className="relative h-40 shrink-0"
         style={{
-          background: `linear-gradient(180deg, ${accent}, ${shade(
-            accent,
-            -10
-          )})`,
+          background: `linear-gradient(180deg, ${accent}, ${shade(accent, -10)})`,
         }}
       >
         <div
@@ -154,38 +251,24 @@ function PlanCard({
         />
         <div className="absolute inset-x-0 -bottom-8 h-16 bg-white rounded-t-[40%/60%]" />
         <div className="absolute inset-0 flex items-center justify-center">
-          <img
-            src={logo}
-            alt="Nummoria logo"
-            className="h-14 w-14 object-contain drop-shadow-lg"
-          />
+          <span className="text-5xl">{icon}</span>
         </div>
       </div>
 
-      {/* Body */}
-      <div
-        className={`relative px-6 pb-8 pt-2 flex-1 flex flex-col ${
-          big ? "md:pt-0" : ""
-        }`}
-      >
+      <div className="relative px-6 pb-8 pt-2 flex-1 flex flex-col">
         <div className="text-center">
           <div className="text-sm tracking-widest font-semibold text-gray-500 uppercase">
             {title}
           </div>
 
           <div className="mt-2 flex items-end justify-center gap-2">
-            <div
-              className={`${
-                big ? "text-5xl md:text-6xl" : "text-4xl"
-              } font-extrabold tracking-tight`}
-            >
+            <div className="text-4xl font-extrabold tracking-tight">
               ${price.toFixed(2)}
             </div>
             <div className="pb-2 text-xs text-gray-500 uppercase">{period}</div>
           </div>
         </div>
 
-        {/* Features + Button */}
         <div className="mt-4 flex flex-col flex-1">
           <ul className="mt-5 space-y-2 text-sm text-left mx-auto max-w-[18rem]">
             {bullets.map((b, i) => (
@@ -198,19 +281,17 @@ function PlanCard({
               </li>
             ))}
           </ul>
-          {/* Buy button always bottom aligned with more space */}
+
           <button
             type="button"
-            onClick={() =>
-              (window.location.href =
-                "subscriptions/purchase?plan=" + title.toLowerCase())
-            } // Add this line
-            className="mt-auto mt-10 inline-flex items-center justify-center w-full rounded-full h-10 px-5 text-sm font-semibold text-white transition focus:outline-none focus:ring-2"
+            onClick={handleClick}
+            disabled={title === "Standard"}
+            className={[
+              "mt-auto mt-10 inline-flex items-center justify-center w-full rounded-full h-10 px-5 text-sm font-semibold text-white transition focus:outline-none focus:ring-2",
+              title === "Standard" ? "opacity-60 cursor-not-allowed" : "",
+            ].join(" ")}
             style={{
-              background: `linear-gradient(180deg, ${accent}, ${shade(
-                accent,
-                -10
-              )})`,
+              background: `linear-gradient(180deg, ${accent}, ${shade(accent, -10)})`,
               boxShadow: `0 10px 22px -10px ${accentRing}`,
             }}
           >
@@ -218,7 +299,6 @@ function PlanCard({
           </button>
         </div>
 
-        {/* hover ring highlight */}
         <div
           className="pointer-events-none absolute inset-0 rounded-[28px] ring-0 group-hover:ring-4 transition-[ring] duration-300"
           style={{ boxShadow: `inset 0 0 0 1px ${accentSoft}` }}
@@ -228,7 +308,6 @@ function PlanCard({
   );
 }
 
-/* ----------------------- helpers ----------------------- */
 function shade(hex, pct) {
   const { r, g, b } = hexToRGB(hex);
   const t = pct < 0 ? 0 : 255;
