@@ -7,6 +7,7 @@ import path from "path";
 import cookieParser from "cookie-parser";
 import crypto from "crypto";
 import rateLimit from "express-rate-limit";
+
 import receiptRoutes from "./routes/receiptRoutes.js";
 import marketRouter from "./routes/marketRoutes.js";
 import authRoutes from "./routes/auth.js";
@@ -34,8 +35,29 @@ const app = express();
 const isProd = process.env.NODE_ENV === "production";
 
 // ---- env-driven config ----
-// Option B: Support CORS_ORIGINS allowlist, fallback to FRONTEND_URL.
-const FRONTEND = process.env.FRONTEND_URL || "http://localhost:5173";
+// Choose correct URLs by environment
+const FRONTEND = isProd
+  ? process.env.FRONTEND_URL_PROD ||
+    process.env.FRONTEND_URL ||
+    "https://nummoria.com"
+  : process.env.FRONTEND_URL || "http://localhost:5173";
+
+const BACKEND = isProd
+  ? process.env.BACKEND_URL_PROD ||
+    process.env.BACKEND_URL ||
+    "https://api.nummoria.com"
+  : process.env.BACKEND_URL || "http://localhost:4000";
+
+// Normalize to origin for CSP connectSrc
+const BACKEND_ORIGIN = (() => {
+  try {
+    return new URL(BACKEND).origin;
+  } catch {
+    return BACKEND;
+  }
+})();
+
+// Support CORS_ORIGINS allowlist, fallback to FRONTEND
 const CORS_ORIGINS = (process.env.CORS_ORIGINS || FRONTEND)
   .split(",")
   .map((s) => s.trim())
@@ -77,8 +99,10 @@ app.use(
       // Allow non-browser clients / same-origin without Origin header
       if (!origin) return cb(null, true);
 
-      const ok = CORS_ORIGINS.includes(origin);
-      return cb(ok ? null : new Error("Not allowed by CORS"), ok);
+      const normalized = origin.trim();
+      const ok = CORS_ORIGINS.includes(normalized);
+
+      return cb(ok ? null : new Error(`CORS blocked: ${normalized}`), ok);
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -111,11 +135,11 @@ app.use(
 
         scriptSrc: ["'self'"],
 
-        // If your API is on another domain in production, add it explicitly.
-        connectSrc: ["'self'"],
+        // Allow browser to connect to API domain (important for nummoria.com -> api.nummoria.com)
+        connectSrc: ["'self'", BACKEND_ORIGIN],
 
         // In prod, auto-upgrade http -> https for subresources
-        upgradeInsecureRequests: isProd ? [] : null,
+        ...(isProd ? { upgradeInsecureRequests: [] } : {}),
       },
     },
 
@@ -200,15 +224,18 @@ app.get("/health", (req, res) =>
   res.json({ status: "ok", timestamp: Date.now(), rid: req.id }),
 );
 
-app.get("/debug/openai", (req, res) => {
-  const k = process.env.OPENAI_API_KEY || "";
-  res.json({
-    hasKey: Boolean(k),
-    keyPreview: k ? `${k.slice(0, 7)}…${k.slice(-4)}` : null,
-    nodeEnv: process.env.NODE_ENV,
-    rid: req.id,
+// ✅ Don't leak key previews in production
+if (!isProd) {
+  app.get("/debug/openai", (req, res) => {
+    const k = process.env.OPENAI_API_KEY || "";
+    res.json({
+      hasKey: Boolean(k),
+      keyPreview: k ? `${k.slice(0, 7)}…${k.slice(-4)}` : null,
+      nodeEnv: process.env.NODE_ENV,
+      rid: req.id,
+    });
   });
-});
+}
 
 // Auth & consent endpoints must stay BEFORE the consent gate
 app.use("/auth", authLimiter, authRoutes);
