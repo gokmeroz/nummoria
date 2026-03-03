@@ -45,6 +45,19 @@ export default function UserPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // ---- TEST: make me admin (guarded) ----
+  const [adminBusy, setAdminBusy] = useState(false);
+  const [adminErr, setAdminErr] = useState("");
+  const [adminMsg, setAdminMsg] = useState("");
+
+  // Show button only if explicitly enabled (recommended for prod safety)
+  const ENABLE_ADMIN_TEST =
+    (typeof import.meta !== "undefined" &&
+      import.meta.env &&
+      (import.meta.env.VITE_ENABLE_ADMIN_TEST === "true" ||
+        import.meta.env.VITE_ENABLE_ADMIN_TEST === "1")) ||
+    false;
+
   const main = "#4f772d";
   const secondary = "#90a955";
 
@@ -352,6 +365,92 @@ export default function UserPage() {
       setErr(`Remove failed (${status || "?"}): ${m}`);
     } finally {
       setUploadingAvatar(false);
+    }
+  }
+
+  // ---- TEST: Make me admin helpers ----
+  async function tryMakeAdminEndpoints() {
+    const candidates = [
+      // preferred: implement ONE of these in backend
+      { method: "post", url: "/me/make-admin" },
+      { method: "post", url: "/admin/make-me-admin" },
+      { method: "patch", url: "/me", data: { role: "admin" } },
+      { method: "patch", url: "/me", data: { isAdmin: true } },
+    ];
+
+    let lastErr = null;
+    for (const c of candidates) {
+      try {
+        const res = await api.request({
+          method: c.method,
+          url: c.url,
+          data: c.data,
+          withCredentials: true,
+        });
+        return {
+          res,
+          tried: candidates.map(
+            (x) => `${String(x.method).toUpperCase()} ${x.url}`,
+          ),
+        };
+      } catch (e) {
+        lastErr = e;
+        const status = e?.response?.status;
+        if (status === 404 || status === 405) continue; // try next candidate
+        e._tried = candidates.map(
+          (x) => `${String(x.method).toUpperCase()} ${x.url}`,
+        );
+        throw e;
+      }
+    }
+
+    if (lastErr) {
+      lastErr._tried = candidates.map(
+        (x) => `${String(x.method).toUpperCase()} ${x.url}`,
+      );
+      throw lastErr;
+    }
+    throw new Error("All make-admin endpoints failed");
+  }
+
+  async function makeMeAdmin() {
+    if (!window.confirm("Promote THIS user to ADMIN?")) return;
+    setAdminBusy(true);
+    setAdminErr("");
+    setAdminMsg("");
+    try {
+      const { res } = await tryMakeAdminEndpoints();
+
+      // if backend returns updated user, merge it
+      if (res?.data && typeof res.data === "object") {
+        mergeMe(res.data);
+      } else {
+        // else refetch
+        try {
+          const { data: fresh } = await api.get("/me", {
+            withCredentials: true,
+          });
+          mergeMe(fresh || {});
+        } catch {}
+      }
+
+      setAdminMsg(
+        "You are now ADMIN (or request succeeded). Refresh if needed.",
+      );
+    } catch (e) {
+      const info = describeAxiosError(e);
+      const triedNote = e?._tried?.length
+        ? ` Tried: ${e._tried.join(" | ")}`
+        : "";
+      setAdminErr(
+        `Make-admin failed (${info.status || "?"}${
+          info.statusText ? " " + info.statusText : ""
+        }) at ${info.method || "?"} ${info.url || "?"}: ${
+          info.dataMsg || "No server message"
+        }.${triedNote}`,
+      );
+    } finally {
+      setAdminBusy(false);
     }
   }
 
@@ -777,6 +876,43 @@ export default function UserPage() {
           </div>
         </div>
       </section>
+
+      {/* ===== TEST / INTERNAL ONLY (BOTTOM OF PAGE) ===== */}
+      {ENABLE_ADMIN_TEST && (
+        <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-16">
+          <div className="mt-2 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+            <div className="font-semibold text-amber-900">
+              Internal tools (enabled)
+            </div>
+            <div className="text-sm text-amber-900/80 mt-1">
+              Use only for production bootstrap. Disable/remove after.
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                disabled={adminBusy}
+                onClick={makeMeAdmin}
+                className="px-4 py-2 rounded-xl font-semibold text-white disabled:opacity-60"
+                style={{ backgroundColor: "#b45309" }}
+              >
+                {adminBusy ? "Promoting…" : "TEST: Make me ADMIN"}
+              </button>
+
+              {adminMsg && (
+                <div className="text-sm text-emerald-700 font-medium">
+                  {adminMsg}
+                </div>
+              )}
+              {adminErr && (
+                <div className="text-sm text-red-700 font-medium">
+                  {adminErr}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
 
       {accModalOpen && (
         <AccountModal
