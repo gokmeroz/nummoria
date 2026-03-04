@@ -70,6 +70,7 @@ function sha256ToBase64url(verifier) {
 function sanitizeNext(nextRaw) {
   if (!nextRaw) return "/";
   try {
+    if (typeof nextRaw !== "string") return "/";
     if (/^https?:\/\//i.test(nextRaw)) {
       const u = new URL(nextRaw);
       return (u.pathname || "/") + (u.search || "") + (u.hash || "");
@@ -87,6 +88,34 @@ function maskEmail(email = "") {
   return `${u[0]}${"*".repeat(Math.max(1, u.length - 2))}${
     u[u.length - 1]
   }@${d}`;
+}
+
+/**
+ * ✅ FIX: Some flows were passing state already URL-encoded and then encoding again.
+ * This helper makes decoding safe/idempotent.
+ */
+function safeDecodeURIComponentMaybe(s) {
+  if (!s || typeof s !== "string") return "";
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+}
+
+/**
+ * ✅ FIX: Your frontend oauth-callback currently requires token.
+ * Ensure provider callbacks always include token in redirect query.
+ */
+function buildOauthRedirectUrl({ provider, token, next }) {
+  const qs = new URLSearchParams({ provider });
+
+  const safeNext = sanitizeNext(next || "/");
+  if (safeNext) qs.set("next", safeNext);
+
+  if (token) qs.set("token", token); // ✅ critical for "Missing token" issue
+
+  return `${FRONTEND_URL}/oauth-callback?${qs.toString()}`;
 }
 
 /* ───────────────────────── Apple helpers ───────────────────────── */
@@ -786,11 +815,14 @@ export async function appleCallback(req, res) {
 
     setAuthCookie(res, token);
 
-    const next = sanitizeNext(state ? decodeURIComponent(state) : "/");
-    const qs = new URLSearchParams({ provider: "apple" });
-    if (next) qs.set("next", next);
+    const next = sanitizeNext(state ? safeDecodeURIComponentMaybe(state) : "/");
 
-    const redirectTo = `${FRONTEND_URL}/oauth-callback?${qs.toString()}`;
+    const redirectTo = buildOauthRedirectUrl({
+      provider: "apple",
+      token,
+      next,
+    });
+
     return res.redirect(redirectTo);
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -911,10 +943,14 @@ export async function googleCallback(req, res) {
 
     setAuthCookie(res, token);
 
-    const next = sanitizeNext(state ? decodeURIComponent(state) : "/");
-    const usp = new URLSearchParams({ provider: "google" });
-    if (next) usp.set("next", next);
-    const redirectTo = `${FRONTEND_URL}/oauth-callback?${usp.toString()}`;
+    const next = sanitizeNext(state ? safeDecodeURIComponentMaybe(state) : "/");
+
+    const redirectTo = buildOauthRedirectUrl({
+      provider: "google",
+      token,
+      next,
+    });
+
     return res.redirect(redirectTo);
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -1212,10 +1248,14 @@ export async function twitterCallback(req, res) {
 
     setAuthCookie(res, token);
 
-    const next = sanitizeNext(state ? decodeURIComponent(state) : "/");
-    const usp = new URLSearchParams({ provider: "twitter" });
-    if (next) usp.set("next", next);
-    const redirectTo = `${FRONTEND_URL}/oauth-callback?${usp.toString()}`;
+    const next = sanitizeNext(state ? safeDecodeURIComponentMaybe(state) : "/");
+
+    const redirectTo = buildOauthRedirectUrl({
+      provider: "twitter",
+      token,
+      next,
+    });
+
     return res.redirect(redirectTo);
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -1362,10 +1402,14 @@ export async function githubCallback(req, res) {
 
     setAuthCookie(res, token);
 
-    const next = sanitizeNext(state ? decodeURIComponent(state) : "/");
-    const qs = new URLSearchParams({ provider: "github" });
-    if (next) qs.set("next", next);
-    const redirectTo = `${FRONTEND_URL}/oauth-callback?${qs.toString()}`;
+    const next = sanitizeNext(state ? safeDecodeURIComponentMaybe(state) : "/");
+
+    const redirectTo = buildOauthRedirectUrl({
+      provider: "github",
+      token,
+      next,
+    });
+
     return res.redirect(redirectTo);
   } catch (err) {
     return res.status(500).json({ error: err.message });
