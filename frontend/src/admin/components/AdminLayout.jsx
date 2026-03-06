@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 // frontend/src/admin/components/AdminLayout.jsx
 import React, { useEffect, useRef, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
