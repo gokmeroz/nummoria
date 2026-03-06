@@ -10,10 +10,13 @@ import React, {
 } from "react";
 import { ResponsiveSankey } from "@nivo/sankey";
 import api from "../lib/api";
+import logoUrl from "../assets/nummoria_logo.png";
 
 /* =========================== Money helpers =========================== */
 
 const DATE_LANG = "en-US";
+const main = "#4f772d";
+const secondary = "#90a955";
 
 function decimalsForCurrency(code) {
   const zero = new Set(["JPY", "KRW", "CLP", "VND"]);
@@ -50,6 +53,171 @@ function csvEscape(v) {
   return s;
 }
 
+function startOfUTC(dateLike) {
+  const d = new Date(dateLike);
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+}
+
+function startOfMonthUTC(dateLike) {
+  const d = new Date(dateLike);
+  return startOfUTC(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)));
+}
+
+function endOfMonthUTC(dateLike) {
+  const d = new Date(dateLike);
+  return new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0, 23, 59, 59, 999),
+  );
+}
+
+function addMonthsUTC(dateLike, n) {
+  const d = new Date(dateLike);
+  return new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, d.getUTCDate()),
+  );
+}
+
+/* =========================== Shared UI =========================== */
+
+function Field({ label, children }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="text-sm font-medium text-white/75">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function Chip({ label, selected, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-full border px-3.5 py-2 text-sm transition ${
+        selected
+          ? "border-white/15 bg-white/[0.08] text-white"
+          : "border-white/10 bg-white/[0.03] text-white/65 hover:bg-white/[0.05] hover:text-white"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function SectionCard({ title, subtitle, right, children, className = "" }) {
+  return (
+    <div
+      className={`relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-md ${className}`}
+    >
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(500px_180px_at_10%_0%,rgba(19,226,67,0.06),transparent_60%),radial-gradient(420px_180px_at_90%_10%,rgba(153,23,70,0.08),transparent_60%)]" />
+      <div className="relative p-5 md:p-6">
+        {(title || right) && (
+          <div className="mb-4 flex items-start justify-between gap-4">
+            <div>
+              {title ? (
+                <h2 className="text-lg font-semibold tracking-tight text-white">
+                  {title}
+                </h2>
+              ) : null}
+              {subtitle ? (
+                <p className="mt-1 text-sm text-white/55">{subtitle}</p>
+              ) : null}
+            </div>
+            {right ? <div>{right}</div> : null}
+          </div>
+        )}
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({ label, value, tone = "neutral" }) {
+  const toneClass =
+    tone === "positive"
+      ? "text-[#dce8bf]"
+      : tone === "negative"
+        ? "text-red-200"
+        : "text-white";
+
+  return (
+    <div className="rounded-2xl border border-white/8 bg-black/20 p-4">
+      <div className="text-xs uppercase tracking-[0.18em] text-white/40">
+        {label}
+      </div>
+      <div
+        className={`mt-2 text-2xl font-semibold tracking-tight ${toneClass}`}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function TotalsCard({ totals }) {
+  return (
+    <SectionCard
+      title="Totals / Money Flow"
+      subtitle="Summarized from the currently filtered transaction set."
+      className="mb-6"
+    >
+      {totals.length === 0 ? (
+        <div className="rounded-2xl border border-white/8 bg-black/20 p-6 text-sm text-white/55">
+          No transactions match these filters.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {totals.map((t) => {
+            const netUp = t.netMinor >= 0;
+            return (
+              <div
+                key={t.currency}
+                className="rounded-2xl border border-white/8 bg-black/20 p-4"
+              >
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="text-sm font-semibold text-white">
+                    {t.currency}
+                  </div>
+                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/60">
+                    Currency
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between gap-3 text-white/65">
+                    <span>Income</span>
+                    <span className="font-medium text-white">
+                      {fmtMoneyUI(t.incomeMinor, t.currency)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 text-white/65">
+                    <span>Outflow</span>
+                    <span className="font-medium text-white">
+                      {fmtMoneyUI(t.outMinor, t.currency)}
+                    </span>
+                  </div>
+                  <div className="h-px bg-white/8" />
+                  <div
+                    className={`flex items-center justify-between gap-3 font-semibold ${
+                      netUp ? "text-[#dce8bf]" : "text-red-200"
+                    }`}
+                  >
+                    <span>Net</span>
+                    <span>{fmtMoneyUI(t.netMinor, t.currency)}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+/* =========================== Page =========================== */
+
 export default function Reports() {
   /* ---------- data ---------- */
   const [transactions, setTransactions] = useState([]);
@@ -60,6 +228,7 @@ export default function Reports() {
   const [loading, setLoading] = useState(true);
   const [initialDone, setInitialDone] = useState(false);
   const [err, setErr] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
 
   /* filters */
   const [fStart, setFStart] = useState("");
@@ -71,7 +240,6 @@ export default function Reports() {
   const [fMin, setFMin] = useState("");
   const [fMax, setFMax] = useState("");
 
-  // ref for Sankey chart (for PDF export)
   const sankeyRef = useRef(null);
 
   /* ---------- load data ---------- */
@@ -91,7 +259,7 @@ export default function Reports() {
       setAccounts((accRes.data || []).filter((a) => !a?.isDeleted));
     } catch (e) {
       setErr(
-        e?.response?.data?.error || e.message || "Failed to load reports data"
+        e?.response?.data?.error || e.message || "Failed to load reports data",
       );
     } finally {
       setLoading(false);
@@ -121,6 +289,15 @@ export default function Reports() {
     const arr = Array.from(s);
     if (!arr.includes("USD")) arr.unshift("USD");
     return arr;
+  }, [transactions]);
+
+  const typeCounts = useMemo(() => {
+    const out = { income: 0, expense: 0, investment: 0 };
+    for (const t of transactions) {
+      const k = String(t.type || "").toLowerCase();
+      if (k in out) out[k] += 1;
+    }
+    return out;
   }, [transactions]);
 
   /* ---------- filters ---------- */
@@ -190,6 +367,48 @@ export default function Reports() {
     fMax,
   ]);
 
+  /* ---------- KPI summary ---------- */
+  const reportKpis = useMemo(() => {
+    const now = new Date();
+    const thisStart = startOfMonthUTC(now);
+    const thisEnd = endOfMonthUTC(now);
+    const lastStart = startOfMonthUTC(addMonthsUTC(now, -1));
+    const lastEnd = endOfMonthUTC(addMonthsUTC(now, -1));
+
+    const source = rows.filter((r) => (r.currency || "USD") === fCurrency);
+
+    const sumByType = (arr, type) =>
+      arr
+        .filter((t) => t.type === type)
+        .reduce((acc, t) => acc + Number(t.amountMinor || 0), 0);
+
+    const within = (arr, s, e) =>
+      arr.filter((t) => {
+        const d = new Date(t.date);
+        return d >= s && d <= e;
+      });
+
+    const thisMonth = within(source, thisStart, thisEnd);
+    const lastMonth = within(source, lastStart, lastEnd);
+
+    const thisIncome = sumByType(thisMonth, "income");
+    const thisExpense = sumByType(thisMonth, "expense");
+    const thisInvestment = sumByType(thisMonth, "investment");
+    const lastNet =
+      sumByType(lastMonth, "income") -
+      sumByType(lastMonth, "expense") -
+      sumByType(lastMonth, "investment");
+    const thisNet = thisIncome - thisExpense - thisInvestment;
+
+    return {
+      thisIncome,
+      thisExpense,
+      thisInvestment,
+      lastNet,
+      thisNet,
+    };
+  }, [rows, fCurrency]);
+
   /* ---------- totals ---------- */
   const totalsByCurrency = useMemo(() => {
     const map = new Map();
@@ -217,7 +436,7 @@ export default function Reports() {
     const cur = fCurrency;
 
     let totalIncome = 0;
-    const catMap = new Map(); // name -> minor
+    const catMap = new Map();
 
     for (const t of rows) {
       if ((t.currency || "USD") !== cur) continue;
@@ -301,13 +520,11 @@ export default function Reports() {
           const response = await api.post("/ingest/csv", formData, {
             headers: { "Content-Type": "multipart/form-data" },
           });
-          // eslint-disable-next-line no-alert
           alert(response.data.message || "CSV imported successfully");
           await loadAll();
         } catch (err) {
-          // eslint-disable-next-line no-alert
           alert(
-            err?.response?.data?.error || err.message || "Failed to import CSV"
+            err?.response?.data?.error || err.message || "Failed to import CSV",
           );
         } finally {
           setLoading(false);
@@ -318,7 +535,6 @@ export default function Reports() {
       document.body.appendChild(input);
       input.click();
     } catch (err) {
-      // eslint-disable-next-line no-alert
       alert(err.message || "Failed to open file picker");
     }
   };
@@ -348,13 +564,11 @@ export default function Reports() {
           const response = await api.post("/ingest/pdf", formData, {
             headers: { "Content-Type": "multipart/form-data" },
           });
-          // eslint-disable-next-line no-alert
           alert(response.data.message || "PDF imported successfully");
           await loadAll();
         } catch (err) {
-          // eslint-disable-next-line no-alert
           alert(
-            err?.response?.data?.error || err.message || "Failed to import PDF"
+            err?.response?.data?.error || err.message || "Failed to import PDF",
           );
         } finally {
           setLoading(false);
@@ -365,16 +579,13 @@ export default function Reports() {
       document.body.appendChild(input);
       input.click();
     } catch (err) {
-      // eslint-disable-next-line no-alert
       alert(err.message || "Failed to open file picker");
     }
   };
 
-  // CSV EXPORT – web-only, creates a download in browser
   const handleDownloadCsv = async () => {
     try {
       if (!rows || rows.length === 0) {
-        // eslint-disable-next-line no-alert
         alert("No transactions to export");
         return;
       }
@@ -401,7 +612,7 @@ export default function Reports() {
         csvLines.push(
           [date, accName, catName, tx.type || "", desc, amt.toString()]
             .map(csvEscape)
-            .join(",")
+            .join(","),
         );
       });
 
@@ -423,7 +634,6 @@ export default function Reports() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (err) {
-      // eslint-disable-next-line no-alert
       alert(err.message || "Failed to download CSV");
     }
   };
@@ -431,31 +641,25 @@ export default function Reports() {
   const handleDownloadPdf = async () => {
     try {
       if (!rows || rows.length === 0) {
-        // eslint-disable-next-line no-alert
         alert("No transactions to export");
         return;
       }
       if (typeof window === "undefined" || typeof document === "undefined")
         return;
 
-      // Grab the rendered Sankey SVG directly
       let sankeySvgHtml = "";
       try {
         if (sankeyRef.current) {
           const svg = sankeyRef.current.querySelector("svg");
           if (svg) {
-            // clone to avoid live DOM mutations
             const cloned = svg.cloneNode(true);
-            // Make sure it scales nicely in print
             cloned.removeAttribute("width");
             cloned.removeAttribute("height");
             sankeySvgHtml = cloned.outerHTML;
           }
         }
       } catch (e) {
-        // fail softly; still generate table-only PDF
         sankeySvgHtml = "";
-        // optional: console.error(e);
       }
 
       const tableRowsHtml = rows
@@ -529,9 +733,8 @@ export default function Reports() {
 
       const win = window.open("", "_blank");
       if (!win) {
-        // eslint-disable-next-line no-alert
         alert(
-          "Popup blocked. Allow popups for this site to download the PDF (via print dialog)."
+          "Popup blocked. Allow popups for this site to download the PDF (via print dialog).",
         );
         return;
       }
@@ -541,7 +744,6 @@ export default function Reports() {
       win.focus();
       win.print();
     } catch (err) {
-      // eslint-disable-next-line no-alert
       alert(err.message || "Failed to generate PDF");
     }
   };
@@ -549,14 +751,39 @@ export default function Reports() {
   /* ---------- loading ---------- */
   if (!initialDone && loading) {
     return (
-      <div className="min-h-[calc(100vh-80px)] flex items-center justify-center bg-[#f5f5f5]">
-        <div className="text-center bg-white border border-gray-200 px-8 py-6 rounded-xl shadow">
-          <div className="mx-auto mb-3 h-6 w-6 rounded-full border-2 border-gray-200 border-t-[#16a34a] animate-spin" />
-          <div className="flex items-center justify-center gap-2 text-sm">
-            <span>🪙</span>
-            <span className="font-semibold text-[#16a34a]">Nummoria</span>
+      <div className="min-h-[60vh] grid place-items-center bg-[#070A07] px-4">
+        <div className="relative w-full max-w-sm">
+          <div className="pointer-events-none absolute -inset-10 opacity-40">
+            <div className="absolute left-4 top-6 h-40 w-40 rounded-full blur-3xl bg-[#13e243]/20" />
+            <div className="absolute right-6 top-10 h-40 w-40 rounded-full blur-3xl bg-[#991746]/20" />
           </div>
-          <p className="mt-1 text-xs text-gray-500">Loading your reports…</p>
+
+          <div className="relative rounded-3xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-md">
+            <div className="flex items-center gap-3">
+              <img
+                src={logoUrl}
+                alt="Nummoria logo"
+                className="h-9 w-9 rounded-xl"
+              />
+              <div>
+                <div className="text-lg font-semibold text-white">Nummoria</div>
+                <div className="text-sm text-white/50">
+                  Loading your reports…
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+              <div className="h-full w-1/3 animate-[reportsload_1.2s_ease-in-out_infinite] bg-white/30" />
+            </div>
+
+            <style>{`
+              @keyframes reportsload {
+                0% { transform: translateX(-120%); }
+                100% { transform: translateX(320%); }
+              }
+            `}</style>
+          </div>
         </div>
       </div>
     );
@@ -565,297 +792,486 @@ export default function Reports() {
   /* ============================= RENDER ============================= */
 
   return (
-    <div className="min-h-screen bg-[#f5f5f5] text-[#111827] px-6 py-4">
-      {/* FILTER BAR */}
-      <div className="flex flex-wrap items-center gap-2 rounded border border-gray-300 bg-white px-2.5 py-2 mb-1.5">
-        <button
-          type="button"
-          className="whitespace-nowrap rounded border border-gray-400 bg-gray-50 px-3 py-1 text-xs hover:bg-gray-200"
-          onClick={resetFilters}
-        >
-          Reset filters
-        </button>
-
-        <input
-          type="date"
-          className="h-[30px] min-w-[120px] rounded border border-gray-300 bg-white px-2 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#16a34a]"
-          value={fStart}
-          onChange={(e) => setFStart(e.target.value)}
-        />
-        <input
-          type="date"
-          className="h-[30px] min-w-[120px] rounded border border-gray-300 bg-white px-2 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#16a34a]"
-          value={fEnd}
-          onChange={(e) => setFEnd(e.target.value)}
-        />
-
-        <select
-          className="h-[30px] min-w-[120px] rounded border border-gray-300 bg-white px-2 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#16a34a]"
-          value={fType}
-          onChange={(e) => setFType(e.target.value)}
-        >
-          <option value="ALL">All types</option>
-          <option value="income">Income</option>
-          <option value="expense">Expense</option>
-          <option value="investment">Investment</option>
-        </select>
-
-        <select
-          className="h-[30px] min-w-[120px] rounded border border-gray-300 bg-white px-2 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#16a34a]"
-          value={fAccountId}
-          onChange={(e) => setFAccountId(e.target.value)}
-        >
-          <option value="ALL">All accounts</option>
-          {accounts.map((a) => (
-            <option key={a._id} value={a._id}>
-              {a.name}
-            </option>
-          ))}
-        </select>
-
-        <select
-          className="h-[30px] min-w-[120px] rounded border border-gray-300 bg-white px-2 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#16a34a]"
-          value={fCategoryId}
-          onChange={(e) => setFCategoryId(e.target.value)}
-        >
-          <option value="ALL">All categories</option>
-          {categories.map((c) => (
-            <option key={c._id} value={c._id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-
-        <select
-          className="h-[30px] min-w-[80px] rounded border border-gray-300 bg-white px-2 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#16a34a]"
-          value={fCurrency}
-          onChange={(e) => setFCurrency(e.target.value)}
-        >
-          {currencies.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-
-        <input
-          type="number"
-          className="h-[30px] min-w-[120px] rounded border border-gray-300 bg-white px-2 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#16a34a]"
-          placeholder="Min amount"
-          value={fMin}
-          onChange={(e) => setFMin(e.target.value)}
-        />
-        <input
-          type="number"
-          className="h-[30px] min-w-[120px] rounded border border-gray-300 bg-white px-2 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#16a34a]"
-          placeholder="Max amount"
-          value={fMax}
-          onChange={(e) => setFMax(e.target.value)}
-        />
+    <div className="min-h-[100dvh] bg-[#070A07] text-white">
+      <div className="pointer-events-none fixed inset-0 -z-10">
+        <div className="absolute inset-0 bg-[#070A07]" />
+        <div className="absolute inset-0 bg-[radial-gradient(1200px_800px_at_15%_0%,rgba(19,226,67,0.10),transparent_55%),radial-gradient(1000px_700px_at_85%_10%,rgba(153,23,70,0.10),transparent_55%),radial-gradient(900px_700px_at_50%_100%,rgba(255,255,255,0.04),transparent_60%)]" />
+        <div className="absolute inset-0 opacity-[0.10] mix-blend-overlay bg-[linear-gradient(to_right,rgba(255,255,255,0.10)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.10)_1px,transparent_1px)] bg-[size:56px_56px]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/35 to-black/70" />
       </div>
 
-      {/* IMPORT / EXPORT ROW */}
-      <div className="mb-2.5 mt-1.5 flex gap-2">
-        <button
-          type="button"
-          className="whitespace-nowrap rounded-full border border-gray-400 bg-gray-50 px-3 py-1 text-xs text-gray-700 hover:bg-gray-200"
-          onClick={handleImportCsv}
-        >
-          Import CSV
-        </button>
-        <button
-          type="button"
-          className="whitespace-nowrap rounded-full border border-gray-400 bg-gray-50 px-3 py-1 text-xs text-gray-700 hover:bg-gray-200"
-          onClick={handleImportPdf}
-        >
-          Import PDF
-        </button>
-        <button
-          type="button"
-          className="whitespace-nowrap rounded-full border border-[#16a34a] bg-[#16a34a] px-3 py-1 text-xs font-semibold text-[#022c22] hover:bg-[#15803d] hover:border-[#15803d]"
-          onClick={handleDownloadCsv}
-        >
-          Download CSV
-        </button>
-        <button
-          type="button"
-          className="whitespace-nowrap rounded-full border border-[#16a34a] bg-[#16a34a] px-3 py-1 text-xs font-semibold text-[#022c22] hover:bg-[#15803d] hover:border-[#15803d]"
-          onClick={handleDownloadPdf}
-        >
-          Download PDF
-        </button>
-      </div>
-
-      {err && (
-        <div className="mt-2 mb-2 rounded border border-red-900 bg-red-900/5 px-2.5 py-2 text-xs text-red-800">
-          {err}
-        </div>
-      )}
-
-      {/* TOTALS CARD */}
-      <section className="mb-3 rounded border border-gray-300 bg-white px-3 py-2.5">
-        <h3 className="mb-2 text-sm font-semibold">Totals / Money Flow</h3>
-        {totalsByCurrency.length === 0 ? (
-          <div className="py-2 text-xs text-gray-500">
-            No transactions match these filters.
-          </div>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {totalsByCurrency.map((t) => {
-              const netUp = t.netMinor >= 0;
-              return (
-                <div
-                  key={t.currency}
-                  className="min-w-[220px] rounded border border-gray-300 bg-white px-3 py-2 text-xs"
-                >
-                  <div className="mb-1 font-semibold">{t.currency}</div>
-                  <div className="my-[1px]">
-                    Income:{" "}
-                    <span className="font-medium">
-                      {fmtMoneyUI(t.incomeMinor, t.currency)}
-                    </span>
-                  </div>
-                  <div className="my-[1px]">
-                    Outflow:{" "}
-                    <span className="font-medium">
-                      {fmtMoneyUI(t.outMinor, t.currency)}
-                    </span>
-                  </div>
-                  <div
-                    className={`mt-1 font-semibold ${
-                      netUp ? "text-[#16a34a]" : "text-[#b91c1c]"
-                    }`}
-                  >
-                    Net: {fmtMoneyUI(t.netMinor, t.currency)}
-                  </div>
+      <div className="mx-4 px-4 py-6 sm:px-6 lg:px-8">
+        <section className="mb-6">
+          <SectionCard className="overflow-visible">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0">
+                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-white/60">
+                  <span className="h-2 w-2 rounded-full bg-[#13e243]" />
+                  reports center
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
 
-      {/* SANKEY CARD */}
-      <section className="mb-3 rounded border border-gray-300 bg-white px-3 py-2.5">
-        <div className="mb-1.5 flex items-center justify-between">
-          <h3 className="text-sm font-semibold">
-            Cash-Flow (Sankey) · {fCurrency}
-          </h3>
-        </div>
+                <div className="mt-4">
+                  <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-white">
+                    Reports
+                  </h1>
+                  <p className="mt-2 max-w-2xl text-sm md:text-base text-white/60">
+                    Analyze transactions, filter cash flow, export records, and
+                    visualize how income moves through spending categories.
+                  </p>
+                </div>
+              </div>
 
-        <div ref={sankeyRef} className="h-[420px]">
-          {!sankeyData ? (
-            <div className="flex h-full items-center justify-center text-xs text-gray-500">
-              Not enough data to display cash-flow for {fCurrency}.
+              <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowFilters((v) => !v)}
+                  className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-white/80 transition hover:bg-white/[0.07]"
+                  title="Show filters"
+                >
+                  <svg
+                    className="h-4 w-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <line x1="4" y1="21" x2="4" y2="14" />
+                    <line x1="4" y1="10" x2="4" y2="3" />
+                    <line x1="12" y1="21" x2="12" y2="12" />
+                    <line x1="12" y1="8" x2="12" y2="3" />
+                    <line x1="20" y1="21" x2="20" y2="16" />
+                    <line x1="20" y1="12" x2="20" y2="3" />
+                    <line x1="1" y1="14" x2="7" y2="14" />
+                    <line x1="9" y1="8" x2="15" y2="8" />
+                    <line x1="17" y1="16" x2="23" y2="16" />
+                  </svg>
+                  <span>Filters</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={loadAll}
+                  className="inline-flex items-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-white/70 transition hover:bg-white/[0.07] hover:text-white"
+                  title="Refresh"
+                >
+                  Refresh
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleImportCsv}
+                  className="inline-flex items-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white/80 transition hover:bg-white/[0.07]"
+                >
+                  Import CSV
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleImportPdf}
+                  className="inline-flex items-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white/80 transition hover:bg-white/[0.07]"
+                >
+                  Import PDF
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadCsv}
+                  className="inline-flex items-center rounded-2xl px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-95"
+                  style={{
+                    background: "linear-gradient(135deg, #90a955, #4f772d)",
+                  }}
+                >
+                  Download CSV
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadPdf}
+                  className="inline-flex items-center rounded-2xl px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-95"
+                  style={{
+                    background: "linear-gradient(135deg, #991746, #7d1238)",
+                  }}
+                >
+                  Download PDF
+                </button>
+              </div>
             </div>
-          ) : (
-            <ResponsiveSankey
-              data={sankeyData}
-              margin={{ top: 20, right: 180, bottom: 20, left: 40 }}
-              align="justify"
-              colors={{ scheme: "paired" }}
-              nodeOpacity={1}
-              nodeThickness={12}
-              nodeInnerPadding={2}
-              nodeSpacing={16}
-              nodeBorderWidth={1}
-              nodeBorderColor={{ from: "color", modifiers: [["darker", 0.2]] }}
-              nodeBorderRadius={0}
-              linkOpacity={0.45}
-              linkBlendMode="multiply"
-              enableLinkGradient
-              labelPosition="outside"
-              labelOrientation="horizontal"
-              labelPadding={8}
-              labelTextColor={{ from: "color", modifiers: [["darker", 1.2]] }}
-              animate
-              motionConfig="gentle"
-            />
-          )}
-        </div>
-      </section>
 
-      {/* TABLE */}
-      <section className="mt-2 rounded border border-gray-300 bg-white px-3 pb-3 pt-2.5">
-        <div className="mb-1.5 flex items-baseline justify-between">
-          <h3 className="text-sm font-semibold">All Transactions</h3>
-          <span className="text-[11px] text-gray-500">
-            ({rows.length} result{rows.length === 1 ? "" : "s"})
-          </span>
-        </div>
+            <div className="mt-5 flex flex-wrap gap-2">
+              <Chip
+                label={`All (${transactions.length})`}
+                selected={fType === "ALL"}
+                onClick={() => setFType("ALL")}
+              />
+              <Chip
+                label={`Income (${typeCounts.income})`}
+                selected={fType === "income"}
+                onClick={() => setFType("income")}
+              />
+              <Chip
+                label={`Expenses (${typeCounts.expense})`}
+                selected={fType === "expense"}
+                onClick={() => setFType("expense")}
+              />
+              <Chip
+                label={`Investments (${typeCounts.investment})`}
+                selected={fType === "investment"}
+                onClick={() => setFType("investment")}
+              />
+            </div>
 
-        {rows.length === 0 ? (
-          <div className="py-2 text-xs text-gray-500">
-            No transactions found.
+            {showFilters && (
+              <div className="mt-5 grid grid-cols-1 gap-3 rounded-3xl border border-white/10 bg-black/20 p-4 md:grid-cols-2 xl:grid-cols-4">
+                <Field label="From">
+                  <input
+                    type="date"
+                    className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white outline-none"
+                    value={fStart}
+                    onChange={(e) => setFStart(e.target.value)}
+                  />
+                </Field>
+
+                <Field label="To">
+                  <input
+                    type="date"
+                    className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white outline-none"
+                    value={fEnd}
+                    onChange={(e) => setFEnd(e.target.value)}
+                  />
+                </Field>
+
+                <Field label="Account">
+                  <select
+                    className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white outline-none"
+                    value={fAccountId}
+                    onChange={(e) => setFAccountId(e.target.value)}
+                  >
+                    <option value="ALL" className="text-black">
+                      All accounts
+                    </option>
+                    {accounts.map((a) => (
+                      <option key={a._id} value={a._id} className="text-black">
+                        {a.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
+                <Field label="Category">
+                  <select
+                    className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white outline-none"
+                    value={fCategoryId}
+                    onChange={(e) => setFCategoryId(e.target.value)}
+                  >
+                    <option value="ALL" className="text-black">
+                      All categories
+                    </option>
+                    {categories.map((c) => (
+                      <option key={c._id} value={c._id} className="text-black">
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
+                <Field label="Currency">
+                  <select
+                    className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white outline-none"
+                    value={fCurrency}
+                    onChange={(e) => setFCurrency(e.target.value)}
+                  >
+                    {currencies.map((c) => (
+                      <option key={c} value={c} className="text-black">
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
+                <Field label="Min amount">
+                  <input
+                    type="number"
+                    placeholder="e.g. 50"
+                    className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white placeholder:text-white/30 outline-none"
+                    value={fMin}
+                    onChange={(e) => setFMin(e.target.value)}
+                  />
+                </Field>
+
+                <Field label="Max amount">
+                  <input
+                    type="number"
+                    placeholder="e.g. 1000"
+                    className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white placeholder:text-white/30 outline-none"
+                    value={fMax}
+                    onChange={(e) => setFMax(e.target.value)}
+                  />
+                </Field>
+
+                <div className="flex items-end">
+                  <button
+                    type="button"
+                    className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/75 transition hover:bg-white/[0.07]"
+                    onClick={resetFilters}
+                  >
+                    Reset filters
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              <MetricCard label="Visible Rows" value={String(rows.length)} />
+              <MetricCard
+                label="This Income"
+                value={fmtMoneyUI(reportKpis.thisIncome, fCurrency)}
+                tone="positive"
+              />
+              <MetricCard
+                label="This Expense"
+                value={fmtMoneyUI(reportKpis.thisExpense, fCurrency)}
+                tone="negative"
+              />
+              <MetricCard
+                label="This Investment"
+                value={fmtMoneyUI(reportKpis.thisInvestment, fCurrency)}
+              />
+              <MetricCard
+                label="This Net"
+                value={fmtMoneyUI(reportKpis.thisNet, fCurrency)}
+                tone={reportKpis.thisNet >= 0 ? "positive" : "negative"}
+              />
+            </div>
+          </SectionCard>
+        </section>
+
+        {err ? (
+          <div className="mb-6 rounded-2xl border border-red-400/20 bg-red-400/10 p-4 text-red-100">
+            {err}
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-xs">
-              <thead>
-                <tr className="bg-gray-100">
-                  <th className="border-t border-gray-200 px-2 py-1 text-left text-[11px] font-semibold text-gray-700">
-                    Date
-                  </th>
-                  <th className="border-t border-gray-200 px-2 py-1 text-left text-[11px] font-semibold text-gray-700">
-                    Account
-                  </th>
-                  <th className="border-t border-gray-200 px-2 py-1 text-left text-[11px] font-semibold text-gray-700">
-                    Category
-                  </th>
-                  <th className="border-t border-gray-200 px-2 py-1 text-left text-[11px] font-semibold text-gray-700">
-                    Type
-                  </th>
-                  <th className="border-t border-gray-200 px-2 py-1 text-left text-[11px] font-semibold text-gray-700">
-                    Description
-                  </th>
-                  <th className="border-t border-gray-200 px-2 py-1 text-right text-[11px] font-semibold text-gray-700">
-                    Amount
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((tx, idx) => {
-                  const accName = accountsById.get(tx.accountId)?.name || "—";
-                  const catName =
-                    categoriesById.get(tx.categoryId)?.name || "—";
-                  const isIncome = tx.type === "income";
-                  let val = minorToMajor(tx.amountMinor, tx.currency);
-                  if (!isIncome) val = -Math.abs(val);
+        ) : null}
 
-                  return (
-                    <tr
-                      key={tx._id}
-                      className={idx % 2 === 1 ? "bg-gray-50" : "bg-white"}
-                    >
-                      <td className="border-t border-gray-200 px-2 py-1">
-                        {fmtDate(tx.date)}
-                      </td>
-                      <td className="border-t border-gray-200 px-2 py-1">
-                        {accName}
-                      </td>
-                      <td className="border-t border-gray-200 px-2 py-1">
-                        {catName}
-                      </td>
-                      <td className="border-t border-gray-200 px-2 py-1">
-                        {tx.type}
-                      </td>
-                      <td className="border-t border-gray-200 px-2 py-1">
-                        {tx.description || ""}
-                      </td>
-                      <td className="border-t border-gray-200 px-2 py-1 text-right">
-                        {new Intl.NumberFormat(undefined, {
-                          style: "currency",
-                          currency: tx.currency || "USD",
-                        }).format(val)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        <TotalsCard totals={totalsByCurrency} />
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="space-y-6 min-w-0">
+            <SectionCard
+              title={`Cash-Flow (Sankey) · ${fCurrency}`}
+              subtitle="Visual breakdown of current filtered income into top expense categories."
+            >
+              <div ref={sankeyRef} className="h-[420px] min-w-0">
+                {!sankeyData ? (
+                  <div className="flex h-full items-center justify-center rounded-2xl border border-white/8 bg-black/20 text-sm text-white/50">
+                    Not enough data to display cash-flow for {fCurrency}.
+                  </div>
+                ) : (
+                  <ResponsiveSankey
+                    data={sankeyData}
+                    margin={{ top: 20, right: 180, bottom: 20, left: 40 }}
+                    align="justify"
+                    colors={{ scheme: "paired" }}
+                    theme={{
+                      text: {
+                        fill: "rgba(255,255,255,0.72)",
+                        fontSize: 12,
+                      },
+                      tooltip: {
+                        container: {
+                          background: "#0b0f0b",
+                          color: "#ffffff",
+                          fontSize: 12,
+                          borderRadius: 12,
+                          border: "1px solid rgba(255,255,255,0.08)",
+                        },
+                      },
+                    }}
+                    nodeOpacity={1}
+                    nodeThickness={12}
+                    nodeInnerPadding={2}
+                    nodeSpacing={16}
+                    nodeBorderWidth={1}
+                    nodeBorderColor={{
+                      from: "color",
+                      modifiers: [["darker", 0.2]],
+                    }}
+                    nodeBorderRadius={0}
+                    linkOpacity={0.45}
+                    linkBlendMode="multiply"
+                    enableLinkGradient
+                    labelPosition="outside"
+                    labelOrientation="horizontal"
+                    labelPadding={8}
+                    labelTextColor={{
+                      from: "color",
+                      modifiers: [["darker", 1.2]],
+                    }}
+                    animate
+                    motionConfig="gentle"
+                  />
+                )}
+              </div>
+            </SectionCard>
+
+            <SectionCard
+              title="All Transactions"
+              subtitle={`${rows.length} visible transaction${rows.length === 1 ? "" : "s"} after current filters.`}
+              right={
+                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/60">
+                  {fCurrency}
+                </span>
+              }
+            >
+              {rows.length === 0 ? (
+                <div className="rounded-2xl border border-white/8 bg-black/20 p-10 text-center text-white/55">
+                  No transactions found.
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-2xl border border-white/8 bg-black/20">
+                  <table className="min-w-full border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-white/8 bg-white/[0.03] text-left">
+                        <th className="px-4 py-3 font-medium text-white/70">
+                          Date
+                        </th>
+                        <th className="px-4 py-3 font-medium text-white/70">
+                          Account
+                        </th>
+                        <th className="px-4 py-3 font-medium text-white/70">
+                          Category
+                        </th>
+                        <th className="px-4 py-3 font-medium text-white/70">
+                          Type
+                        </th>
+                        <th className="px-4 py-3 font-medium text-white/70">
+                          Description
+                        </th>
+                        <th className="px-4 py-3 text-right font-medium text-white/70">
+                          Amount
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((tx, idx) => {
+                        const accName =
+                          accountsById.get(tx.accountId)?.name || "—";
+                        const catName =
+                          categoriesById.get(tx.categoryId)?.name || "—";
+                        const isIncome = tx.type === "income";
+                        let val = minorToMajor(tx.amountMinor, tx.currency);
+                        if (!isIncome) val = -Math.abs(val);
+
+                        return (
+                          <tr
+                            key={tx._id}
+                            className={`border-t border-white/8 ${
+                              idx % 2 === 1
+                                ? "bg-white/[0.02]"
+                                : "bg-transparent"
+                            }`}
+                          >
+                            <td className="px-4 py-3 text-white/78">
+                              {fmtDate(tx.date)}
+                            </td>
+                            <td className="px-4 py-3 text-white/72">
+                              {accName}
+                            </td>
+                            <td className="px-4 py-3 text-white/72">
+                              {catName}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-white/65">
+                                {tx.type}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-white/60">
+                              {tx.description || ""}
+                            </td>
+                            <td
+                              className={`px-4 py-3 text-right font-medium ${
+                                val >= 0 ? "text-[#dce8bf]" : "text-red-200"
+                              }`}
+                            >
+                              {new Intl.NumberFormat(undefined, {
+                                style: "currency",
+                                currency: tx.currency || "USD",
+                              }).format(val)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </SectionCard>
           </div>
-        )}
-      </section>
+
+          <aside className="space-y-6 lg:sticky lg:top-20 h-max min-w-0">
+            <SectionCard title="Export Notes">
+              <div className="space-y-3 text-sm text-white/60">
+                <div className="rounded-2xl border border-white/8 bg-black/20 p-4">
+                  CSV export downloads the currently filtered transaction set.
+                </div>
+                <div className="rounded-2xl border border-white/8 bg-black/20 p-4">
+                  PDF export includes the visible table and the rendered sankey
+                  chart when available.
+                </div>
+                <div className="rounded-2xl border border-white/8 bg-black/20 p-4">
+                  Imports will refresh the report view immediately after a
+                  successful ingest.
+                </div>
+              </div>
+            </SectionCard>
+
+            <SectionCard title="Current Filter State">
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between gap-3 text-white/60">
+                  <span>Type</span>
+                  <span className="text-white">{fType}</span>
+                </div>
+                <div className="flex justify-between gap-3 text-white/60">
+                  <span>Account</span>
+                  <span className="text-white">
+                    {fAccountId === "ALL"
+                      ? "All"
+                      : accountsById.get(fAccountId)?.name || "—"}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-3 text-white/60">
+                  <span>Category</span>
+                  <span className="text-white">
+                    {fCategoryId === "ALL"
+                      ? "All"
+                      : categoriesById.get(fCategoryId)?.name || "—"}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-3 text-white/60">
+                  <span>Currency</span>
+                  <span className="text-white">{fCurrency}</span>
+                </div>
+                <div className="flex justify-between gap-3 text-white/60">
+                  <span>From</span>
+                  <span className="text-white">{fStart || "—"}</span>
+                </div>
+                <div className="flex justify-between gap-3 text-white/60">
+                  <span>To</span>
+                  <span className="text-white">{fEnd || "—"}</span>
+                </div>
+                <div className="flex justify-between gap-3 text-white/60">
+                  <span>Min</span>
+                  <span className="text-white">{fMin || "—"}</span>
+                </div>
+                <div className="flex justify-between gap-3 text-white/60">
+                  <span>Max</span>
+                  <span className="text-white">{fMax || "—"}</span>
+                </div>
+              </div>
+            </SectionCard>
+          </aside>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 // frontend/src/pages/incomes.jsx
 /* eslint-disable no-unused-labels */
 /* eslint-disable no-undef */
@@ -44,13 +45,13 @@ function startOfMonthUTC(dateLike) {
 function endOfMonthUTC(dateLike) {
   const d = new Date(dateLike);
   return new Date(
-    Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0, 23, 59, 59, 999)
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0, 23, 59, 59, 999),
   );
 }
 function addMonthsUTC(dateLike, n) {
   const d = new Date(dateLike);
   return new Date(
-    Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, d.getUTCDate())
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, d.getUTCDate()),
   );
 }
 function fmtDateUTC(dateLike) {
@@ -63,7 +64,7 @@ function fmtDateUTC(dateLike) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* ✅ Auto modal: kept at MODULE scope to avoid remounting on re-renders        */
+/* ✅ Auto modal: kept at MODULE scope to avoid remounting on re-renders      */
 /* -------------------------------------------------------------------------- */
 const AutoQuickAddModal = React.memo(function AutoQuickAddModal({
   open,
@@ -79,10 +80,8 @@ const AutoQuickAddModal = React.memo(function AutoQuickAddModal({
 }) {
   const inputRef = React.useRef(null);
 
-  // focus input when opening
   React.useEffect(() => {
     if (open) {
-      // small tick to ensure DOM mounted
       const t = setTimeout(() => inputRef.current?.focus?.(), 0);
       return () => clearTimeout(t);
     }
@@ -103,73 +102,93 @@ const AutoQuickAddModal = React.memo(function AutoQuickAddModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/40"
+      className="fixed inset-0 z-50 grid place-items-center bg-black/60 backdrop-blur-sm px-4"
       onMouseDown={(e) => {
-        // click backdrop closes
         if (e.target === e.currentTarget) onCancel?.();
       }}
     >
-      <div className="w-full max-w-xl bg-white rounded-2xl p-5 space-y-4 shadow-xl">
-        <div className="text-lg font-bold">Auto add income</div>
+      <div className="relative w-full max-w-xl overflow-hidden rounded-3xl border border-white/10 bg-[#0B0F0B]/95 text-white shadow-2xl">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(600px_260px_at_15%_0%,rgba(19,226,67,0.10),transparent_55%),radial-gradient(500px_260px_at_85%_10%,rgba(153,23,70,0.12),transparent_55%)]" />
+        <div className="relative p-6 space-y-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-lg font-semibold tracking-tight">
+                Auto add income
+              </div>
+              <div className="mt-1 text-sm text-white/60">
+                Parse a short sentence into a transaction.
+              </div>
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-[11px] text-white/70">
+              <span className="h-2 w-2 rounded-full bg-[#13e243]" />
+              TEXT PARSER
+            </div>
+          </div>
 
-        <div className="space-y-1 w-full">
-          <label className="font-semibold text-sm">Account</label>
-          <select
-            value={accountId}
-            onChange={(e) => onChangeAccountId(e.target.value)}
-            className="w-full border rounded-lg px-3 py-2 bg-white"
-            disabled={busy}
-          >
-            <option value="">— Pick an account —</option>
-            {accounts.map((a) => (
-              <option key={a._id} value={a._id}>
-                {a.name} · {a.type} · {a.currency}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-white/80">Account</label>
+            <select
+              value={accountId}
+              onChange={(e) => onChangeAccountId(e.target.value)}
+              className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white outline-none transition focus:border-white/20"
+              disabled={busy}
+            >
+              <option value="" className="text-black">
+                — Pick an account —
               </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="space-y-1 w-full">
-          <label className="font-semibold text-sm">Text</label>
-          <input
-            ref={inputRef}
-            value={text}
-            onChange={(e) => onChangeText(e.target.value)}
-            placeholder="paid 280 TRY coffee"
-            className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
-            disabled={busy}
-          />
-          <div className="text-xs text-gray-500">
-            Examples: <span className="font-medium">paid 280 TRY coffee</span>,{" "}
-            <span className="font-medium">uber 180</span>,{" "}
-            <span className="font-medium">$12 lunch</span>
+              {accounts.map((a) => (
+                <option key={a._id} value={a._id} className="text-black">
+                  {a.name} · {a.type} · {a.currency}
+                </option>
+              ))}
+            </select>
           </div>
-        </div>
 
-        {notice ? (
-          <div className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2">
-            {notice}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-white/80">Text</label>
+            <input
+              ref={inputRef}
+              value={text}
+              onChange={(e) => onChangeText(e.target.value)}
+              placeholder="salary 4000 USD"
+              className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white placeholder:text-white/30 outline-none transition focus:border-white/20"
+              disabled={busy}
+            />
+            <div className="text-xs text-white/45">
+              Examples: <span className="text-white/70">salary 4000 USD</span>,{" "}
+              <span className="text-white/70">freelance 850 eur</span>,{" "}
+              <span className="text-white/70">dividend 120</span>
+            </div>
           </div>
-        ) : null}
 
-        <div className="flex gap-3 justify-end pt-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-4 py-2 border rounded-xl"
-            disabled={busy}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={onCreate}
-            className="px-4 py-2 rounded-xl bg-[#4f772d] text-white font-semibold disabled:opacity-60"
-            disabled={busy}
-            title="Ctrl/⌘ + Enter"
-          >
-            {busy ? "Parsing..." : "Create"}
-          </button>
+          {notice ? (
+            <div className="rounded-2xl border border-amber-400/20 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">
+              {notice}
+            </div>
+          ) : null}
+
+          <div className="flex justify-end gap-3 pt-1">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-white/75 transition hover:bg-white/[0.07]"
+              disabled={busy}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={onCreate}
+              className="rounded-2xl px-4 py-2.5 text-sm font-semibold text-white transition disabled:opacity-60"
+              style={{
+                background: "linear-gradient(135deg, #90a955, #4f772d)",
+              }}
+              disabled={busy}
+              title="Ctrl/⌘ + Enter"
+            >
+              {busy ? "Parsing..." : "Create"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -177,17 +196,14 @@ const AutoQuickAddModal = React.memo(function AutoQuickAddModal({
 });
 
 /* ---------------------------------- Screen ---------------------------------- */
-export default function incomesScreen({ accountId }) {
-  // data
+export default function IncomesScreen({ accountId }) {
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
   const [accounts, setAccounts] = useState([]);
 
-  // ui
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
-  // search + filters
   const [q, setQ] = useState("");
   const [fStartISO, setFStartISO] = useState("");
   const [fEndISO, setFEndISO] = useState("");
@@ -201,18 +217,15 @@ export default function incomesScreen({ accountId }) {
   const [sortKey, setSortKey] = useState("date_desc");
   const [showUpcoming, setShowUpcoming] = useState(false);
 
-  // modal state (create / edit)
   const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState(null); // if null => create
+  const [editing, setEditing] = useState(null);
 
-  // ✅ Auto modal (fully controlled)
   const [autoModalOpen, setAutoModalOpen] = useState(false);
   const [autoBusy, setAutoBusy] = useState(false);
   const [autoText, setAutoText] = useState("");
   const [autoAccountId, setAutoAccountId] = useState("");
   const [autoNotice, setAutoNotice] = useState("");
 
-  // form seeds
   const [form, setForm] = useState({
     amount: "",
     currency: "USD",
@@ -224,7 +237,6 @@ export default function incomesScreen({ accountId }) {
     accountId: "",
   });
 
-  /* ------------------------------ Money helpers ------------------------------ */
   function decimalsForCurrency(code) {
     const zero = new Set(["JPY", "KRW", "CLP", "VND"]);
     const three = new Set(["BHD", "IQD", "JOD", "KWD", "OMR", "TND"]);
@@ -248,7 +260,6 @@ export default function incomesScreen({ accountId }) {
       currency: cur || "USD",
     }).format((minor || 0) / Math.pow(10, decimalsForCurrency(cur || "USD")));
 
-  /* ---------------------------- Lookups / helpers --------------------------- */
   const categoriesById = useMemo(() => {
     const m = new Map();
     for (const c of categories) m.set(c._id, c);
@@ -265,12 +276,11 @@ export default function incomesScreen({ accountId }) {
     const s = new Set(
       transactions
         .filter((t) => t.type === "income")
-        .map((t) => t.currency || "USD")
+        .map((t) => t.currency || "USD"),
     );
     return ["ALL", ...Array.from(s)];
   }, [transactions]);
 
-  /* ---------------------------------- Data ---------------------------------- */
   const loadAll = useCallback(async () => {
     try {
       setLoading(true);
@@ -281,7 +291,7 @@ export default function incomesScreen({ accountId }) {
         api.get("/accounts"),
       ]);
       const cats = (catRes.data || []).filter(
-        (c) => c.kind === "income" && !c.isDeleted
+        (c) => c.kind === "income" && !c.isDeleted,
       );
       setCategories(cats);
       setTransactions(txRes.data || []);
@@ -297,7 +307,6 @@ export default function incomesScreen({ accountId }) {
     loadAll();
   }, [loadAll]);
 
-  /* ------------------------------- Filtering -------------------------------- */
   const rows = useMemo(() => {
     const start = fStartISO ? new Date(`${fStartISO}T00:00:00.000Z`) : null;
     const end = fEndISO ? new Date(`${fEndISO}T23:59:59.999Z`) : null;
@@ -382,7 +391,6 @@ export default function incomesScreen({ accountId }) {
     sortKey,
   ]);
 
-  /* --------------------------------- Totals --------------------------------- */
   const totals = useMemo(() => {
     const byCur = {};
     for (const t of rows) {
@@ -392,12 +400,11 @@ export default function incomesScreen({ accountId }) {
     return Object.entries(byCur).map(([cur, minor]) => ({
       cur,
       major: (Number(minor) / Math.pow(10, decimalsForCurrency(cur))).toFixed(
-        decimalsForCurrency(cur)
+        decimalsForCurrency(cur),
       ),
     }));
   }, [rows]);
 
-  /* --------------------------- Upcoming (planned) --------------------------- */
   const upcoming = useMemo(() => {
     const today = startOfUTC(new Date());
     const keyOf = (t) =>
@@ -485,14 +492,13 @@ export default function incomesScreen({ accountId }) {
     accountsById,
   ]);
 
-  /* --------- Insights (KPIs + charts; reflects current filters) ----- */
   const { statsCurrency, kpis, monthCats, pieData, noteMixedCurrency } =
     useMemo(() => {
       const chosen =
         fCurrency !== "ALL" ? fCurrency : rows[0]?.currency || "USD";
 
       const filteredByCur = rows.filter((r) =>
-        chosen ? r.currency === chosen : true
+        chosen ? r.currency === chosen : true,
       );
 
       const now = new Date();
@@ -517,7 +523,7 @@ export default function incomesScreen({ accountId }) {
       let yearMinor = 0;
       for (let m = 0; m < monthsPassed; m++) {
         const s = startOfMonthUTC(
-          new Date(Date.UTC(now.getUTCFullYear(), m, 1))
+          new Date(Date.UTC(now.getUTCFullYear(), m, 1)),
         );
         const e = endOfMonthUTC(new Date(Date.UTC(now.getUTCFullYear(), m, 1)));
         yearMinor += minorSum(within(filteredByCur, s, e));
@@ -564,7 +570,6 @@ export default function incomesScreen({ accountId }) {
       };
     }, [rows, fCurrency, categoriesById]);
 
-  /* --------------------------------- CRUD Tx -------------------------------- */
   function openCreate() {
     const defaultAccId = accountId || accounts[0]?._id || "";
     const defaultCur =
@@ -584,7 +589,6 @@ export default function incomesScreen({ accountId }) {
     setModalOpen(true);
   }
 
-  // ✅ open auto modal (seed account once, do not reset while typing)
   function openAuto() {
     const defaultAccId = accountId || accounts[0]?._id || "";
     if (!defaultAccId) {
@@ -597,21 +601,17 @@ export default function incomesScreen({ accountId }) {
     setAutoModalOpen(true);
   }
 
-  // keep notice sane: if user changes inputs, clear notice
   useEffect(() => {
     if (!autoModalOpen) return;
     setAutoNotice("");
-    // intentionally only on open
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoModalOpen]);
 
   useEffect(() => {
     if (!autoModalOpen) return;
-    // clear notice when user edits
     setAutoNotice("");
   }, [autoText, autoAccountId, autoModalOpen]);
 
-  // Seed a "create" from an existing row (useful for virtual upcoming -> Edit)
   function openCreateSeed(seed) {
     setEditing(null);
     setForm({
@@ -649,7 +649,7 @@ export default function incomesScreen({ accountId }) {
     try {
       await api.delete(`/transactions/${tx._id}`);
       setTransactions((prev) =>
-        prev.filter((t) => String(t._id) !== String(tx._id))
+        prev.filter((t) => String(t._id) !== String(tx._id)),
       );
       await loadAll();
     } catch (e) {
@@ -657,7 +657,6 @@ export default function incomesScreen({ accountId }) {
     }
   }
 
-  // ✅ call backend auto endpoint (NO alerts for draft)
   async function submitAutoText({ text, pickedAccountId }) {
     const clean = String(text || "").trim();
     if (!pickedAccountId) {
@@ -697,21 +696,19 @@ export default function incomesScreen({ accountId }) {
       }
 
       if (data?.mode === "draft") {
-        // keep modal open + show notice (no blocking popup)
         setAutoNotice("Draft created. Review it in Drafts.");
-        setAutoText(""); // optional: clear text for next entry
+        setAutoText("");
         await loadAll();
         return;
       }
 
-      // fallback
       setAutoModalOpen(false);
       setAutoText("");
       setAutoNotice("");
       await loadAll();
     } catch (e) {
       setAutoNotice(
-        e?.response?.data?.error || e.message || "Auto parse failed"
+        e?.response?.data?.error || e.message || "Auto parse failed",
       );
     } finally {
       setAutoBusy(false);
@@ -722,16 +719,15 @@ export default function incomesScreen({ accountId }) {
     await submitAutoText({ text: autoText, pickedAccountId: autoAccountId });
   }
 
-  /* --------------------------------- UI Bits -------------------------------- */
   function Chip({ label, selected, onClick }) {
     return (
       <button
         type="button"
         onClick={onClick}
-        className={`px-3 py-1.5 rounded-full border text-sm ${
+        className={`rounded-full border px-3.5 py-2 text-sm transition ${
           selected
-            ? "border-[#4f772d] bg-[#e8f5e9] text-[#2f5d1d]"
-            : "border-gray-300 bg-white text-gray-800"
+            ? "border-white/15 bg-white/[0.08] text-white"
+            : "border-white/10 bg-white/[0.03] text-white/65 hover:bg-white/[0.05] hover:text-white"
         }`}
       >
         {label}
@@ -739,7 +735,6 @@ export default function incomesScreen({ accountId }) {
     );
   }
 
-  /* -------- Mini Charts (pure SVG) -------- */
   function BarChart({ data, currency }) {
     const pad = 36;
     const perBar = 60;
@@ -754,19 +749,25 @@ export default function incomesScreen({ accountId }) {
         <svg
           width={width}
           height={height}
-          className="rounded-xl border bg-white"
+          className="rounded-2xl border border-white/10 bg-[#0b0f0b]"
         >
           {ticks.map((val, i) => {
             const y = height - pad - (val / max) * (height - pad * 2);
             return (
               <g key={i}>
-                <line x1={pad} y1={y} x2={width - pad} y2={y} stroke="#eee" />
+                <line
+                  x1={pad}
+                  y1={y}
+                  x2={width - pad}
+                  y2={y}
+                  stroke="rgba(255,255,255,0.08)"
+                />
                 <text
                   x={pad - 8}
                   y={y + 4}
                   textAnchor="end"
                   fontSize="11"
-                  fill="#8a8a8a"
+                  fill="rgba(255,255,255,0.45)"
                 >
                   {fmtMoney(val, currency)}
                 </text>
@@ -778,7 +779,7 @@ export default function incomesScreen({ accountId }) {
             y1={height - pad}
             x2={width - pad}
             y2={height - pad}
-            stroke="#ddd"
+            stroke="rgba(255,255,255,0.14)"
           />
           {data.map((d, i) => {
             const h = (d.minor / max) * (height - pad * 2);
@@ -792,8 +793,8 @@ export default function incomesScreen({ accountId }) {
                   y={y}
                   width={w}
                   height={h}
-                  rx="8"
-                  ry="8"
+                  rx="10"
+                  ry="10"
                   fill={secondary}
                   opacity="0.95"
                 >
@@ -804,7 +805,7 @@ export default function incomesScreen({ accountId }) {
                   y={height - pad + 18}
                   textAnchor="middle"
                   fontSize="12"
-                  fill="#555"
+                  fill="rgba(255,255,255,0.55)"
                 >
                   {d.name.length > 12 ? d.name.slice(0, 12) + "…" : d.name}
                 </text>
@@ -813,7 +814,7 @@ export default function incomesScreen({ accountId }) {
                   y={y - 6}
                   textAnchor="middle"
                   fontSize="12"
-                  fill="#222"
+                  fill="rgba(255,255,255,0.9)"
                   fontWeight="600"
                 >
                   {fmtMoney(d.minor, currency)}
@@ -834,7 +835,7 @@ export default function incomesScreen({ accountId }) {
       cy = size / 2;
     const total = Math.max(
       1,
-      data.reduce((a, d) => a + d.minor, 0)
+      data.reduce((a, d) => a + d.minor, 0),
     );
     let angle = -Math.PI / 2;
 
@@ -870,20 +871,35 @@ export default function incomesScreen({ accountId }) {
     });
 
     return (
-      <div className="flex items-start gap-6">
-        <svg width={size} height={size} className="border rounded-xl bg-white">
+      <div className="flex flex-col xl:flex-row items-start gap-6">
+        <svg
+          width={size}
+          height={size}
+          className="rounded-2xl border border-white/10 bg-[#0b0f0b]"
+        >
           {segs.map((s, i) => (
             <g key={i}>
-              <path d={s.path} fill={s.color} stroke="#fff" strokeWidth="1.5">
+              <path
+                d={s.path}
+                fill={s.color}
+                stroke="#0b0f0b"
+                strokeWidth="1.5"
+              >
                 <title>{`${s.d.name}: ${fmtMoney(
                   s.d.minor,
-                  currency
+                  currency,
                 )} (${Math.round(s.pct * 100)}%)`}</title>
               </path>
             </g>
           ))}
-          <circle cx={cx} cy={cy} r={hole - 6} fill="#fff" />
-          <text x={cx} y={cy - 4} textAnchor="middle" fontSize="13" fill="#666">
+          <circle cx={cx} cy={cy} r={hole - 6} fill="#0b0f0b" />
+          <text
+            x={cx}
+            y={cy - 4}
+            textAnchor="middle"
+            fontSize="13"
+            fill="rgba(255,255,255,0.45)"
+          >
             Total
           </text>
           <text
@@ -891,27 +907,33 @@ export default function incomesScreen({ accountId }) {
             y={cy + 16}
             textAnchor="middle"
             fontSize="14"
-            fill="#111"
+            fill="rgba(255,255,255,0.92)"
             fontWeight="700"
           >
             {fmtMoney(total, currency)}
           </text>
         </svg>
 
-        <div className="text-sm space-y-2 min-w-[200px]">
+        <div className="min-w-[200px] space-y-2 text-sm">
           {data.map((s, i) => (
-            <div key={i} className="flex items-center gap-2">
+            <div
+              key={i}
+              className="flex items-center gap-2 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2"
+            >
               <span
-                className="inline-block w-3.5 h-3.5 rounded-sm"
+                className="inline-block h-3.5 w-3.5 rounded-sm"
                 style={{ background: `hsl(${(i * 36) % 360} 65% 58%)` }}
               />
-              <span className="truncate max-w-[150px]" title={s.name}>
+              <span
+                className="max-w-[150px] truncate text-white/75"
+                title={s.name}
+              >
                 {s.name}
               </span>
-              <span className="ml-auto font-medium">
+              <span className="ml-auto font-medium text-white">
                 {fmtMoney(s.minor, currency)}
               </span>
-              <span className="ml-1 text-xs text-gray-500">
+              <span className="ml-1 text-xs text-white/45">
                 {Math.round((s.pct ?? 0) * 100)}%
               </span>
             </div>
@@ -921,247 +943,315 @@ export default function incomesScreen({ accountId }) {
     );
   }
 
-  /* --------------------------------- Header -------------------------------- */
-  function Header() {
+  function SectionCard({ title, subtitle, right, children, className = "" }) {
     return (
-      <div className="space-y-3 p-4 border-b bg-white">
-        <div className="flex items-center justify-between gap-3">
-          <h1 className="text-2xl font-bold">incomes</h1>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowUpcoming((v) => !v)}
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border"
-              title="Show upcoming (planned / future) incomes"
-            >
-              <span>Upcoming</span>
-              <span className="text-xs rounded-full px-2 py-0.5 bg-[#e8f5e9] text-[#2f5d1d] border">
-                {upcoming.length}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowFilters((v) => !v)}
-              className="inline-flex items-center gap-1 text-[#4f772d] hover:text-[#3f5f24]"
-              title="Show filters"
-            >
-              <svg
-                className="w-4 h-4"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <line x1="4" y1="21" x2="4" y2="14" />
-                <line x1="4" y1="10" x2="4" y2="3" />
-                <line x1="12" y1="21" x2="12" y2="12" />
-                <line x1="12" y1="8" x2="12" y2="3" />
-                <line x1="20" y1="21" x2="20" y2="16" />
-                <line x1="20" y1="12" x2="20" y2="3" />
-                <line x1="1" y1="14" x2="7" y2="14" />
-                <line x1="9" y1="8" x2="15" y2="8" />
-                <line x1="17" y1="16" x2="23" y2="16" />
-              </svg>
-              <span className="font-medium">Filters</span>
-            </button>
-
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">Sorting</span>
-              <select
-                value={sortKey}
-                onChange={(e) => setSortKey(e.target.value)}
-                className="border rounded-lg px-3 py-1.5"
-                title="Sorting"
-              >
-                <option value="date_desc">Newest</option>
-                <option value="date_asc">Oldest</option>
-                <option value="amount_desc">Amount: High → Low</option>
-                <option value="amount_asc">Amount: Low → High</option>
-              </select>
+      <div
+        className={`relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-md ${className}`}
+      >
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(500px_180px_at_10%_0%,rgba(19,226,67,0.06),transparent_60%),radial-gradient(420px_180px_at_90%_10%,rgba(153,23,70,0.08),transparent_60%)]" />
+        <div className="relative p-5 md:p-6">
+          {(title || right) && (
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                {title ? (
+                  <h2 className="text-lg font-semibold tracking-tight text-white">
+                    {title}
+                  </h2>
+                ) : null}
+                {subtitle ? (
+                  <p className="mt-1 text-sm text-white/55">{subtitle}</p>
+                ) : null}
+              </div>
+              {right ? <div>{right}</div> : null}
             </div>
-          </div>
-        </div>
-
-        <div className="flex gap-2">
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search description, notes, account, category or #tags"
-            className="flex-1 border rounded-lg px-3 py-2"
-          />
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Chip
-            label="All categories"
-            selected={fCategoryId === "ALL"}
-            onClick={() => setFCategoryId("ALL")}
-          />
-          {categories.map((c) => (
-            <Chip
-              key={c._id}
-              label={c.name}
-              selected={fCategoryId === c._id}
-              onClick={() => setFCategoryId(c._id)}
-            />
-          ))}
-        </div>
-
-        {showFilters && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-3 border rounded-xl bg-[#fafdf9]">
-            <div className="flex flex-col gap-1">
-              <label className="text-sm text-gray-600">Account</label>
-              <select
-                value={fAccountId}
-                onChange={(e) => setFAccountId(e.target.value)}
-                className="border rounded-lg px-3 py-2"
-              >
-                <option value="ALL">All accounts</option>
-                {accounts.map((a) => (
-                  <option key={a._id} value={a._id}>
-                    {a.name} · {a.type} · {a.currency}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-sm text-gray-600">Currency</label>
-              <select
-                value={fCurrency}
-                onChange={(e) => setFCurrency(e.target.value)}
-                className="border rounded-lg px-3 py-2"
-              >
-                {currencies.map((c) => (
-                  <option key={c} value={c}>
-                    {c === "ALL" ? "All currencies" : c}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-sm text-gray-600">From</label>
-              <input
-                type="date"
-                lang={DATE_LANG}
-                value={fStartISO}
-                onChange={(e) => setFStartISO(e.target.value)}
-                className="border rounded-lg px-3 py-2"
-                title="From date"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-sm text-gray-600">To</label>
-              <input
-                type="date"
-                lang={DATE_LANG}
-                value={fEndISO}
-                onChange={(e) => setFEndISO(e.target.value)}
-                className="border rounded-lg px-3 py-2"
-                title="To date"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-sm text-gray-600">Min amount</label>
-              <input
-                type="number"
-                inputMode="decimal"
-                placeholder="e.g., 50"
-                value={fMin}
-                onChange={(e) => setFMin(e.target.value)}
-                className="border rounded-lg px-3 py-2"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-sm text-gray-600">Max amount</label>
-              <input
-                type="number"
-                inputMode="decimal"
-                placeholder="e.g., 1000"
-                value={fMax}
-                onChange={(e) => setFMax(e.target.value)}
-                className="border rounded-lg px-3 py-2"
-              />
-            </div>
-
-            <div className="col-span-full flex gap-2 justify-end">
-              <button
-                type="button"
-                className="px-3 py-2 border rounded-lg"
-                onClick={() => {
-                  setFAccountId("ALL");
-                  setFCategoryId("ALL");
-                  setFCurrency("ALL");
-                  setFStartISO("");
-                  setFEndISO("");
-                  setFMin("");
-                  setFMax("");
-                }}
-              >
-                Clear filters
-              </button>
-              <button
-                type="button"
-                className="px-3 py-2 rounded-lg text-white"
-                style={{ background: main }}
-                onClick={() => setShowFilters(false)}
-              >
-                Apply
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Totals */}
-        <div className="flex flex-wrap items-center gap-4 text-sm">
-          {totals.map(({ cur, major }) => (
-            <span key={cur} className="font-semibold">
-              Total {cur}: {major}
-            </span>
-          ))}
-        </div>
-
-        {/* Actions */}
-        <div className="flex gap-3 items-center flex-wrap">
-          <button
-            type="button"
-            onClick={openCreate}
-            className="inline-flex items-center px-4 py-2 rounded-xl bg-[#4f772d] text-white font-bold hover:bg-[#3f5f24]"
-          >
-            + New income
-          </button>
-
-          <button
-            type="button"
-            onClick={openAuto}
-            className="inline-flex items-center px-4 py-2 rounded-xl border font-bold"
-            title="Quick add using text parsing"
-          >
-            Auto
-          </button>
-
-          <button
-            type="button"
-            onClick={loadAll}
-            className="px-3 py-2 rounded-xl border"
-            title="Refresh"
-          >
-            Refresh
-          </button>
+          )}
+          {children}
         </div>
       </div>
     );
   }
 
-  /* ----------------------------- Category Manager ---------------------------- */
+  function Header() {
+    return (
+      <div className="mb-6 space-y-5">
+        <SectionCard className="overflow-visible">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-white/60">
+                <span className="h-2 w-2 rounded-full bg-[#13e243]" />
+                income ledger
+              </div>
+
+              <div className="mt-4">
+                <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-white">
+                  Incomes
+                </h1>
+                <p className="mt-2 max-w-2xl text-sm md:text-base text-white/60">
+                  Track salary, freelance work, dividends, rentals, and any
+                  other inflow with the same decision-ready structure used
+                  across Nummoria.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+              <button
+                type="button"
+                onClick={() => setShowUpcoming((v) => !v)}
+                className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-white/80 transition hover:bg-white/[0.07]"
+                title="Show upcoming (planned / future) incomes"
+              >
+                <span>Upcoming</span>
+                <span className="rounded-full border border-white/10 bg-white/[0.06] px-2 py-0.5 text-[11px] text-white">
+                  {upcoming.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowFilters((v) => !v)}
+                className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-white/80 transition hover:bg-white/[0.07]"
+                title="Show filters"
+              >
+                <svg
+                  className="h-4 w-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="4" y1="21" x2="4" y2="14" />
+                  <line x1="4" y1="10" x2="4" y2="3" />
+                  <line x1="12" y1="21" x2="12" y2="12" />
+                  <line x1="12" y1="8" x2="12" y2="3" />
+                  <line x1="20" y1="21" x2="20" y2="16" />
+                  <line x1="20" y1="12" x2="20" y2="3" />
+                  <line x1="1" y1="14" x2="7" y2="14" />
+                  <line x1="9" y1="8" x2="15" y2="8" />
+                  <line x1="17" y1="16" x2="23" y2="16" />
+                </svg>
+                <span>Filters</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={openCreate}
+                className="inline-flex items-center rounded-2xl px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-95"
+                style={{
+                  background: "linear-gradient(135deg, #90a955, #4f772d)",
+                }}
+              >
+                + New income
+              </button>
+
+              <button
+                type="button"
+                onClick={openAuto}
+                className="inline-flex items-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white/80 transition hover:bg-white/[0.07]"
+                title="Quick add using text parsing"
+              >
+                Auto
+              </button>
+
+              <button
+                type="button"
+                onClick={loadAll}
+                className="inline-flex items-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-white/70 transition hover:bg-white/[0.07] hover:text-white"
+                title="Refresh"
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-col gap-3 xl:flex-row xl:items-center">
+            <div className="relative flex-1">
+              <div className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-white/30">
+                <svg
+                  className="h-4 w-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="11" cy="11" r="7" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+              </div>
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search description, notes, account, category or #tags"
+                className="w-full rounded-2xl border border-white/10 bg-white/[0.05] py-3 pl-11 pr-4 text-white placeholder:text-white/30 outline-none transition focus:border-white/20"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2.5">
+              <span className="text-sm text-white/50">Sorting</span>
+              <select
+                value={sortKey}
+                onChange={(e) => setSortKey(e.target.value)}
+                className="bg-transparent text-sm text-white outline-none"
+                title="Sorting"
+              >
+                <option value="date_desc" className="text-black">
+                  Newest
+                </option>
+                <option value="date_asc" className="text-black">
+                  Oldest
+                </option>
+                <option value="amount_desc" className="text-black">
+                  Amount: High → Low
+                </option>
+                <option value="amount_asc" className="text-black">
+                  Amount: Low → High
+                </option>
+              </select>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Chip
+              label="All categories"
+              selected={fCategoryId === "ALL"}
+              onClick={() => setFCategoryId("ALL")}
+            />
+            {categories.map((c) => (
+              <Chip
+                key={c._id}
+                label={c.name}
+                selected={fCategoryId === c._id}
+                onClick={() => setFCategoryId(c._id)}
+              />
+            ))}
+          </div>
+
+          {showFilters && (
+            <div className="mt-5 grid grid-cols-1 gap-3 rounded-3xl border border-white/10 bg-black/20 p-4 md:grid-cols-2 xl:grid-cols-3">
+              <Field label="Account">
+                <select
+                  value={fAccountId}
+                  onChange={(e) => setFAccountId(e.target.value)}
+                  className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white outline-none"
+                >
+                  <option value="ALL" className="text-black">
+                    All accounts
+                  </option>
+                  {accounts.map((a) => (
+                    <option key={a._id} value={a._id} className="text-black">
+                      {a.name} · {a.type} · {a.currency}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Currency">
+                <select
+                  value={fCurrency}
+                  onChange={(e) => setFCurrency(e.target.value)}
+                  className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white outline-none"
+                >
+                  {currencies.map((c) => (
+                    <option key={c} value={c} className="text-black">
+                      {c === "ALL" ? "All currencies" : c}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="From">
+                <input
+                  type="date"
+                  lang={DATE_LANG}
+                  value={fStartISO}
+                  onChange={(e) => setFStartISO(e.target.value)}
+                  className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white outline-none"
+                  title="From date"
+                />
+              </Field>
+
+              <Field label="To">
+                <input
+                  type="date"
+                  lang={DATE_LANG}
+                  value={fEndISO}
+                  onChange={(e) => setFEndISO(e.target.value)}
+                  className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white outline-none"
+                  title="To date"
+                />
+              </Field>
+
+              <Field label="Min amount">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  placeholder="e.g., 50"
+                  value={fMin}
+                  onChange={(e) => setFMin(e.target.value)}
+                  className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white placeholder:text-white/30 outline-none"
+                />
+              </Field>
+
+              <Field label="Max amount">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  placeholder="e.g., 1000"
+                  value={fMax}
+                  onChange={(e) => setFMax(e.target.value)}
+                  className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white placeholder:text-white/30 outline-none"
+                />
+              </Field>
+
+              <div className="col-span-full flex flex-wrap justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-white/75 transition hover:bg-white/[0.07]"
+                  onClick={() => {
+                    setFAccountId("ALL");
+                    setFCategoryId("ALL");
+                    setFCurrency("ALL");
+                    setFStartISO("");
+                    setFEndISO("");
+                    setFMin("");
+                    setFMax("");
+                  }}
+                >
+                  Clear filters
+                </button>
+                <button
+                  type="button"
+                  className="rounded-2xl px-4 py-2.5 text-sm font-semibold text-white"
+                  style={{
+                    background: "linear-gradient(135deg, #90a955, #4f772d)",
+                  }}
+                  onClick={() => setShowFilters(false)}
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-5 flex flex-wrap items-center gap-2">
+            {totals.map(({ cur, major }) => (
+              <span
+                key={cur}
+                className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm font-medium text-white/80"
+              >
+                Total {cur}: <span className="text-white">{major}</span>
+              </span>
+            ))}
+          </div>
+        </SectionCard>
+      </div>
+    );
+  }
+
   async function createincomeCategory(name) {
     return api.post("/categories", { name, kind: "income" });
   }
@@ -1182,7 +1272,7 @@ export default function incomesScreen({ accountId }) {
         await loadAll();
       } catch (e) {
         window.alert(
-          e?.response?.data?.error || e.message || "Failed to create category"
+          e?.response?.data?.error || e.message || "Failed to create category",
         );
       } finally {
         setBusy(false);
@@ -1207,50 +1297,60 @@ export default function incomesScreen({ accountId }) {
     }
 
     return (
-      <div className="p-4 bg-white border rounded-xl space-y-3 m-4">
-        <div className="font-semibold">Categories (income only)</div>
-        <div className="flex flex-wrap gap-2 items-center">
+      <SectionCard
+        title="Categories"
+        subtitle="Manage income-only categories for cleaner reporting."
+        className="mb-6"
+      >
+        <div className="flex flex-wrap items-center gap-3">
           <select
-            className="border rounded-lg px-3 py-2"
+            className="rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white outline-none"
             value={selected}
             onChange={(e) => setSelected(e.target.value)}
           >
             {INCOME_CATEGORY_OPTIONS.map((n) => (
-              <option key={n} value={n}>
+              <option key={n} value={n} className="text-black">
                 {n}
               </option>
             ))}
           </select>
+
           <button
             type="button"
             onClick={addOne}
             disabled={busy}
-            className="px-4 py-2 rounded-lg bg-[#4f772d] text-white font-semibold disabled:opacity-60"
+            className="rounded-2xl px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
+            style={{
+              background: "linear-gradient(135deg, #90a955, #4f772d)",
+            }}
           >
             Add category
           </button>
+
           <button
             type="button"
             onClick={seedAll}
             disabled={busy}
-            className="px-4 py-2 rounded-lg border font-semibold disabled:opacity-60"
+            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-white/80 transition hover:bg-white/[0.07] disabled:opacity-60"
           >
             Seed all income categories
           </button>
         </div>
-        <div className="text-sm text-gray-600">
+
+        <div className="mt-4 text-sm text-white/55">
           Existing:{" "}
           {categories.length === 0 ? (
             <span>none</span>
           ) : (
-            <span>{categories.map((c) => c.name).join(", ")}</span>
+            <span className="text-white/75">
+              {categories.map((c) => c.name).join(", ")}
+            </span>
           )}
         </div>
-      </div>
+      </SectionCard>
     );
   }
 
-  /* --------------------------------- Upcoming ------------------------------- */
   function UpcomingPanel() {
     if (!showUpcoming) return null;
 
@@ -1288,7 +1388,7 @@ export default function incomesScreen({ accountId }) {
           await loadAll();
         } catch (e) {
           window.alert(
-            e?.response?.data?.error || e.message || "Delete failed"
+            e?.response?.data?.error || e.message || "Delete failed",
           );
         }
       } else {
@@ -1297,37 +1397,37 @@ export default function incomesScreen({ accountId }) {
     }
 
     return (
-      <div className="m-4 p-4 border rounded-xl bg-white">
-        <div className="flex items-center justify-between mb-3">
-          <div className="font-semibold">
-            Upcoming incomes ({upcoming.length})
-          </div>
+      <SectionCard
+        title={`Upcoming incomes (${upcoming.length})`}
+        subtitle="Future entries and planned recurrences within current filters."
+        right={
           <button
             type="button"
-            className="text-sm underline"
+            className="text-sm text-white/55 transition hover:text-white"
             onClick={() => setShowUpcoming(false)}
           >
             Close
           </button>
-        </div>
-
+        }
+        className="mb-6"
+      >
         {upcoming.length === 0 ? (
-          <div className="text-gray-600 text-sm">
+          <div className="text-sm text-white/55">
             Nothing upcoming within your filters.
           </div>
         ) : (
-          <div className="divide-y">
+          <div className="space-y-3">
             {upcoming.map((u) => {
               const catName =
                 categories.find((c) => c._id === u.categoryId)?.name || "—";
               const accName = accountsById.get(u.accountId)?.name || "—";
               const badge =
                 u.__kind === "virtual" ? (
-                  <span className="text-[11px] px-2 py-0.5 rounded-full border border-dashed text-[#2f5d1d]">
-                    Planned (not added)
+                  <span className="rounded-full border border-dashed border-[#90a955]/40 bg-[#90a955]/10 px-2.5 py-1 text-[11px] text-[#dce8bf]">
+                    Planned
                   </span>
                 ) : (
-                  <span className="text-[11px] px-2 py-0.5 rounded-full border text-gray-600">
+                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/60">
                     In database
                   </span>
                 );
@@ -1335,73 +1435,83 @@ export default function incomesScreen({ accountId }) {
               return (
                 <div
                   key={u._id}
-                  className="py-3 flex items-start justify-between gap-4"
+                  className="rounded-2xl border border-white/8 bg-black/20 p-4"
                 >
-                  <div className="min-w-0">
-                    <div className="font-semibold flex items-center gap-2">
-                      <span>{catName}</span>
-                      {badge}
-                    </div>
-                    <div className="text-xs text-gray-500 mb-1">
-                      <span className="inline-block px-2 py-0.5 rounded-full border">
-                        {accName}
-                      </span>
-                    </div>
-                    <div className="text-sm text-gray-600 truncate">
-                      {u.description || "No description"}
-                    </div>
-                    <div className="text-xs text-gray-400">
-                      Scheduled: {fmtDateUTC(u.date)}
-                    </div>
-                  </div>
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="font-semibold text-white">
+                          {catName}
+                        </div>
+                        {badge}
+                      </div>
 
-                  <div className="text-right">
-                    <div className="font-bold">
-                      -{minorToMajor(u.amountMinor, u.currency)} {u.currency}
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-white/60">
+                          {accName}
+                        </span>
+                      </div>
+
+                      <div className="mt-3 text-sm text-white/60">
+                        {u.description || "No description"}
+                      </div>
+                      <div className="mt-1 text-xs text-white/35">
+                        Scheduled: {fmtDateUTC(u.date)}
+                      </div>
                     </div>
-                    <div className="mt-2 flex flex-wrap justify-end gap-2">
-                      {u.__kind === "virtual" ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => addVirtual(u)}
-                            className="px-3 py-1 rounded-lg bg-[#4f772d] text-white"
-                          >
-                            Add
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => openCreateSeed(u)}
-                            className="px-3 py-1 border rounded-lg"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => deleteOne(u)}
-                            className="px-3 py-1 border rounded-lg text-red-700 border-red-200"
-                          >
-                            Delete
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => openEdit(u)}
-                            className="px-3 py-1 border rounded-lg"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => deleteOne(u)}
-                            className="px-3 py-1 border rounded-lg text-red-700 border-red-200"
-                          >
-                            Delete
-                          </button>
-                        </>
-                      )}
+
+                    <div className="text-left lg:text-right">
+                      <div className="text-lg font-semibold text-white">
+                        {minorToMajor(u.amountMinor, u.currency)} {u.currency}
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2 lg:justify-end">
+                        {u.__kind === "virtual" ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => addVirtual(u)}
+                              className="rounded-xl px-3 py-2 text-sm font-medium text-white"
+                              style={{
+                                background:
+                                  "linear-gradient(135deg, #90a955, #4f772d)",
+                              }}
+                            >
+                              Add
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openCreateSeed(u)}
+                              className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/75"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteOne(u)}
+                              className="rounded-xl border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm text-red-200"
+                            >
+                              Delete
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => openEdit(u)}
+                              className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/75"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteOne(u)}
+                              className="rounded-xl border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm text-red-200"
+                            >
+                              Delete
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1409,11 +1519,10 @@ export default function incomesScreen({ accountId }) {
             })}
           </div>
         )}
-      </div>
+      </SectionCard>
     );
   }
 
-  /* --------------------------------- Rows ---------------------------------- */
   function Row({ item }) {
     const catName =
       categories.find((c) => c._id === item.categoryId)?.name || "—";
@@ -1421,49 +1530,61 @@ export default function incomesScreen({ accountId }) {
     const isFuture = new Date(item.date) > startOfUTC(new Date());
 
     return (
-      <div className="p-4 border-b bg-white">
-        <div className="flex items-start justify-between gap-4">
+      <div className="border-b border-white/8 p-4 last:border-b-0">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
-            <div className="font-semibold flex items-center gap-2">
-              <span>{catName}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold text-white">{catName}</span>
               {isFuture && (
-                <span className="text-[11px] px-2 py-0.5 rounded-full border border-dashed text-[#2f5d1d]">
+                <span className="rounded-full border border-dashed border-[#90a955]/40 bg-[#90a955]/10 px-2.5 py-1 text-[11px] text-[#dce8bf]">
                   Upcoming
                 </span>
               )}
             </div>
-            <div className="text-xs text-gray-500 mb-1">
-              <span className="inline-block px-2 py-0.5 rounded-full border">
+
+            <div className="mt-2">
+              <span className="inline-block rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-white/60">
                 {accName}
               </span>
             </div>
-            <div className="text-sm text-gray-600 truncate">
+
+            <div className="mt-3 text-sm text-white/60">
               {item.description || "No description"}
             </div>
-            <div className="text-xs text-gray-400">{fmtDateUTC(item.date)}</div>
+            <div className="mt-1 text-xs text-white/35">
+              {fmtDateUTC(item.date)}
+            </div>
+
             {item.tags?.length ? (
-              <div className="text-sm text-[#90a955] mt-1">
-                #{item.tags.join("  #")}
+              <div className="mt-2 flex flex-wrap gap-2">
+                {item.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="rounded-full border border-white/8 bg-white/[0.03] px-2.5 py-1 text-xs text-[#dce8bf]"
+                  >
+                    #{tag}
+                  </span>
+                ))}
               </div>
             ) : null}
           </div>
 
-          <div className="text-right">
-            <div className="font-bold">
-              -{minorToMajor(item.amountMinor, item.currency)} {item.currency}
+          <div className="text-left lg:text-right">
+            <div className="text-xl font-semibold text-white">
+              {minorToMajor(item.amountMinor, item.currency)} {item.currency}
             </div>
-            <div className="mt-2 flex justify-end gap-2">
+            <div className="mt-3 flex flex-wrap gap-2 lg:justify-end">
               <button
                 type="button"
                 onClick={() => openEdit(item)}
-                className="px-3 py-1 border rounded-lg"
+                className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/75"
               >
                 Edit
               </button>
               <button
                 type="button"
                 onClick={() => softDelete(item)}
-                className="px-3 py-1 border rounded-lg text-red-700 border-red-200"
+                className="rounded-xl border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm text-red-200"
               >
                 Delete
               </button>
@@ -1474,8 +1595,7 @@ export default function incomesScreen({ accountId }) {
     );
   }
 
-  /* --------------------------------- Modal --------------------------------- */
-  function incomeModal() {
+  function IncomeModal() {
     const amountRef = useRef(null);
     const currencyRef = useRef(null);
     const dateRef = useRef(null);
@@ -1528,10 +1648,10 @@ export default function incomesScreen({ accountId }) {
         } else {
           const { data } = await api.put(
             `/transactions/${editing._id}`,
-            payload
+            payload,
           );
           setTransactions((prev) =>
-            prev.map((t) => (String(t._id) === String(data._id) ? data : t))
+            prev.map((t) => (String(t._id) === String(data._id) ? data : t)),
           );
         }
         setModalOpen(false);
@@ -1544,267 +1664,299 @@ export default function incomesScreen({ accountId }) {
     const defaultAccId = form.accountId || accountId || accounts[0]?._id || "";
 
     return (
-      <div className="fixed inset-0 z-50 grid place-items-center bg-black/40">
-        <div className="w-full max-w-xl bg-white rounded-2xl p-5 space-y-4">
-          <div className="text-lg font-bold">
-            {editing ? "Edit income" : "New income"}
-          </div>
+      <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 backdrop-blur-sm px-4">
+        <div className="relative w-full max-w-xl overflow-hidden rounded-3xl border border-white/10 bg-[#0B0F0B]/95 text-white shadow-2xl">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(600px_260px_at_15%_0%,rgba(19,226,67,0.10),transparent_55%),radial-gradient(500px_260px_at_85%_10%,rgba(153,23,70,0.12),transparent_55%)]" />
+          <div className="relative space-y-4 p-6">
+            <div>
+              <div className="text-lg font-semibold tracking-tight">
+                {editing ? "Edit income" : "New income"}
+              </div>
+              <div className="mt-1 text-sm text-white/55">
+                Keep structure clean so reporting and future automation stay
+                reliable.
+              </div>
+            </div>
 
-          <div className="space-y-1 w-full">
-            <label className="font-semibold text-sm">Account</label>
-            <select
-              ref={accountRef}
-              defaultValue={defaultAccId}
-              className="w-full border rounded-lg px-3 py-2 bg-white"
-              onChange={(e) => {
-                const acc = accounts.find((a) => a._id === e.target.value);
-                if (acc && currencyRef.current) {
-                  currencyRef.current.value = acc.currency;
-                }
-              }}
-            >
-              <option value="">— Pick an account —</option>
-              {accounts.map((a) => (
-                <option key={a._id} value={a._id}>
-                  {a.name} · {a.type} · {a.currency}
+            <Field label="Account">
+              <select
+                ref={accountRef}
+                defaultValue={defaultAccId}
+                className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white outline-none"
+                onChange={(e) => {
+                  const acc = accounts.find((a) => a._id === e.target.value);
+                  if (acc && currencyRef.current) {
+                    currencyRef.current.value = acc.currency;
+                  }
+                }}
+              >
+                <option value="" className="text-black">
+                  — Pick an account —
                 </option>
-              ))}
-            </select>
-          </div>
+                {accounts.map((a) => (
+                  <option key={a._id} value={a._id} className="text-black">
+                    {a.name} · {a.type} · {a.currency}
+                  </option>
+                ))}
+              </select>
+            </Field>
 
-          <div className="flex gap-3">
-            <div className="space-y-1 w-full">
-              <label className="font-semibold text-sm">Amount</label>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_120px]">
+              <Field label="Amount">
+                <input
+                  ref={amountRef}
+                  defaultValue={form.amount}
+                  placeholder="e.g., 1500.00"
+                  inputMode="decimal"
+                  className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white placeholder:text-white/30 outline-none"
+                />
+              </Field>
+
+              <Field label="Currency">
+                <input
+                  ref={currencyRef}
+                  defaultValue={
+                    accounts.find((a) => a._id === defaultAccId)?.currency ||
+                    form.currency
+                  }
+                  maxLength={3}
+                  readOnly
+                  className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white outline-none"
+                />
+              </Field>
+            </div>
+
+            <Field label="Date">
               <input
-                ref={amountRef}
-                defaultValue={form.amount}
-                placeholder="e.g., 1500.00"
-                inputMode="decimal"
-                className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
+                ref={dateRef}
+                defaultValue={form.date}
+                type="date"
+                lang={DATE_LANG}
+                className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white outline-none"
               />
-            </div>
-            <div className="space-y-1 w-28">
-              <label className="font-semibold text-sm">Currency</label>
+            </Field>
+
+            <Field label="Next date (optional)">
               <input
-                ref={currencyRef}
-                defaultValue={
-                  accounts.find((a) => a._id === defaultAccId)?.currency ||
-                  form.currency
-                }
-                maxLength={3}
-                readOnly
-                className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
+                ref={nextDateRef}
+                defaultValue={form.nextDate || ""}
+                type="date"
+                lang={DATE_LANG}
+                className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white outline-none"
+                placeholder="YYYY-MM-DD"
               />
+              <div className="mt-1 text-xs text-white/40">
+                If set, this shows up under{" "}
+                <span className="text-white/70">Upcoming</span> as a planned
+                item.
+              </div>
+            </Field>
+
+            <Field label="Category">
+              <select
+                ref={categoryRef}
+                defaultValue={form.categoryId ?? ""}
+                className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white outline-none"
+              >
+                {categories.map((c) => (
+                  <option key={c._id} value={c._id} className="text-black">
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field label="Description">
+              <input
+                ref={descRef}
+                defaultValue={form.description}
+                placeholder="Optional memo"
+                className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white placeholder:text-white/30 outline-none"
+              />
+            </Field>
+
+            <Field label="Tags (comma-separated)">
+              <input
+                ref={tagsRef}
+                defaultValue={form.tagsCsv}
+                placeholder="salary, client, monthly"
+                className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white placeholder:text-white/30 outline-none"
+              />
+            </Field>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setModalOpen(false)}
+                className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-white/75 transition hover:bg-white/[0.07]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitFromRefs}
+                className="rounded-2xl px-4 py-2.5 text-sm font-semibold text-white"
+                style={{
+                  background: "linear-gradient(135deg, #90a955, #4f772d)",
+                }}
+              >
+                {editing ? "Save" : "Add"}
+              </button>
             </div>
-          </div>
-
-          <div className="space-y-1 w-full">
-            <label className="font-semibold text-sm">Date</label>
-            <input
-              ref={dateRef}
-              defaultValue={form.date}
-              type="date"
-              lang={DATE_LANG}
-              className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
-            />
-          </div>
-
-          <div className="space-y-1 w-full">
-            <label className="font-semibold text-sm">
-              Next date (optional)
-            </label>
-            <input
-              ref={nextDateRef}
-              defaultValue={form.nextDate || ""}
-              type="date"
-              lang={DATE_LANG}
-              className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
-              placeholder="YYYY-MM-DD"
-            />
-            <div className="text-xs text-gray-500">
-              If set, this shows up under{" "}
-              <span className="font-semibold">Upcoming</span> as a planned item.
-            </div>
-          </div>
-
-          <div className="space-y-1 w-full">
-            <label className="font-semibold text-sm">Category</label>
-            <select
-              ref={categoryRef}
-              defaultValue={form.categoryId ?? ""}
-              className="w-full border rounded-lg px-3 py-2 bg-white"
-            >
-              {categories.map((c) => (
-                <option key={c._id} value={c._id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-1 w-full">
-            <label className="font-semibold text-sm">Description</label>
-            <input
-              ref={descRef}
-              defaultValue={form.description}
-              placeholder="Optional memo"
-              className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
-            />
-          </div>
-
-          <div className="space-y-1 w-full">
-            <label className="font-semibold text-sm">
-              Tags (comma-separated)
-            </label>
-            <input
-              ref={tagsRef}
-              defaultValue={form.tagsCsv}
-              placeholder="groceries, reimbursement"
-              className="w-full border rounded-lg px-3 py-2 bg-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
-            />
-          </div>
-
-          <div className="flex gap-3 justify-end pt-2">
-            <button
-              type="button"
-              onClick={() => setModalOpen(false)}
-              className="px-4 py-2 border rounded-xl"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={submitFromRefs}
-              className="px-4 py-2 rounded-xl bg-[#4f772d] text-white font-semibold"
-            >
-              {editing ? "Save" : "Add"}
-            </button>
           </div>
         </div>
       </div>
     );
   }
 
-  /* --------------------------------- Layout -------------------------------- */
   if (loading) {
     return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center bg-[#f8faf8] pt-90">
-        <div className="relative w-14 h-14 mb-6">
-          <div className="absolute inset-0 rounded-full border-4 border-[#cfe3c5]" />
-          <div className="absolute inset-0 rounded-full border-4 border-t-[#4f772d] border-transparent animate-spin" />
-        </div>
+      <div className="min-h-[60vh] grid place-items-center bg-[#070A07] px-4">
+        <div className="relative w-full max-w-sm">
+          <div className="pointer-events-none absolute -inset-10 opacity-40">
+            <div className="absolute left-4 top-6 h-40 w-40 rounded-full blur-3xl bg-[#13e243]/20" />
+            <div className="absolute right-6 top-10 h-40 w-40 rounded-full blur-3xl bg-[#991746]/20" />
+          </div>
 
-        <div className="flex items-center gap-2 mb-2">
-          <img src={logoUrl} alt="Nummoria logo" className="w-8 h-8 rounded" />
-          <span className="text-2xl font-semibold text-[#4f772d] tracking-tight">
-            Nummoria
-          </span>
-        </div>
+          <div className="relative rounded-3xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-md">
+            <div className="flex items-center gap-3">
+              <img
+                src={logoUrl}
+                alt="Nummoria logo"
+                className="h-9 w-9 rounded-xl"
+              />
+              <div>
+                <div className="text-lg font-semibold text-white">Nummoria</div>
+                <div className="text-sm text-white/50">
+                  Loading your incomes…
+                </div>
+              </div>
+            </div>
 
-        <p className="text-gray-600 text-sm font-medium animate-pulse">
-          Loading your incomes...
-        </p>
+            <div className="mt-5 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+              <div className="h-full w-1/3 animate-[incomeload_1.2s_ease-in-out_infinite] bg-white/30" />
+            </div>
+
+            <style>{`
+              @keyframes incomeload {
+                0% { transform: translateX(-120%); }
+                100% { transform: translateX(320%); }
+              }
+            `}</style>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-[100dvh] bg-[#f8faf8]">
-      <Header />
-      <UpcomingPanel />
-      <CategoryManager />
-
-      {err ? (
-        <div className="mx-4 mb-4 p-3 bg-red-50 text-red-700 border rounded-xl">
-          {err}
-        </div>
-      ) : null}
-
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1px_1fr] gap-4 mx-4">
-        <div className="rounded-xl overflow-hidden border">
-          {rows.length === 0 ? (
-            <div className="p-6 text-center text-gray-600">
-              No incomes found. Add your first one or adjust filters.
-            </div>
-          ) : (
-            <div>
-              {rows.map((item) => (
-                <Row key={item._id} item={item} />
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="hidden lg:block border-l border-gray-300" />
-
-        <aside className="lg:sticky lg:top-20 min-w-0 h-max space-y-4">
-          <div className="p-4 bg-white border rounded-xl">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold">Insights</h2>
-              <span className="text-xs px-2 py-0.5 rounded-full border text-gray-600">
-                {(fCurrency !== "ALL" ? fCurrency : rows[0]?.currency) || "—"}
-              </span>
-            </div>
-            {noteMixedCurrency && (
-              <div className="mt-2 text-xs text-gray-500">
-                KPIs/Charts are calculated in{" "}
-                <span className="font-medium">{statsCurrency}</span>. Pick a
-                currency in Filters to switch.
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
-              <div className="p-3 rounded-lg border bg-[#fafdf9]">
-                <div className="text-xs text-gray-600">Last Month</div>
-                <div className="text-xl font-bold">
-                  {fmtMoney(kpis.last, statsCurrency)}
-                </div>
-              </div>
-              <div className="p-3 rounded-lg border bg-[#fafdf9]">
-                <div className="text-xs text-gray-600">This Month</div>
-                <div className="text-xl font-bold">
-                  {fmtMoney(kpis.this, statsCurrency)}
-                </div>
-              </div>
-              <div className="p-3 rounded-lg border bg-[#fafdf9]">
-                <div className="text-xs text-gray-600">Yearly Average</div>
-                <div className="text-xl font-bold">
-                  {fmtMoney(kpis.yearlyAvg, statsCurrency)}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="p-4 bg-white border rounded-xl">
-            <div className="flex items-center justify-between mb-2">
-              <div className="font-semibold">This Month by Category</div>
-              <div className="text-xs text-gray-500">
-                {monthCats.length} categories
-              </div>
-            </div>
-            {monthCats.length ? (
-              <BarChart data={monthCats} currency={statsCurrency} />
-            ) : (
-              <div className="text-sm text-gray-500">
-                No data for this month.
-              </div>
-            )}
-          </div>
-
-          <div className="p-4 bg-white border rounded-xl">
-            <div className="font-semibold mb-2">Category Distribution</div>
-            {pieData.length ? (
-              <PieChart data={pieData} currency={statsCurrency} />
-            ) : (
-              <div className="text-sm text-gray-500">No data to visualize.</div>
-            )}
-          </div>
-        </aside>
+    <div className="min-h-[100dvh] bg-[#070A07] text-white">
+      <div className="pointer-events-none fixed inset-0 -z-10">
+        <div className="absolute inset-0 bg-[#070A07]" />
+        <div className="absolute inset-0 bg-[radial-gradient(1200px_800px_at_15%_0%,rgba(19,226,67,0.10),transparent_55%),radial-gradient(1000px_700px_at_85%_10%,rgba(153,23,70,0.10),transparent_55%),radial-gradient(900px_700px_at_50%_100%,rgba(255,255,255,0.04),transparent_60%)]" />
+        <div className="absolute inset-0 opacity-[0.10] mix-blend-overlay bg-[linear-gradient(to_right,rgba(255,255,255,0.10)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.10)_1px,transparent_1px)] bg-[size:56px_56px]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/35 to-black/70" />
       </div>
 
-      <incomeModal />
+      <div className="mx-4 px-4 py-6 sm:px-6 lg:px-8">
+        <Header />
+        <UpcomingPanel />
+        <CategoryManager />
 
-      {/* ✅ Stable Auto modal */}
+        {err ? (
+          <div className="mb-6 rounded-2xl border border-red-400/20 bg-red-400/10 p-4 text-red-100">
+            {err}
+          </div>
+        ) : null}
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1px_1fr]">
+          <SectionCard
+            title="Income records"
+            subtitle={`${rows.length} visible item${rows.length === 1 ? "" : "s"} based on current filters.`}
+          >
+            {rows.length === 0 ? (
+              <div className="rounded-2xl border border-white/8 bg-black/20 p-10 text-center text-white/55">
+                No incomes found. Add your first one or adjust filters.
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-2xl border border-white/8 bg-black/20">
+                {rows.map((item) => (
+                  <Row key={item._id} item={item} />
+                ))}
+              </div>
+            )}
+          </SectionCard>
+
+          <div className="hidden lg:block border-l border-white/10" />
+
+          <aside className="space-y-4 lg:sticky lg:top-20 min-w-0 h-max">
+            <SectionCard
+              title="Insights"
+              right={
+                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/60">
+                  {(fCurrency !== "ALL" ? fCurrency : rows[0]?.currency) || "—"}
+                </span>
+              }
+            >
+              {noteMixedCurrency && (
+                <div className="mb-4 rounded-2xl border border-white/8 bg-black/20 px-4 py-3 text-xs text-white/50">
+                  KPIs and charts are calculated in{" "}
+                  <span className="font-medium text-white/75">
+                    {statsCurrency}
+                  </span>
+                  . Pick a currency in Filters to switch.
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+                <MetricCard
+                  label="Last Month"
+                  value={fmtMoney(kpis.last, statsCurrency)}
+                />
+                <MetricCard
+                  label="This Month"
+                  value={fmtMoney(kpis.this, statsCurrency)}
+                />
+                <MetricCard
+                  label="Yearly Average"
+                  value={fmtMoney(kpis.yearlyAvg, statsCurrency)}
+                />
+              </div>
+            </SectionCard>
+
+            <SectionCard
+              title="This Month by Category"
+              right={
+                <div className="text-xs text-white/45">
+                  {monthCats.length} categories
+                </div>
+              }
+              className="min-w-0"
+            >
+              {monthCats.length ? (
+                <BarChart data={monthCats} currency={statsCurrency} />
+              ) : (
+                <div className="text-sm text-white/50">
+                  No data for this month.
+                </div>
+              )}
+            </SectionCard>
+
+            <SectionCard title="Category Distribution" className="min-w-0">
+              {pieData.length ? (
+                <PieChart data={pieData} currency={statsCurrency} />
+              ) : (
+                <div className="text-sm text-white/50">
+                  No data to visualize.
+                </div>
+              )}
+            </SectionCard>
+          </aside>
+        </div>
+      </div>
+
+      <IncomeModal />
+
       <AutoQuickAddModal
         open={autoModalOpen}
         accounts={accounts}
@@ -1820,6 +1972,28 @@ export default function incomesScreen({ accountId }) {
         }}
         onCreate={handleAutoCreate}
       />
+    </div>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="text-sm font-medium text-white/75">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function MetricCard({ label, value }) {
+  return (
+    <div className="rounded-2xl border border-white/8 bg-black/20 p-4">
+      <div className="text-xs uppercase tracking-[0.18em] text-white/40">
+        {label}
+      </div>
+      <div className="mt-2 text-2xl font-semibold tracking-tight text-white">
+        {value}
+      </div>
     </div>
   );
 }

@@ -37,7 +37,9 @@ function useMonthlyExpenseTotal(baseCurrency) {
       } catch (e) {
         if (!mounted) return;
         setError(
-          e?.response?.data?.error || e.message || "Failed to load transactions"
+          e?.response?.data?.error ||
+            e.message ||
+            "Failed to load transactions",
         );
       } finally {
         if (mounted) setLoading(false);
@@ -58,7 +60,7 @@ function useMonthlyExpenseTotal(baseCurrency) {
       23,
       59,
       59,
-      999
+      999,
     );
     let sumMinor = 0;
     for (const t of tx) {
@@ -87,7 +89,9 @@ function useMonthlyIncomeTotal(baseCurrency) {
       } catch (e) {
         if (!mounted) return;
         setError(
-          e?.response?.data?.error || e.message || "Failed to load transactions"
+          e?.response?.data?.error ||
+            e.message ||
+            "Failed to load transactions",
         );
       } finally {
         if (mounted) setLoading(false);
@@ -108,7 +112,7 @@ function useMonthlyIncomeTotal(baseCurrency) {
       23,
       59,
       59,
-      999
+      999,
     );
     let sumMinor = 0;
     for (const t of tx) {
@@ -137,7 +141,9 @@ function useMonthlyInvestmentTotal(baseCurrency) {
       } catch (e) {
         if (!mounted) return;
         setError(
-          e?.response?.data?.error || e.message || "Failed to load transactions"
+          e?.response?.data?.error ||
+            e.message ||
+            "Failed to load transactions",
         );
       } finally {
         if (mounted) setLoading(false);
@@ -158,7 +164,7 @@ function useMonthlyInvestmentTotal(baseCurrency) {
       23,
       59,
       59,
-      999
+      999,
     );
     let sumMinor = 0;
     for (const t of tx) {
@@ -213,7 +219,6 @@ export default function Dashboard() {
         { label: "GET ADVICE", href: "/ai/financial-advice" },
         { label: "VIEW REPORTS", href: "/reports" },
       ],
-      // card: { main, secondary },
       dim: true,
     },
     {
@@ -244,9 +249,6 @@ export default function Dashboard() {
       ctas: [{ label: "View Investments", href: "/investments/performance" }],
       dim: true,
     },
-
-    // ⚠️ This slide likely hijacked clicks if your HeroSlider has a slide-level onClick.
-    // Re-enable AFTER you confirm your HeroSlider doesn't attach a full-screen onClick.
     {
       image: "https://images.unsplash.com/photo-1550547660-d9450f859349",
       alt: "Hamburger meal display",
@@ -258,28 +260,57 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="min-h-dvh bg-white">
+    <div className="min-h-dvh bg-[#070A07] text-white">
+      {/* subtle background texture + glow */}
+      <div className="pointer-events-none fixed inset-0 -z-10">
+        <div className="absolute inset-0 bg-[radial-gradient(1200px_800px_at_20%_10%,rgba(19,226,67,0.10),transparent_55%),radial-gradient(900px_700px_at_80%_20%,rgba(153,23,70,0.12),transparent_55%),radial-gradient(900px_700px_at_50%_90%,rgba(255,255,255,0.06),transparent_60%)]" />
+        <div className="absolute inset-0 opacity-[0.10] mix-blend-overlay bg-[linear-gradient(to_right,rgba(255,255,255,0.10)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.10)_1px,transparent_1px)] bg-[size:56px_56px]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/40 to-black/70" />
+      </div>
+
       {/* FULL-BLEED HERO */}
       <section className="relative w-screen">
-        {/* If your HeroSlider supports it, pass a flag to disable slide-level clicks */}
-        {/* <HeroSlider slides={slides} minHeight={480} className="rounded-none" disableSlideClick /> */}
-        <HeroSlider slides={slides} minHeight={480} className="rounded-none" />
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute -top-16 left-8 h-40 w-40 rounded-full blur-3xl opacity-30 bg-[#13e243]" />
+          <div className="absolute -top-12 right-10 h-40 w-40 rounded-full blur-3xl opacity-25 bg-[#991746]" />
+        </div>
+
+        {/* Keep your HeroSlider intact; we just wrap it for styling */}
+        <div className="relative">
+          <HeroSlider
+            slides={slides}
+            minHeight={520}
+            className="rounded-none"
+          />
+          {/* bottom fade to merge with dark content */}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-transparent to-[#070A07]" />
+        </div>
       </section>
 
       {/* Content */}
       <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12 md:py-16">
-        <h2
-          className="text-2xl md:text-3xl font-semibold text-center"
-          style={{ color: main }}
-        >
-          A clear picture of your money — instantly
-        </h2>
-        <p className="mt-3 max-w-3xl mx-auto text-center text-gray-600">
-          From students to growing teams: track expenses, monitor income, and
-          keep an eye on investments with Nummoria. Export, share, and automate.
-        </p>
+        <div className="flex flex-col items-center text-center">
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/70 backdrop-blur-md">
+            <span
+              className="inline-block h-2 w-2 rounded-full"
+              style={{ background: secondary }}
+            />
+            LIVE MONTHLY SNAPSHOT
+          </div>
 
-        <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <h2 className="mt-5 text-3xl md:text-4xl font-semibold tracking-tight">
+            A clear picture of your money — instantly
+          </h2>
+
+          <p className="mt-3 max-w-3xl text-base md:text-lg text-white/70">
+            From students to growing teams: track expenses, monitor income, and
+            keep an eye on investments with Nummoria. Export, share, and
+            automate.
+          </p>
+        </div>
+
+        {/* Stats */}
+        <div className="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-4">
           <StatCard
             title="This Month's Expenses"
             value={
@@ -289,6 +320,7 @@ export default function Dashboard() {
             }
             main={main}
             secondary={secondary}
+            accent="expense"
           />
           <StatCard
             title="This Month's Income"
@@ -299,6 +331,7 @@ export default function Dashboard() {
             }
             main={main}
             secondary={secondary}
+            accent="income"
           />
           <StatCard
             title="Invested Balance"
@@ -309,18 +342,32 @@ export default function Dashboard() {
             }
             main={main}
             secondary={secondary}
+            accent="invest"
           />
         </div>
 
-        {err && <div className="text-red-600 mt-6 text-center">{err}</div>}
-        {expErr && (
-          <div className="text-red-600 mt-2 text-center">{expErr}</div>
-        )}
-        {incErr && (
-          <div className="text-red-600 mt-2 text-center">{incErr}</div>
-        )}
-        {invErr && (
-          <div className="text-red-600 mt-2 text-center">{invErr}</div>
+        {/* Errors (kept same logic, upgraded UI) */}
+        {(err || expErr || incErr || invErr) && (
+          <div className="mt-10">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-md p-4 md:p-5">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 h-9 w-9 rounded-xl bg-[#991746]/20 border border-[#991746]/30 grid place-items-center">
+                  <span className="text-sm">!</span>
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-white">
+                    Something didn’t load
+                  </div>
+                  <div className="mt-1 text-sm text-white/70 space-y-1">
+                    {err && <div>{err}</div>}
+                    {expErr && <div>{expErr}</div>}
+                    {incErr && <div>{incErr}</div>}
+                    {invErr && <div>{invErr}</div>}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
       </section>
 
@@ -329,16 +376,79 @@ export default function Dashboard() {
   );
 }
 
-/** Simple stat card */
-function StatCard({ title, value, main, secondary }) {
+/** Simple stat card (UI upgraded, same inputs/outputs) */
+function StatCard({ title, value, main, secondary, accent }) {
+  const accentMap = {
+    expense: {
+      glow: "rgba(153,23,70,0.18)",
+      chip: "bg-[#991746]/15 border-[#991746]/30 text-white/80",
+      dot: "#991746",
+    },
+    income: {
+      glow: "rgba(19,226,67,0.16)",
+      chip: "bg-[#13e243]/15 border-[#13e243]/30 text-white/80",
+      dot: "#13e243",
+    },
+    invest: {
+      glow: "rgba(144,169,85,0.16)",
+      chip: "bg-white/5 border-white/10 text-white/80",
+      dot: secondary,
+    },
+  };
+  const a = accentMap[accent] || accentMap.invest;
+
   return (
-    <div
-      className="rounded-lg border bg-white p-5 shadow-sm"
-      style={{ borderColor: secondary }}
-    >
-      <div className="text-sm text-gray-600">{title}</div>
-      <div className="mt-2 text-2xl font-semibold" style={{ color: main }}>
-        {value}
+    <div className="group relative rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-md p-5 md:p-6 overflow-hidden transition-transform duration-300 hover:-translate-y-0.5">
+      {/* ambient glow */}
+      <div
+        className="pointer-events-none absolute -top-10 -right-10 h-44 w-44 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+        style={{ background: a.glow }}
+      />
+      {/* top hairline */}
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-px"
+        style={{
+          background:
+            "linear-gradient(to right, transparent, rgba(255,255,255,0.18), transparent)",
+        }}
+      />
+
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-xs uppercase tracking-wider text-white/60">
+            {title}
+          </div>
+          <div className="mt-2 text-3xl md:text-[34px] font-semibold tracking-tight">
+            <span
+              className="bg-clip-text text-transparent"
+              style={{
+                backgroundImage: `linear-gradient(135deg, ${secondary}, ${main})`,
+              }}
+            >
+              {value}
+            </span>
+          </div>
+        </div>
+
+        <div
+          className={`shrink-0 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] ${a.chip}`}
+        >
+          <span
+            className="inline-block h-2 w-2 rounded-full"
+            style={{ background: a.dot }}
+          />
+          THIS MONTH
+        </div>
+      </div>
+
+      <div className="mt-5 flex items-center justify-between text-xs text-white/55">
+        <div className="inline-flex items-center gap-2">
+          <span className="inline-block h-1 w-1 rounded-full bg-white/40" />
+          Updated from transactions
+        </div>
+        <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+          Hovered
+        </div>
       </div>
     </div>
   );

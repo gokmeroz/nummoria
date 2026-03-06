@@ -1,3 +1,4 @@
+// frontend/src/components/Footer.jsx
 import React from "react";
 import logo from "../assets/nummoria_logo.png";
 
@@ -48,12 +49,12 @@ export default function Footer({
   const year = new Date().getFullYear();
 
   const wrapTop = fullBleed
-    ? "w-full px-6 lg:px-10 py-10"
-    : "mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10";
+    ? "w-full px-6 lg:px-10 py-12"
+    : "mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12";
 
   const wrapBottom = fullBleed
-    ? "w-full px-6 lg:px-10 py-4"
-    : "mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4";
+    ? "w-full px-6 lg:px-10 py-5"
+    : "mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-5";
 
   const sectionsOrder = ["Product", "Company", "Legal"];
 
@@ -62,26 +63,63 @@ export default function Footer({
   const liUrl = socialUrl("linkedin", socials.linkedin);
 
   return (
-    <footer
-      className={`w-full border-t border-gray-200 bg-gray-50 ${className}`}
-    >
+    <footer className={`relative w-full ${className}`}>
+      {/* background + top hairline */}
+      <div className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute inset-0 bg-[#070A07]" />
+        <div className="absolute inset-0 bg-[radial-gradient(900px_500px_at_15%_0%,rgba(19,226,67,0.10),transparent_55%),radial-gradient(700px_500px_at_85%_15%,rgba(153,23,70,0.12),transparent_55%)]" />
+        <div className="absolute inset-0 opacity-[0.10] mix-blend-overlay bg-[linear-gradient(to_right,rgba(255,255,255,0.10)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.10)_1px,transparent_1px)] bg-[size:72px_72px]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/0 via-black/25 to-black/60" />
+      </div>
+
+      <div
+        className="w-full"
+        style={{
+          background:
+            "linear-gradient(to right, transparent, rgba(255,255,255,0.12), transparent)",
+          height: 1,
+        }}
+      />
+
       {/* Top */}
       <div className={wrapTop}>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-10">
           {/* Brand */}
           <div className="col-span-1 md:col-span-2">
             <div className="flex items-center gap-3">
-              <img
-                src={logo}
-                alt="Nummoria Logo"
-                className="h-8 w-8 rounded-full object-contain"
-              />
-              <div>
-                <div className="text-xl font-semibold" style={{ color: main }}>
-                  {brand.name}
+              <div className="relative">
+                <div className="absolute -inset-2 rounded-2xl blur-2xl opacity-25 bg-white/10" />
+                <div className="relative rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-md p-2">
+                  <img
+                    src={logo}
+                    alt="Nummoria Logo"
+                    className="h-8 w-8 rounded-xl object-contain"
+                  />
                 </div>
-                <div className="text-sm text-gray-600">{brand.tagline}</div>
               </div>
+
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <div className="text-xl font-semibold tracking-tight text-white">
+                    {brand.name}
+                  </div>
+                  <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/70">
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{ background: main }}
+                    />
+                    PRIVATE BY DEFAULT
+                  </span>
+                </div>
+                <div className="mt-1 text-sm text-white/65">
+                  {brand.tagline}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 max-w-md text-sm text-white/60 leading-relaxed">
+              Clean money tracking, decision-ready reporting, and AI-assisted
+              clarity—built to keep you consistent without noise.
             </div>
           </div>
 
@@ -90,20 +128,25 @@ export default function Footer({
             const items = nav[section] || [];
             return (
               <div key={section} className="md:col-span-1">
-                <div
-                  className="text-sm font-semibold mb-3"
-                  style={{ color: main }}
-                >
+                <div className="inline-flex items-center gap-2 text-xs uppercase tracking-wider text-white/60">
+                  <span
+                    className="h-2 w-2 rounded-full"
+                    style={{ background: main }}
+                  />
                   {section}
                 </div>
-                <ul className="space-y-2 text-sm">
+
+                <ul className="mt-4 space-y-2.5 text-sm">
                   {items.map((it, idx) => (
                     <li key={idx}>
                       <a
                         href={it.href}
-                        className="text-gray-700 hover:underline hover:text-gray-900"
+                        className="group inline-flex items-center gap-2 text-white/70 hover:text-white transition"
                       >
-                        {it.label}
+                        <span className="h-1 w-1 rounded-full bg-white/30 group-hover:bg-white/60 transition" />
+                        <span className="border-b border-transparent group-hover:border-white/30 transition">
+                          {it.label}
+                        </span>
                       </a>
                     </li>
                   ))}
@@ -115,27 +158,26 @@ export default function Footer({
       </div>
 
       {/* Bottom bar */}
-      <div className="border-t border-gray-200 bg-gray-50">
+      <div className="border-t border-white/10">
         <div
           className={
             wrapBottom +
-            " flex flex-col md:flex-row items-center justify-between gap-3"
+            " flex flex-col md:flex-row items-center justify-between gap-4"
           }
         >
-          <div className="text-xs text-gray-500">
+          <div className="text-xs text-white/55">
             © {year} {brand.name}. All rights reserved.
           </div>
 
           <div className="flex items-center gap-2">
             {xUrl && (
-              <a
+              <SocialIconButton
                 href={xUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="X (Twitter)"
-                className="inline-flex items-center justify-center w-9 h-9 rounded-full ring-1 ring-gray-200 text-gray-400 hover:text-gray-700 hover:ring-gray-300 transition"
+                label="X (Twitter)"
                 title="X"
+                main={main}
               >
+                {/* minimalist X glyph */}
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                   <path
                     d="M18 6L6 18M6 6l12 12"
@@ -144,16 +186,15 @@ export default function Footer({
                     strokeLinecap="round"
                   />
                 </svg>
-              </a>
+              </SocialIconButton>
             )}
+
             {ghUrl && (
-              <a
+              <SocialIconButton
                 href={ghUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="GitHub"
-                className="inline-flex items-center justify-center w-9 h-9 rounded-full ring-1 ring-gray-200 text-gray-400 hover:text-gray-700 hover:ring-gray-300 transition"
+                label="GitHub"
                 title="GitHub"
+                main={main}
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                   <path
@@ -161,16 +202,15 @@ export default function Footer({
                     fill="currentColor"
                   />
                 </svg>
-              </a>
+              </SocialIconButton>
             )}
+
             {liUrl && (
-              <a
+              <SocialIconButton
                 href={liUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="LinkedIn"
-                className="inline-flex items-center justify-center w-9 h-9 rounded-full ring-1 ring-gray-200 text-gray-400 hover:text-gray-700 hover:ring-gray-300 transition"
+                label="LinkedIn"
                 title="LinkedIn"
+                main={main}
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                   <path
@@ -178,11 +218,31 @@ export default function Footer({
                     fill="currentColor"
                   />
                 </svg>
-              </a>
+              </SocialIconButton>
             )}
           </div>
         </div>
       </div>
     </footer>
+  );
+}
+
+function SocialIconButton({ href, label, title, children, main }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={label}
+      title={title}
+      className="group relative inline-flex items-center justify-center w-10 h-10 rounded-2xl border border-white/10 bg-white/[0.04] text-white/65 backdrop-blur-md transition
+                 hover:text-white hover:border-white/20 hover:-translate-y-0.5"
+    >
+      <span
+        className="pointer-events-none absolute -inset-2 rounded-2xl blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+        style={{ background: `color-mix(in srgb, ${main} 22%, transparent)` }}
+      />
+      <span className="relative">{children}</span>
+    </a>
   );
 }

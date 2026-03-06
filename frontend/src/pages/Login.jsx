@@ -1,35 +1,309 @@
+/* eslint-disable no-empty */
 /* eslint-disable no-unused-vars */
 // src/pages/Login.jsx
-import { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom"; // NEW
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import Footer from "../components/Footer";
 
+const logoUrl = new URL("../assets/nummoria_logo.png", import.meta.url).href;
+const loginBgUrl = new URL("../assets/loginAlt.jpg", import.meta.url).href;
+
+/* ─── WELCOME LANDING BACKGROUND STYLES (COPIED) ─── */
+const G = `
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; }
+  :root {
+    --mint:    #00ff87;
+    --cyan:    #00d4ff;
+    --violet:  #a78bfa;
+    --bg:      #030508;
+    --surface: rgba(255,255,255,0.038);
+    --bdr:     rgba(255,255,255,0.07);
+    --txt:     #e2e8f0;
+    --muted:   rgba(226,232,240,0.48);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--txt);
+    font-family: 'Outfit', sans-serif;
+    overflow-x: hidden;
+  }
+
+  @keyframes shimmer {
+    0%   { background-position: -400% center; }
+    100% { background-position:  400% center; }
+  }
+  @keyframes blink {
+    0%,100% { opacity: 1; }
+    50%     { opacity: 0; }
+  }
+  @keyframes pulse-dot {
+    0%,100% { transform: scale(1); opacity: .6; }
+    50%     { transform: scale(1.55); opacity: 1; }
+  }
+  @keyframes float-y {
+    0%,100% { transform: translateY(0); }
+    50%     { transform: translateY(-9px); }
+  }
+
+  .cursor-glow {
+    position: fixed;
+    width: 500px;
+    height: 500px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(0,255,135,.04) 0%, transparent 65%);
+    pointer-events: none;
+    transform: translate(-50%,-50%);
+    transition: left .1s ease, top .1s ease;
+    z-index: 0;
+  }
+
+  .scanlines {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,.018) 2px,
+      rgba(0,0,0,.018) 4px
+    );
+  }
+
+  .auth-glass {
+    border: 1px solid rgba(255,255,255,.08);
+    background: rgba(255,255,255,.045);
+    backdrop-filter: blur(26px);
+    -webkit-backdrop-filter: blur(26px);
+    box-shadow: 0 30px 80px -40px rgba(0,0,0,.7);
+  }
+
+  .auth-input {
+    width: 100%;
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,.10);
+    background: rgba(255,255,255,.05);
+    color: #e2e8f0;
+    padding: 12px 14px;
+    outline: none;
+    transition: border-color .2s, background .2s, box-shadow .2s;
+  }
+
+  .auth-input::placeholder {
+    color: rgba(226,232,240,.28);
+  }
+
+  .auth-input:focus {
+    border-color: rgba(0,255,135,.28);
+    box-shadow: 0 0 0 3px rgba(0,255,135,.08);
+    background: rgba(255,255,255,.06);
+  }
+
+  .auth-label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+    color: rgba(226,232,240,.72);
+    font-weight: 500;
+  }
+
+  .cta-primary-auth {
+    width: 100%;
+    height: 48px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #00ff87, #00d4ff);
+    color: #04110a;
+    font-size: 14px;
+    font-weight: 800;
+    transition: transform .2s, box-shadow .2s, opacity .2s;
+    box-shadow: 0 0 28px rgba(0,255,135,.22);
+  }
+
+  .cta-primary-auth:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 38px rgba(0,255,135,.28);
+  }
+
+  .cta-secondary-auth {
+    width: 100%;
+    height: 48px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,.14);
+    background: rgba(255,255,255,.05);
+    color: rgba(226,232,240,.86);
+    font-size: 14px;
+    font-weight: 700;
+    transition: transform .2s, border-color .2s, background .2s;
+  }
+
+  .cta-secondary-auth:hover {
+    transform: translateY(-1px);
+    border-color: rgba(0,255,135,.22);
+    background: rgba(0,255,135,.05);
+  }
+
+  .auth-divider {
+    height: 1px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      rgba(255,255,255,.10),
+      transparent
+    );
+  }
+`;
+
+/* ─── PARTICLE CANVAS (COPIED) ─── */
+function ParticleNet() {
+  const cvs = useRef(null);
+  const mouse = useRef({ x: -9999, y: -9999 });
+
+  useEffect(() => {
+    const c = cvs.current;
+    const ctx = c.getContext("2d");
+    let raf;
+
+    const fit = () => {
+      c.width = window.innerWidth;
+      c.height = window.innerHeight;
+    };
+
+    fit();
+    window.addEventListener("resize", fit);
+
+    const onMove = (e) => {
+      mouse.current = { x: e.clientX, y: e.clientY };
+    };
+    window.addEventListener("mousemove", onMove);
+
+    const N = 68;
+    const pts = Array.from({ length: N }, () => ({
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
+      vx: (Math.random() - 0.5) * 0.25,
+      vy: (Math.random() - 0.5) * 0.25,
+      r: 0.7 + Math.random() * 1.4,
+      col: ["#00ff87", "#00d4ff", "#ffffff"][~~(Math.random() * 3)],
+      op: 0.1 + Math.random() * 0.32,
+    }));
+
+    const draw = () => {
+      ctx.clearRect(0, 0, c.width, c.height);
+      const { x: mx, y: my } = mouse.current;
+
+      for (let i = 0; i < N; i++) {
+        for (let j = i + 1; j < N; j++) {
+          const dx = pts[i].x - pts[j].x;
+          const dy = pts[i].y - pts[j].y;
+          const d = Math.hypot(dx, dy);
+
+          if (d < 115) {
+            ctx.beginPath();
+            ctx.strokeStyle = `rgba(0,255,135,${0.06 * (1 - d / 115)})`;
+            ctx.lineWidth = 0.35;
+            ctx.moveTo(pts[i].x, pts[i].y);
+            ctx.lineTo(pts[j].x, pts[j].y);
+            ctx.stroke();
+          }
+        }
+
+        const mdx = pts[i].x - mx;
+        const mdy = pts[i].y - my;
+        const md = Math.hypot(mdx, mdy);
+
+        if (md < 165) {
+          ctx.beginPath();
+          ctx.strokeStyle = `rgba(0,212,255,${0.14 * (1 - md / 165)})`;
+          ctx.lineWidth = 0.5;
+          ctx.moveTo(pts[i].x, pts[i].y);
+          ctx.lineTo(mx, my);
+          ctx.stroke();
+
+          pts[i].x += (mdx / md) * 0.2;
+          pts[i].y += (mdy / md) * 0.2;
+        }
+
+        ctx.beginPath();
+        ctx.arc(pts[i].x, pts[i].y, pts[i].r, 0, Math.PI * 2);
+        ctx.fillStyle = pts[i].col;
+        ctx.globalAlpha = pts[i].op;
+        ctx.shadowBlur = 6;
+        ctx.shadowColor = pts[i].col;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.shadowBlur = 0;
+
+        pts[i].x += pts[i].vx;
+        pts[i].y += pts[i].vy;
+
+        if (pts[i].x < 0) pts[i].x = c.width;
+        if (pts[i].x > c.width) pts[i].x = 0;
+        if (pts[i].y < 0) pts[i].y = c.height;
+        if (pts[i].y > c.height) pts[i].y = 0;
+      }
+
+      raf = requestAnimationFrame(draw);
+    };
+
+    draw();
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", fit);
+      window.removeEventListener("mousemove", onMove);
+    };
+  }, []);
+
+  return (
+    <canvas
+      ref={cvs}
+      style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none" }}
+    />
+  );
+}
+
+function CursorGlow() {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const mm = (e) => {
+      if (ref.current) {
+        ref.current.style.left = `${e.clientX}px`;
+        ref.current.style.top = `${e.clientY}px`;
+      }
+    };
+    window.addEventListener("mousemove", mm);
+    return () => window.removeEventListener("mousemove", mm);
+  }, []);
+
+  return <div ref={ref} className="cursor-glow" />;
+}
+
 export default function Login() {
-  // NEW: router helpers for proper post-login redirects
   const navigate = useNavigate();
   const location = useLocation();
-  const from = location.state?.from; // e.g. "/admin/users" (set by AdminRoute)
+  const from = location.state?.from;
 
-  // ───────────── login state ─────────────
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginErr, setLoginErr] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
-  const [loginReason, setLoginReason] = useState(""); // "UNVERIFIED" etc.
+  const [loginReason, setLoginReason] = useState("");
 
-  // ───────────── signup state ────────────
   const [name, setName] = useState("");
   const [signEmail, setSignEmail] = useState("");
   const [signPassword, setSignPassword] = useState("");
   const [signErr, setSignErr] = useState("");
   const [signLoading, setSignLoading] = useState(false);
 
-  // ───────────── social state ────────────
   const [socialLoading, setSocialLoading] = useState("");
   const [socialErr, setSocialErr] = useState("");
 
-  // ───────────── debug panel ─────────────
   const [meProbe, setMeProbe] = useState({
     tried: false,
     ok: false,
@@ -37,17 +311,15 @@ export default function Login() {
   });
   const [lastSetCookieSeen, setLastSetCookieSeen] = useState(null);
 
-  // Absolute API base for redirects
   const API_BASE =
     (api?.defaults?.baseURL || "").replace(/\/+$/, "") ||
     window.location.origin;
 
-  // =============== email verification modal state ===============
   const [showVerify, setShowVerify] = useState(false);
-  const [verifyEmail, setVerifyEmail] = useState(""); // which email to verify
+  const [verifyEmail, setVerifyEmail] = useState("");
   const [regToken, setRegToken] = useState(
-    localStorage.getItem("regToken") || ""
-  ); // registration token from backend (new flow)
+    localStorage.getItem("regToken") || "",
+  );
   const [code, setCode] = useState("");
   const [verifyMsg, setVerifyMsg] = useState("");
   const [verifyErr, setVerifyErr] = useState("");
@@ -66,14 +338,14 @@ export default function Login() {
     return `${maskU}@${d}`;
   }, [verifyEmail]);
 
-  // Lock scroll when modal open
   useEffect(() => {
     if (showVerify) document.body.style.overflow = "hidden";
     else document.body.style.overflow = "";
-    return () => (document.body.style.overflow = "");
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, [showVerify]);
 
-  // On mount: quick probe of /me so you can see current auth state
   useEffect(() => {
     (async () => {
       try {
@@ -89,31 +361,24 @@ export default function Login() {
     })();
   }, []);
 
-  // NEW: centralized redirect logic
   async function goPostLogin() {
-    // 1) If we were sent here by AdminRoute (or any protected page), go back there
     if (from) {
       navigate(from, { replace: true });
       return;
     }
 
-    // 2) Otherwise: send admins to admin console, users to dashboard
     try {
-      // AdminRoute uses /auth/me; keep consistent
       const { data } = await api.get("/me", { withCredentials: true });
       const user = data?.user ?? data;
       if (user?.role === "admin") {
         navigate("/admin/users", { replace: true });
         return;
       }
-    } catch (e) {
-      // If /auth/me fails, fall back to dashboard
-    }
+    } catch (e) {}
 
     navigate("/dashboard", { replace: true });
   }
 
-  // ====================== LOGIN ======================
   async function onLogin(e) {
     e.preventDefault();
     setLoginErr("");
@@ -121,41 +386,32 @@ export default function Login() {
     setLoginLoading(true);
 
     try {
-      // 1) Login (must send credentials)
       const resp = await api.post(
         "/auth/login",
         { email: loginEmail, password: loginPassword },
-        { withCredentials: true }
+        { withCredentials: true },
       );
 
       const data = resp?.data || {};
 
-      // 2) (Optional) remember some UI bits
       if (data?.user?.id) {
         localStorage.setItem("defaultId", data.user.id);
         localStorage.setItem("userEmail", data.user.email || "");
         localStorage.setItem("userName", data.user.name || "");
       }
 
-      // Only set token if backend returns it
       if (data?.token) localStorage.setItem("token", data.token);
 
-      // 3) Post-login sanity: cookie should work on /me
       try {
         const meResp = await api.get("/me", { withCredentials: true });
         setMeProbe({ tried: true, ok: true, body: meResp.data });
-
-        // NEW: navigate based on intended destination / admin role
         await goPostLogin();
         return;
       } catch (meErr) {
         const body = meErr?.response?.data || {
           error: meErr?.message || "Unknown",
         };
-        console.error("Sanity /me failed after login:", body);
         setMeProbe({ tried: true, ok: false, body });
-
-        // NEW: still attempt to route correctly (don’t hardcode /dashboard)
         await goPostLogin();
         return;
       }
@@ -164,7 +420,6 @@ export default function Login() {
       const body = e.response?.data || {};
       const errMsg = body.error || "Login failed";
 
-      // ⚠️ Email not verified yet (legacy flow)
       if (
         status === 403 &&
         (body.reason === "UNVERIFIED" || body.needsVerification === true)
@@ -186,29 +441,26 @@ export default function Login() {
     }
   }
 
-  // ====================== SIGNUP ======================
   async function onSignup(e) {
     e.preventDefault();
     setSignErr("");
     setSignLoading(true);
+
     try {
       const { data } = await api.post(
         "/auth/register",
         { name, email: signEmail, password: signPassword },
-        { withCredentials: true }
+        { withCredentials: true },
       );
 
-      // After successful registration, open verify modal
       const email = (signEmail || "").trim();
       setVerifyEmail(email);
       localStorage.setItem("pendingVerifyEmail", email);
 
-      // ✅ NEW FLOW: regToken comes from backend (account not created yet)
       if (data?.regToken) {
         setRegToken(data.regToken);
         localStorage.setItem("regToken", data.regToken);
       } else {
-        // If backend didn't return regToken (older backend), clear it
         setRegToken("");
         localStorage.removeItem("regToken");
       }
@@ -221,13 +473,11 @@ export default function Login() {
     }
   }
 
-  // ====================== SOCIAL ======================
   function startSocial(provider) {
     try {
       setSocialErr("");
       setSocialLoading(provider);
 
-      // NEW: preserve intended destination if we were redirected to login
       const nextPath = from || "/dashboard";
       const next = encodeURIComponent(`${window.location.origin}${nextPath}`);
 
@@ -239,15 +489,14 @@ export default function Login() {
     }
   }
 
-  // =================== VERIFY HANDLERS (modal) ===================
   async function onVerifySubmit(e) {
     e.preventDefault();
     if (!verifyEmail && !regToken) return;
     setVerifyErr("");
     setVerifyMsg("");
     setVerifying(true);
+
     try {
-      // ✅ Prefer regToken flow (no user in DB yet). Fallback to legacy email flow.
       const payload = regToken
         ? { regToken, code: code.trim() }
         : { email: verifyEmail, code: code.trim() };
@@ -256,11 +505,10 @@ export default function Login() {
 
       setVerifyMsg("Email verified! Signing you in…");
 
-      // New flow: after verify, backend may create account; we can now login.
       const { data } = await api.post(
         "/auth/login",
         { email: verifyEmail, password: signPassword || loginPassword },
-        { withCredentials: true }
+        { withCredentials: true },
       );
 
       if (data?.user?.id) {
@@ -285,12 +533,11 @@ export default function Login() {
         });
       }
 
-      // NEW: navigate correctly instead of forcing /dashboard
       await goPostLogin();
     } catch (e) {
       setVerifyErr(
         e.response?.data?.error ||
-          "Verification failed. Check the code and try again."
+          "Verification failed. Check the code and try again.",
       );
     } finally {
       setVerifying(false);
@@ -302,15 +549,13 @@ export default function Login() {
     setVerifyErr("");
     setVerifyMsg("");
     setResending(true);
-    try {
-      // ✅ Prefer regToken flow. Fallback to legacy email flow.
-      const payload = regToken ? { regToken } : { email: verifyEmail };
 
+    try {
+      const payload = regToken ? { regToken } : { email: verifyEmail };
       const { data } = await api.post("/auth/resend-code", payload, {
         withCredentials: true,
       });
 
-      // If backend rotates/returns a new token, keep it
       if (data?.regToken) {
         setRegToken(data.regToken);
         localStorage.setItem("regToken", data.regToken);
@@ -325,46 +570,213 @@ export default function Login() {
   }
 
   return (
-    <div className="relative min-h-dvh flex flex-col">
-      {/* Background */}
-      <img
-        src="../../src/assets/loginAlt.jpg"
-        alt="Background"
-        className="absolute inset-0 w-full h-full object-cover -z-10"
-      />
-      <div className="absolute inset-0 bg-black/50 -z-10" />
+    <div
+      style={{
+        background: "#030508",
+        color: "#e2e8f0",
+        fontFamily: "'Outfit', sans-serif",
+        minHeight: "100vh",
+        overflowX: "hidden",
+        position: "relative",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <style>{G}</style>
+      <ParticleNet />
+      <CursorGlow />
+      <div className="scanlines" />
 
-      {/* Main */}
-      <main className="flex-1 flex items-center justify-center p-4">
-        <div className="w-full max-w-5xl bg-white rounded-2xl shadow-xl overflow-hidden grid grid-cols-1 md:grid-cols-2">
-          {/* Left: Sign in */}
-          <div className="relative p-8 md:p-10 bg-[#4f772d]/90 text-white flex flex-col justify-center">
-            <div className="relative">
-              <h2 className="text-3xl font-extrabold">Welcome Back!</h2>
-              <p className="mt-2 text-white/90">
-                To keep connected with us please login with your personal info.
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 0,
+          pointerEvents: "none",
+          background: `
+            radial-gradient(ellipse at top left, rgba(0,255,135,0.06), transparent 40%),
+            radial-gradient(ellipse at top right, rgba(0,212,255,0.05), transparent 42%),
+            radial-gradient(ellipse at bottom center, rgba(167,139,250,0.04), transparent 40%)
+          `,
+        }}
+      />
+
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 0,
+          pointerEvents: "none",
+          backgroundImage: `linear-gradient(rgba(3,5,8,.45), rgba(3,5,8,.8)), url(${loginBgUrl})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          opacity: 0.18,
+        }}
+      />
+
+      <main
+        style={{
+          position: "relative",
+          zIndex: 2,
+          flex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "40px 20px",
+        }}
+      >
+        <div style={{ width: "100%", maxWidth: 1240 }}>
+          <div
+            className="auth-glass"
+            style={{
+              width: "100%",
+              borderRadius: 30,
+              overflow: "hidden",
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+            }}
+          >
+            {/* LEFT */}
+            <div
+              style={{
+                padding: "42px 38px",
+                background:
+                  "linear-gradient(180deg, rgba(0,255,135,.06), rgba(255,255,255,.02))",
+                borderRight: "1px solid rgba(255,255,255,.07)",
+                position: "relative",
+              }}
+            >
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "4px 12px",
+                  borderRadius: 999,
+                  border: "1px solid rgba(0,255,135,.22)",
+                  background: "rgba(0,255,135,.07)",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: "#00ff87",
+                  letterSpacing: ".04em",
+                  marginBottom: 22,
+                }}
+              >
+                <span
+                  style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: "50%",
+                    background: "#00ff87",
+                    animation: "pulse-dot 2s ease-in-out infinite",
+                  }}
+                />
+                SECURE LOGIN
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <img
+                  src={logoUrl}
+                  alt="Nummoria Logo"
+                  style={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: 12,
+                    border: "1px solid rgba(0,255,135,.22)",
+                  }}
+                />
+                <div>
+                  <div
+                    style={{
+                      fontFamily: "'Syne', sans-serif",
+                      fontWeight: 800,
+                      fontSize: 17,
+                      letterSpacing: "-.02em",
+                    }}
+                  >
+                    Nummoria
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "rgba(226,232,240,.42)",
+                      letterSpacing: ".04em",
+                    }}
+                  >
+                    AI money clarity platform
+                  </div>
+                </div>
+              </div>
+
+              <h1
+                style={{
+                  marginTop: 26,
+                  fontFamily: "'Syne', sans-serif",
+                  fontSize: "clamp(2.3rem, 4vw, 3.3rem)",
+                  fontWeight: 800,
+                  lineHeight: 1.06,
+                  letterSpacing: "-.04em",
+                }}
+              >
+                Welcome back.
+              </h1>
+
+              <p
+                style={{
+                  marginTop: 14,
+                  fontSize: 15,
+                  color: "rgba(226,232,240,.56)",
+                  lineHeight: 1.8,
+                  maxWidth: 440,
+                }}
+              >
+                Sign in to continue tracking your money with a cleaner, sharper,
+                aerospace-grade interface.
               </p>
 
-              <form onSubmit={onLogin} className="mt-8 space-y-4">
+              <form onSubmit={onLogin} style={{ marginTop: 28 }}>
                 {loginErr && (
-                  <div className="text-sm bg-white/15 px-3 py-2 rounded">
+                  <div
+                    style={{
+                      marginBottom: 16,
+                      fontSize: 13,
+                      borderRadius: 14,
+                      padding: "12px 14px",
+                      background: "rgba(255, 80, 80, .08)",
+                      border: "1px solid rgba(255, 80, 80, .18)",
+                      color: "#fecaca",
+                    }}
+                  >
                     {loginErr}
                     {loginReason === "UNVERIFIED" && (
-                      <div className="mt-2 flex items-center gap-4">
+                      <div
+                        style={{
+                          marginTop: 10,
+                          display: "flex",
+                          gap: 14,
+                          flexWrap: "wrap",
+                        }}
+                      >
                         <button
                           type="button"
-                          className="underline"
+                          style={{
+                            background: "transparent",
+                            color: "#e2e8f0",
+                            textDecoration: "underline",
+                          }}
                           onClick={() => onResendCode()}
                           disabled={!verifyEmail && !regToken}
-                          title="Resend verification code"
                         >
                           Resend code
                         </button>
                         <button
                           type="button"
-                          className="underline"
+                          style={{
+                            background: "transparent",
+                            color: "#e2e8f0",
+                            textDecoration: "underline",
+                          }}
                           onClick={() => setShowVerify(true)}
-                          title="Enter code"
                         >
                           Enter code
                         </button>
@@ -373,278 +785,441 @@ export default function Login() {
                   </div>
                 )}
 
-                <div>
-                  <label className="text-sm">Email</label>
+                <div style={{ marginBottom: 14 }}>
+                  <label className="auth-label">Email</label>
                   <input
                     type="email"
-                    className="mt-1 w-full rounded-lg px-3 py-2 bg-white text-gray-900 placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
+                    className="auth-input"
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
                     placeholder="you@nummoria.com"
                     required
                   />
                 </div>
-                <div>
-                  <label className="text-sm">Password</label>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label className="auth-label">Password</label>
                   <input
                     type="password"
-                    className="mt-1 w-full rounded-lg px-3 py-2 bg-white text-gray-900 placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#90a955]"
+                    className="auth-input"
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
                     placeholder="••••••••"
                     required
                   />
                 </div>
-                <button
-                  className="w-full rounded-full border-2 border-white py-2 font-semibold hover:bg-white hover:text-[#4f772d] transition disabled:opacity-60"
-                  disabled={loginLoading}
-                >
-                  {loginLoading ? "Signing in..." : "SIGN IN"}
+
+                <button className="cta-primary-auth" disabled={loginLoading}>
+                  {loginLoading ? "SIGNING IN..." : "SIGN IN"}
                 </button>
-                <div className="text-sm text-white/90">
-                  <a href="/forgot-password" className="underline">
+
+                <div style={{ marginTop: 14, fontSize: 13 }}>
+                  <a
+                    href="/forgot-password"
+                    style={{
+                      color: "rgba(226,232,240,.72)",
+                      textDecoration: "underline",
+                    }}
+                  >
                     Forgot password?
                   </a>
                 </div>
               </form>
             </div>
-          </div>
 
-          {/* Right: Create account */}
-          <div className="p-8 md:p-10 flex flex-col justify-center bg-white/95">
-            <h2 className="text-3xl font-extrabold text-[#4f772d]">
-              Create Account
-            </h2>
+            {/* RIGHT */}
+            <div
+              style={{
+                padding: "42px 38px",
+                background: "rgba(255,255,255,.015)",
+                position: "relative",
+              }}
+            >
+              <h2
+                style={{
+                  fontFamily: "'Syne', sans-serif",
+                  fontSize: 36,
+                  fontWeight: 800,
+                  letterSpacing: "-.04em",
+                  color: "#fff",
+                }}
+              >
+                Create account
+              </h2>
 
-            {/* Social providers */}
-            <div className="mt-5">
-              {socialErr && (
-                <div className="text-sm text-red-600 mb-3">{socialErr}</div>
-              )}
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  aria-label="Continue with Google"
-                  title="Continue with Google"
-                  className="w-9 h-9 rounded-full border flex items-center justify-center"
-                  disabled={!!socialLoading}
-                  onClick={() => {
-                    setSocialLoading(true);
-                    const apiUrl =
-                      import.meta.env.VITE_API_URL || "http://localhost:4000";
+              <p
+                style={{
+                  marginTop: 10,
+                  color: "rgba(226,232,240,.54)",
+                  fontSize: 14,
+                }}
+              >
+                Start with your email or continue with a social account.
+              </p>
 
-                    // NEW: preserve intended destination
-                    const nextPath = from || "/dashboard";
-                    window.location.href = `${apiUrl}/auth/google?next=${encodeURIComponent(
-                      nextPath
-                    )}`;
+              <div style={{ marginTop: 22 }}>
+                {socialErr && (
+                  <div
+                    style={{
+                      marginBottom: 14,
+                      fontSize: 13,
+                      color: "#fecaca",
+                    }}
+                  >
+                    {socialErr}
+                  </div>
+                )}
+
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <button
+                    type="button"
+                    aria-label="Continue with Google"
+                    title="Continue with Google"
+                    disabled={!!socialLoading}
+                    onClick={() => {
+                      setSocialLoading("google");
+                      const apiUrl =
+                        import.meta.env.VITE_API_URL || "http://localhost:4000";
+                      const nextPath = from || "/dashboard";
+                      window.location.href = `${apiUrl}/auth/google?next=${encodeURIComponent(
+                        nextPath,
+                      )}`;
+                    }}
+                    style={socialBtnStyle}
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 48 48"
+                      aria-hidden="true"
+                    >
+                      <path
+                        fill="#FFC107"
+                        d="M43.611 20.083H42V20H24v8h11.303C33.659 32.657 29.239 36 24 36c-6.627 0-12-5.373-12-12S17.373 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.27 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"
+                      />
+                      <path
+                        fill="#FF3D00"
+                        d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.27 4 24 4c-7.682 0-14.347 4.337-17.694 10.691z"
+                      />
+                      <path
+                        fill="#4CAF50"
+                        d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.17 35.091 26.715 36 24 36c-5.219 0-9.629-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"
+                      />
+                      <path
+                        fill="#1976D2"
+                        d="M43.611 20.083H42V20H24v8h11.303a12.053 12.053 0 0 1-4.084 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"
+                      />
+                    </svg>
+                  </button>
+
+                  <button
+                    type="button"
+                    aria-label="Continue with X"
+                    title="Continue with X"
+                    disabled={!!socialLoading}
+                    onClick={() => startSocial("twitter")}
+                    style={socialBtnStyle}
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                    >
+                      <path
+                        fill="currentColor"
+                        d="M18.244 2H21.5l-7.42 8.49L22 22h-6.77l-5.3-6.97L4.77 22H1.5l7.92-9.05L2 2h6.91l4.79 6.39L18.244 2zm-2.37 18h2.11L8.21 4H6.01l9.864 16z"
+                      />
+                    </svg>
+                  </button>
+
+                  <button
+                    type="button"
+                    aria-label="Continue with GitHub"
+                    title="Continue with GitHub"
+                    disabled={!!socialLoading}
+                    onClick={() => startSocial("github")}
+                    style={socialBtnStyle}
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                    >
+                      <path
+                        fill="currentColor"
+                        d="M12 .5C5.649.5.5 5.649.5 12A11.5 11.5 0 0 0 8.36 22.91c.575.106.785-.25.785-.556 0-.274-.01-1-.015-1.962-3.197.695-3.872-1.54-3.872-1.54-.523-1.327-1.278-1.68-1.278-1.68-1.045-.714.08-.7.08-.7 1.155.081 1.763 1.187 1.763 1.187 1.026 1.758 2.692 1.25 3.348.956.104-.744.402-1.25.731-1.538-2.552-.29-5.238-1.276-5.238-5.68 0-1.255.448-2.28 1.183-3.083-.119-.29-.513-1.46.112-3.045 0 0 .965-.309 3.162 1.177A10.98 10.98 0 0 1 12 6.09c.975.005 1.958.132 2.875.388 2.195-1.486 3.158-1.177 3.158-1.177.627 1.585.233 2.755.115 3.045.737.803 1.181 1.828 1.181 3.083 0 4.415-2.69 5.386-5.255 5.67.413.355.78 1.057.78 2.132 0 1.54-.014 2.781-.014 3.16 0 .31.207.669.79.555A11.502 11.502 0 0 0 23.5 12C23.5 5.649 18.351.5 12 .5z"
+                      />
+                    </svg>
+                  </button>
+
+                  {socialLoading && (
+                    <span
+                      style={{ fontSize: 13, color: "rgba(226,232,240,.42)" }}
+                    >
+                      Redirecting to {socialLoading}…
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ marginTop: 22 }} className="auth-divider" />
+
+                <p
+                  style={{
+                    marginTop: 18,
+                    marginBottom: 16,
+                    color: "rgba(226,232,240,.42)",
+                    fontSize: 13,
                   }}
                 >
-                  {/* Google G */}
-                  <svg width="20" height="20" viewBox="0 0 48 48">
-                    <path
-                      fill="#FFC107"
-                      d="M43.6 20.5H42V20H24v8h11.3C33.7 32.6 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.7 1.1 7.8 3l5.7-5.7C33.9 6.3 29.2 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 19.3-8.8 19.3-20c0-1.3-.1-2.5-.7-3.5z"
-                    />
-                    <path
-                      fill="#FF3D00"
-                      d="M6.3 14.7l6.6 4.8C14.5 16 18.9 12 24 12c3 0 5.7 1.1 7.8 3l5.7-5.7C33.9 6.3 29.2 4 24 4 16.2 4 9.4 8.4 6.3 14.7z"
-                    />
-                    <path
-                      fill="#4CAF50"
-                      d="M24 44c5.2 0 9.9-1.9 13.5-5.1l-6.2-5c-2 1.4-4.7 2.2-7.3 2.2-5.3 0-9.7-3.4-11.3-8.1l-6.6 5.1C9.4 39.6 16.2 44 24 44z"
-                    />
-                    <path
-                      fill="#1976D2"
-                      d="M43.6 20.5H42V20H24v8h11.3c-1.1 3.6-4.5 6-8.3 6-5.3 0-9.7-3.4-11.3-8.1l-6.6 5.1C9.4 39.6 16.2 44 24 44c8.6 0 19.3-6.2 19.3-20 0-1.3-.1-2.5-.7-3.5z"
-                    />
-                  </svg>
-                </button>
+                  or use your email for registration:
+                </p>
+              </div>
 
-                <button
-                  type="button"
-                  aria-label="Continue with Twitter"
-                  title="Continue with Twitter"
-                  className="w-10 h-10 rounded-full border flex items-center justify-center hover:bg-gray-50 disabled:opacity-60"
-                  disabled={!!socialLoading}
-                  onClick={() => startSocial("twitter")}
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="black">
-                    <path d="M18.244 2H21.5l-7.42 8.49L22 22h-6.77l-5.3-6.97L4.77 22H1.5l7.92-9.05L2 2h6.91l4.79 6.39L18.244 2zm-2.37 18h2.11L8.21 4H6.01l9.864 16z" />
-                  </svg>
-                </button>
-
-                <button
-                  type="button"
-                  aria-label="Continue with GitHub"
-                  title="Continue with GitHub"
-                  className="w-10 h-10 rounded-full border flex items-center justify-center hover:bg-gray-50 disabled:opacity-60 bg-black"
-                  disabled={!!socialLoading}
-                  onClick={() => startSocial("github")}
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="white"
+              <form onSubmit={onSignup}>
+                {signErr && (
+                  <div
+                    style={{
+                      marginBottom: 16,
+                      fontSize: 13,
+                      color: "#fecaca",
+                    }}
                   >
-                    <path d="M12 .5C5.73.5.5 5.74.5 12.02c0 5.1 3.29 9.42 7.86 10.95.58.11.79-.25.79-.56 0-.28-.01-1.02-.02-2 -3.2.7-3.88-1.54-3.88-1.54-.53-1.35-1.3-1.71-1.3-1.71-1.06-.72.08-.71.08-.71 1.17.08 1.79 1.2 1.79 1.2 1.04 1.79 2.73 1.27 3.4.97.1-.76.41-1.27.75-1.56-2.55-.29-5.23-1.28-5.23-5.7 0-1.26.45-2.29 1.2-3.1-.12-.29-.52-1.45.11-3.02 0 0 .97-.31 3.18 1.18a11.1 11.1 0 0 1 2.9-.39c.98 0 1.96.13 2.9.39 2.2-1.49 3.17-1.18 3.17-1.18.63 1.57.23 2.73.11 3.02.75.81 1.2 1.84 1.2 3.1 0 4.43-2.69 5.41-5.25 5.7.42.36.8 1.09.8 2.2 0 1.59-.01 2.87-.01 3.26 0 .31.21.68.8.56 A10.52 10.52 0 0 0 23.5 12c0-6.28-5.23-11.5-11.5-11.5z" />
-                  </svg>
+                    {signErr}
+                  </div>
+                )}
+
+                <div style={{ marginBottom: 14 }}>
+                  <label className="auth-label">Name</label>
+                  <input
+                    className="auth-input"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Your name"
+                    required
+                  />
+                </div>
+
+                <div style={{ marginBottom: 14 }}>
+                  <label className="auth-label">Email</label>
+                  <input
+                    type="email"
+                    className="auth-input"
+                    value={signEmail}
+                    onChange={(e) => setSignEmail(e.target.value)}
+                    placeholder="you@nummoria.com"
+                    required
+                  />
+                </div>
+
+                <div style={{ marginBottom: 18 }}>
+                  <label className="auth-label">Password</label>
+                  <input
+                    type="password"
+                    className="auth-input"
+                    value={signPassword}
+                    onChange={(e) => setSignPassword(e.target.value)}
+                    placeholder="At least 8 characters"
+                    minLength={8}
+                    required
+                  />
+                </div>
+
+                <button className="cta-secondary-auth" disabled={signLoading}>
+                  {signLoading ? "CREATING..." : "SIGN UP"}
                 </button>
 
-                {socialLoading && (
-                  <span className="text-sm text-gray-500">
-                    Redirecting to {socialLoading}…
-                  </span>
-                )}
-              </div>
+                <div
+                  style={{
+                    marginTop: 16,
+                    fontSize: 12,
+                    lineHeight: 1.8,
+                    color: "rgba(226,232,240,.44)",
+                    textAlign: "center",
+                  }}
+                >
+                  By continuing you agree to our{" "}
+                  <a href="/terms" style={{ textDecoration: "underline" }}>
+                    Terms
+                  </a>{" "}
+                  and{" "}
+                  <a href="/privacy" style={{ textDecoration: "underline" }}>
+                    Privacy Policy
+                  </a>
+                  .
+                </div>
 
-              <p className="mt-4 text-gray-500 text-sm">
-                or use your email for registration:
-              </p>
+                <div
+                  style={{
+                    marginTop: 12,
+                    fontSize: 13,
+                    color: "rgba(226,232,240,.52)",
+                  }}
+                >
+                  Already have an account?{" "}
+                  <a
+                    href="#"
+                    style={{ color: "#00ff87", textDecoration: "underline" }}
+                  >
+                    Sign in on the left
+                  </a>
+                </div>
+              </form>
             </div>
-
-            <form onSubmit={onSignup} className="mt-4 space-y-4">
-              {signErr && <div className="text-sm text-red-600">{signErr}</div>}
-              <div>
-                <label className="block text-sm mb-1">Name</label>
-                <input
-                  className="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#90a955]"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Your name"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm mb-1">Email</label>
-                <input
-                  type="email"
-                  className="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#90a955]"
-                  value={signEmail}
-                  onChange={(e) => setSignEmail(e.target.value)}
-                  placeholder="you@nummoria.com"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm mb-1">Password</label>
-                <input
-                  type="password"
-                  className="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#90a955]"
-                  value={signPassword}
-                  onChange={(e) => setSignPassword(e.target.value)}
-                  placeholder="At least 8 characters"
-                  minLength={8}
-                  required
-                />
-              </div>
-              <button
-                className="w-full bg-[#4f772d] text-white py-2 rounded-full font-semibold shadow-md hover:shadow-lg hover:bg-[#90a955] transition disabled:opacity-60"
-                disabled={signLoading}
-              >
-                {signLoading ? "Creating..." : "SIGN UP"}
-              </button>
-
-              <div className="text-xs text-gray-500 text-center">
-                By continuing you agree to our{" "}
-                <a className="underline" href="/terms">
-                  Terms
-                </a>{" "}
-                and{" "}
-                <a className="underline" href="/privacy">
-                  Privacy Policy
-                </a>
-                .
-              </div>
-
-              <div className="text-sm text-gray-600">
-                Already have an account?{" "}
-                <a href="#" className="text-[#4f772d] underline">
-                  Sign in on the left
-                </a>
-              </div>
-            </form>
           </div>
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="mt-auto w-full">
-        <Footer fullBleed className="bg-white/70 backdrop-blur-sm" />
+      <footer style={{ position: "relative", zIndex: 2 }}>
+        <Footer fullBleed className="bg-transparent" />
       </footer>
 
-      {/* ===================== VERIFY MODAL ===================== */}
       {showVerify && (
         <div
-          className="fixed inset-0 z-[100] grid place-items-center bg-black/60 p-4"
-          onMouseDown={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 100,
+            display: "grid",
+            placeItems: "center",
+            background: "rgba(0,0,0,.62)",
+            backdropFilter: "blur(8px)",
+            padding: 16,
+          }}
         >
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6">
-            <div className="flex items-start justify-between">
-              <h2 className="text-xl font-extrabold text-[#4f772d]">
+          <div
+            className="auth-glass"
+            style={{
+              width: "100%",
+              maxWidth: 460,
+              borderRadius: 24,
+              padding: 24,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "start",
+                justifyContent: "space-between",
+                gap: 12,
+              }}
+            >
+              <h2
+                style={{
+                  fontFamily: "'Syne', sans-serif",
+                  fontSize: 24,
+                  fontWeight: 800,
+                  letterSpacing: "-.03em",
+                }}
+              >
                 Verify your email
               </h2>
+
               <button
-                className="text-gray-500 hover:text-gray-700"
                 onClick={() => setShowVerify(false)}
                 aria-label="Close"
                 title="Close"
+                style={{
+                  background: "transparent",
+                  color: "rgba(226,232,240,.68)",
+                  fontSize: 24,
+                  lineHeight: 1,
+                }}
               >
                 ×
               </button>
             </div>
 
-            <p className="mt-1 text-gray-600">
+            <p
+              style={{
+                marginTop: 8,
+                fontSize: 14,
+                color: "rgba(226,232,240,.56)",
+              }}
+            >
               We sent a 6-digit code to{" "}
-              <span className="font-medium">{maskedEmail}</span>.
+              <span style={{ color: "#fff", fontWeight: 600 }}>
+                {maskedEmail}
+              </span>
+              .
             </p>
 
-            <form onSubmit={onVerifySubmit} className="mt-5 space-y-4">
+            <form onSubmit={onVerifySubmit} style={{ marginTop: 18 }}>
               {verifyErr && (
-                <div className="text-sm bg-red-50 text-red-700 px-3 py-2 rounded">
+                <div
+                  style={{
+                    marginBottom: 14,
+                    fontSize: 13,
+                    borderRadius: 12,
+                    padding: "10px 12px",
+                    background: "rgba(255,80,80,.08)",
+                    border: "1px solid rgba(255,80,80,.18)",
+                    color: "#fecaca",
+                  }}
+                >
                   {verifyErr}
                 </div>
               )}
+
               {verifyMsg && (
-                <div className="text-sm bg-green-50 text-green-700 px-3 py-2 rounded">
+                <div
+                  style={{
+                    marginBottom: 14,
+                    fontSize: 13,
+                    borderRadius: 12,
+                    padding: "10px 12px",
+                    background: "rgba(0,255,135,.08)",
+                    border: "1px solid rgba(0,255,135,.18)",
+                    color: "#bbf7d0",
+                  }}
+                >
                   {verifyMsg}
                 </div>
               )}
 
-              <div>
-                <label className="block text-sm mb-1">Verification Code</label>
+              <div style={{ marginBottom: 16 }}>
+                <label className="auth-label">Verification Code</label>
                 <input
                   inputMode="numeric"
                   pattern="[0-9]*"
                   maxLength={6}
-                  className="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#90a955]"
+                  className="auth-input"
                   placeholder="Enter 6-digit code"
                   value={code}
                   onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
                   required
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  Expires ~15 minutes after request.
-                </p>
               </div>
 
               <button
-                className="w-full bg-[#4f772d] text-white py-2 rounded-full font-semibold shadow-md hover:shadow-lg hover:bg-[#90a955] transition disabled:opacity-60"
+                className="cta-primary-auth"
                 disabled={verifying || (!verifyEmail && !regToken)}
               >
-                {verifying ? "Verifying…" : "Verify & Continue"}
+                {verifying ? "VERIFYING…" : "VERIFY & CONTINUE"}
               </button>
             </form>
 
-            <div className="mt-4 text-sm text-gray-600 flex items-center justify-between">
+            <div
+              style={{
+                marginTop: 16,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 16,
+                fontSize: 13,
+                color: "rgba(226,232,240,.54)",
+              }}
+            >
               <span>Didn’t get the code?</span>
               <button
                 onClick={onResendCode}
-                className="text-[#4f772d] underline disabled:opacity-60"
                 disabled={resending || (!verifyEmail && !regToken)}
+                style={{
+                  background: "transparent",
+                  color: "#00ff87",
+                  textDecoration: "underline",
+                }}
               >
                 {resending ? "Resending…" : "Resend code"}
               </button>
@@ -655,3 +1230,17 @@ export default function Login() {
     </div>
   );
 }
+
+const socialBtnStyle = {
+  width: 42,
+  height: 42,
+  borderRadius: "50%",
+  border: "1px solid rgba(255,255,255,.10)",
+  background: "rgba(255,255,255,.05)",
+  color: "#e2e8f0",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+  transition: "transform .2s, border-color .2s, background .2s",
+};

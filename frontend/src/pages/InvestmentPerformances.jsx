@@ -1,8 +1,10 @@
+/* eslint-disable no-empty */
 /* eslint-disable no-unused-vars */
 // frontend/src/pages/InvestmentPerformance.jsx
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../lib/api";
+import logoUrl from "../assets/nummoria_logo.png";
 
 const main = "#4f772d";
 const secondary = "#90a955";
@@ -40,16 +42,84 @@ function formatNumber(n, digits = 2) {
   }).format(n);
 }
 
-/** ---------- NEW: helper to exclude INV ---------- **/
+/** ---------- helper to exclude INV ---------- **/
 function isInvSymbol(sym) {
   const s = String(sym || "")
     .trim()
     .toUpperCase();
-  // Exclude "INV" exactly or anything beginning with "INV-"/"INV "
   return /^INV(\b|[-_])/i.test(s) || s === "INV";
 }
 
-/** ---------- NEW: Market Search widget ---------- **/
+function abbreviateNumber(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return "—";
+  const units = ["", "K", "M", "B", "T"];
+  let i = 0;
+  let num = v;
+  while (num >= 1000 && i < units.length - 1) {
+    num /= 1000;
+    i++;
+  }
+  return `${num.toFixed(num >= 100 ? 0 : num >= 10 ? 1 : 2)}${units[i]}`;
+}
+
+function SectionCard({ title, subtitle, right, children, className = "" }) {
+  return (
+    <div
+      className={`relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-md ${className}`}
+    >
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(500px_180px_at_10%_0%,rgba(19,226,67,0.06),transparent_60%),radial-gradient(420px_180px_at_90%_10%,rgba(153,23,70,0.08),transparent_60%)]" />
+      <div className="relative p-5 md:p-6">
+        {(title || right) && (
+          <div className="mb-4 flex items-start justify-between gap-4">
+            <div>
+              {title ? (
+                <h2 className="text-lg font-semibold tracking-tight text-white">
+                  {title}
+                </h2>
+              ) : null}
+              {subtitle ? (
+                <p className="mt-1 text-sm text-white/55">{subtitle}</p>
+              ) : null}
+            </div>
+            {right ? <div>{right}</div> : null}
+          </div>
+        )}
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({ label, value, valueClassName = "" }) {
+  return (
+    <div className="rounded-2xl border border-white/8 bg-black/20 p-4">
+      <div className="text-xs uppercase tracking-[0.18em] text-white/40">
+        {label}
+      </div>
+      <div
+        className={`mt-2 text-2xl font-semibold tracking-tight text-white ${valueClassName}`}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function MiniStat({ label, value, className = "" }) {
+  return (
+    <div className="rounded-2xl border border-white/8 bg-black/20 p-4">
+      <div className="text-xs uppercase tracking-[0.16em] text-white/40">
+        {label}
+      </div>
+      <div className={`mt-2 text-sm font-semibold text-white ${className}`}>
+        {String(value)}
+      </div>
+    </div>
+  );
+}
+
+/** ---------- Market Search widget ---------- **/
 function MarketSearch() {
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
@@ -90,48 +160,51 @@ function MarketSearch() {
       : null;
   const chg = price != null && prev != null ? price - prev : null;
   const chgPct = price != null && prev ? (chg / prev) * 100 : null;
-
   const priceCur = data?.currency || data?.financialCurrency || "USD";
 
   return (
-    <section className="mb-6">
-      <div className="rounded-2xl border p-4 bg-white">
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-          <div className="w-full sm:max-w-md">
-            <label className="block text-sm text-gray-600 mb-1">
-              Market Search
-            </label>
+    <SectionCard
+      title="Market Search"
+      subtitle="Look up live market data for stocks, ETFs, forex, crypto, and metals."
+      className="mb-6"
+    >
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col xl:flex-row xl:items-end gap-3">
+          <div className="w-full xl:max-w-xl">
+            <label className="mb-1 block text-sm text-white/60">Symbol</label>
             <div className="flex gap-2">
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 onKeyDown={onKeyDown}
                 placeholder="Try AAPL, MSFT, BTC-USD, VOO, USDTRY=X…"
-                className="flex-1 border rounded-lg px-3 py-2"
+                className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white placeholder:text-white/30 outline-none transition focus:border-white/20"
               />
               <button
                 onClick={() => search()}
                 disabled={busy}
-                className="px-4 py-2 rounded-lg text-white font-semibold disabled:opacity-60"
-                style={{ background: main }}
+                className="rounded-2xl px-4 py-3 text-sm font-semibold text-white transition disabled:opacity-60"
+                style={{
+                  background: "linear-gradient(135deg, #90a955, #4f772d)",
+                }}
               >
                 {busy ? "Searching…" : "Search"}
               </button>
             </div>
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-2 text-xs text-white/40">
               Tips: US stocks (AAPL), ETFs (VOO), forex (USDTRY=X), crypto
               (BTC-USD), metals (XAUUSD=X)
             </p>
           </div>
 
-          {data && (
-            <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <Stat label="Symbol" value={data.symbol || "—"} />
-              <Stat
+          {data ? (
+            <div className="w-full xl:flex-1 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+              <MiniStat label="Symbol" value={data.symbol || "—"} />
+              <MiniStat
                 label="Name"
                 value={data.shortName || data.longName || "—"}
               />
-              <Stat
+              <MiniStat
                 label="Price"
                 value={
                   typeof price === "number"
@@ -144,7 +217,7 @@ function MarketSearch() {
                     : "—"
                 }
               />
-              <Stat
+              <MiniStat
                 label="Change"
                 value={
                   chg != null
@@ -155,90 +228,67 @@ function MarketSearch() {
                   chg == null
                     ? ""
                     : chg > 0
-                    ? "text-emerald-600"
-                    : chg < 0
-                    ? "text-red-600"
-                    : ""
+                      ? "text-emerald-400"
+                      : chg < 0
+                        ? "text-red-400"
+                        : ""
                 }
-              />
-
-              <Stat label="Currency" value={priceCur} />
-              <Stat label="Previous Close" value={prev ?? "—"} />
-              <Stat label="Open" value={data?.regularMarketOpen ?? "—"} />
-              <Stat
-                label="Day Range"
-                value={
-                  data?.regularMarketDayLow != null &&
-                  data?.regularMarketDayHigh != null
-                    ? `${data.regularMarketDayLow} – ${data.regularMarketDayHigh}`
-                    : "—"
-                }
-              />
-              <Stat
-                label="52W Range"
-                value={
-                  data?.fiftyTwoWeekLow != null &&
-                  data?.fiftyTwoWeekHigh != null
-                    ? `${data.fiftyTwoWeekLow} – ${data.fiftyTwoWeekHigh}`
-                    : "—"
-                }
-              />
-              <Stat
-                label="Volume"
-                value={
-                  data?.regularMarketVolume != null
-                    ? data.regularMarketVolume.toLocaleString()
-                    : "—"
-                }
-              />
-              <Stat
-                label="Market Cap"
-                value={
-                  data?.marketCap != null
-                    ? abbreviateNumber(data.marketCap)
-                    : "—"
-                }
-              />
-              <Stat
-                label="Exchange"
-                value={data?.fullExchangeName || data?.exchange || "—"}
               />
             </div>
-          )}
+          ) : null}
         </div>
 
-        {err && (
-          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 text-red-700 p-2">
+        {data ? (
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+            <MiniStat label="Currency" value={priceCur} />
+            <MiniStat label="Previous Close" value={prev ?? "—"} />
+            <MiniStat label="Open" value={data?.regularMarketOpen ?? "—"} />
+            <MiniStat
+              label="Day Range"
+              value={
+                data?.regularMarketDayLow != null &&
+                data?.regularMarketDayHigh != null
+                  ? `${data.regularMarketDayLow} – ${data.regularMarketDayHigh}`
+                  : "—"
+              }
+            />
+            <MiniStat
+              label="52W Range"
+              value={
+                data?.fiftyTwoWeekLow != null && data?.fiftyTwoWeekHigh != null
+                  ? `${data.fiftyTwoWeekLow} – ${data.fiftyTwoWeekHigh}`
+                  : "—"
+              }
+            />
+            <MiniStat
+              label="Volume"
+              value={
+                data?.regularMarketVolume != null
+                  ? data.regularMarketVolume.toLocaleString()
+                  : "—"
+              }
+            />
+            <MiniStat
+              label="Market Cap"
+              value={
+                data?.marketCap != null ? abbreviateNumber(data.marketCap) : "—"
+              }
+            />
+            <MiniStat
+              label="Exchange"
+              value={data?.fullExchangeName || data?.exchange || "—"}
+            />
+          </div>
+        ) : null}
+
+        {err ? (
+          <div className="rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-100">
             {err}
           </div>
-        )}
+        ) : null}
       </div>
-    </section>
+    </SectionCard>
   );
-}
-
-function Stat({ label, value, className = "" }) {
-  return (
-    <div className="p-3 rounded-xl border">
-      <div className="text-xs text-gray-500">{label}</div>
-      <div className={`text-sm font-semibold truncate ${className}`}>
-        {String(value)}
-      </div>
-    </div>
-  );
-}
-
-function abbreviateNumber(n) {
-  const v = Number(n);
-  if (!Number.isFinite(v)) return "—";
-  const units = ["", "K", "M", "B", "T"];
-  let i = 0;
-  let num = v;
-  while (num >= 1000 && i < units.length - 1) {
-    num /= 1000;
-    i++;
-  }
-  return `${num.toFixed(num >= 100 ? 0 : num >= 10 ? 1 : 2)}${units[i]}`;
 }
 
 /** ---------- Page ---------- **/
@@ -249,16 +299,12 @@ export default function InvestmentPerformance() {
   const [lastRefreshed, setLastRefreshed] = useState(null);
 
   const [sort, setSort] = useState({ key: "symbol", dir: "asc" });
-  // ✅ NEW: list mode toggle (same behavior as mobile)
-  const [listMode, setListMode] = useState("HOLDINGS"); // "HOLDINGS" | "FAVORITES"
+  const [listMode, setListMode] = useState("HOLDINGS");
 
-  // ✅ NEW: favorites from localStorage (fallback across likely keys)
   const location = useLocation();
   const navigate = useNavigate();
 
-  // ✅ NEW: favorites from URL (?favorites=AAPL,BTC-USD) + localStorage fallback
   const favorites = useMemo(() => {
-    // 1) URL param favorites=SYM1,SYM2
     const sp = new URLSearchParams(location.search);
     const qp = sp.get("favorites");
 
@@ -267,13 +313,12 @@ export default function InvestmentPerformance() {
       .map((s) =>
         String(s || "")
           .trim()
-          .toUpperCase()
+          .toUpperCase(),
       )
       .filter(Boolean);
 
     if (fromQuery.length) return fromQuery;
 
-    // 2) localStorage fallback
     const tryKeys = [
       "favorites",
       "investmentFavorites",
@@ -294,14 +339,12 @@ export default function InvestmentPerformance() {
           .map((x) =>
             String(x?.symbol ?? x?.assetSymbol ?? x ?? "")
               .trim()
-              .toUpperCase()
+              .toUpperCase(),
           )
           .filter(Boolean);
 
         if (normalized.length) return normalized;
-      } catch {
-        // ignore
-      }
+      } catch {}
     }
 
     return [];
@@ -325,7 +368,7 @@ export default function InvestmentPerformance() {
     fetchPerf();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  // ✅ Keep behavior like mobile: if URL has favorites, default to Favorites tab
+
   useEffect(() => {
     const sp = new URLSearchParams(location.search);
     const hasFav = Boolean(sp.get("favorites"));
@@ -346,11 +389,10 @@ export default function InvestmentPerformance() {
 
     navigate(
       { search: sp.toString() ? `?${sp.toString()}` : "" },
-      { replace: true }
+      { replace: true },
     );
   }
 
-  /** Sort first, then filter out INV so toggling sort feels consistent */
   const holdingsSorted = useMemo(() => {
     const rows = [...(data?.holdings || [])];
     rows.sort((a, b) => {
@@ -376,11 +418,11 @@ export default function InvestmentPerformance() {
     return rows;
   }, [data, sort]);
 
-  /** ---------- NEW: filtered rows (hide INV) ---------- */
   const holdingsFiltered = useMemo(
     () => holdingsSorted.filter((h) => !isInvSymbol(h.symbol)),
-    [holdingsSorted]
+    [holdingsSorted],
   );
+
   const favoritesSet = useMemo(() => new Set(favorites), [favorites]);
 
   const favoritesFiltered = useMemo(() => {
@@ -396,13 +438,11 @@ export default function InvestmentPerformance() {
   const rowsToRender =
     listMode === "FAVORITES" ? favoritesFiltered : holdingsFiltered;
 
-  /** Use filtered rows for “anyQuotes” and empty-state logic */
   const anyQuotes = useMemo(
     () => holdingsFiltered.some((h) => typeof h.price === "number"),
-    [holdingsFiltered]
+    [holdingsFiltered],
   );
 
-  /** ---------- NEW: recompute totals from filtered rows ---------- */
   const totalsFiltered = useMemo(() => {
     const totals = {};
     for (const h of rowsToRender) {
@@ -410,12 +450,13 @@ export default function InvestmentPerformance() {
       if (!totals[cur])
         totals[cur] = { costMinor: 0, valueMinor: 0, plMinor: 0 };
       totals[cur].costMinor += h.costMinor ?? 0;
-      // Only accumulate when present; if null/undefined, keep as null unless something already set
+
       if (typeof h.valueMinor === "number") {
         totals[cur].valueMinor += h.valueMinor;
       } else {
         totals[cur].valueMinor = totals[cur].valueMinor || null;
       }
+
       if (typeof h.plMinor === "number") {
         totals[cur].plMinor += h.plMinor;
       } else {
@@ -423,25 +464,25 @@ export default function InvestmentPerformance() {
       }
     }
     return totals;
-  }, [holdingsFiltered]);
+  }, [rowsToRender]);
 
   function setSortKey(key) {
     setSort((s) =>
       s.key === key
         ? { key, dir: s.dir === "asc" ? "desc" : "asc" }
-        : { key, dir: "asc" }
+        : { key, dir: "asc" },
     );
   }
 
-  function SortBtn({ k, children }) {
+  function SortBtn({ k, children, className = "" }) {
     const active = sort.key === k;
     return (
       <button
         type="button"
         onClick={() => setSortKey(k)}
         className={`inline-flex items-center gap-1 ${
-          active ? "font-semibold" : "font-normal"
-        }`}
+          active ? "font-semibold text-white" : "font-normal text-white/65"
+        } ${className}`}
         title="Sort"
       >
         {children}
@@ -452,44 +493,81 @@ export default function InvestmentPerformance() {
     );
   }
 
+  if (loading) {
+    return (
+      <div className="min-h-[60vh] grid place-items-center bg-[#070A07] px-4">
+        <div className="relative w-full max-w-sm">
+          <div className="pointer-events-none absolute -inset-10 opacity-40">
+            <div className="absolute left-4 top-6 h-40 w-40 rounded-full blur-3xl bg-[#13e243]/20" />
+            <div className="absolute right-6 top-10 h-40 w-40 rounded-full blur-3xl bg-[#991746]/20" />
+          </div>
+
+          <div className="relative rounded-3xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-md">
+            <div className="flex items-center gap-3">
+              <img
+                src={logoUrl}
+                alt="Nummoria logo"
+                className="h-9 w-9 rounded-xl"
+              />
+              <div>
+                <div className="text-lg font-semibold text-white">Nummoria</div>
+                <div className="text-sm text-white/50">
+                  Loading investment performance…
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+              <div className="h-full w-1/3 animate-[perflogload_1.2s_ease-in-out_infinite] bg-white/30" />
+            </div>
+
+            <style>{`
+              @keyframes perflogload {
+                0% { transform: translateX(-120%); }
+                100% { transform: translateX(320%); }
+              }
+            `}</style>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-dvh bg-white">
-      {/* Header */}
-      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur border-b">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+    <div className="min-h-[100dvh] bg-[#070A07] text-white">
+      <div className="pointer-events-none fixed inset-0 -z-10">
+        <div className="absolute inset-0 bg-[#070A07]" />
+        <div className="absolute inset-0 bg-[radial-gradient(1200px_800px_at_15%_0%,rgba(19,226,67,0.10),transparent_55%),radial-gradient(1000px_700px_at_85%_10%,rgba(153,23,70,0.10),transparent_55%),radial-gradient(900px_700px_at_50%_100%,rgba(255,255,255,0.04),transparent_60%)]" />
+        <div className="absolute inset-0 opacity-[0.10] mix-blend-overlay bg-[linear-gradient(to_right,rgba(255,255,255,0.10)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.10)_1px,transparent_1px)] bg-[size:56px_56px]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/35 to-black/70" />
+      </div>
+
+      <header className="sticky top-0 z-30 border-b border-white/10 bg-[#070A07]/80 backdrop-blur">
+        <div className="mx-4 h-16 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
             <img
-              src="../src/assets/nummoria_logo.png"
+              src={logoUrl}
               alt="Nummoria Logo"
-              className="h-8 w-8"
+              className="h-8 w-8 rounded-xl"
             />
-            <h1
-              className="text-lg sm:text-xl font-semibold"
-              style={{ color: main }}
-            >
+            <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-white">
               Investment Performance
             </h1>
-            <img
-              src="../src/assets/nummoria_logo.png"
-              alt="Nummoria Logo"
-              className="h-8 w-8"
-            />
           </div>
 
           <div className="flex items-center gap-3">
-            {lastRefreshed && (
-              <div className="text-xs sm:text-sm text-gray-500">
+            {lastRefreshed ? (
+              <div className="hidden sm:block text-xs text-white/45">
                 Refreshed:{" "}
                 {new Intl.DateTimeFormat("en-US", {
                   dateStyle: "medium",
                   timeStyle: "short",
                 }).format(lastRefreshed)}
               </div>
-            )}
+            ) : null}
             <button
               onClick={fetchPerf}
-              className="px-3 py-2 rounded-xl border text-sm"
-              style={{ borderColor: main, color: main }}
+              className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-white/75 transition hover:bg-white/[0.07] hover:text-white disabled:opacity-60"
               disabled={loading}
             >
               {loading ? "Loading..." : "Refresh"}
@@ -498,25 +576,67 @@ export default function InvestmentPerformance() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
-        {/* ---------- Market Search ---------- */}
+      <main className="mx-4 py-6">
+        <SectionCard
+          className="mb-6"
+          title="Performance dashboard"
+          subtitle="Review live pricing, track unrealized profit and loss, and compare current value against invested cost."
+        >
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div className="flex flex-wrap items-center gap-3 text-sm">
+              <button
+                type="button"
+                onClick={() => setMode("HOLDINGS")}
+                className={`rounded-2xl border px-4 py-2.5 font-semibold transition ${
+                  listMode === "HOLDINGS"
+                    ? "border-white/15 bg-white/[0.08] text-white"
+                    : "border-white/10 bg-white/[0.03] text-white/55 hover:bg-white/[0.05] hover:text-white"
+                }`}
+              >
+                Holdings ({holdingsFiltered.length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMode("FAVORITES")}
+                className={`rounded-2xl border px-4 py-2.5 font-semibold transition ${
+                  listMode === "FAVORITES"
+                    ? "border-white/15 bg-white/[0.08] text-white"
+                    : "border-white/10 bg-white/[0.03] text-white/55 hover:bg-white/[0.05] hover:text-white"
+                }`}
+              >
+                Favorites ({favoritesFiltered.length})
+              </button>
+            </div>
+
+            {lastRefreshed ? (
+              <div className="sm:hidden text-xs text-white/45">
+                Refreshed:{" "}
+                {new Intl.DateTimeFormat("en-US", {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                }).format(lastRefreshed)}
+              </div>
+            ) : null}
+          </div>
+        </SectionCard>
+
         <MarketSearch />
 
-        {/* Notices */}
-        {err && (
-          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 text-red-700 p-3">
+        {err ? (
+          <div className="mb-6 rounded-2xl border border-red-400/20 bg-red-400/10 p-4 text-red-100">
             {err}
           </div>
-        )}
-        {!err && !loading && !anyQuotes && holdingsFiltered.length > 0 && (
-          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 text-amber-700 p-3">
-            Live quotes are disabled or unavailable. Value &amp; P/L shown as
+        ) : null}
+
+        {!err && !loading && !anyQuotes && holdingsFiltered.length > 0 ? (
+          <div className="mb-6 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4 text-amber-100">
+            Live quotes are disabled or unavailable. Value and P/L are shown as
             “—”.
           </div>
-        )}
+        ) : null}
 
-        {/* Totals by currency (FILTERED) */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
           {Object.entries(totalsFiltered).map(([cur, t]) => {
             const hasVal = t.valueMinor !== null && t.valueMinor !== undefined;
             const hasPL = t.plMinor !== null && t.plMinor !== undefined;
@@ -524,214 +644,201 @@ export default function InvestmentPerformance() {
             const plNegative = (t.plMinor ?? 0) < 0;
 
             return (
-              <div
+              <SectionCard
                 key={cur}
-                className="rounded-2xl border p-4 shadow-sm"
-                style={{ borderColor: "#e5e7eb" }}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-sm font-medium text-gray-600">Totals</h2>
-                  <span
-                    className="text-xs px-2 py-1 rounded-full"
-                    style={{ backgroundColor: `${secondary}22`, color: main }}
-                  >
+                title="Totals"
+                right={
+                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/60">
                     {cur}
                   </span>
+                }
+              >
+                <div className="grid grid-cols-1 gap-3">
+                  <MetricCard
+                    label="Cost"
+                    value={formatMoneyMinor(t.costMinor, cur)}
+                  />
+                  <MetricCard
+                    label="Current Value"
+                    value={hasVal ? formatMoneyMinor(t.valueMinor, cur) : "—"}
+                  />
+                  <MetricCard
+                    label="P/L"
+                    value={hasPL ? formatMoneyMinor(t.plMinor, cur) : "—"}
+                    valueClassName={
+                      hasPL
+                        ? plPositive
+                          ? "text-emerald-400"
+                          : plNegative
+                            ? "text-red-400"
+                            : "text-white"
+                        : "text-white"
+                    }
+                  />
                 </div>
-
-                <dl className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <dt className="text-gray-500">Cost</dt>
-                    <dd className="font-semibold">
-                      {formatMoneyMinor(t.costMinor, cur)}
-                    </dd>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <dt className="text-gray-500">Current Value</dt>
-                    <dd className="font-semibold">
-                      {hasVal ? formatMoneyMinor(t.valueMinor, cur) : "—"}
-                    </dd>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <dt className="text-gray-500">P/L</dt>
-                    <dd
-                      className={`font-semibold ${
-                        hasPL
-                          ? plPositive
-                            ? "text-emerald-600"
-                            : plNegative
-                            ? "text-red-600"
-                            : "text-gray-800"
-                          : "text-gray-800"
-                      }`}
-                    >
-                      {hasPL ? formatMoneyMinor(t.plMinor, cur) : "—"}
-                    </dd>
-                  </div>
-                </dl>
-              </div>
+              </SectionCard>
             );
           })}
-          {Object.keys(totalsFiltered).length === 0 && !loading && (
-            <div className="text-gray-500">
-              No totals yet — add investment transactions.
-            </div>
-          )}
+
+          {Object.keys(totalsFiltered).length === 0 && !loading ? (
+            <SectionCard title="Totals">
+              <div className="text-sm text-white/50">
+                No totals yet — add investment transactions.
+              </div>
+            </SectionCard>
+          ) : null}
         </section>
-        <div className="mb-2 flex items-center gap-3 text-sm">
-          <button
-            type="button"
-            onClick={() => setMode("HOLDINGS")}
-            className={`font-semibold ${
-              listMode === "HOLDINGS" ? "text-gray-900" : "text-gray-500"
-            }`}
-          >
-            Holdings ({holdingsFiltered.length})
-          </button>
 
-          <button
-            type="button"
-            onClick={() => setMode("FAVORITES")}
-            className={`font-semibold ${
-              listMode === "FAVORITES" ? "text-gray-900" : "text-gray-500"
-            }`}
-            style={listMode === "FAVORITES" ? { color: main } : undefined}
-          >
-            Favorites ({favoritesFiltered.length})
-          </button>
-        </div>
-
-        {/* Holdings table (FILTERED) */}
-        <section className="rounded-2xl border overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 text-gray-700">
-              <tr>
-                <th className="px-4 py-3 text-left">
-                  <SortBtn k="symbol">Symbol</SortBtn>
-                </th>
-                <th className="px-4 py-3 text-left">
-                  <SortBtn k="currency">Currency</SortBtn>
-                </th>
-                <th className="px-4 py-3 text-right">
-                  <SortBtn k="units">Units</SortBtn>
-                </th>
-                <th className="px-4 py-3 text-right">
-                  <SortBtn k="costMinor">Cost</SortBtn>
-                </th>
-                <th className="px-4 py-3 text-right">
-                  <SortBtn k="avgCostPerUnit">Avg Cost/Unit</SortBtn>
-                </th>
-                <th className="px-4 py-3 text-right">
-                  <SortBtn k="price">Price</SortBtn>
-                </th>
-                <th className="px-4 py-3 text-right">
-                  <SortBtn k="valueMinor">Current Value</SortBtn>
-                </th>
-                <th className="px-4 py-3 text-right">
-                  <SortBtn k="plMinor">P/L</SortBtn>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {loading && (
+        <SectionCard
+          title={listMode === "FAVORITES" ? "Favorite holdings" : "Holdings"}
+          subtitle={
+            listMode === "FAVORITES"
+              ? "Tracked positions limited to your saved favorites."
+              : "All current holdings with live quote comparison where available."
+          }
+          className="min-w-0"
+        >
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="border-b border-white/8 text-white/65">
                 <tr>
-                  <td className="px-4 py-4 text-gray-500" colSpan={8}>
-                    Loading...
-                  </td>
+                  <th className="px-4 py-3 text-left whitespace-nowrap">
+                    <SortBtn k="symbol">Symbol</SortBtn>
+                  </th>
+                  <th className="px-4 py-3 text-left whitespace-nowrap">
+                    <SortBtn k="currency">Currency</SortBtn>
+                  </th>
+                  <th className="px-4 py-3 text-right whitespace-nowrap">
+                    <SortBtn k="units">Units</SortBtn>
+                  </th>
+                  <th className="px-4 py-3 text-right whitespace-nowrap">
+                    <SortBtn k="costMinor">Cost</SortBtn>
+                  </th>
+                  <th className="px-4 py-3 text-right whitespace-nowrap">
+                    <SortBtn k="avgCostPerUnit">Avg Cost/Unit</SortBtn>
+                  </th>
+                  <th className="px-4 py-3 text-right whitespace-nowrap">
+                    <SortBtn k="price">Price</SortBtn>
+                  </th>
+                  <th className="px-4 py-3 text-right whitespace-nowrap">
+                    <SortBtn k="valueMinor">Current Value</SortBtn>
+                  </th>
+                  <th className="px-4 py-3 text-right whitespace-nowrap">
+                    <SortBtn k="plMinor">P/L</SortBtn>
+                  </th>
                 </tr>
-              )}
+              </thead>
 
-              {!loading && rowsToRender.length === 0 && (
-                <tr>
-                  <td className="px-4 py-6 text-gray-500" colSpan={8}>
-                    {listMode === "FAVORITES"
-                      ? "No favorites found in your current holdings."
-                      : "No holdings found. Add some investment transactions with an assetSymbol."}
-                  </td>
-                </tr>
-              )}
+              <tbody className="divide-y divide-white/8">
+                {loading ? (
+                  <tr>
+                    <td className="px-4 py-5 text-white/50" colSpan={8}>
+                      Loading...
+                    </td>
+                  </tr>
+                ) : null}
 
-              {!loading &&
-                rowsToRender.map((h, idx) => {
-                  const dec = decimalsForCurrency(h.currency);
-                  const priceStr =
-                    typeof h.price === "number"
-                      ? new Intl.NumberFormat("en-US", {
-                          style: "currency",
-                          currency: h.priceCurrency || h.currency,
-                          minimumFractionDigits: decimalsForCurrency(
-                            h.priceCurrency || h.currency
-                          ),
-                          maximumFractionDigits: decimalsForCurrency(
-                            h.priceCurrency || h.currency
-                          ),
-                        }).format(h.price)
-                      : "—";
+                {!loading && rowsToRender.length === 0 ? (
+                  <tr>
+                    <td className="px-4 py-8 text-white/50" colSpan={8}>
+                      {listMode === "FAVORITES"
+                        ? "No favorites found in your current holdings."
+                        : "No holdings found. Add some investment transactions with an assetSymbol."}
+                    </td>
+                  </tr>
+                ) : null}
 
-                  const priceCurMismatch =
-                    typeof h.price === "number" &&
-                    h.priceCurrency &&
-                    h.priceCurrency !== h.currency;
+                {!loading &&
+                  rowsToRender.map((h, idx) => {
+                    const dec = decimalsForCurrency(h.currency);
+                    const priceStr =
+                      typeof h.price === "number"
+                        ? new Intl.NumberFormat("en-US", {
+                            style: "currency",
+                            currency: h.priceCurrency || h.currency,
+                            minimumFractionDigits: decimalsForCurrency(
+                              h.priceCurrency || h.currency,
+                            ),
+                            maximumFractionDigits: decimalsForCurrency(
+                              h.priceCurrency || h.currency,
+                            ),
+                          }).format(h.price)
+                        : "—";
 
-                  return (
-                    <tr
-                      key={`${h.symbol}-${idx}`}
-                      className="hover:bg-gray-50/60"
-                    >
-                      <td className="px-4 py-3 font-medium">{h.symbol}</td>
-                      <td className="px-4 py-3">
-                        <span className="inline-flex items-center gap-2">
-                          {h.currency}
-                          {priceCurMismatch && (
-                            <span
-                              className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800"
-                              title={`Quote currency (${h.priceCurrency}) differs from holding currency (${h.currency}). Value/P&L not computed.`}
-                            >
-                              FX mismatch
-                            </span>
-                          )}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        {formatNumber(h.units, 4)}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        {formatMoneyMinor(h.costMinor, h.currency)}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        {h.avgCostPerUnit == null
-                          ? "—"
-                          : new Intl.NumberFormat("en-US", {
-                              style: "currency",
-                              currency: h.currency,
-                              minimumFractionDigits: dec,
-                              maximumFractionDigits: dec,
-                            }).format(h.avgCostPerUnit)}
-                      </td>
-                      <td className="px-4 py-3 text-right">{priceStr}</td>
-                      <td className="px-4 py-3 text-right">
-                        {formatMoneyMinor(h.valueMinor, h.currency)}
-                      </td>
-                      <td
-                        className={`px-4 py-3 text-right ${
-                          (h.plMinor ?? 0) > 0
-                            ? "text-emerald-600"
-                            : (h.plMinor ?? 0) < 0
-                            ? "text-red-600"
-                            : ""
-                        }`}
+                    const priceCurMismatch =
+                      typeof h.price === "number" &&
+                      h.priceCurrency &&
+                      h.priceCurrency !== h.currency;
+
+                    return (
+                      <tr
+                        key={`${h.symbol}-${idx}`}
+                        className="hover:bg-white/[0.03] transition"
                       >
-                        {formatMoneyMinor(h.plMinor, h.currency)}
-                      </td>
-                    </tr>
-                  );
-                })}
-            </tbody>
-          </table>
-        </section>
-      </main>
+                        <td className="px-4 py-4 font-medium text-white whitespace-nowrap">
+                          {h.symbol}
+                        </td>
 
-      <div className="h-1 w-full" style={{ backgroundColor: secondary }} />
+                        <td className="px-4 py-4 whitespace-nowrap text-white/75">
+                          <span className="inline-flex items-center gap-2">
+                            {h.currency}
+                            {priceCurMismatch ? (
+                              <span
+                                className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-0.5 text-[10px] text-amber-200"
+                                title={`Quote currency (${h.priceCurrency}) differs from holding currency (${h.currency}). Value/P&L not computed.`}
+                              >
+                                FX mismatch
+                              </span>
+                            ) : null}
+                          </span>
+                        </td>
+
+                        <td className="px-4 py-4 text-right whitespace-nowrap text-white/75">
+                          {formatNumber(h.units, 4)}
+                        </td>
+
+                        <td className="px-4 py-4 text-right whitespace-nowrap text-white">
+                          {formatMoneyMinor(h.costMinor, h.currency)}
+                        </td>
+
+                        <td className="px-4 py-4 text-right whitespace-nowrap text-white/75">
+                          {h.avgCostPerUnit == null
+                            ? "—"
+                            : new Intl.NumberFormat("en-US", {
+                                style: "currency",
+                                currency: h.currency,
+                                minimumFractionDigits: dec,
+                                maximumFractionDigits: dec,
+                              }).format(h.avgCostPerUnit)}
+                        </td>
+
+                        <td className="px-4 py-4 text-right whitespace-nowrap text-white/75">
+                          {priceStr}
+                        </td>
+
+                        <td className="px-4 py-4 text-right whitespace-nowrap text-white">
+                          {formatMoneyMinor(h.valueMinor, h.currency)}
+                        </td>
+
+                        <td
+                          className={`px-4 py-4 text-right whitespace-nowrap ${
+                            (h.plMinor ?? 0) > 0
+                              ? "text-emerald-400"
+                              : (h.plMinor ?? 0) < 0
+                                ? "text-red-400"
+                                : "text-white"
+                          }`}
+                        >
+                          {formatMoneyMinor(h.plMinor, h.currency)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+        </SectionCard>
+      </main>
     </div>
   );
 }

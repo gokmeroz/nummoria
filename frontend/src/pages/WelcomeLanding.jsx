@@ -1,953 +1,2394 @@
 /* eslint-disable */
-import React, { useEffect } from "react";
-const logoUrl = new URL("../assets/nummoria_logo.png", import.meta.url).href;
-const mainColor = "#10b981";
-const secondaryColor = "#047857";
+import { useState, useEffect, useRef } from "react";
 
-// Scroll-reveal without external deps
-function useScrollReveal() {
+const logoUrl = new URL("../assets/nummoria_logo.png", import.meta.url).href;
+
+/* ─── GLOBAL STYLES ─── */
+const G = `
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --mint:    #00ff87;
+    --cyan:    #00d4ff;
+    --violet:  #a78bfa;
+    --bg:      #030508;
+    --surface: rgba(255,255,255,0.038);
+    --bdr:     rgba(255,255,255,0.07);
+    --txt:     #e2e8f0;
+    --muted:   rgba(226,232,240,0.48);
+  }
+  html { scroll-behavior: smooth; }
+  body { background: var(--bg); color: var(--txt); font-family: 'Outfit', sans-serif; overflow-x: hidden; }
+  a    { color: inherit; text-decoration: none; }
+  button { font-family: inherit; border: none; cursor: pointer; }
+
+  ::-webkit-scrollbar       { width: 3px; }
+  ::-webkit-scrollbar-track { background: #030508; }
+  ::-webkit-scrollbar-thumb { background: rgba(0,255,135,0.3); border-radius: 2px; }
+
+  @keyframes shimmer {
+    0%   { background-position: -400% center; }
+    100% { background-position:  400% center; }
+  }
+  @keyframes blink {
+    0%,100% { opacity: 1; }
+    50%     { opacity: 0; }
+  }
+  @keyframes pulse-dot {
+    0%,100% { transform: scale(1); opacity: .6; }
+    50%     { transform: scale(1.55); opacity: 1; }
+  }
+  @keyframes float-y {
+    0%,100% { transform: translateY(0); }
+    50%     { transform: translateY(-9px); }
+  }
+  @keyframes spin-slow {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  @keyframes spin-rev {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(-360deg); }
+  }
+  @keyframes orbit-a {
+    from { transform: rotate(0deg)   translateX(68px) rotate(0deg); }
+    to   { transform: rotate(360deg) translateX(68px) rotate(-360deg); }
+  }
+  @keyframes orbit-b {
+    from { transform: rotate(130deg)  translateX(108px) rotate(-130deg); }
+    to   { transform: rotate(490deg)  translateX(108px) rotate(-490deg); }
+  }
+  @keyframes orbit-c {
+    from { transform: rotate(255deg)  translateX(86px) rotate(-255deg); }
+    to   { transform: rotate(615deg)  translateX(86px) rotate(-615deg); }
+  }
+  @keyframes ticker-scroll {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  .grad-txt {
+    background: linear-gradient(90deg, #00ff87 0%, #00d4ff 33%, #a78bfa 66%, #00ff87 100%);
+    background-size: 400% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: shimmer 6s linear infinite;
+  }
+
+  .rv  { opacity: 0; transition: opacity .75s cubic-bezier(.22,1,.36,1), transform .75s cubic-bezier(.22,1,.36,1); }
+  .rv-up  { transform: translateY(28px); }
+  .rv-lft { transform: translateX(-36px); }
+  .rv-rgt { transform: translateX(36px); }
+  .rv-scl { transform: scale(.96); }
+  .rv.in  { opacity: 1 !important; transform: none !important; }
+
+  .cursor-glow {
+    position: fixed; width: 500px; height: 500px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(0,255,135,.04) 0%, transparent 65%);
+    pointer-events: none; transform: translate(-50%,-50%);
+    transition: left .1s ease, top .1s ease; z-index: 0;
+  }
+
+  .ghost-num {
+    font-family: 'DM Mono', monospace; font-size: 88px; font-weight: 500;
+    color: rgba(0,255,135,.045); line-height: 1;
+    position: absolute; top: 14px; right: 18px;
+    pointer-events: none; user-select: none;
+  }
+
+  .faq-body { max-height: 0; overflow: hidden; transition: max-height .4s cubic-bezier(.4,0,.2,1); }
+  .faq-body.open { max-height: 180px; }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 12px; border-radius: 100px;
+    border: 1px solid rgba(0,255,135,.22);
+    background: rgba(0,255,135,.07);
+    font-size: 11px; font-weight: 700; color: #00ff87;
+    letter-spacing: .04em;
+  }
+
+  .ticker-wrap { overflow: hidden; width: 100%; }
+  .ticker-inner { display: flex; white-space: nowrap; animation: ticker-scroll 28s linear infinite; }
+
+  .scanlines {
+    position: fixed; inset: 0; z-index: 9999; pointer-events: none;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,.018) 2px, rgba(0,0,0,.018) 4px);
+  }
+
+  .cta-primary {
+    position: relative; display: inline-flex; align-items: center; justify-content: center;
+    height: 48px; padding: 0 28px; border-radius: 13px;
+    background: linear-gradient(135deg, #00ff87, #00d4ff);
+    color: #020b05; font-size: 14px; font-weight: 800; font-family: 'Outfit', sans-serif;
+    box-shadow: 0 0 36px rgba(0,255,135,.38); text-decoration: none;
+    transition: transform .2s, box-shadow .2s;
+  }
+  .cta-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 48px rgba(0,255,135,.6); }
+
+  .cta-ghost {
+    display: inline-flex; align-items: center; justify-content: center;
+    height: 48px; padding: 0 24px; border-radius: 13px;
+    border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04);
+    color: rgba(226,232,240,.8); font-size: 14px; font-weight: 600; font-family: 'Outfit', sans-serif;
+    text-decoration: none;
+    transition: border-color .2s, background .2s, transform .2s;
+  }
+  .cta-ghost:hover { border-color: rgba(0,255,135,.28); background: rgba(0,255,135,.05); transform: translateY(-1px); }
+`;
+
+/* ─── PARTICLE CANVAS ─── */
+function ParticleNet() {
+  const cvs = useRef(null);
+  const mouse = useRef({ x: -9999, y: -9999 });
   useEffect(() => {
-    const els = document.querySelectorAll("[data-reveal]");
+    const c = cvs.current;
+    const ctx = c.getContext("2d");
+    let raf;
+    const fit = () => {
+      c.width = window.innerWidth;
+      c.height = window.innerHeight;
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    window.addEventListener("mousemove", (e) => {
+      mouse.current = { x: e.clientX, y: e.clientY };
+    });
+    const N = 68;
+    const pts = Array.from({ length: N }, () => ({
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
+      vx: (Math.random() - 0.5) * 0.25,
+      vy: (Math.random() - 0.5) * 0.25,
+      r: 0.7 + Math.random() * 1.4,
+      col: ["#00ff87", "#00d4ff", "#ffffff"][~~(Math.random() * 3)],
+      op: 0.1 + Math.random() * 0.32,
+    }));
+    const draw = () => {
+      ctx.clearRect(0, 0, c.width, c.height);
+      const { x: mx, y: my } = mouse.current;
+      for (let i = 0; i < N; i++) {
+        for (let j = i + 1; j < N; j++) {
+          const dx = pts[i].x - pts[j].x,
+            dy = pts[i].y - pts[j].y,
+            d = Math.hypot(dx, dy);
+          if (d < 115) {
+            ctx.beginPath();
+            ctx.strokeStyle = `rgba(0,255,135,${0.06 * (1 - d / 115)})`;
+            ctx.lineWidth = 0.35;
+            ctx.moveTo(pts[i].x, pts[i].y);
+            ctx.lineTo(pts[j].x, pts[j].y);
+            ctx.stroke();
+          }
+        }
+        const mdx = pts[i].x - mx,
+          mdy = pts[i].y - my,
+          md = Math.hypot(mdx, mdy);
+        if (md < 165) {
+          ctx.beginPath();
+          ctx.strokeStyle = `rgba(0,212,255,${0.14 * (1 - md / 165)})`;
+          ctx.lineWidth = 0.5;
+          ctx.moveTo(pts[i].x, pts[i].y);
+          ctx.lineTo(mx, my);
+          ctx.stroke();
+          pts[i].x += (mdx / md) * 0.2;
+          pts[i].y += (mdy / md) * 0.2;
+        }
+        ctx.beginPath();
+        ctx.arc(pts[i].x, pts[i].y, pts[i].r, 0, Math.PI * 2);
+        ctx.fillStyle = pts[i].col;
+        ctx.globalAlpha = pts[i].op;
+        ctx.shadowBlur = 6;
+        ctx.shadowColor = pts[i].col;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.shadowBlur = 0;
+        pts[i].x += pts[i].vx;
+        pts[i].y += pts[i].vy;
+        if (pts[i].x < 0) pts[i].x = c.width;
+        if (pts[i].x > c.width) pts[i].x = 0;
+        if (pts[i].y < 0) pts[i].y = c.height;
+        if (pts[i].y > c.height) pts[i].y = 0;
+      }
+      raf = requestAnimationFrame(draw);
+    };
+    draw();
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", fit);
+    };
+  }, []);
+  return (
+    <canvas
+      ref={cvs}
+      style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none" }}
+    />
+  );
+}
+
+function CursorGlow() {
+  const ref = useRef(null);
+  useEffect(() => {
+    const mm = (e) => {
+      if (ref.current) {
+        ref.current.style.left = `${e.clientX}px`;
+        ref.current.style.top = `${e.clientY}px`;
+      }
+    };
+    window.addEventListener("mousemove", mm);
+    return () => window.removeEventListener("mousemove", mm);
+  }, []);
+  return <div ref={ref} className="cursor-glow" />;
+}
+
+function useReveal() {
+  useEffect(() => {
+    const els = document.querySelectorAll(".rv");
     const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          if (e.isIntersecting) e.target.classList.add("reveal-show");
-        });
-      },
-      { threshold: 0.2 },
+      (e) =>
+        e.forEach((x) => {
+          if (x.isIntersecting) x.target.classList.add("in");
+        }),
+      { threshold: 0.1 },
     );
     els.forEach((el) => io.observe(el));
     return () => io.disconnect();
   }, []);
 }
 
-// Smooth scroll for in-page anchors
-function useSmoothScroll() {
+function useTypewriter(phrases, spd = 72, del = 36, pause = 2400) {
+  const [txt, setTxt] = useState("");
+  const [pi, setPi] = useState(0);
+  const [isD, setIsD] = useState(false);
   useEffect(() => {
-    const anchors = Array.from(document.querySelectorAll('a[href^="#"]'));
-    const onClick = (e) => {
-      const href = e.currentTarget.getAttribute("href");
-      const target = href && document.querySelector(href);
-      if (target) {
-        e.preventDefault();
-        target.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    };
-    anchors.forEach((a) => a.addEventListener("click", onClick));
-    return () =>
-      anchors.forEach((a) => a.removeEventListener("click", onClick));
-  }, []);
+    const cur = phrases[pi];
+    const t = setTimeout(
+      () => {
+        if (!isD) {
+          if (txt.length < cur.length) setTxt(cur.slice(0, txt.length + 1));
+          else setTimeout(() => setIsD(true), pause);
+        } else {
+          if (txt.length > 0) setTxt(txt.slice(0, -1));
+          else {
+            setIsD(false);
+            setPi((pi + 1) % phrases.length);
+          }
+        }
+      },
+      isD ? del : spd,
+    );
+    return () => clearTimeout(t);
+  }, [txt, isD, pi, phrases, spd, del, pause]);
+  return txt;
 }
 
-export default function WelcomeLanding() {
-  useScrollReveal();
-  useSmoothScroll();
+function Tilt({ children, className = "", style = {} }) {
+  const ref = useRef(null);
+  const mv = (e) => {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width - 0.5,
+      y = (e.clientY - r.top) / r.height - 0.5;
+    el.style.transform = `perspective(1000px) rotateY(${x * 8}deg) rotateX(${-y * 8}deg) scale(1.022)`;
+  };
+  const lv = () => {
+    if (ref.current)
+      ref.current.style.transform =
+        "perspective(1000px) rotateY(0) rotateX(0) scale(1)";
+  };
+  return (
+    <div
+      ref={ref}
+      onMouseMove={mv}
+      onMouseLeave={lv}
+      className={className}
+      style={{
+        transition: "transform .2s ease",
+        transformStyle: "preserve-3d",
+        ...style,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function Counter({ to, suffix = "", prefix = "", duration = 1600 }) {
+  const [val, setVal] = useState(0);
+  const ref = useRef(null);
+  useEffect(() => {
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (e.isIntersecting) {
+          io.disconnect();
+          const start = Date.now();
+          const tick = () => {
+            const p = Math.min((Date.now() - start) / duration, 1);
+            const ease = 1 - Math.pow(1 - p, 3);
+            setVal(Math.round(ease * to));
+            if (p < 1) requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        }
+      },
+      { threshold: 0.5 },
+    );
+    if (ref.current) io.observe(ref.current);
+    return () => io.disconnect();
+  }, [to, duration]);
+  return (
+    <span ref={ref}>
+      {prefix}
+      {val.toLocaleString()}
+      {suffix}
+    </span>
+  );
+}
+
+function OrbitVisual() {
+  return (
+    <div
+      style={{ position: "relative", width: 200, height: 200, flexShrink: 0 }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          borderRadius: "50%",
+          border: "1px dashed rgba(0,255,135,.11)",
+          animation: "spin-slow 22s linear infinite",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          inset: 18,
+          borderRadius: "50%",
+          border: "1px dashed rgba(0,212,255,.08)",
+          animation: "spin-rev 14s linear infinite",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          inset: 38,
+          borderRadius: "50%",
+          border: "1px dashed rgba(167,139,250,.06)",
+          animation: "spin-slow 9s linear infinite",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          width: 34,
+          height: 34,
+          marginLeft: -17,
+          marginTop: -17,
+          borderRadius: "50%",
+          background:
+            "linear-gradient(135deg,rgba(0,255,135,.3),rgba(0,212,255,.18))",
+          border: "1px solid rgba(0,255,135,.28)",
+          boxShadow: "0 0 20px rgba(0,255,135,.32)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontFamily: "'Syne',sans-serif",
+          fontWeight: 800,
+          fontSize: 14,
+          color: "#00ff87",
+        }}
+      >
+        <img
+          src={logoUrl}
+          alt="Nummoria Logo"
+          style={{ width: 34, height: 34, borderRadius: "50%" }}
+        />
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          width: 10,
+          height: 10,
+          marginLeft: -5,
+          marginTop: -5,
+          borderRadius: "50%",
+          background: "#00ff87",
+          boxShadow: "0 0 10px #00ff87",
+          animation: "orbit-a 4.5s linear infinite",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          width: 7,
+          height: 7,
+          marginLeft: -3.5,
+          marginTop: -3.5,
+          borderRadius: "50%",
+          background: "#00d4ff",
+          boxShadow: "0 0 8px #00d4ff",
+          animation: "orbit-b 6.5s linear infinite",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          width: 5,
+          height: 5,
+          marginLeft: -2.5,
+          marginTop: -2.5,
+          borderRadius: "50%",
+          background: "#a78bfa",
+          boxShadow: "0 0 7px #a78bfa",
+          animation: "orbit-c 3.8s linear infinite",
+        }}
+      />
+    </div>
+  );
+}
+
+function SectionHead({ label, title, sub }) {
+  return (
+    <div className="rv rv-up" style={{ textAlign: "center", marginBottom: 52 }}>
+      <div
+        style={{
+          fontFamily: "'DM Mono',monospace",
+          fontSize: 10,
+          fontWeight: 500,
+          letterSpacing: ".28em",
+          color: "rgba(0,255,135,.6)",
+          textTransform: "uppercase",
+          marginBottom: 14,
+        }}
+      >
+        {label}
+      </div>
+      <h2
+        style={{
+          fontFamily: "'Syne',sans-serif",
+          fontSize: "clamp(2rem,4vw,3rem)",
+          fontWeight: 800,
+          letterSpacing: "-.035em",
+          lineHeight: 1.1,
+        }}
+      >
+        {title}
+      </h2>
+      {sub && (
+        <p
+          style={{
+            marginTop: 14,
+            color: "var(--muted)",
+            fontSize: 15,
+            lineHeight: 1.8,
+            maxWidth: 540,
+            margin: "14px auto 0",
+          }}
+        >
+          {sub}
+        </p>
+      )}
+    </div>
+  );
+}
+
+const Divider = () => (
+  <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 28px" }}>
+    <div
+      style={{
+        height: 1,
+        background:
+          "linear-gradient(to right, transparent, rgba(0,255,135,.1), transparent)",
+      }}
+    />
+  </div>
+);
+
+function StoreBadge({ type }) {
+  const apple = type === "apple";
+  return (
+    <a
+      href={
+        apple
+          ? "https://apps.apple.com/app/id0000000000"
+          : "https://play.google.com/store/apps/details?id=com.example"
+      }
+      className="cta-ghost"
+      style={{ height: 42, gap: 8, padding: "0 14px", fontSize: 12 }}
+    >
+      {apple ? (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M16.365 1.43c.056.73-.27 1.44-.77 1.98-.48.56-1.29 1-2.07.93-.07-.72.29-1.45.78-1.99.49-.56 1.36-.98 2.06-.92zm4.145 15.6c-.38.88-.84 1.75-1.45 2.51-.55.7-1.23 1.39-2.11 1.42-.92.04-1.22-.55-2.28-.55-1.06 0-1.4.53-2.29.56-.9.04-1.59-.75-2.15-1.44-1.17-1.49-2.07-3.6-1.83-5.64.2-1.15.8-2.22 1.73-2.96.81-.64 1.9-1.11 2.95-.92.3.06.6.16.88.29.26.12.52.29.8.28.23 0 .45-.15.64-.26.53-.31 1.01-.67 1.6-.87.86-.3 1.8-.28 2.6.17.39.22.72.54.95.94-.88.53-1.47 1.49-1.39 2.53.09 1.02.7 1.98 1.68 2.45-.2.29-.43.56-.66.85z" />
+        </svg>
+      ) : (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M3.01 2.406c-.01.063-.02.127-.02.191v18.806c0 .064.01.128.02.191l10.73-9.594L3.01 2.406zM14.53 11.5l4.79-4.29c-.33-.255-.78-.267-1.19-.036L14.53 11.5zm0 1l3.6 4.325c.41.23.86.218 1.19-.037L14.53 12.5zM13.25 12L3 21.403c.15.834.98 1.23 1.67.83l15.44-8.74c.9-.51.9-1.93 0-2.44L4.67 2.313c-.69-.401-1.52-.004-1.67.833L13.25 12z" />
+        </svg>
+      )}
+      <div style={{ lineHeight: 1.3, textAlign: "left" }}>
+        <div style={{ fontSize: 9, color: "var(--muted)" }}>
+          {apple ? "Download on the" : "Get it on"}
+        </div>
+        <div style={{ fontSize: 12, fontWeight: 600 }}>
+          {apple ? "App Store" : "Google Play"}
+        </div>
+      </div>
+    </a>
+  );
+}
+
+function FeatureCard({ title, accent, desc, items, className = "" }) {
+  const ref = useRef(null);
+  const mv = (e) => {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    el.style.setProperty("--fx", `${e.clientX - r.left}px`);
+    el.style.setProperty("--fy", `${e.clientY - r.top}px`);
+  };
+  return (
+    <div
+      ref={ref}
+      onMouseMove={mv}
+      className={`rv rv-up ${className}`}
+      style={{
+        borderRadius: 24,
+        border: "1px solid rgba(255,255,255,.07)",
+        background: "rgba(255,255,255,.03)",
+        padding: "28px 26px",
+        position: "relative",
+        overflow: "hidden",
+        transition: "border-color .3s",
+        backgroundImage: `radial-gradient(280px 240px at var(--fx,50%) var(--fy,50%), ${accent}09, transparent 60%)`,
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = accent + "2a";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = "rgba(255,255,255,.07)";
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          right: 0,
+          width: 180,
+          height: 180,
+          background: `radial-gradient(circle at 80% 10%, ${accent}12, transparent 55%)`,
+          pointerEvents: "none",
+        }}
+      />
+      <div
+        style={{
+          fontFamily: "'DM Mono',monospace",
+          fontSize: 10,
+          fontWeight: 500,
+          letterSpacing: ".2em",
+          textTransform: "uppercase",
+          color: accent,
+          marginBottom: 10,
+        }}
+      >
+        {title}
+      </div>
+      <div
+        style={{
+          fontSize: 14,
+          color: "var(--muted)",
+          lineHeight: 1.75,
+          marginBottom: 20,
+        }}
+      >
+        {desc}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        {items.map((item) => (
+          <div
+            key={item}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 9,
+              fontSize: 13,
+              color: "rgba(226,232,240,.72)",
+            }}
+          >
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                background: accent,
+                flexShrink: 0,
+                boxShadow: `0 0 6px ${accent}`,
+              }}
+            />
+            {item}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PriceCard({
+  name,
+  tagline,
+  price,
+  period,
+  accent,
+  bullets,
+  actionLabel,
+  highlight,
+  current,
+  plan,
+}) {
+  const ref = useRef(null);
+  const h2r = (hex, a) => {
+    const r = parseInt(hex.slice(1, 3), 16),
+      g = parseInt(hex.slice(3, 5), 16),
+      b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r},${g},${b},${a})`;
+  };
+  const mv = (e) => {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    el.style.setProperty("--px", `${e.clientX - r.left}px`);
+    el.style.setProperty("--py", `${e.clientY - r.top}px`);
+  };
+  return (
+    <div
+      ref={ref}
+      onMouseMove={mv}
+      className="rv rv-up"
+      style={{
+        borderRadius: 26,
+        position: "relative",
+        overflow: "hidden",
+        flexDirection: "column",
+        display: "flex",
+        border: `1px solid ${highlight ? h2r(accent, 0.3) : "rgba(255,255,255,.08)"}`,
+        background: highlight
+          ? "rgba(0,255,135,.035)"
+          : "rgba(255,255,255,.03)",
+        padding: "28px 24px",
+        boxShadow: highlight ? `0 0 90px -50px ${h2r(accent, 0.55)}` : "none",
+        backgroundImage: `radial-gradient(220px 200px at var(--px,50%) var(--py,50%), ${h2r(accent, 0.07)}, transparent 55%)`,
+        transition: "box-shadow .3s",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 2,
+          background: `linear-gradient(to right, transparent, ${accent}, transparent)`,
+          opacity: highlight ? 0.95 : 0.3,
+        }}
+      />
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          gap: 10,
+          marginBottom: 20,
+        }}
+      >
+        <div>
+          <div
+            style={{
+              fontFamily: "'DM Mono',monospace",
+              fontSize: 10,
+              fontWeight: 500,
+              letterSpacing: ".2em",
+              textTransform: "uppercase",
+              color: "rgba(226,232,240,.38)",
+              marginBottom: 6,
+            }}
+          >
+            {name}
+          </div>
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: "rgba(226,232,240,.72)",
+            }}
+          >
+            {tagline}
+          </div>
+        </div>
+        {highlight && (
+          <span className="chip" style={{ fontSize: 9, flexShrink: 0 }}>
+            {highlight}
+          </span>
+        )}
+      </div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-end",
+          gap: 6,
+          marginBottom: 22,
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "'Syne',sans-serif",
+            fontSize: 52,
+            fontWeight: 800,
+            letterSpacing: "-.04em",
+            color: accent,
+            lineHeight: 1,
+          }}
+        >
+          {price}
+        </span>
+        <span
+          style={{
+            fontSize: 11,
+            textTransform: "uppercase",
+            letterSpacing: ".08em",
+            color: "rgba(226,232,240,.32)",
+            paddingBottom: 8,
+          }}
+        >
+          {period}
+        </span>
+      </div>
+      <div
+        style={{
+          height: 1,
+          background: "rgba(255,255,255,.07)",
+          marginBottom: 20,
+        }}
+      />
+      <ul
+        style={{
+          listStyle: "none",
+          display: "flex",
+          flexDirection: "column",
+          gap: 11,
+          flex: 1,
+          marginBottom: 24,
+        }}
+      >
+        {bullets.map((b, i) => (
+          <li
+            key={i}
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 10,
+              fontSize: 13.5,
+              color: "rgba(226,232,240,.73)",
+            }}
+          >
+            <span
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: "50%",
+                background: accent,
+                flexShrink: 0,
+                marginTop: 5,
+                boxShadow: `0 0 6px ${accent}`,
+              }}
+            />
+            {b}
+          </li>
+        ))}
+      </ul>
+      {current ? (
+        <button
+          disabled
+          style={{
+            width: "100%",
+            height: 44,
+            borderRadius: 12,
+            border: "1px solid rgba(255,255,255,.09)",
+            background: "rgba(255,255,255,.04)",
+            color: "rgba(226,232,240,.3)",
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: "not-allowed",
+          }}
+        >
+          {actionLabel}
+        </button>
+      ) : (
+        <button
+          onClick={() =>
+            (window.location.href = `/subscriptions/purchase?plan=${plan}`)
+          }
+          style={{
+            width: "100%",
+            height: 44,
+            borderRadius: 12,
+            border: `1px solid ${h2r(accent, 0.35)}`,
+            background: highlight
+              ? `linear-gradient(135deg,${accent},${h2r(accent, 0.78)})`
+              : h2r(accent, 0.09),
+            color: highlight ? "#020b05" : accent,
+            fontSize: 13.5,
+            fontWeight: 800,
+            boxShadow: highlight
+              ? `0 0 36px -10px ${h2r(accent, 0.7)}`
+              : "none",
+            transition: "all .2s",
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.transform = "translateY(-2px)";
+            e.target.style.boxShadow = `0 8px 44px -10px ${h2r(accent, 0.8)}`;
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.transform = "translateY(0)";
+            e.target.style.boxShadow = highlight
+              ? `0 0 36px -10px ${h2r(accent, 0.7)}`
+              : "none";
+          }}
+        >
+          {actionLabel}
+        </button>
+      )}
+      <div
+        style={{
+          marginTop: 10,
+          fontSize: 11,
+          color: "rgba(226,232,240,.3)",
+          textAlign: "center",
+        }}
+      >
+        {name === "Standard"
+          ? "Ideal for tracking and basic reporting."
+          : name === "Plus"
+            ? "Best value: AI clarity + reporting."
+            : "Power users: advanced AI and full exports."}
+      </div>
+    </div>
+  );
+}
+
+function FAQ({ q, a }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div
+      className="rv rv-up"
+      onClick={() => setOpen(!open)}
+      style={{
+        borderRadius: 16,
+        border: `1px solid ${open ? "rgba(0,255,135,.18)" : "rgba(255,255,255,.07)"}`,
+        background: "rgba(255,255,255,.03)",
+        cursor: "pointer",
+        overflow: "hidden",
+        transition: "border-color .3s",
+      }}
+    >
+      <div
+        style={{
+          padding: "18px 22px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 16,
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "'Syne',sans-serif",
+            fontWeight: 700,
+            fontSize: 14,
+          }}
+        >
+          {q}
+        </span>
+        <span
+          style={{
+            width: 24,
+            height: 24,
+            flexShrink: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: "50%",
+            border: "1px solid rgba(0,255,135,.28)",
+            color: "#00ff87",
+            fontSize: 18,
+            transition: "transform .3s",
+            transform: open ? "rotate(45deg)" : "none",
+          }}
+        >
+          +
+        </span>
+      </div>
+      <div className={`faq-body${open ? " open" : ""}`}>
+        <div
+          style={{
+            padding: "0 22px 18px",
+            color: "var(--muted)",
+            fontSize: 14,
+            lineHeight: 1.75,
+          }}
+        >
+          {a}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════ MAIN ═══════════════════════════════════════ */
+export default function NummoriasLanding() {
+  useReveal();
+  const tw = useTypewriter([
+    "a clear picture",
+    "real clarity",
+    "your financial edge",
+    "one simple system",
+  ]);
+  const [scrolled, setScrolled] = useState(false);
+  const W = { maxWidth: 1200, margin: "0 auto", padding: "0 28px" };
+
+  useEffect(() => {
+    const fn = () => setScrolled(window.scrollY > 30);
+    window.addEventListener("scroll", fn);
+    return () => window.removeEventListener("scroll", fn);
+  }, []);
 
   return (
-    <div className="min-h-screen bg-[#0b0f0d] text-white selection:bg-emerald-200/40 selection:text-emerald-950 scroll-smooth">
-      {/* NAVBAR */}
-      <header className="sticky top-0 z-50 border-b border-white/10 backdrop-blur-2xl bg-white/10 shadow-lg shadow-emerald-500/10">
-        <div className="mx-auto flex h-24 max-w-7xl items-center justify-between px-10">
-          {/* Left Nav Links */}
-          <nav className="flex items-center gap-8 text-lg font-semibold text-white/80">
-            <a
-              href="#features"
-              className="hover:text-emerald-300 transition-colors"
-            >
-              Features
-            </a>
-            <a href="#why" className="hover:text-emerald-300 transition-colors">
-              Why Nummoria?
-            </a>
-            <a
-              href="#pricing"
-              className="hover:text-emerald-300 transition-colors"
-            >
-              Pricing
-            </a>
-            <a
-              href="#about"
-              className="hover:text-emerald-300 transition-colors"
-            >
-              About
-            </a>
-            <a
-              href="#contact"
-              className="hover:text-emerald-300 transition-colors"
-            >
-              Contact
-            </a>
+    <div
+      style={{
+        background: "#030508",
+        color: "#e2e8f0",
+        fontFamily: "'Outfit',sans-serif",
+        minHeight: "100vh",
+        overflowX: "hidden",
+        position: "relative",
+      }}
+    >
+      <style>{G}</style>
+      <ParticleNet />
+      <CursorGlow />
+      <div className="scanlines" />
+
+      {/* NAV */}
+      <header
+        style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 300,
+          borderBottom: `1px solid ${scrolled ? "rgba(0,255,135,.09)" : "rgba(255,255,255,.05)"}`,
+          background: scrolled ? "rgba(3,5,8,.96)" : "rgba(3,5,8,.72)",
+          backdropFilter: "blur(28px)",
+          transition: "all .4s",
+        }}
+      >
+        <div
+          style={{
+            ...W,
+            height: 68,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <a
+            href="#top"
+            style={{ display: "flex", alignItems: "center", gap: 11 }}
+          >
+            <div style={{ position: "relative" }}>
+              <div
+                style={{
+                  position: "absolute",
+                  inset: -2,
+                  borderRadius: 13,
+                  background: "rgba(0,255,135,.15)",
+                  filter: "blur(8px)",
+                  opacity: 0.6,
+                }}
+              />
+              <div
+                style={{
+                  position: "relative",
+                  width: 38,
+                  height: 38,
+                  borderRadius: 11,
+                  background:
+                    "linear-gradient(135deg,rgba(0,255,135,.2),rgba(0,212,255,.1))",
+                  border: "1px solid rgba(0,255,135,.22)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontFamily: "'Syne',sans-serif",
+                  fontWeight: 800,
+                  fontSize: 16,
+                  color: "#00ff87",
+                }}
+              >
+                <img
+                  src={logoUrl}
+                  alt="Nummoria Logo"
+                  style={{ width: 38, height: 38, borderRadius: 11 }}
+                />
+              </div>
+            </div>
+            <div>
+              <div
+                style={{
+                  fontFamily: "'Syne',sans-serif",
+                  fontWeight: 800,
+                  fontSize: 16,
+                  letterSpacing: "-.02em",
+                }}
+              >
+                Nummoria
+              </div>
+              <div
+                style={{
+                  fontSize: 10,
+                  color: "rgba(226,232,240,.38)",
+                  letterSpacing: ".04em",
+                }}
+              >
+                AI money clarity platform
+              </div>
+            </div>
+          </a>
+          <nav style={{ display: "flex", alignItems: "center", gap: 1 }}>
+            {[
+              ["How it works", "#how"],
+              ["Features", "#features"],
+              ["Pricing", "#pricing"],
+              ["FAQ", "#faq"],
+            ].map(([l, h]) => (
+              <a
+                key={h}
+                href={h}
+                style={{
+                  padding: "7px 14px",
+                  borderRadius: 100,
+                  color: "rgba(226,232,240,.52)",
+                  fontSize: 13.5,
+                  fontWeight: 600,
+                  transition: "all .2s",
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.color = "#00ff87";
+                  e.target.style.background = "rgba(0,255,135,.07)";
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.color = "rgba(226,232,240,.52)";
+                  e.target.style.background = "transparent";
+                }}
+              >
+                {l}
+              </a>
+            ))}
           </nav>
-
-          {/* Center Logo */}
-          <div className="flex items-center gap-4">
-            <img
-              src={logoUrl}
-              alt="Nummoria logo"
-              className="w-14 h-14 rounded-2xl shadow-xl shadow-emerald-500/20"
-            />
-            <a
-              href="#top"
-              className="text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-br from-emerald-300 to-emerald-600 drop-shadow-lg hover:scale-105 transition-transform"
-            >
-              Nummoria
-            </a>
-          </div>
-
-          {/* Auth Buttons */}
-          <div className="flex items-center gap-4">
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <a
               href="/login"
-              className="rounded-2xl border border-white/30 px-6 py-3 text-lg text-white/80 hover:border-white/60 hover:bg-white/10 backdrop-blur-md transition-all"
+              className="cta-ghost"
+              style={{ height: 38, padding: "0 16px", fontSize: 13 }}
             >
-              Log in / Sign up
+              Log in
+            </a>
+            <a
+              href="/signup"
+              className="cta-primary"
+              style={{ height: 38, padding: "0 18px", fontSize: 13 }}
+            >
+              Create account
             </a>
           </div>
         </div>
       </header>
 
+      {/* TRUST TICKER */}
+      <div
+        style={{
+          borderBottom: "1px solid rgba(255,255,255,.05)",
+          background: "rgba(255,255,255,.015)",
+          padding: "10px 0",
+          overflow: "hidden",
+          position: "relative",
+          zIndex: 2,
+        }}
+      >
+        <div className="ticker-wrap">
+          <div className="ticker-inner">
+            {[...Array(2)].map((_, dup) => (
+              <span key={dup} style={{ display: "inline-flex" }}>
+                {[
+                  "✦  Unified ledger across all accounts",
+                  "✦  Multi-currency tracking",
+                  "✦  AI-powered financial insights",
+                  "✦  Investments & portfolio overview",
+                  "✦  No bank connection required",
+                  "✦  Private by default",
+                  "✦  Cancel anytime",
+                  "✦  Real clarity. No generic advice.",
+                ].map((t, i) => (
+                  <span
+                    key={i}
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: "rgba(226,232,240,.28)",
+                      letterSpacing: ".06em",
+                      padding: "0 32px",
+                      whiteSpace: "nowrap",
+                      fontFamily: "'DM Mono',monospace",
+                    }}
+                  >
+                    {t}
+                  </span>
+                ))}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* HERO */}
-      <section id="top" className="relative isolate overflow-hidden">
-        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60%_40%_at_50%_-10%,rgba(79,119,45,0.35),transparent_60%)]" />
-        <div className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-10 px-4 pb-24 pt-16 md:grid-cols-2 md:pt-20">
-          <div data-reveal="left" className="reveal">
-            <h1 className="text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl">
-              See it. Track it. Decide with clarity.
+      <section
+        id="top"
+        style={{
+          ...W,
+          paddingTop: 82,
+          paddingBottom: 70,
+          position: "relative",
+          zIndex: 1,
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            top: -200,
+            left: "10%",
+            width: 750,
+            height: 550,
+            borderRadius: "50%",
+            background:
+              "radial-gradient(ellipse,rgba(0,255,135,.055),transparent 62%)",
+            pointerEvents: "none",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            top: -80,
+            right: -50,
+            width: 420,
+            height: 420,
+            borderRadius: "50%",
+            background:
+              "radial-gradient(ellipse,rgba(0,212,255,.04),transparent 62%)",
+            pointerEvents: "none",
+          }}
+        />
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 68,
+            alignItems: "center",
+          }}
+        >
+          {/* LEFT */}
+          <div className="rv rv-lft">
+            <div className="chip" style={{ marginBottom: 24 }}>
+              <span
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: "50%",
+                  background: "#00ff87",
+                  animation: "pulse-dot 2s ease-in-out infinite",
+                }}
+              />
+              Your money. One system. Real clarity.
+            </div>
+
+            <h1
+              style={{
+                fontFamily: "'Syne',sans-serif",
+                fontSize: "clamp(2.7rem,4.8vw,4rem)",
+                fontWeight: 800,
+                letterSpacing: "-.04em",
+                lineHeight: 1.07,
+              }}
+            >
+              Nummoria turns
+              <br />
+              your finances into <span className="grad-txt">{tw}</span>
+              <span
+                style={{
+                  display: "inline-block",
+                  width: 3,
+                  height: "0.82em",
+                  background: "#00ff87",
+                  marginLeft: 4,
+                  verticalAlign: "middle",
+                  animation: "blink .85s step-end infinite",
+                  boxShadow: "0 0 8px #00ff87",
+                }}
+              />
+              <span>.</span>
             </h1>
-            <p className="mt-4 text-white/70 sm:text-lg">
-              A dashboard that shows your money like it actually is: income,
-              expenses, investments, and AI guidance—without the noise.
+
+            <p
+              style={{
+                marginTop: 20,
+                fontSize: 15.5,
+                color: "var(--muted)",
+                lineHeight: 1.8,
+                maxWidth: 460,
+              }}
+            >
+              Track income, expenses, and investments in one place — then get
+              AI-guided explanations and action steps based on your own data. No
+              fluff. No generic advice.
             </p>
-            <div className="mt-6 flex flex-wrap items-center gap-3">
-              <a
-                href="/login"
-                className="rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-emerald-950 shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-400"
-              >
+
+            <div
+              style={{
+                marginTop: 30,
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 12,
+                alignItems: "center",
+              }}
+            >
+              <a href="/login" className="cta-primary">
                 Open Web App
               </a>
-              <StoreBadges />
+              <a href="#how" className="cta-ghost">
+                See how it works ↓
+              </a>
             </div>
-            <ul className="mt-6 grid grid-cols-1 gap-2 text-sm text-white/70 sm:grid-cols-2">
-              <li className="flex items-center gap-2">
-                <Dot /> Instant money snapshot
-              </li>
-              <li className="flex items-center gap-2">
-                <Dot /> AI advice & reports
-              </li>
-              <li className="flex items-center gap-2">
-                <Dot /> Expense + income tracking
-              </li>
-              <li className="flex items-center gap-2">
-                <Dot /> Investments overview
-              </li>
-            </ul>
+
+            <div
+              style={{
+                marginTop: 16,
+                display: "flex",
+                gap: 10,
+                flexWrap: "wrap",
+              }}
+            >
+              <StoreBadge type="apple" />
+              <StoreBadge type="google" />
+            </div>
+
+            <div
+              style={{
+                marginTop: 32,
+                display: "grid",
+                gridTemplateColumns: "repeat(4,1fr)",
+                gap: 10,
+              }}
+            >
+              {[
+                ["01", "Unified ledger"],
+                ["02", "Multi-currency"],
+                ["03", "Investments"],
+                ["04", "AI mentor"],
+              ].map(([k, v]) => (
+                <div
+                  key={k}
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 13,
+                    border: "1px solid rgba(255,255,255,.06)",
+                    background: "rgba(255,255,255,.03)",
+                    transition: "all .2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = "rgba(0,255,135,.16)";
+                    e.currentTarget.style.background = "rgba(0,255,135,.045)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = "rgba(255,255,255,.06)";
+                    e.currentTarget.style.background = "rgba(255,255,255,.03)";
+                  }}
+                >
+                  <div
+                    style={{
+                      fontFamily: "'DM Mono',monospace",
+                      fontSize: 9,
+                      color: "rgba(0,255,135,.55)",
+                      marginBottom: 4,
+                    }}
+                  >
+                    {k}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: "rgba(226,232,240,.68)",
+                    }}
+                  >
+                    {v}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
-          {/* RIGHT: mobile app mock (UPDATED to match real dashboard preview) */}
-          <div data-reveal="right" className="relative reveal">
-            <div className="relative mx-auto w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-white/5 p-4 shadow-2xl">
-              <div className="mx-auto aspect-[9/19] w-full max-w-[280px] rounded-[28px] bg-[#020617] text-[11px] text-white/80 shadow-[0_0_40px_rgba(16,185,129,0.22)] overflow-hidden">
-                {/* status bar */}
-                <div className="flex items-center justify-between px-4 pt-3 pb-2 text-[9px] text-white/55">
-                  <span>16:17</span>
-                  <div className="flex items-center gap-1">
-                    <span className="h-1.5 w-6 rounded-full bg-white/15" />
-                    <span className="h-1.5 w-3 rounded-full bg-white/25" />
-                    <span className="text-[9px] text-white/45">27</span>
-                  </div>
-                </div>
+          {/* RIGHT */}
+          <Tilt className="rv rv-rgt" style={{ position: "relative" }}>
+            <div
+              style={{
+                position: "absolute",
+                top: -22,
+                right: -22,
+                width: 84,
+                height: 84,
+                borderRadius: "50%",
+                background:
+                  "radial-gradient(circle,rgba(0,255,135,.16),transparent 65%)",
+                animation: "float-y 5.5s ease-in-out infinite",
+                pointerEvents: "none",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                bottom: -18,
+                left: -18,
+                width: 66,
+                height: 66,
+                borderRadius: "50%",
+                background:
+                  "radial-gradient(circle,rgba(0,212,255,.12),transparent 65%)",
+                animation: "float-y 7s ease-in-out infinite 1.5s",
+                pointerEvents: "none",
+              }}
+            />
 
-                {/* top header row */}
-                <div className="flex items-center justify-between px-4 pt-1">
-                  <div className="text-[11px] font-semibold text-white/85">
-                    Nummoria AI
-                  </div>
-                  <div className="h-7 w-7 rounded-full bg-white/10 border border-white/10 overflow-hidden">
-                    {/* fake avatar */}
-                    <div className="h-full w-full bg-gradient-to-br from-emerald-400/30 to-white/0" />
-                  </div>
-                </div>
+            <div
+              style={{
+                borderRadius: 28,
+                border: "1px solid rgba(0,255,135,.13)",
+                background: "rgba(255,255,255,.04)",
+                backdropFilter: "blur(40px)",
+                padding: 26,
+                boxShadow: "0 40px 110px -55px rgba(0,255,135,.28)",
+                position: "relative",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  top: -40,
+                  right: -40,
+                  width: 170,
+                  height: 170,
+                  borderRadius: "50%",
+                  background:
+                    "radial-gradient(circle,rgba(0,255,135,.09),transparent 58%)",
+                  pointerEvents: "none",
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: -35,
+                  left: -35,
+                  width: 140,
+                  height: 140,
+                  borderRadius: "50%",
+                  background:
+                    "radial-gradient(circle,rgba(0,212,255,.06),transparent 58%)",
+                  pointerEvents: "none",
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: 1,
+                  background:
+                    "linear-gradient(to right,transparent,rgba(0,255,135,.55),rgba(0,212,255,.38),transparent)",
+                }}
+              />
 
-                {/* greeting */}
-                <div className="px-4 pt-3">
-                  <div className="text-[16px] font-extrabold tracking-tight text-white">
-                    Good afternoon, Joe{" "}
-                    <span className="text-white/80">👋</span>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  marginBottom: 20,
+                  position: "relative",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 9,
+                      background:
+                        "linear-gradient(135deg,rgba(0,255,135,.2),rgba(0,212,255,.1))",
+                      border: "1px solid rgba(0,255,135,.2)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontFamily: "'Syne',sans-serif",
+                      fontWeight: 800,
+                      fontSize: 14,
+                      color: "#00ff87",
+                    }}
+                  >
+                    <img
+                      src={logoUrl}
+                      alt="Nummoria Logo"
+                      style={{ width: 32, height: 32, borderRadius: 9 }}
+                    />
                   </div>
-                  <div className="mt-1 text-[10px] text-white/55">
-                    Here&apos;s a clear picture of your money today.
-                  </div>
-                </div>
-
-                {/* feature card */}
-                <div className="px-4 pt-4">
-                  <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] p-4">
-                    {/* circular graphic bg */}
-                    <div className="pointer-events-none absolute -right-12 -top-10 h-44 w-44 rounded-full border border-emerald-400/20" />
-                    <div className="pointer-events-none absolute -right-16 -top-6 h-48 w-48 rounded-full border border-emerald-400/15" />
-                    <div className="pointer-events-none absolute -right-10 top-3 h-36 w-36 rounded-full bg-emerald-500/10 blur-[1px]" />
-                    <div className="pointer-events-none absolute right-10 top-10 h-16 w-16 rounded-full border border-emerald-400/20" />
-
-                    <div className="relative">
-                      <div className="text-[9px] font-semibold text-emerald-300/90">
-                        Finance background
-                      </div>
-                      <div className="mt-1 text-[18px] font-extrabold tracking-tight text-white">
-                        See it. Track it.
-                      </div>
-                      <div className="mt-1 text-[9px] leading-relaxed text-white/60">
-                        Real-time visibility into your cash flow, spending, and
-                        investments—all in one place. Stay compliant with your
-                        own rules and never miss a beat.
-                      </div>
-
-                      <div className="mt-3 flex items-center gap-2">
-                        <button
-                          type="button"
-                          className="inline-flex h-8 items-center justify-center rounded-full bg-emerald-500 px-4 text-[9px] font-semibold text-emerald-950 shadow-lg shadow-emerald-500/20 hover:bg-emerald-400 transition"
-                        >
-                          GET ADVICE
-                        </button>
-                        <button
-                          type="button"
-                          className="inline-flex h-8 items-center justify-center rounded-full border border-white/15 bg-white/5 px-4 text-[9px] font-semibold text-white/80 hover:border-white/30 hover:bg-white/10 transition"
-                        >
-                          VIEW REPORTS
-                        </button>
-                      </div>
+                  <div>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 700,
+                        fontFamily: "'Syne',sans-serif",
+                      }}
+                    >
+                      Stop leaking money quietly
+                    </div>
+                    <div
+                      style={{ fontSize: 11, color: "rgba(226,232,240,.42)" }}
+                    >
+                      Upgrade to get AI that finds the leaks.
                     </div>
                   </div>
                 </div>
+                <span className="chip" style={{ fontSize: 9, flexShrink: 0 }}>
+                  most popular: Plus
+                </span>
+              </div>
 
-                {/* snapshot section */}
-                <div className="px-4 pt-4">
-                  <div className="text-[12px] font-bold text-white/90">
-                    A clear picture of your money
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 10,
+                  marginBottom: 16,
+                }}
+              >
+                {[
+                  [
+                    "Habit cost → annual impact",
+                    "Turn daily spending into real yearly numbers.",
+                    "AI",
+                  ],
+                  [
+                    "Break-even comparisons",
+                    "Compare options with ROI logic and tradeoffs.",
+                    "AI",
+                  ],
+                  [
+                    "Monthly clarity report",
+                    "A clean snapshot you can act on in minutes.",
+                    "Plus",
+                  ],
+                  [
+                    "Investments overview",
+                    "Unified view across assets and currencies.",
+                    "Plus",
+                  ],
+                ].map(([t, d, b]) => (
+                  <div
+                    key={t}
+                    style={{
+                      padding: "11px 12px",
+                      borderRadius: 14,
+                      border: "1px solid rgba(255,255,255,.07)",
+                      background: "rgba(255,255,255,.03)",
+                      transition: "all .25s",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = "rgba(0,255,135,.18)";
+                      e.currentTarget.style.background = "rgba(0,255,135,.045)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor =
+                        "rgba(255,255,255,.07)";
+                      e.currentTarget.style.background =
+                        "rgba(255,255,255,.03)";
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        gap: 6,
+                        marginBottom: 5,
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          fontFamily: "'Syne',sans-serif",
+                          lineHeight: 1.3,
+                        }}
+                      >
+                        {t}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 8,
+                          fontWeight: 700,
+                          padding: "2px 6px",
+                          borderRadius: 100,
+                          border: "1px solid rgba(255,255,255,.09)",
+                          background: "rgba(0,0,0,.38)",
+                          color: "rgba(226,232,240,.48)",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {b}
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 10,
+                        color: "rgba(226,232,240,.48)",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {d}
+                    </div>
                   </div>
-                  <div className="mt-1 text-[9px] text-white/50">
-                    This month&apos;s snapshot across expenses, income, and
-                    investments.
-                  </div>
+                ))}
+              </div>
+
+              <div
+                style={{
+                  borderRadius: 18,
+                  border: "1px solid rgba(255,255,255,.07)",
+                  background: "rgba(0,0,0,.32)",
+                  padding: "14px 16px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 12,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      fontFamily: "'Syne',sans-serif",
+                    }}
+                  >
+                    What you get
+                  </span>
+                  <span
+                    style={{ fontSize: 10, color: "rgba(226,232,240,.38)" }}
+                  >
+                    cancel anytime
+                  </span>
                 </div>
-
-                {/* three cards */}
-                <div className="px-4 pt-3 space-y-2">
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2">
-                    <div className="text-[9px] text-white/45">
-                      This Month&apos;s Expenses
-                    </div>
-                    <div className="mt-0.5 text-[16px] font-extrabold text-rose-400">
-                      $0
-                    </div>
-                    <div className="mt-1 text-[9px] text-white/45">
-                      Keep an eye on lifestyle creep.
-                    </div>
+                {[
+                  "Personalized insights from your own entries (not templates).",
+                  'Clear "what changed + why it matters" explanations.',
+                  "Action steps with tradeoffs, not orders.",
+                ].map((t, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 8,
+                      marginBottom: 8,
+                      fontSize: 11,
+                      color: "rgba(226,232,240,.62)",
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 5,
+                        height: 5,
+                        borderRadius: "50%",
+                        background: "#00ff87",
+                        flexShrink: 0,
+                        marginTop: 4,
+                        boxShadow: "0 0 5px #00ff87",
+                      }}
+                    />
+                    {t}
                   </div>
-
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2">
-                    <div className="text-[9px] text-white/45">
-                      This Month&apos;s Income
-                    </div>
-                    <div className="mt-0.5 text-[16px] font-extrabold text-emerald-400">
-                      $0
-                    </div>
-                    <div className="mt-1 text-[9px] text-white/45">
-                      Aim for a positive savings rate every month.
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2">
-                    <div className="text-[9px] text-white/45">
-                      Invested Balance
-                    </div>
-                    <div className="mt-0.5 text-[16px] font-extrabold text-sky-400">
-                      $0
-                    </div>
-                    <div className="mt-1 text-[9px] text-white/45">
-                      Long-term money working quietly in the background.
-                    </div>
-                  </div>
+                ))}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 9,
+                    marginTop: 14,
+                  }}
+                >
+                  <a
+                    href="#pricing"
+                    className="cta-primary"
+                    style={{ height: 38, fontSize: 11 }}
+                  >
+                    See plans & upgrade
+                  </a>
+                  <a
+                    href="/signup"
+                    className="cta-ghost"
+                    style={{ height: 38, fontSize: 11 }}
+                  >
+                    Start free first
+                  </a>
                 </div>
-
-                {/* bottom area: quick actions + FAB */}
-                <div className="relative mt-4 px-4 pb-4">
-                  <div className="text-[11px] font-bold text-white/85">
-                    Quick actions
-                  </div>
-
-                  <div className="mt-2 flex items-center gap-2">
-                    <span className="inline-flex h-7 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-3 text-[9px] text-white/75">
-                      Add expense
-                    </span>
-                    <span className="inline-flex h-7 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-3 text-[9px] text-white/75">
-                      Add income
-                    </span>
-                    <span className="inline-flex h-7 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-3 text-[9px] text-white/75">
-                      Open AI Mentor
-                    </span>
-                  </div>
-
-                  {/* floating action button */}
-                  <div className="absolute -right-1 bottom-2">
-                    <div className="h-12 w-12 rounded-full bg-emerald-500 shadow-[0_18px_40px_-18px_rgba(16,185,129,0.9)] flex items-center justify-center">
-                      <div className="h-5 w-5 rounded-md bg-emerald-950/20 border border-emerald-950/20 flex items-center justify-center">
-                        <span className="block h-2.5 w-2.5 bg-white/85 rounded-[3px]" />
-                      </div>
-                    </div>
-                  </div>
+                <div
+                  style={{
+                    marginTop: 12,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    flexWrap: "wrap",
+                    gap: 8,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 10,
+                      color: "rgba(226,232,240,.38)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 5,
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 5,
+                        height: 5,
+                        borderRadius: "50%",
+                        background: "rgba(0,255,135,.5)",
+                      }}
+                    />
+                    Purchases in mobile app
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 10,
+                      color: "rgba(226,232,240,.38)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 5,
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 5,
+                        height: 5,
+                        borderRadius: "50%",
+                        background: "rgba(0,212,255,.5)",
+                      }}
+                    />
+                    Private by default
+                  </span>
                 </div>
               </div>
             </div>
-
-            {/* glow */}
-            <div className="absolute -left-8 -top-6 -z-10 h-40 w-40 rounded-full bg-emerald-500/20 blur-2xl" />
-          </div>
+          </Tilt>
         </div>
       </section>
 
-      {/* FEATURE ROWS */}
-      <FeatureRow
-        id="features"
-        eyebrow="Accounts"
-        title="All your money, organized by reality"
-        desc="Multi-currency accounts with real-time summaries. Attach institutions, categories, and rules."
-        bullets={[
-          "Multiple accounts",
-          "Per-currency totals",
-          "Reconciliations",
-          "Transfers",
-        ]}
-      />
-      <FeatureRow
-        id="investments"
-        flip
-        eyebrow="Investments"
-        title="Stocks, crypto, land — tracked together"
-        desc="Add tickers or manual assets. See performance and allocation in one place."
-        bullets={[
-          "Positions & lots",
-          "Cost basis",
-          "Simple charts",
-          "CSV import",
-        ]}
-      />
-
-      {/* WHY NUMMORIA */}
-      <section id="why" className="mx-auto max-w-6xl px-6 py-20 text-white/80">
-        <div data-reveal="up" className="reveal text-center mb-16">
-          <h2 className="text-3xl md:text-5xl font-extrabold tracking-tight mb-6">
-            Why Nummoria?
-          </h2>
-
-          <p className="mt-3 max-w-2xl mx-auto text-sm md:text-base text-white/70">
-            Managing your money should feel clear, confident and powerful.
-            Nummoria gives you a financial lens that shows what is real and what
-            matters so you can make decisions with certainty.
-          </p>
-
-          <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-            <div className="rounded-3xl bg-white/5 border border-white/10 p-6 text-left backdrop-blur-sm hover:bg-white/10 transition">
-              <div className="text-emerald-300 text-xl mb-3">💡</div>
-              <h3 className="text-lg font-semibold mb-2 text-white">
-                Clarity that feels effortless
-              </h3>
-              <p className="text-white/70 text-sm">
-                See all accounts, spending and investments in one clean, honest
-                dashboard. No clutter. No confusion. Just your real financial
-                picture.
-              </p>
-            </div>
-
-            <div className="rounded-3xl bg-white/5 border border-white/10 p-6 text-left backdrop-blur-sm hover:bg-white/10 transition">
-              <div className="text-emerald-300 text-xl mb-3">🤖</div>
-              <h3 className="text-lg font-semibold mb-2 text-white">
-                AI that understands you
-              </h3>
-              <p className="text-white/70 text-sm">
-                The AI Financial Helper studies your habits, goals and spending
-                rhythm and answers with advice shaped for you. It feels like
-                speaking to a private wealth mentor.
-              </p>
-            </div>
-
-            <div className="rounded-3xl bg-white/5 border border-white/10 p-6 text-left backdrop-blur-sm hover:bg-white/10 transition">
-              <div className="text-emerald-300 text-xl mb-3">🚀</div>
-              <h3 className="text-lg font-semibold mb-2 text-white">
-                Built for real progress
-              </h3>
-              <p className="text-white/70 text-sm">
-                Nummoria removes noise, shows opportunities and gives you the
-                clarity usually reserved for elite wealth managers so every step
-                you take is intentional.
-              </p>
-            </div>
-          </div>
-
-          <p className="mt-12 max-w-2xl mx-auto text-sm md:text-base text-white/70 font-medium">
-            If you want to build your financial life with purpose and precision,
-            Nummoria is not a tool. It is your advantage.
-          </p>
-        </div>
-
-        <div className="grid gap-6 md:grid-cols-3">
-          <div className="reveal rounded-3xl border border-white/10 bg-white/5 p-6 text-left">
-            <div className="text-xs font-semibold uppercase tracking-wider text-emerald-400 mb-2">
-              Engineered by practitioners
-            </div>
-            <p className="text-sm text-white/75">
-              Designed by active investors and operators, Nummoria embodies real
-              portfolio thinking — multi-asset awareness, tax-aware views, and
-              practical workflows. It’s productized experience, not theory.
-            </p>
-          </div>
-
-          <div className="reveal rounded-3xl border border-white/10 bg-white/5 p-6 text-left">
-            <div className="text-xs font-semibold uppercase tracking-wider text-emerald-400 mb-2">
-              Unified financial intelligence
-            </div>
-            <p className="text-sm text-white/75">
-              Replace scattered apps and spreadsheets with one coherent ledger.
-              Accounts, investments, goals, and rules live together so insights
-              are contextual, decisions are faster, and risk is visible.
-            </p>
-          </div>
-
-          <div className="reveal rounded-3xl border border-white/10 bg-white/5 p-6 text-left">
-            <div className="text-xs font-semibold uppercase tracking-wider text-emerald-400 mb-2">
-              Contextual AI counsel
-            </div>
-            <p className="text-sm text-white/75">
-              A privacy-first AI that reads your numbers and explains tradeoffs.
-              Not generic advice — prioritized actions, scenario simulations,
-              and plain-language rationales tailored to your finances.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* PRICING */}
-      <section id="pricing" className="mx-auto max-w-6xl px-6 py-20">
-        <header className="text-center mb-10">
-          <h2 className="text-3xl md:text-5xl font-extrabold tracking-tight text-white">
-            Choose a plan that takes off with you ✈️
-          </h2>
-          <p className="mt-3 text-sm md:text-base text-white/70">
-            Simple pricing. Powerful features. Cancel anytime.
-          </p>
-        </header>
-
-        <div className="grid gap-6 md:grid-cols-3 items-stretch">
-          <PlanCard
-            title="Standard"
-            price={0}
-            period="/month"
-            cta="YOUR PLAN"
-            bullets={["Track Transactions", "Get Reports", "Basic support"]}
-            accent="#aed121ff"
-            icon="✈️"
-            logoSrc={logoUrl}
-          />
-
-          <PlanCard
-            title="Plus"
-            price={4.99}
-            period="/month"
-            cta="Buy"
-            bullets={[
-              "Track Transactions",
-              "Get Reports",
-              "Basic support",
-              "AI Financial Helper",
-            ]}
-            accent="#13e243ff"
-            icon="🚀"
-            featured
-            big
-            logoSrc={logoUrl}
-          />
-
-          <PlanCard
-            title="Premium"
-            price={9.99}
-            period="/month"
-            cta="Buy"
-            bullets={[
-              "Track Transactions",
-              "Get Reports",
-              "Basic support",
-              "More Advanced AI Financial Helper",
-              "Priority support",
-              "Early access to new features",
-              "Custom insights",
-              "Data export",
-              "Multi-currency support",
-            ]}
-            accent="#991746ff"
-            icon="🛸"
-            logoSrc={logoUrl}
-          />
-        </div>
-      </section>
-
-      {/* ABOUT */}
-      <section
-        id="about"
-        className="mx-auto max-w-6xl px-4 py-16 text-white/80"
+      {/* METRICS BAR */}
+      <div
+        style={{
+          borderTop: "1px solid rgba(255,255,255,.05)",
+          borderBottom: "1px solid rgba(255,255,255,.05)",
+          background: "rgba(255,255,255,.02)",
+          position: "relative",
+          zIndex: 1,
+        }}
       >
-        <h3 className="text-2xl font-bold mb-2">About</h3>
-        <p>Built for clarity, speed, and long-term use.</p>
-      </section>
+        <div style={{ ...W, padding: "36px 28px" }}>
+          <div
+            style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)" }}
+          >
+            {[
+              { label: "Entries tracked", to: 2400000, suffix: "+" },
+              { label: "Currencies supported", to: 60, suffix: "+" },
+              { label: "AI insights generated", to: 180000, suffix: "+" },
+              {
+                label: "Avg. savings per user",
+                to: 340,
+                suffix: "/yr",
+                prefix: "$",
+              },
+            ].map((s, i) => (
+              <div
+                key={i}
+                className="rv rv-up"
+                style={{
+                  transitionDelay: `${i * 0.08}s`,
+                  textAlign: "center",
+                  padding: "20px 16px",
+                  borderLeft:
+                    i === 0 ? "none" : "1px solid rgba(255,255,255,.06)",
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: "'Syne',sans-serif",
+                    fontSize: "clamp(1.8rem,3vw,2.5rem)",
+                    fontWeight: 800,
+                    letterSpacing: "-.04em",
+                    color: "#fff",
+                    lineHeight: 1,
+                    marginBottom: 8,
+                  }}
+                >
+                  <Counter
+                    to={s.to}
+                    suffix={s.suffix}
+                    prefix={s.prefix || ""}
+                  />
+                </div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: "var(--muted)",
+                    letterSpacing: ".03em",
+                  }}
+                >
+                  {s.label}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
 
-      {/* MARQUEE */}
-      <section className="my-20 border-y border-white/10 py-8">
-        <div className="animate-marquee flex gap-8 whitespace-nowrap px-4 text-white/60 [animation-duration:14s]">
-          {Array.from({ length: 12 }).map((_, i) => (
-            <span key={i} className="text-sm">
-              • Secure • Fast • Private • Insightful
-            </span>
+      <Divider />
+
+      {/* HOW IT WORKS */}
+      <section
+        id="how"
+        style={{
+          ...W,
+          paddingTop: 90,
+          paddingBottom: 90,
+          position: "relative",
+          zIndex: 1,
+        }}
+      >
+        <SectionHead
+          label="HOW IT WORKS"
+          title="3 steps. One clear system."
+          sub="Nummoria is simple: capture your reality, structure it cleanly, and use AI to understand your decisions."
+        />
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3,1fr)",
+            gap: 18,
+          }}
+        >
+          {[
+            [
+              "01",
+              "Add entries (fast)",
+              "Log expenses, income, and investments. Manual entry or imports. Multi-currency supported.",
+            ],
+            [
+              "02",
+              "Get a clear snapshot",
+              "Your totals, trends, and allocation in one dashboard. No scattered spreadsheets.",
+            ],
+            [
+              "03",
+              "Ask AI, get tradeoffs",
+              "AI explains what changed, why it matters, and what action improves your goal.",
+            ],
+          ].map(([n, t, d], i) => (
+            <div
+              key={n}
+              className="rv rv-up"
+              style={{
+                transitionDelay: `${i * 0.1}s`,
+                borderRadius: 24,
+                border: "1px solid rgba(255,255,255,.07)",
+                background: "rgba(255,255,255,.03)",
+                padding: "30px 26px",
+                position: "relative",
+                overflow: "hidden",
+                transition: "border-color .3s, background .3s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "rgba(0,255,135,.18)";
+                e.currentTarget.style.background = "rgba(0,255,135,.03)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "rgba(255,255,255,.07)";
+                e.currentTarget.style.background = "rgba(255,255,255,.03)";
+              }}
+            >
+              <div className="ghost-num">{n}</div>
+              <div
+                style={{
+                  fontFamily: "'DM Mono',monospace",
+                  fontSize: 10,
+                  fontWeight: 500,
+                  letterSpacing: ".18em",
+                  color: "rgba(0,255,135,.58)",
+                  textTransform: "uppercase",
+                  marginBottom: 12,
+                }}
+              >
+                Step {n}
+              </div>
+              <div
+                style={{
+                  fontFamily: "'Syne',sans-serif",
+                  fontSize: 20,
+                  fontWeight: 700,
+                  marginBottom: 12,
+                  letterSpacing: "-.02em",
+                }}
+              >
+                {t}
+              </div>
+              <div
+                style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.8 }}
+              >
+                {d}
+              </div>
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: 0,
+                  right: 0,
+                  width: 90,
+                  height: 90,
+                  background:
+                    "radial-gradient(circle at 85% 85%,rgba(0,255,135,.06),transparent 55%)",
+                  borderRadius: "0 0 24px 0",
+                  pointerEvents: "none",
+                }}
+              />
+            </div>
           ))}
         </div>
       </section>
 
-      {/* CTA / CONTACT */}
-      <section id="contact" className="mx-auto max-w-6xl px-4 py-16">
-        <div
-          data-reveal="up"
-          className="reveal rounded-3xl border border-white/10 bg-gradient-to-br from-white/5 to-white/[0.02] p-8 md:p-12"
-        >
-          <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-            Start in minutes. Keep for years.
-          </h2>
-          <p className="mt-3 max-w-2xl text-white/70">
-            Create an account, import past transactions, and see your real
-            picture instantly.
-          </p>
-          <div className="mt-6 flex flex-wrap items-center gap-3">
-            <a
-              href="/signup"
-              className="rounded-xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-white/90"
-            >
-              Create free account
-            </a>
-            <a
-              href="/login"
-              className="rounded-xl border border-white/20 px-5 py-3 text-sm font-semibold text-white/90 hover:border-white/40"
-            >
-              I already have an account
-            </a>
-            <StoreBadges compact />
+      <Divider />
+
+      {/* FEATURES */}
+      <section
+        id="features"
+        style={{
+          ...W,
+          paddingTop: 90,
+          paddingBottom: 90,
+          position: "relative",
+          zIndex: 1,
+        }}
+      >
+        <SectionHead
+          label="FEATURES"
+          title="Built for real-world finance"
+          sub="Every feature is designed around clarity, discipline, and long-term financial progress."
+        />
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div
+            style={{ display: "grid", gridTemplateColumns: "58% 1fr", gap: 16 }}
+          >
+            <FeatureCard
+              title="Unified ledger"
+              accent="#00ff87"
+              desc="Expenses, income, transfers, and investments — one coherent model."
+              items={[
+                "Multiple accounts",
+                "Categories & rules",
+                "Per-currency totals",
+                "Exports & reports",
+              ]}
+            />
+            <FeatureCard
+              title="AI Financial Helper"
+              accent="#00d4ff"
+              desc="Data-driven, behavior-aware explanations and suggestions."
+              items={[
+                "Annualize habits",
+                "Compare alternatives",
+                "Break-even logic",
+                "Scenario planning",
+              ]}
+            />
+          </div>
+          <div
+            style={{ display: "grid", gridTemplateColumns: "1fr 58%", gap: 16 }}
+          >
+            <FeatureCard
+              title="Investments overview"
+              accent="#a78bfa"
+              desc="Track crypto, stocks, and manual assets together."
+              items={[
+                "Holdings & positions",
+                "Allocation awareness",
+                "Cost basis support",
+                "Simple performance view",
+              ]}
+            />
+            <FeatureCard
+              title="Discipline-first workflows"
+              accent="#00ff87"
+              desc="Rules and reporting that keep you consistent over time."
+              items={[
+                "Recurring reminders",
+                "Spend caps (optional)",
+                "Clean monthly snapshot",
+                "Decision-ready reports",
+              ]}
+            />
           </div>
         </div>
       </section>
 
-      {/* FOOTER */}
-      <footer className="mx-auto mt-10 max-w-6xl px-4 pb-16 text-xs text-white/60">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-6">
-          <div>© {new Date().getFullYear()} Nummoria</div>
-          <nav className="flex gap-4">
-            <a href="/privacy" className="hover:text-white/80">
-              Privacy
-            </a>
-            <a href="/terms" className="hover:text-white/80">
-              Terms
-            </a>
-            <a href="/contact" className="hover:text-white/80">
-              Contact
-            </a>
-          </nav>
-        </div>
-      </footer>
+      <Divider />
 
-      {/* Styles for reveal + marquee */}
-      <style>{`
-        .reveal {opacity: 0; transform: translateY(16px); transition: opacity .6s ease, transform .6s ease;}
-        .reveal[data-reveal="left"] {transform: translateX(-40px);}
-        .reveal[data-reveal="right"] {transform: translateX(40px);}
-        .reveal-show {opacity: 1; transform: translate(0,0);} 
-        @keyframes marquee {0%{transform:translateX(0)}100%{transform:translateX(-600px)}}
-        .animate-marquee {animation: marquee linear infinite;}
-      `}</style>
-    </div>
-  );
-}
-
-function Dot() {
-  return <span className="block h-1.5 w-1.5 rounded-full bg-emerald-400" />;
-}
-
-function StoreBadges({ compact = false }) {
-  return (
-    <div className={`flex items-center gap-2 ${compact ? "scale-95" : ""}`}>
-      <a
-        href="https://apps.apple.com/app/id0000000000"
-        aria-label="Download on the App Store"
-        className="group inline-flex items-center gap-2 rounded-xl border border-white/20 px-3 py-2 hover:border-white/40 hover:bg-white/5"
-      >
-        <AppleBadge />
-        <div className="text-left leading-none">
-          <div className="text-[10px] text-white/60">Download on the</div>
-          <div className="text-sm font-semibold">App Store</div>
-        </div>
-      </a>
-      <a
-        href="https://play.google.com/store/apps/details?id=com.example"
-        aria-label="Get it on Google Play"
-        className="group inline-flex items-center gap-2 rounded-xl border border-white/20 px-3 py-2 hover:border-white/40 hover:bg-white/5"
-      >
-        <PlayBadge />
-        <div className="text-left leading-none">
-          <div className="text-[10px] text-white/60">GET IT ON</div>
-          <div className="text-sm font-semibold">Google Play</div>
-        </div>
-      </a>
-    </div>
-  );
-}
-
-function AppleBadge() {
-  return (
-    <svg
-      width="28"
-      height="28"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      className="opacity-90"
-    >
-      <path d="M16.365 1.43c.056.73-.27 1.44-.77 1.98-.48.56-1.29 1-2.07.93-.07-.72.29-1.45.78-1.99.49-.56 1.36-.98 2.06-.92h0zM20.51 17.03c-.38.88-.84 1.75-1.45 2.51-.55.7-1.23 1.39-2.11 1.42-.92.04-1.22-.55-2.28-.55-1.06 0-1.4.53-2.29.56-.9.04-1.59-.75-2.15-1.44-1.17-1.49-2.07-3.6-1.83-5.64.2-1.15.8-2.22 1.73-2.96.81-.64 1.9-1.11 2.95-.92.3.06.6.16.88.29.26.12.52.29.8.28.23 0 .45-.15.64-.26.53-.31 1.01-.67 1.6-.87.86-.3 1.8-.28 2.6.17.39.22.72.54.95.94-.88.53-1.47 1.49-1.39 2.53.09 1.02.7 1.98 1.68 2.45-.2.29-.43.56-.66.85z" />
-    </svg>
-  );
-}
-
-function PlayBadge() {
-  return (
-    <svg
-      width="28"
-      height="28"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      className="opacity-90"
-    >
-      <path d="M3.01 2.406c-.01.063-.02.127-.02.191v18.806c0 .064.01.128.02.191l10.73-9.594L3.01 2.406zM14.53 11.5l4.79-4.29c-.33-.255-.78-.267-1.19-.036L14.53 11.5zm0 1l3.6 4.325c.41.23.86.218 1.19-.037L14.53 12.5zM13.25 12L3 21.403c.15.834.98 1.23 1.67.83l15.44-8.74c.9-.51.9-1.93 0-2.44L4.67 2.313c-.69-.401-1.52-.004-1.67.833L13.25 12z" />
-    </svg>
-  );
-}
-
-// FeatureRow component with custom mocks
-function FeatureRow({ id, flip = false, eyebrow, title, desc, bullets }) {
-  const isAccounts = id === "features";
-  const isInvestments = id === "investments";
-
-  return (
-    <section id={id} className="mx-auto max-w-6xl px-4 py-16">
+      {/* CONVICTION STRIP */}
       <div
-        className={`grid grid-cols-1 items-center gap-10 md:grid-cols-2 ${
-          flip ? "md:[&>div:first-child]:order-2" : ""
-        }`}
-      >
-        <div data-reveal={flip ? "right" : "left"} className="reveal space-y-3">
-          <div className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
-            {eyebrow}
-          </div>
-          <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-            {title}
-          </h2>
-          <p className="max-w-2xl text-white/70">{desc}</p>
-          <ul className="mt-4 grid grid-cols-1 gap-2 text-sm text-white/70 sm:grid-cols-2">
-            {bullets.map((b, i) => (
-              <li key={i} className="flex items-center gap-2">
-                <Dot /> {b}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div data-reveal={flip ? "left" : "right"} className="reveal relative">
-          <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#050908] p-4 shadow-2xl">
-            {isAccounts ? (
-              <AccountsMock />
-            ) : isInvestments ? (
-              <InvestmentsMock />
-            ) : (
-              <div className="aspect-video w-full rounded-2xl bg-gradient-to-br from-emerald-400/10 to-white/0" />
-            )}
-          </div>
-          <div className="absolute -right-6 -top-6 -z-10 h-40 w-40 rounded-full bg-emerald-500/20 blur-2xl" />
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// Accounts illustration
-function AccountsMock() {
-  return (
-    <div className="space-y-4 text-xs text-white/75">
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-[10px] uppercase tracking-wide text-emerald-300/80">
-          Accounts overview
-        </span>
-        <span className="rounded-full bg-emerald-500/15 px-2 py-[2px] text-[10px] text-emerald-200">
-          +$320 today
-        </span>
-      </div>
-
-      <div className="rounded-2xl bg-white/5 p-3">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] text-white/60">Total balance</span>
-          <span className="text-[10px] text-emerald-300">Multi-currency</span>
-        </div>
-        <div className="mt-1 text-2xl font-bold">$12,840</div>
-        <div className="mt-3 h-1.5 w-full rounded-full bg-white/5">
-          <div className="h-1.5 w-[68%] rounded-full bg-emerald-400" />
-        </div>
-        <div className="mt-2 flex justify-between text-[10px] text-white/55">
-          <span>TRY ₺24,300</span>
-          <span>USD $3,420</span>
-          <span>EUR €910</span>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-2">
-        {[
-          { name: "Checking", amt: "$2,430", fill: "w-[60%]" },
-          { name: "Savings", amt: "$4,280", fill: "w-[82%]" },
-          { name: "Cash", amt: "$540", fill: "w-[30%]" },
-        ].map((a) => (
-          <div key={a.name} className="rounded-xl bg-white/4 p-2">
-            <div className="text-[10px] text-white/55">{a.name}</div>
-            <div className="text-sm font-semibold">{a.amt}</div>
-            <div className="mt-1 h-1 w-full rounded-full bg-white/10">
-              <div className={`h-1 rounded-full bg-emerald-300 ${a.fill}`} />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// Investments illustration
-function InvestmentsMock() {
-  return (
-    <div className="flex gap-4 text-xs text-white/75">
-      <div className="flex flex-col items-center justify-center">
-        <div className="relative h-28 w-28">
-          <div className="absolute inset-0 rounded-full bg-white/5" />
-          <div className="absolute inset-[4px] rounded-full border-[6px] border-emerald-400/80 border-t-emerald-300/40 border-r-emerald-500/80 border-b-emerald-700/70" />
-          <div className="absolute inset-[18px] rounded-full bg-[#050908]" />
-          <div className="absolute inset-[20px] flex flex-col items-center justify-center">
-            <span className="text-[9px] text-white/50">Portfolio</span>
-            <span className="text-sm font-semibold">$8,920</span>
-          </div>
-        </div>
-        <span className="mt-2 text-[10px] text-white/55">+7.4% this month</span>
-      </div>
-
-      <div className="flex-1 space-y-2">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-[10px] uppercase tracking-wide text-emerald-300/80">
-            Holdings
-          </span>
-          <span className="text-[10px] text-white/50">Today</span>
-        </div>
-
-        {[
-          { name: "S&P 500 ETF", pct: "42%", pl: "+$210", bar: "w-[70%]" },
-          { name: "BTC", pct: "31%", pl: "+$95", bar: "w-[52%]" },
-          { name: "AVAX", pct: "12%", pl: "-$24", bar: "w-[28%]" },
-        ].map((p) => (
-          <div
-            key={p.name}
-            className="rounded-2xl bg-white/5 px-3 py-2 flex flex-col gap-1"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-[11px]">{p.name}</span>
-              <span className="text-[10px] text-white/55">{p.pct}</span>
-            </div>
-            <div className="h-1.5 w-full rounded-full bg-white/8">
-              <div
-                className={`h-1.5 rounded-full bg-gradient-to-r from-emerald-300 via-emerald-400 to-emerald-500 ${p.bar}`}
-              />
-            </div>
-            <div className="flex items-center justify-between text-[10px] text-white/55">
-              <span>Cost basis aligned</span>
-              <span
-                className={
-                  p.pl.startsWith("-") ? "text-red-300" : "text-emerald-300"
-                }
-              >
-                {p.pl}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ---------- PlanCard + helpers ----------
-function PlanCard({
-  title,
-  price,
-  period,
-  cta,
-  bullets,
-  accent = "#4f772d",
-  icon = "✨",
-  featured = false,
-  big = false,
-  logoSrc,
-}) {
-  const ref = React.useRef(null);
-
-  const onMouseMove = (e) => {
-    const el = ref.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const px = e.clientX - rect.left;
-    const py = e.clientY - rect.top;
-    el.style.setProperty("--x", `${px}px`);
-    el.style.setProperty("--y", `${py}px`);
-    const rx = (py / rect.height - 0.5) * -8;
-    const ry = (px / rect.width - 0.5) * 8;
-    el.style.transform = `perspective(900px) rotateX(${rx}deg) rotateY(${ry}deg) scale(1.02)`;
-  };
-  const onMouseLeave = () => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.transform = "";
-  };
-
-  const accentRing = hexToRGBA(accent, 0.25);
-  const accentSoft = hexToRGBA(accent, 0.1);
-  const accentText = accent;
-
-  return (
-    <div
-      ref={ref}
-      onMouseMove={onMouseMove}
-      onMouseLeave={onMouseLeave}
-      className={[
-        "group relative flex flex-col h-full rounded-[28px] border shadow-sm overflow-hidden",
-        "bg-white/10 backdrop-blur supports-[backdrop-filter]:bg-white/5",
-        "transition-transform duration-200 ease-out will-change-transform",
-        featured ? "ring-2" : "ring-1",
-      ].join(" ")}
-      style={{
-        backgroundImage: `
-          radial-gradient(200px 200px at var(--x) var(--y), ${accentSoft}, transparent 60%)
-        `,
-        borderColor: accentSoft,
-        boxShadow: featured
-          ? `0 20px 40px -16px ${accentRing}`
-          : `0 14px 30px -16px rgba(0,0,0,0.12)`,
-      }}
-    >
-      <div
-        className="relative h-40 shrink-0"
         style={{
-          background: `linear-gradient(180deg, ${accent}, ${shade(
-            accent,
-            -10,
-          )})`,
+          ...W,
+          paddingTop: 60,
+          paddingBottom: 60,
+          position: "relative",
+          zIndex: 1,
         }}
       >
         <div
-          className="absolute inset-0 opacity-15 mix-blend-overlay pointer-events-none"
+          className="rv rv-up"
           style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 48,
+            borderRadius: 26,
+            border: "1px solid rgba(255,255,255,.07)",
+            background: "rgba(255,255,255,.025)",
+            padding: "36px 44px",
+            flexWrap: "wrap",
+            justifyContent: "space-between",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
+            <OrbitVisual />
+            <div>
+              <div
+                style={{
+                  fontFamily: "'Syne',sans-serif",
+                  fontSize: "clamp(1.5rem,2.5vw,2rem)",
+                  fontWeight: 800,
+                  letterSpacing: "-.03em",
+                  marginBottom: 10,
+                  lineHeight: 1.15,
+                }}
+              >
+                Your financial clarity
+                <br />
+                starts with one entry.
+              </div>
+              <div
+                style={{
+                  fontSize: 14,
+                  color: "var(--muted)",
+                  lineHeight: 1.8,
+                  maxWidth: 360,
+                }}
+              >
+                Most users see a clear picture of their money within the first
+                10 minutes. No setup calls. No financial complexity.
+              </div>
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {[
+              ["No bank connection required", "Connect later — or never."],
+              ["100% manual control", "Your data, your rules."],
+              ["AI that knows your numbers", "Not generic templates."],
+            ].map(([t, s]) => (
+              <div
+                key={t}
+                style={{ display: "flex", alignItems: "flex-start", gap: 12 }}
+              >
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    background: "#00ff87",
+                    flexShrink: 0,
+                    marginTop: 6,
+                    boxShadow: "0 0 8px #00ff87",
+                  }}
+                />
+                <div>
+                  <div
+                    style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 2 }}
+                  >
+                    {t}
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--muted)" }}>{s}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <Divider />
+
+      {/* PRICING */}
+      <section
+        id="pricing"
+        style={{
+          ...W,
+          paddingTop: 90,
+          paddingBottom: 90,
+          position: "relative",
+          zIndex: 1,
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            top: "5%",
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: 900,
+            height: 460,
+            borderRadius: "50%",
             background:
-              "radial-gradient(120% 80% at 80% -10%, rgba(255,255,255,.35), rgba(255,255,255,0) 60%)",
+              "radial-gradient(ellipse,rgba(0,255,135,.035),transparent 62%)",
+            pointerEvents: "none",
           }}
         />
-        <div className="absolute inset-x-0 -bottom-8 h-16 bg-white/90 rounded-t-[40%/60%]" />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-4xl mr-2">{icon}</div>
-          <img
-            src={logoSrc}
-            alt="Nummoria logo"
-            className="h-14 w-14 object-contain drop-shadow-lg"
+        <SectionHead
+          label="PRICING"
+          title="Plans built for momentum"
+          sub="Start free. Upgrade when you want deeper AI clarity. Cancel anytime."
+        />
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3,1fr)",
+            gap: 20,
+            alignItems: "stretch",
+          }}
+        >
+          <PriceCard
+            name="Standard"
+            tagline="Track & report"
+            price="$0"
+            period="/month"
+            accent="#94a3b8"
+            bullets={["Track transactions", "Monthly reports", "Basic support"]}
+            actionLabel="Your plan"
+            current
+          />
+          <PriceCard
+            name="Plus"
+            tagline="AI clarity, every month"
+            price="$4.99"
+            period="/month"
+            accent="#00ff87"
+            bullets={[
+              "Everything in Standard",
+              "AI Financial Helper",
+              "Smarter summaries",
+              "Priority reports",
+            ]}
+            actionLabel="Upgrade to Plus"
+            highlight="Most popular"
+            plan="plus"
+          />
+          <PriceCard
+            name="Premium"
+            tagline="Advanced AI + priority support"
+            price="$9.99"
+            period="/month"
+            accent="#00d4ff"
+            bullets={[
+              "Everything in Plus",
+              "Advanced AI Financial Helper",
+              "Priority support",
+              "Early access features",
+              "Data export",
+              "Multi-currency support",
+            ]}
+            actionLabel="Upgrade to Premium"
+            plan="premium"
           />
         </div>
-      </div>
+        <p
+          style={{
+            textAlign: "center",
+            fontSize: 12,
+            color: "rgba(226,232,240,.32)",
+            marginTop: 22,
+            fontFamily: "'DM Mono',monospace",
+          }}
+        >
+          Purchases are handled in the mobile app. Web remains fully usable.
+        </p>
+      </section>
 
-      <div
-        className={`relative px-6 pb-8 pt-2 flex-1 flex flex-col ${big ? "md:pt-0" : ""}`}
+      <Divider />
+
+      {/* FAQ */}
+      <section
+        id="faq"
+        style={{
+          maxWidth: 800,
+          margin: "0 auto",
+          padding: "90px 28px",
+          position: "relative",
+          zIndex: 1,
+        }}
       >
-        <div className="text-center">
-          <div className="text-sm tracking-widest font-semibold text-white/70 uppercase">
-            {title}
-          </div>
-          <div className="mt-2 flex items-end justify-center gap-2">
-            <div
-              className={`${big ? "text-5xl md:text-6xl" : "text-4xl"} font-extrabold tracking-tight text-white`}
-            >
-              ${price.toFixed(2)}
-            </div>
-            <div className="pb-2 text-xs text-white/60 uppercase">{period}</div>
-          </div>
+        <SectionHead label="FAQ" title="Quick answers" />
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <FAQ
+            q="Is this financial advice?"
+            a="Nummoria provides educational guidance and decision support based on your inputs — not personalized investment advice."
+          />
+          <FAQ
+            q="Does Nummoria support multiple currencies?"
+            a="Yes. Track accounts and totals across currencies with clear summaries."
+          />
+          <FAQ
+            q="Do I need to connect a bank?"
+            a="No. You can track manually. Integrations can be added later without changing your workflow."
+          />
+          <FAQ
+            q="Where do upgrades happen?"
+            a="Purchases are handled in the mobile app. Web remains fully usable."
+          />
         </div>
+      </section>
 
-        <div className="mt-4 flex flex-col flex-1">
-          <ul className="mt-5 space-y-2 text-sm text-left mx-auto max-w-[18rem]">
-            {bullets.map((b, i) => (
-              <li key={i} className="flex items-start gap-2">
-                <span
-                  className="mt-1 inline-block h-2 w-2 rounded-full"
-                  style={{ backgroundColor: accentText }}
-                />
-                <span className="text-white/80">{b}</span>
-              </li>
-            ))}
-          </ul>
-
-          <button
-            type="button"
-            onClick={() =>
-              (window.location.href = `/subscriptions/purchase?plan=${title.toLowerCase()}`)
-            }
-            className="mt-auto inline-flex items-center justify-center w-full rounded-full h-11 px-5 text-sm font-semibold text-white transition focus:outline-none focus:ring-2"
+      {/* CTA */}
+      <section
+        id="contact"
+        style={{ ...W, paddingBottom: 90, position: "relative", zIndex: 1 }}
+      >
+        <div
+          className="rv rv-scl"
+          style={{
+            borderRadius: 30,
+            border: "1px solid rgba(0,255,135,.11)",
+            background: "rgba(0,255,135,.022)",
+            padding: "72px 56px",
+            textAlign: "center",
+            position: "relative",
+            overflow: "hidden",
+          }}
+        >
+          <div
             style={{
-              background: `linear-gradient(180deg, ${accent}, ${shade(accent, -10)})`,
-              boxShadow: `0 10px 22px -10px ${accentRing}`,
+              position: "absolute",
+              top: -100,
+              right: -100,
+              width: 300,
+              height: 300,
+              borderRadius: "50%",
+              border: "1px solid rgba(0,255,135,.06)",
+              animation: "spin-slow 25s linear infinite",
+              pointerEvents: "none",
             }}
           >
-            {cta}
-          </button>
+            <div
+              style={{
+                position: "absolute",
+                top: 10,
+                left: 10,
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: "#00ff87",
+                boxShadow: "0 0 10px #00ff87",
+                transform: "translate(-50%,-50%)",
+              }}
+            />
+          </div>
+          <div
+            style={{
+              position: "absolute",
+              bottom: -70,
+              left: -70,
+              width: 220,
+              height: 220,
+              borderRadius: "50%",
+              border: "1px solid rgba(0,212,255,.05)",
+              animation: "spin-rev 16s linear infinite",
+              pointerEvents: "none",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              top: -60,
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: 700,
+              height: 350,
+              borderRadius: "50%",
+              background:
+                "radial-gradient(ellipse,rgba(0,255,135,.06),transparent 58%)",
+              pointerEvents: "none",
+            }}
+          />
+
+          <div style={{ position: "relative" }}>
+            <div className="chip" style={{ marginBottom: 20 }}>
+              <span
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: "50%",
+                  background: "#00ff87",
+                  animation: "pulse-dot 2s ease-in-out infinite",
+                }}
+              />
+              Free to start. No credit card required.
+            </div>
+            <h3
+              style={{
+                fontFamily: "'Syne',sans-serif",
+                fontSize: "clamp(2rem,4vw,3.2rem)",
+                fontWeight: 800,
+                letterSpacing: "-.035em",
+                marginBottom: 16,
+                lineHeight: 1.08,
+              }}
+            >
+              Start today.
+              <br />
+              Get clarity tonight.
+            </h3>
+            <p
+              style={{
+                color: "var(--muted)",
+                fontSize: 15.5,
+                lineHeight: 1.8,
+                maxWidth: 500,
+                margin: "0 auto 36px",
+              }}
+            >
+              Create an account, add your first entries, and get your first AI
+              explanation immediately.
+            </p>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                justifyContent: "center",
+                gap: 12,
+              }}
+            >
+              <a
+                href="/signup"
+                className="cta-primary"
+                style={{ height: 52, padding: "0 32px", fontSize: 15 }}
+              >
+                Create free account
+              </a>
+              <a
+                href="/login"
+                className="cta-ghost"
+                style={{ height: 52, padding: "0 26px", fontSize: 14 }}
+              >
+                I already have an account
+              </a>
+              <StoreBadge type="apple" />
+              <StoreBadge type="google" />
+            </div>
+          </div>
         </div>
 
-        <div
-          className="pointer-events-none absolute inset-0 rounded-[28px] ring-0 group-hover:ring-4 transition-[ring] duration-300"
-          style={{ boxShadow: `inset 0 0 0 1px ${accentSoft}` }}
-        />
-      </div>
+        <footer
+          style={{
+            marginTop: 40,
+            borderTop: "1px solid rgba(255,255,255,.07)",
+            paddingTop: 24,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 14,
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "'DM Mono',monospace",
+              fontSize: 12,
+              color: "rgba(226,232,240,.3)",
+            }}
+          >
+            © {new Date().getFullYear()} Nummoria
+          </div>
+          <nav style={{ display: "flex", gap: 24 }}>
+            {[
+              ["Privacy", "/privacy"],
+              ["Terms", "/terms"],
+              ["Contact", "/contact"],
+            ].map(([l, h]) => (
+              <a
+                key={h}
+                href={h}
+                style={{
+                  fontSize: 12,
+                  color: "rgba(226,232,240,.32)",
+                  transition: "color .2s",
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.color = "#00ff87";
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.color = "rgba(226,232,240,.32)";
+                }}
+              >
+                {l}
+              </a>
+            ))}
+          </nav>
+        </footer>
+      </section>
     </div>
   );
-}
-
-/* ----------------------- helpers ----------------------- */
-function shade(hex, pct) {
-  const { r, g, b } = hexToRGB(hex);
-  const t = pct < 0 ? 0 : 255;
-  const p = Math.abs(pct) / 100;
-  const R = Math.round((t - r) * p + r);
-  const G = Math.round((t - g) * p + g);
-  const B = Math.round((t - b) * p + b);
-  return `rgb(${R}, ${G}, ${B})`;
-}
-
-function hexToRGB(hex) {
-  let c = (hex || "").replace("#", "");
-  if (c.length === 3)
-    c = c
-      .split("")
-      .map((x) => x + x)
-      .join("");
-  const num = parseInt(c, 16);
-  return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
-}
-
-function hexToRGBA(hex, a = 1) {
-  const { r, g, b } = hexToRGB(hex);
-  return `rgba(${r}, ${g}, ${b}, ${a})`;
 }
