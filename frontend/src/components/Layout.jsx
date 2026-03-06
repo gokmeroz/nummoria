@@ -112,21 +112,30 @@ export default function Layout({ onLogout }) {
       <header className="sticky top-0 z-50 border-b border-white/10 bg-[#070A07]/70 backdrop-blur-xl">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
           {/* Logo + Brand */}
-          <Link to="/dashboard" className="flex items-center gap-3 min-w-0">
+          <Link
+            to="/dashboard"
+            className="group flex items-center gap-3 min-w-0 select-none"
+          >
+            {/* Logo */}
             <div className="relative shrink-0">
-              <div className="absolute -inset-2 rounded-2xl blur-2xl opacity-25 bg-white/10" />
-              <div className="relative rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-md p-2">
-                <img
-                  src={logo}
-                  alt="Nummoria Logo"
-                  className="h-7 w-7 object-contain"
-                />
-              </div>
+              {/* glow */}
+              <div className="absolute -inset-4 blur-2xl opacity-50 bg-[radial-gradient(circle,rgba(19,226,67,0.45),transparent_70%)] transition group-hover:opacity-80" />
+
+              <img
+                src={logo}
+                alt="Nummoria Logo"
+                className="relative h-10 w-10 object-contain transition duration-300 group-hover:scale-105"
+              />
             </div>
 
-            <div className="min-w-0">
-              <span className="block font-semibold text-lg tracking-tight text-white">
+            {/* Brand */}
+            <div className="leading-tight">
+              <span className="block text-[18px] font-semibold tracking-tight text-white">
                 Nummoria
+              </span>
+
+              <span className="block text-[10px] uppercase tracking-[0.18em] text-white/40">
+                Financial Intelligence
               </span>
             </div>
           </Link>
