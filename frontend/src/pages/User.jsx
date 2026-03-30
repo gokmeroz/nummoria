@@ -80,7 +80,6 @@ const CURRENCIES = [
   { code: "KZT", name: "Kazakhstani Tenge", symbol: "₸" },
 ];
 const main = "#4f772d";
-const secondary = "#90a955";
 
 export default function UserPage() {
   const [me, setMe] = useState(null);
@@ -111,17 +110,6 @@ export default function UserPage() {
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-
-  const [adminBusy, setAdminBusy] = useState(false);
-  const [adminErr, setAdminErr] = useState("");
-  const [adminMsg, setAdminMsg] = useState("");
-
-  const ENABLE_ADMIN_TEST =
-    (typeof import.meta !== "undefined" &&
-      import.meta.env &&
-      (import.meta.env.VITE_ENABLE_ADMIN_TEST === "true" ||
-        import.meta.env.VITE_ENABLE_ADMIN_TEST === "1")) ||
-    false;
 
   function mergeMe(patch) {
     setMe((prev) => {
@@ -413,88 +401,6 @@ export default function UserPage() {
     }
   }
 
-  async function tryMakeAdminEndpoints() {
-    const candidates = [
-      { method: "post", url: "/me/make-admin" },
-      { method: "post", url: "/admin/make-me-admin" },
-      { method: "patch", url: "/me", data: { role: "admin" } },
-      { method: "patch", url: "/me", data: { isAdmin: true } },
-    ];
-
-    let lastErr = null;
-    for (const c of candidates) {
-      try {
-        const res = await api.request({
-          method: c.method,
-          url: c.url,
-          data: c.data,
-          withCredentials: true,
-        });
-        return {
-          res,
-          tried: candidates.map(
-            (x) => `${String(x.method).toUpperCase()} ${x.url}`,
-          ),
-        };
-      } catch (e) {
-        lastErr = e;
-        const status = e?.response?.status;
-        if (status === 404 || status === 405) continue;
-        e._tried = candidates.map(
-          (x) => `${String(x.method).toUpperCase()} ${x.url}`,
-        );
-        throw e;
-      }
-    }
-
-    if (lastErr) {
-      lastErr._tried = candidates.map(
-        (x) => `${String(x.method).toUpperCase()} ${x.url}`,
-      );
-      throw lastErr;
-    }
-    throw new Error("All make-admin endpoints failed");
-  }
-
-  async function makeMeAdmin() {
-    if (!window.confirm("Promote THIS user to ADMIN?")) return;
-    setAdminBusy(true);
-    setAdminErr("");
-    setAdminMsg("");
-    try {
-      const { res } = await tryMakeAdminEndpoints();
-
-      if (res?.data && typeof res.data === "object") {
-        mergeMe(res.data);
-      } else {
-        try {
-          const { data: fresh } = await api.get("/me", {
-            withCredentials: true,
-          });
-          mergeMe(fresh || {});
-        } catch {}
-      }
-
-      setAdminMsg(
-        "You are now ADMIN (or request succeeded). Refresh if needed.",
-      );
-    } catch (e) {
-      const info = describeAxiosError(e);
-      const triedNote = e?._tried?.length
-        ? ` Tried: ${e._tried.join(" | ")}`
-        : "";
-      setAdminErr(
-        `Make-admin failed (${info.status || "?"}${
-          info.statusText ? " " + info.statusText : ""
-        }) at ${info.method || "?"} ${info.url || "?"}: ${
-          info.dataMsg || "No server message"
-        }.${triedNote}`,
-      );
-    } finally {
-      setAdminBusy(false);
-    }
-  }
-
   const initials =
     (me?.name || me?.email || "U")
       .split(" ")
@@ -646,7 +552,7 @@ export default function UserPage() {
           </SectionCard>
         </div>
 
-        {(msg || err || adminMsg || adminErr || accErr) && (
+        {(msg || err || accErr) && (
           <div className="mb-6 space-y-3">
             {msg ? (
               <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-emerald-100">
@@ -661,16 +567,6 @@ export default function UserPage() {
             {accErr ? (
               <div className="rounded-2xl border border-red-400/20 bg-red-400/10 p-4 text-red-100">
                 {accErr}
-              </div>
-            ) : null}
-            {adminMsg ? (
-              <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-emerald-100">
-                {adminMsg}
-              </div>
-            ) : null}
-            {adminErr ? (
-              <div className="rounded-2xl border border-red-400/20 bg-red-400/10 p-4 text-red-100">
-                {adminErr}
               </div>
             ) : null}
           </div>
@@ -794,22 +690,6 @@ export default function UserPage() {
                 />
               </div>
             </SectionCard>
-
-            {ENABLE_ADMIN_TEST ? (
-              <SectionCard
-                title="Internal tools"
-                subtitle="Use only for production bootstrap and testing."
-              >
-                <button
-                  type="button"
-                  disabled={adminBusy}
-                  onClick={makeMeAdmin}
-                  className="w-full rounded-2xl bg-amber-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-amber-500 disabled:opacity-60"
-                >
-                  {adminBusy ? "Promoting…" : "TEST: Make me ADMIN"}
-                </button>
-              </SectionCard>
-            ) : null}
           </aside>
 
           <div className="space-y-6">
@@ -1212,8 +1092,8 @@ function AccountModal({ initial, onClose, onSubmit, busy }) {
                   onChange={(e) => setCurrency(e.target.value)}
                 >
                   {CURRENCIES.map((c) => (
-                    <option key={c} value={c} className="text-black">
-                      {c}
+                    <option key={c.code} value={c.code} className="text-black">
+                      {c.code} — {c.name} ({c.symbol})
                     </option>
                   ))}
                 </select>

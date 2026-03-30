@@ -1,6 +1,7 @@
 // backend/src/controllers/adminActivityController.js
 import mongoose from "mongoose";
 import ActivityEvent from "../models/ActivityEvent.js";
+import { User } from "../models/user.js";
 
 function parseTypes(typesRaw) {
   if (!typesRaw) return null;
@@ -23,6 +24,7 @@ function parseLimit(limitRaw) {
   return Math.min(n, 200);
 }
 
+// GET /admin/users/:userId/activity
 export async function adminGetUserActivity(req, res) {
   try {
     const { userId } = req.params;
@@ -31,35 +33,31 @@ export async function adminGetUserActivity(req, res) {
       return res.status(400).json({ message: "Invalid user id." });
     }
 
-    const limit = Math.min(parseInt(req.query.limit || "50", 10), 200);
+    const limit = parseLimit(req.query.limit);
+    const cursor = parseCursor(req.query.cursor);
+    const types = parseTypes(req.query.types);
 
-    // cursor is an ISO date string; we page "older than cursor"
-    const cursor = req.query.cursor ? new Date(req.query.cursor) : null;
+    const q = {
+      userId: new mongoose.Types.ObjectId(userId),
+    };
 
-    const types = req.query.types
-      ? String(req.query.types)
-          .split(",")
-          .map((x) => x.trim())
-          .filter(Boolean)
-      : null;
-
-    const q = { userId };
-
-    if (cursor && !Number.isNaN(cursor.getTime())) {
+    if (cursor) {
       q.ts = { $lt: cursor };
     }
 
-    if (types && types.length) {
+    if (types?.length) {
       q.type = { $in: types };
     }
 
     const items = await ActivityEvent.find(q)
       .sort({ ts: -1 })
       .limit(limit)
-      .select("type ts title subtitle meta adminEmail adminId payload");
+      .select("type ts title subtitle meta adminEmail adminId payload")
+      .lean();
 
-    const nextCursor =
-      items.length > 0 ? items[items.length - 1].ts.toISOString() : null;
+    const nextCursor = items.length
+      ? new Date(items[items.length - 1].ts).toISOString()
+      : null;
 
     return res.json({
       items,
@@ -71,7 +69,53 @@ export async function adminGetUserActivity(req, res) {
   }
 }
 
-// GET /admin/activity (global)
+// PATCH /admin/users/:id/role
+export async function updateUserRole(req, res) {
+  try {
+    const { id } = req.params;
+    const { role } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid user id." });
+    }
+
+    const normalizedRole = String(role || "")
+      .trim()
+      .toLowerCase();
+
+    if (!["user", "admin"].includes(normalizedRole)) {
+      return res.status(400).json({ message: "Invalid role." });
+    }
+
+    const targetUser = await User.findById(id);
+    if (!targetUser) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    // Prevent self-demotion
+    if (
+      String(req.user?._id) === String(targetUser._id) &&
+      normalizedRole !== "admin"
+    ) {
+      return res.status(400).json({
+        message: "You cannot remove your own admin role.",
+      });
+    }
+
+    targetUser.role = normalizedRole;
+    await targetUser.save();
+
+    return res.json({
+      message: "User role updated successfully.",
+      user: targetUser,
+    });
+  } catch (error) {
+    console.error("updateUserRole error:", error);
+    return res.status(500).json({ message: "Failed to update user role." });
+  }
+}
+
+// GET /admin/activity
 export async function adminGetGlobalActivity(req, res) {
   try {
     const limit = parseLimit(req.query.limit);
@@ -96,7 +140,7 @@ export async function adminGetGlobalActivity(req, res) {
     const items = await ActivityEvent.find(q)
       .sort({ ts: -1 })
       .limit(limit)
-      .populate("userId", "name email") // optional: makes admin UI nicer
+      .populate("userId", "name email")
       .lean();
 
     const nextCursor = items.length

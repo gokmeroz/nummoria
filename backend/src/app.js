@@ -266,7 +266,7 @@ app.use("/notifications", requireAuth, notificationsRouter);
 // Admin
 app.use("/admin", adminUserRoutes);
 app.use("/admin", adminRoutes);
-app.use("/api", adminActivityRoutes);
+app.use("/", adminActivityRoutes);
 
 // ---- 404 fallback ----
 app.use((req, res) => {

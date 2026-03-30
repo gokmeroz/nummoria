@@ -18,8 +18,8 @@ import { useNavigation } from "@react-navigation/native";
 import api from "../lib/api";
 
 // ✅ NEW: Radial menu FAB
-import RadialMenuFab from "../components/RadialMenuFab";
-
+// import RadialMenuFab from "../components/RadialMenuFab";
+import DashboardMenuFab from "../components/DashboardMenuFab";
 const { width } = Dimensions.get("window");
 
 const BG_DARK = "#020617";
@@ -313,7 +313,6 @@ export default function DashboardScreen() {
   return (
     <View style={styles.root}>
       <StatusBar barStyle="light-content" />
-
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -506,9 +505,9 @@ export default function DashboardScreen() {
 
         <View style={styles.footerSpace} />
       </ScrollView>
-
       {/* ✅ NEW VERSION: Bottom-right radial navigation menu */}
-      <RadialMenuFab items={radialItems} placement="bottom-right" />
+      {/* <RadialMenuFab items={radialItems} placement="bottom-right" /> */}
+      <DashboardMenuFab />
     </View>
   );
 }

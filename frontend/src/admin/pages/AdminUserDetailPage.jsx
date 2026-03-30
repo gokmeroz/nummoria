@@ -16,6 +16,7 @@ import {
   adminAddUserNote,
   adminUpdateUserFlags,
   adminGetUserActivity,
+  adminUpdateUserRole, // ← NEW
 } from "../lib/adminApi";
 
 /* ─── GLOBAL STYLES ─── */
@@ -264,6 +265,12 @@ const G = `
   .danger-zone {
     padding:16px;border-radius:16px;
     border:1px solid rgba(248,113,113,.18);background:rgba(248,113,113,.04);
+  }
+
+  /* ── role zone ── */
+  .role-zone {
+    padding:16px;border-radius:16px;
+    border:1px solid rgba(167,139,250,.18);background:rgba(167,139,250,.04);
   }
 `;
 
@@ -812,6 +819,7 @@ export default function AdminUserDetailPage() {
     saveFlags: false,
     addNote: false,
     loadNotes: false,
+    updateRole: false, // ← NEW
   });
   const [notes, setNotes] = useState([]);
   const [notesErr, setNotesErr] = useState("");
@@ -821,6 +829,8 @@ export default function AdminUserDetailPage() {
   const userId = user?._id || user?.id || id;
   const email = user?.email || "";
   const isActive = user?.isActive !== false;
+  const currentRole = user?.role || "user"; // ← NEW
+  const isAdmin = currentRole === "admin"; // ← NEW
 
   const [activityItems, setActivityItems] = useState([]);
   const [activityErr, setActivityErr] = useState("");
@@ -837,6 +847,7 @@ export default function AdminUserDetailPage() {
       { key: "password_reset_sent", label: "Password reset" },
       { key: "verification_resent", label: "Verification" },
       { key: "subscription_updated", label: "Subscription" },
+      { key: "role_updated", label: "Role" }, // ← NEW
       { key: "admin_event", label: "Other" },
     ],
     [],
@@ -1180,6 +1191,33 @@ export default function AdminUserDetailPage() {
       setErr(e?.response?.data?.message || "Failed to add note.");
     } finally {
       setActionLoading((s) => ({ ...s, addNote: false }));
+    }
+  }
+
+  /* ── NEW: role update ── */
+  async function onUpdateRole(nextRole) {
+    if (!userId) return;
+    const label =
+      nextRole === "admin"
+        ? "grant Admin privileges"
+        : "revoke Admin and set to User";
+    if (
+      !window.confirm(
+        `Are you sure you want to ${label} for ${displayName || email}?\n\nThis takes effect immediately.`,
+      )
+    )
+      return;
+    try {
+      setActionLoading((s) => ({ ...s, updateRole: true }));
+      setErr("");
+      const res = await adminUpdateUserRole(userId, nextRole);
+      const upd = res?.user ?? res;
+      setUser((p) => ({ ...(p || {}), ...(upd || {}), role: nextRole }));
+      setToast(`Role updated to "${nextRole}"`);
+    } catch (e) {
+      setErr(e?.response?.data?.message || "Failed to update role.");
+    } finally {
+      setActionLoading((s) => ({ ...s, updateRole: false }));
     }
   }
 
@@ -1579,7 +1617,50 @@ export default function AdminUserDetailPage() {
                     />
                     <Row label="Name" value={user.name} />
                     <Row label="Email" value={user.email} />
-                    <Row label="Role" value={user.role} />
+                    {/* ── Role row with inline toggle ── */}
+                    <div className="row-label">Role</div>
+                    <div
+                      className="row-val"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontFamily: "'DM Mono',monospace",
+                          fontSize: 12,
+                          color: isAdmin ? "#34d399" : "rgba(226,232,240,.7)",
+                        }}
+                      >
+                        {currentRole}
+                      </span>
+                      {isAdmin ? (
+                        <button
+                          className="danger-btn"
+                          style={{ padding: "3px 10px", fontSize: 11 }}
+                          onClick={() => onUpdateRole("user")}
+                          disabled={actionLoading.updateRole || loading}
+                        >
+                          {actionLoading.updateRole
+                            ? "Updating…"
+                            : "Revoke Admin"}
+                        </button>
+                      ) : (
+                        <button
+                          className="success-btn"
+                          style={{ padding: "3px 10px", fontSize: 11 }}
+                          onClick={() => onUpdateRole("admin")}
+                          disabled={actionLoading.updateRole || loading}
+                        >
+                          {actionLoading.updateRole
+                            ? "Updating…"
+                            : "Grant Admin"}
+                        </button>
+                      )}
+                    </div>
                     <Row
                       label="Subscription"
                       value={<SubBadge plan={user.subscription} />}
@@ -2200,6 +2281,90 @@ export default function AdminUserDetailPage() {
                 >
                   Use these actions only when assisting users with access or
                   security issues.
+                </div>
+
+                {/* ── ROLE MANAGEMENT ── */}
+                <Divider />
+                <div
+                  style={{
+                    fontFamily: "'DM Mono',monospace",
+                    fontSize: 10,
+                    letterSpacing: ".16em",
+                    textTransform: "uppercase",
+                    color: "rgba(226,232,240,.35)",
+                    marginBottom: 12,
+                  }}
+                >
+                  Role Management
+                </div>
+                <div className="role-zone">
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          fontSize: 13,
+                          color: "rgba(226,232,240,.85)",
+                          marginBottom: 4,
+                        }}
+                      >
+                        Current role:{" "}
+                        <span
+                          style={{
+                            fontFamily: "'DM Mono',monospace",
+                            fontWeight: 700,
+                            color: isAdmin ? "#34d399" : "rgba(226,232,240,.6)",
+                          }}
+                        >
+                          {currentRole}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "var(--muted)",
+                          fontFamily: "'DM Mono',monospace",
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        {isAdmin
+                          ? "This user has full admin access. Revoking will downgrade them to a standard user."
+                          : "Grant admin access to allow this user to manage other users and settings."}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {isAdmin ? (
+                        <button
+                          className="danger-btn"
+                          onClick={() => onUpdateRole("user")}
+                          disabled={actionLoading.updateRole || loading}
+                          style={{ whiteSpace: "nowrap" }}
+                        >
+                          {actionLoading.updateRole
+                            ? "Updating…"
+                            : "⬇ Revoke Admin"}
+                        </button>
+                      ) : (
+                        <button
+                          className="success-btn"
+                          onClick={() => onUpdateRole("admin")}
+                          disabled={actionLoading.updateRole || loading}
+                          style={{ whiteSpace: "nowrap" }}
+                        >
+                          {actionLoading.updateRole
+                            ? "Updating…"
+                            : "⬆ Grant Admin"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </Section>
             )}

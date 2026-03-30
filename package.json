@@ -9,6 +9,8 @@
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "csv-parse": "^6.1.0",
+    "expo-blur": "~55.0.10",
+    "expo-linear-gradient": "~55.0.9",
     "express-session": "^1.18.2",
     "framer-motion": "^12.23.24",
     "g": "^2.0.1",

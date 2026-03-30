@@ -15,6 +15,10 @@ export async function adminSearchUsers({
   });
   return data;
 }
+export async function adminUpdateUserRole(userId, role) {
+  const { data } = await api.patch(`/admin/users/${userId}/role`, { role });
+  return data;
+}
 
 export async function adminGetUserById(userId) {
   const { data } = await api.get(`/admin/users/${userId}`, {
@@ -33,7 +37,7 @@ export async function getMe() {
 // (Keep but don’t call until backend exists)
 export async function adminGetUserAccounts(
   userId,
-  { includeInactive = false } = {}
+  { includeInactive = false } = {},
 ) {
   const { data } = await api.get(`/admin/users/${userId}/accounts`, {
     params: { includeInactive },
@@ -46,7 +50,7 @@ export async function adminDeactivateUser(userId) {
   const { data } = await api.patch(
     `/admin/users/${userId}/deactivate`,
     {},
-    { withCredentials: true }
+    { withCredentials: true },
   );
   return data;
 }
@@ -55,7 +59,7 @@ export async function adminReactivateUser(userId) {
   const { data } = await api.patch(
     `/admin/users/${userId}/reactivate`,
     {},
-    { withCredentials: true }
+    { withCredentials: true },
   );
   return data;
 }

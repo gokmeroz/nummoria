@@ -7,36 +7,36 @@ import {
   StyleSheet,
   Animated,
   Easing,
+  Pressable,
 } from "react-native";
 
-const BG_DARK = "#020617";
+const BACKDROP = "rgba(2, 6, 23, 0.32)";
+const FAB_BG = "#16a34a";
 
-function polarToCartesian(r, angleDeg) {
-  const a = (angleDeg * Math.PI) / 180;
-  return { x: r * Math.cos(a), y: r * Math.sin(a) };
+function normalizeItems(items = []) {
+  return items.map((it, index) => ({
+    key: it?.key || `item-${index}`,
+    title: it?.title || it?.label || it?.text || "Action",
+    icon: it?.icon || it?.emoji || "•",
+    onPress: typeof it?.onPress === "function" ? it.onPress : () => {},
+    destructive: Boolean(it?.destructive),
+  }));
 }
 
-/**
- * items: [{ key, icon, title, onPress }]
- * placement: "bottom-right" (default) | "bottom-left"
- */
 export default function RadialMenuFab({
   items = [],
-  radius = 160,
-  startAngle = -100,
-  endAngle = -190,
-  buttonSize = 60,
-  mainSize = 70,
   placement = "bottom-right",
+  mainSize = 70,
+  itemHeight = 56,
+  itemGap = 12,
+  bottomOffset,
 }) {
   const [open, setOpen] = useState(false);
   const anim = useRef(new Animated.Value(0)).current;
 
-  const points = useMemo(() => {
-    const n = Math.max(items.length, 1);
-    const step = n === 1 ? 0 : (endAngle - startAngle) / (n - 1);
-    return items.map((_, i) => polarToCartesian(radius, startAngle + step * i));
-  }, [items, radius, startAngle, endAngle]);
+  const safeItems = useMemo(() => normalizeItems(items), [items]);
+
+  const resolvedBottom = typeof bottomOffset === "number" ? bottomOffset : 34;
 
   function toggle() {
     const next = !open;
@@ -44,10 +44,12 @@ export default function RadialMenuFab({
 
     Animated.timing(anim, {
       toValue: next ? 1 : 0,
-      duration: 220,
-      easing: Easing.out(Easing.cubic),
+      duration: next ? 240 : 180,
+      easing: next ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
       useNativeDriver: true,
-    }).start();
+    }).start(() => {
+      if (!next) setOpen(false);
+    });
   }
 
   function closeAndRun(fn) {
@@ -62,154 +64,118 @@ export default function RadialMenuFab({
     });
   }
 
-  const overlayOpacity = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 0.65],
-  });
-
-  const menuScale = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.9, 1],
-  });
-
-  const itemOpacity = anim.interpolate({
+  const backdropOpacity = anim.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 1],
   });
 
-  // Labels appear after opening starts
-  const labelOpacity = anim.interpolate({
-    inputRange: [0, 0.35, 1],
-    outputRange: [0, 0, 1],
-  });
-
-  // Slide toward center (bottom-right => slide left, bottom-left => slide right)
-  const labelSlide = anim.interpolate({
+  const fabRotate = anim.interpolate({
     inputRange: [0, 1],
-    outputRange: placement === "bottom-right" ? [10, 0] : [-10, 0],
+    outputRange: ["0deg", "45deg"],
   });
 
   const wrapStyle =
-    placement === "bottom-right" ? styles.wrapBR : styles.wrapBL;
-  const itemWrapStyle =
-    placement === "bottom-right" ? styles.itemWrapBR : styles.itemWrapBL;
-
-  // NEW: Put titles slightly TOP-LEFT of each icon (tooltip-style)
-  // For bottom-right placement, "top-left" means up + left (toward screen center).
-  // For bottom-left placement, "top-left" means up + right (toward screen center).
-  const diagGap = 10;
-  const diagX =
-    placement === "bottom-right"
-      ? -(buttonSize * 0.65 + diagGap)
-      : buttonSize * 0.65 + diagGap;
-  const diagY = -(buttonSize * 0.55 + 6);
+    placement === "bottom-left"
+      ? { left: 20, right: undefined, bottom: resolvedBottom }
+      : { right: 20, left: undefined, bottom: resolvedBottom };
 
   return (
     <>
-      {open && (
-        <Animated.View style={[styles.overlay, { opacity: overlayOpacity }]}>
-          <TouchableOpacity
-            style={StyleSheet.absoluteFill}
-            activeOpacity={1}
-            onPress={toggle}
-          />
+      {open ? (
+        <Animated.View
+          pointerEvents="auto"
+          style={[styles.overlay, { opacity: backdropOpacity }]}
+        >
+          <Pressable style={StyleSheet.absoluteFill} onPress={toggle} />
         </Animated.View>
-      )}
+      ) : null}
 
-      <View pointerEvents="box-none" style={wrapStyle}>
-        {items.map((it, idx) => {
-          const { x, y } = points[idx];
+      <View pointerEvents="box-none" style={[styles.wrap, wrapStyle]}>
+        <View pointerEvents="box-none" style={styles.stack}>
+          {safeItems.map((item, idx) => {
+            const orderFromBottom = safeItems.length - idx;
+            const verticalOffset = orderFromBottom * (itemHeight + itemGap);
 
-          const translateX = anim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [0, x],
-          });
-          const translateY = anim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [0, y],
-          });
+            const translateY = anim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [20, -verticalOffset],
+            });
 
-          // Keep earlier items on top to avoid label hiding
-          const stackZ = 1000 - idx;
+            const opacity = anim.interpolate({
+              inputRange: [0, 0.15, 1],
+              outputRange: [0, 0, 1],
+            });
 
-          const icon = it.icon ?? it.emoji ?? "•";
-          const title = it.title ?? it.text ?? it.label ?? "";
+            const scale = anim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0.92, 1],
+            });
 
-          return (
-            <Animated.View
-              key={it.key}
-              style={[
-                itemWrapStyle,
-                {
-                  width: buttonSize,
-                  height: buttonSize,
-                  opacity: itemOpacity,
-                  zIndex: stackZ,
-                  elevation: stackZ,
-                  transform: [
-                    { translateX },
-                    { translateY },
-                    { scale: menuScale },
-                  ],
-                },
-              ]}
-            >
-              <TouchableOpacity
-                activeOpacity={0.92}
-                onPress={() => closeAndRun(it.onPress)}
+            const slideX = anim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [placement === "bottom-right" ? 10 : -10, 0],
+            });
+
+            return (
+              <Animated.View
+                key={item.key}
+                pointerEvents={open ? "auto" : "none"}
                 style={[
-                  styles.itemBtn,
+                  styles.itemWrap,
                   {
-                    width: buttonSize,
-                    height: buttonSize,
-                    borderRadius: buttonSize / 2,
+                    opacity,
+                    transform: [
+                      { translateY },
+                      { translateX: slideX },
+                      { scale },
+                    ],
+                    zIndex: 100 - idx,
+                    elevation: 100 - idx,
                   },
                 ]}
               >
-                <Text style={styles.itemIcon} numberOfLines={1}>
-                  {icon}
-                </Text>
-
-                {open && !!title && (
-                  <Animated.View
-                    pointerEvents="none"
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={() => closeAndRun(item.onPress)}
+                  style={[
+                    styles.itemBtn,
+                    item.destructive && styles.itemBtnDestructive,
+                  ]}
+                >
+                  <View
                     style={[
-                      styles.titlePill,
-                      {
-                        // Diagonal anchor: slightly above + to the "center side"
-                        left: "50%",
-                        top: "50%",
-                        opacity: labelOpacity,
-                        zIndex: 9999,
-                        elevation: 9999,
-                        transform: [
-                          { translateX: diagX }, // base diagonal placement
-                          { translateY: diagY },
-                          { translateX: labelSlide }, // small slide-in polish
-                        ],
-                      },
+                      styles.iconWrap,
+                      item.destructive && styles.iconWrapDestructive,
                     ]}
                   >
-                    <Text
-                      style={styles.titleText}
-                      numberOfLines={1}
-                      ellipsizeMode="clip"
-                    >
-                      {title}
-                    </Text>
-                  </Animated.View>
-                )}
-              </TouchableOpacity>
-            </Animated.View>
-          );
-        })}
+                    <Text style={styles.itemIcon}>{item.icon}</Text>
+                  </View>
+
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      styles.itemTitle,
+                      item.destructive && styles.itemTitleDestructive,
+                    ]}
+                  >
+                    {item.title}
+                  </Text>
+                </TouchableOpacity>
+              </Animated.View>
+            );
+          })}
+        </View>
 
         <TouchableOpacity
           activeOpacity={0.9}
           onPress={toggle}
           style={[styles.mainFab, { width: mainSize, height: mainSize }]}
         >
-          <Text style={styles.mainIcon}>{open ? "×" : "≡"}</Text>
+          <Animated.Text
+            style={[styles.mainIcon, { transform: [{ rotate: fabRotate }] }]}
+          >
+            +
+          </Animated.Text>
         </TouchableOpacity>
       </View>
     </>
@@ -219,47 +185,93 @@ export default function RadialMenuFab({
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: BG_DARK,
+    backgroundColor: BACKDROP,
     zIndex: 10,
   },
 
-  // Bottom-left
-  wrapBL: {
+  wrap: {
     position: "absolute",
-    left: 20,
-    bottom: 35,
     zIndex: 20,
-    width: 350,
-    height: 350,
-    alignItems: "flex-start",
-    justifyContent: "flex-end",
-  },
-  itemWrapBL: {
-    position: "absolute",
-    left: 12,
-    bottom: 12,
-  },
-
-  // Bottom-right
-  wrapBR: {
-    position: "absolute",
-    right: 20,
-    bottom: 40,
-    zIndex: 20,
-    width: 420,
-    height: 420,
     alignItems: "flex-end",
     justifyContent: "flex-end",
   },
-  itemWrapBR: {
+
+  stack: {
     position: "absolute",
-    right: 15,
-    bottom: 15,
+    right: 0,
+    bottom: 0,
+    alignItems: "flex-end",
+    justifyContent: "flex-end",
+  },
+
+  itemWrap: {
+    position: "absolute",
+    right: 0,
+    bottom: 0,
+  },
+
+  itemBtn: {
+    minWidth: 220,
+    maxWidth: 260,
+    minHeight: 56,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    backgroundColor: "rgba(8, 17, 31, 0.96)",
+    borderWidth: 1.5,
+    borderColor: "rgba(22,163,74,0.48)",
+    flexDirection: "row",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.32,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 10,
+  },
+
+  itemBtnDestructive: {
+    borderColor: "rgba(248,113,113,0.42)",
+    backgroundColor: "rgba(60, 16, 16, 0.96)",
+  },
+
+  iconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(22,163,74,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(22,163,74,0.28)",
+    marginRight: 10,
+  },
+
+  iconWrapDestructive: {
+    backgroundColor: "rgba(248,113,113,0.16)",
+    borderColor: "rgba(248,113,113,0.28)",
+  },
+
+  itemIcon: {
+    color: "#ffffff",
+    fontSize: 18,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+
+  itemTitle: {
+    flex: 1,
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: "800",
+    letterSpacing: 0.2,
+  },
+
+  itemTitleDestructive: {
+    color: "#fecaca",
   },
 
   mainFab: {
-    backgroundColor: "#16a34a",
     borderRadius: 999,
+    backgroundColor: FAB_BG,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
@@ -270,59 +282,12 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 12 },
     elevation: 12,
   },
+
   mainIcon: {
-    fontSize: 32,
+    fontSize: 34,
     fontWeight: "900",
     color: "#ffffff",
-    lineHeight: 32,
-  },
-
-  itemBtn: {
-    backgroundColor: "#0a1628",
-    borderWidth: 2.5,
-    borderColor: "#16a34a",
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 7 },
-    elevation: 10,
-  },
-
-  itemIcon: {
-    color: "#ffffff",
-    fontWeight: "800",
-    fontSize: 26,
-    lineHeight: 28,
-    textAlign: "center",
-  },
-
-  // Diagonal tooltip pill (top-left relative to icon)
-  titlePill: {
-    position: "absolute",
-    height: 32,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    backgroundColor: "rgba(2, 8, 25, 0.92)",
-    borderWidth: 1,
-    borderColor: "rgba(22,163,74,0.6)",
-    justifyContent: "center",
-    alignSelf: "flex-start",
-    minWidth: 96,
-    maxWidth: 220,
-    shadowColor: "#000",
-    shadowOpacity: 0.34,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 25,
-  },
-
-  titleText: {
-    color: "#e5e7eb",
-    fontSize: 13,
-    fontWeight: "800",
-    letterSpacing: 0.2,
-    includeFontPadding: false,
+    lineHeight: 34,
+    marginTop: -1,
   },
 });

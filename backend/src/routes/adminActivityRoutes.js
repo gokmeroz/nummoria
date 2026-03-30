@@ -1,6 +1,10 @@
 // backend/src/routes/adminActivityRoutes.js
 import express from "express";
-import { adminGetUserActivity } from "../controllers/adminActivityController.js";
+import {
+  adminGetUserActivity,
+  updateUserRole,
+  adminGetGlobalActivity,
+} from "../controllers/adminActivityController.js";
 
 // IMPORTANT: replace these with your real middlewares
 import { requireAuth } from "../middlewares/auth.js";
@@ -13,7 +17,13 @@ router.get(
   "/admin/users/:userId/activity",
   requireAuth,
   requireAdmin,
-  adminGetUserActivity
+  adminGetUserActivity,
+);
+router.patch(
+  "/admin/users/:id/role",
+  requireAuth,
+  requireAdmin,
+  updateUserRole,
 );
 
 export default router;
