@@ -25,22 +25,29 @@ import {
   View,
   Image,
 } from "react-native";
-import TextRecognition from "@react-native-ml-kit/text-recognition"; // Android on-device OCR (in your current setup)
+import TextRecognition from "@react-native-ml-kit/text-recognition";
 import { useNavigation } from "@react-navigation/native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 
-// ✅ mobile axios instance (points to same backend as web)
 import api from "../lib/api";
 import logo from "../../assets/nummoria_logo.png";
 
-const main = "#22c55e";
-const secondary = "#4ade80";
-const BG_DARK = "#020617";
-const CARD_DARK = "#020819";
-const BORDER_DARK = "#0f172a";
-const TEXT_SOFT = "rgba(148,163,184,0.85)";
-const TEXT_MUTED = "rgba(148,163,184,0.7)";
-const TEXT_HEADING = "#e5e7eb";
+/* ──────────────────────────────────────────────────────────
+   THEME — aligned with DashboardScreen.js
+────────────────────────────────────────────────────────── */
+const BG_DARK = "#070A07";
+const CARD_BG = "rgba(255,255,255,0.03)";
+const CARD_BORDER = "rgba(255,255,255,0.10)";
+const TEXT_PRIMARY = "#f9fafb";
+const TEXT_MUTED = "rgba(255,255,255,0.70)";
+const TEXT_SOFT = "rgba(255,255,255,0.55)";
+const MAIN = "#4f772d";
+const SECONDARY = "#90a955";
+const GREEN = "#13e243";
+const EXPENSE = "#991746";
+const GREEN_GLOW = "rgba(19,226,67,0.10)";
+const PINK_GLOW = "rgba(153,23,70,0.12)";
+const CARD_INNER = "rgba(255,255,255,0.04)";
 const DATE_LANG = "en-US";
 
 /* --------------------------- Date helpers --------------------------- */
@@ -107,7 +114,6 @@ function parseReceiptFromQR(data) {
   let dateStr;
   let description;
 
-  // 1) Try JSON
   try {
     const obj = JSON.parse(data);
     if (obj && typeof obj === "object") {
@@ -116,30 +122,25 @@ function parseReceiptFromQR(data) {
       dateStr = obj.date ?? obj.txDate ?? dateStr;
       description = obj.description ?? obj.desc ?? description;
     }
-  } catch {
-    // not JSON
-  }
+  } catch {}
 
-  // 2) Fallback: first "xx.xx" number
   if (amount == null) {
     const match = data.match(/([0-9]+[.,][0-9]{2})/);
     if (match) amount = match[1];
   }
 
-  // 3) Currency code
   if (!currency) {
     const curMatch = data.match(/\b(USD|EUR|TRY|GBP)\b/i);
     if (curMatch) currency = curMatch[1].toUpperCase();
   }
 
-  // 4) Date
   if (!dateStr) {
     const iso = data.match(/(\d{4}-\d{2}-\d{2})/);
     const eu = data.match(/(\d{2}\.\d{2}\.\d{4})/);
     if (iso) {
       dateStr = iso[1];
     } else if (eu) {
-      const raw = eu[1]; // DD.MM.YYYY
+      const raw = eu[1];
       const [dd, mm, yyyy] = raw.split(".");
       dateStr = `${yyyy}-${mm}-${dd}`;
     }
@@ -162,7 +163,6 @@ function parseReceiptFromText(rawText) {
   const textRaw = String(rawText);
   const text = textRaw.replace(/\s+/g, " ").toUpperCase();
 
-  // ----- 1) AMOUNT (TOTAL) -----
   const totalRegex =
     /(GENEL TOPLAM|TOPLAM|TOPLAM TUTAR|ÖDENECEK|ODENECEK|TOTAL|GRAND TOTAL|AMOUNT)[^\d]*([0-9]+[.,][0-9]{2})/;
   const totalMatch = text.match(totalRegex);
@@ -188,14 +188,12 @@ function parseReceiptFromText(rawText) {
     }
   }
 
-  // ----- 2) CURRENCY -----
   let currency = null;
   if (/\b(TRY|TL|₺)\b/.test(text)) currency = "TRY";
   else if (/\b(USD|\$)\b/.test(text)) currency = "USD";
   else if (/\b(EUR|€)\b/.test(text)) currency = "EUR";
   else if (/\b(GBP|£)\b/.test(text)) currency = "GBP";
 
-  // ----- 3) DATE -----
   let dateStr = null;
   const iso = text.match(/(\d{4}[-/.]\d{2}[-/.]\d{2})/);
   const eu = text.match(/(\d{2}[-/.]\d{2}[-/.]\d{4})/);
@@ -207,7 +205,6 @@ function parseReceiptFromText(rawText) {
     dateStr = `${yyyy}-${mm}-${dd}`;
   }
 
-  // ----- 4) SELLER / MERCHANT -----
   let seller = null;
   const lines = textRaw
     .split(/\r?\n/)
@@ -325,7 +322,7 @@ function Chip({ label, selected, onPress, small }) {
         small && styles.chipSmall,
         selected && styles.chipSelected,
       ]}
-      activeOpacity={0.8}
+      activeOpacity={0.85}
     >
       <Text
         style={[
@@ -341,6 +338,75 @@ function Chip({ label, selected, onPress, small }) {
   );
 }
 
+function StatCard({
+  title,
+  value,
+  accent = "expense",
+  chipText = "THIS MONTH",
+}) {
+  const accentMap = {
+    expense: {
+      glow: "rgba(153,23,70,0.20)",
+      dot: EXPENSE,
+      chipBg: "rgba(153,23,70,0.15)",
+      chipBorder: "rgba(153,23,70,0.32)",
+      valueColor: SECONDARY,
+    },
+    neutral: {
+      glow: "rgba(144,169,85,0.15)",
+      dot: SECONDARY,
+      chipBg: "rgba(255,255,255,0.05)",
+      chipBorder: "rgba(255,255,255,0.12)",
+      valueColor: SECONDARY,
+    },
+    green: {
+      glow: "rgba(19,226,67,0.16)",
+      dot: GREEN,
+      chipBg: "rgba(19,226,67,0.14)",
+      chipBorder: "rgba(19,226,67,0.32)",
+      valueColor: SECONDARY,
+    },
+  };
+
+  const a = accentMap[accent] || accentMap.neutral;
+
+  return (
+    <View style={styles.statCard}>
+      <View style={[styles.statGlow, { backgroundColor: a.glow }]} />
+      <View style={styles.statHairline} />
+
+      <View style={styles.statTopRow}>
+        <View style={{ flex: 1, paddingRight: 10 }}>
+          <Text style={styles.statLabel}>{title}</Text>
+          <Text style={[styles.statValue, { color: a.valueColor }]}>
+            {value}
+          </Text>
+        </View>
+
+        <View
+          style={[
+            styles.statChip,
+            {
+              backgroundColor: a.chipBg,
+              borderColor: a.chipBorder,
+            },
+          ]}
+        >
+          <View style={[styles.statChipDot, { backgroundColor: a.dot }]} />
+          <Text style={styles.statChipText}>{chipText}</Text>
+        </View>
+      </View>
+
+      <View style={styles.statBottomRow}>
+        <View style={styles.statHintRow}>
+          <View style={styles.statHintDot} />
+          <Text style={styles.statHint}>Updated from filters</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 /* =============================== Screen =============================== */
 
 export default function ExpensesScreen({ route }) {
@@ -349,23 +415,19 @@ export default function ExpensesScreen({ route }) {
 
   const accountId = route?.params?.accountId;
 
-  // --- data ---
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
   const [accounts, setAccounts] = useState([]);
 
-  // ✅ AUTO ADD state
   const [autoOpen, setAutoOpen] = useState(false);
   const [autoText, setAutoText] = useState("");
   const [autoAccountId, setAutoAccountId] = useState("");
   const [autoLoading, setAutoLoading] = useState(false);
   const [scanProcessing, setScanProcessing] = useState(false);
 
-  // --- ui ---
   const [initialDone, setInitialDone] = useState(false);
   const [err, setErr] = useState("");
 
-  // --- filters ---
   const [q, setQ] = useState("");
   const [fAccountId, setFAccountId] = useState("ALL");
   const [fCategoryId, setFCategoryId] = useState("ALL");
@@ -374,7 +436,6 @@ export default function ExpensesScreen({ route }) {
   const [showUpcoming, setShowUpcoming] = useState(false);
   const [datePreset, setDatePreset] = useState("ALL");
 
-  // --- modal state (create / edit) ---
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({
@@ -388,19 +449,15 @@ export default function ExpensesScreen({ route }) {
     accountId: "",
   });
 
-  // --- QR / camera state (expo-camera) ---
   const [scannerVisible, setScannerVisible] = useState(false);
-  const [isScanning, setIsScanning] = useState(false); // barcode mode
+  const [isScanning, setIsScanning] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState("back");
   const [flash, setFlash] = useState("off");
   const scannedOnceRef = useRef(false);
   const cameraRef = useRef(null);
-
-  // avoid double OCR taps
   const ocrBusyRef = useRef(false);
 
-  /* ---------------------------- Lookups ---------------------------- */
   const categoriesById = useMemo(() => {
     const m = new Map();
     for (const c of categories) m.set(c._id, c);
@@ -424,19 +481,15 @@ export default function ExpensesScreen({ route }) {
     return ["ALL", ...Array.from(s)];
   }, [transactions]);
 
-  /* ----------------------------- Data load ----------------------------- */
   const loadAll = useCallback(async () => {
     try {
       setErr("");
 
-      console.log("[Expenses] fetching data...");
-      const t0 = Date.now();
       const [txRes, catRes, accRes] = await Promise.all([
         api.get("/transactions", { params: { type: "expense" } }),
         api.get("/categories"),
         api.get("/accounts"),
       ]);
-      console.log("[Expenses] data loaded in", Date.now() - t0, "ms");
 
       const cats = (catRes.data || []).filter(
         (c) => c.kind === "expense" && !c.isDeleted,
@@ -452,7 +505,6 @@ export default function ExpensesScreen({ route }) {
       setAccounts(accs);
       setTransactions(txs);
     } catch (e) {
-      console.log("[Expenses] error", e.message);
       setErr(e?.response?.data?.error || e.message || "Failed to load data");
     } finally {
       setInitialDone(true);
@@ -463,7 +515,6 @@ export default function ExpensesScreen({ route }) {
     loadAll();
   }, [loadAll]);
 
-  /* ------------------------ Shared date-filter logic ------------------------ */
   function passesDateFilter(dateStr, preset) {
     if (preset === "ALL") return true;
 
@@ -494,7 +545,6 @@ export default function ExpensesScreen({ route }) {
     return true;
   }
 
-  /* ----------------------------- Filtering ----------------------------- */
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
 
@@ -565,7 +615,6 @@ export default function ExpensesScreen({ route }) {
     datePreset,
   ]);
 
-  /* ------------------------------ Totals ------------------------------ */
   const totals = useMemo(() => {
     const byCur = {};
     for (const t of rows) {
@@ -580,7 +629,6 @@ export default function ExpensesScreen({ route }) {
     }));
   }, [rows]);
 
-  /* --------------------------- Upcoming (planned) -------------------------- */
   const upcoming = useMemo(() => {
     const today = startOfUTC(new Date());
     const keyOf = (t) =>
@@ -596,7 +644,6 @@ export default function ExpensesScreen({ route }) {
 
     const map = new Map();
 
-    // future rows actually in DB
     for (const t of transactions) {
       if (t.type !== "expense") continue;
       if (t.isDeleted) continue;
@@ -606,7 +653,6 @@ export default function ExpensesScreen({ route }) {
       }
     }
 
-    // virtual rows coming from nextDate
     for (const t of transactions) {
       if (t.type !== "expense" || !t.nextDate) continue;
       if (t.isDeleted) continue;
@@ -660,7 +706,6 @@ export default function ExpensesScreen({ route }) {
     datePreset,
   ]);
 
-  /* ------------------------------- Insights (KPIs) ------------------------------- */
   const { statsCurrency, kpis, noteMixedCurrency } = useMemo(() => {
     const chosen = fCurrency !== "ALL" ? fCurrency : rows[0]?.currency || "USD";
     const filteredByCur = rows.filter((r) =>
@@ -706,7 +751,6 @@ export default function ExpensesScreen({ route }) {
     };
   }, [rows, fCurrency]);
 
-  /* ---------------------- Insights: charts data ---------------------- */
   const spendingByCategory = useMemo(() => {
     if (!rows.length) return [];
     const map = new Map();
@@ -767,7 +811,6 @@ export default function ExpensesScreen({ route }) {
     return { points, max };
   }, [rows, statsCurrency]);
 
-  /* ------------------------------- CRUD TX ------------------------------- */
   const openAutoAdd = useCallback(() => {
     setAutoAccountId(accountId || defaultAccountId || "");
     setAutoText("");
@@ -908,9 +951,7 @@ export default function ExpensesScreen({ route }) {
               String(t._id) === String(parentUpdated._id) ? parentUpdated : t,
             ),
           );
-        } catch {
-          // ignore
-        }
+        } catch {}
       }
 
       const createdArr = Array.isArray(data?.created) ? data.created : [data];
@@ -950,9 +991,6 @@ export default function ExpensesScreen({ route }) {
     });
   }, []);
 
-  /* ---------------------- Scan helpers ---------------------- */
-
-  // ✅ Backend OCR endpoint (works on iOS + Android)
   async function parseReceiptViaBackend(photoUri) {
     const fd = new FormData();
     fd.append("file", {
@@ -961,7 +999,6 @@ export default function ExpensesScreen({ route }) {
       type: "image/jpeg",
     });
 
-    // IMPORTANT: do NOT set multipart content-type manually (axios sets boundary)
     const res = await api.post("/receipt/parse", fd, {
       timeout: 30000,
     });
@@ -1010,10 +1047,7 @@ export default function ExpensesScreen({ route }) {
           const result = await TextRecognition.recognize(photoUri);
           rawText = result?.text || "";
           parsed = parseReceiptFromText(rawText);
-          console.log("[Expenses] OCR text (device):", rawText);
-        } catch (e) {
-          console.log("[Expenses] on-device OCR failed:", e?.message);
-        }
+        } catch {}
       }
 
       const missingCritical =
@@ -1062,10 +1096,7 @@ export default function ExpensesScreen({ route }) {
     [accountId, accounts, categories, form.accountId, form.currency],
   );
 
-  /* ---------------------- QR scanner handlers (expo-camera) ---------------------- */
   const openScanner = useCallback(async () => {
-    console.log("[Expenses] Scan receipt QR pressed");
-
     try {
       const ensurePerm = async () => {
         if (!permission) {
@@ -1090,10 +1121,9 @@ export default function ExpensesScreen({ route }) {
 
       setModalOpen(false);
       scannedOnceRef.current = false;
-      setIsScanning(true); // barcode mode
+      setIsScanning(true);
       setScannerVisible(true);
     } catch (e) {
-      console.log("[Expenses] openScanner error", e);
       Alert.alert("Error", e.message || "Failed to open scanner");
     }
   }, [permission, requestPermission]);
@@ -1104,8 +1134,6 @@ export default function ExpensesScreen({ route }) {
       scannedOnceRef.current = true;
 
       const text = String(data || "");
-      console.log("[Expenses] code scanned:", { type, data: text });
-
       setScanProcessing(true);
 
       try {
@@ -1118,7 +1146,6 @@ export default function ExpensesScreen({ route }) {
 
         setIsScanning(false);
         setScannerVisible(false);
-
         setModalOpen(true);
 
         const isLikelyIdOnly =
@@ -1140,7 +1167,6 @@ export default function ExpensesScreen({ route }) {
           "Auto-filled amount + date + description and inferred a category. Review and save.",
         );
       } catch (e) {
-        console.log("[Expenses] scan+ocr error", e);
         setScannerVisible(false);
         setIsScanning(false);
         setModalOpen(true);
@@ -1181,13 +1207,12 @@ export default function ExpensesScreen({ route }) {
 
       setModalOpen(false);
       setScannerVisible(true);
-      setIsScanning(false); // ✅ OCR mode
+      setIsScanning(false);
     } catch (e) {
       Alert.alert("Error", e.message || "Failed to open camera.");
     }
   }, [permission, requestPermission]);
 
-  /* ------------------------------- Row item ------------------------------- */
   function renderRow({ item }) {
     const catName =
       categories.find((c) => c._id === item.categoryId)?.name || "—";
@@ -1201,13 +1226,18 @@ export default function ExpensesScreen({ route }) {
             <Text style={styles.rowCategory}>{catName}</Text>
             {isFuture && <Text style={styles.badgeUpcoming}>Upcoming</Text>}
           </View>
-          <View style={styles.rowAccountBadge}>
-            <Text style={styles.rowAccountText}>{accName}</Text>
+
+          <View style={styles.rowMetaWrap}>
+            <View style={styles.rowMetaPill}>
+              <Text style={styles.rowMetaPillText}>{accName}</Text>
+            </View>
           </View>
+
           <Text style={styles.rowDescription} numberOfLines={2}>
             {item.description || "No description"}
           </Text>
           <Text style={styles.rowDate}>{fmtDateUTC(item.date)}</Text>
+
           {item.tags?.length ? (
             <Text style={styles.rowTags}>#{item.tags.join("  #")}</Text>
           ) : null}
@@ -1217,6 +1247,7 @@ export default function ExpensesScreen({ route }) {
           <Text style={styles.rowAmount}>
             -{minorToMajor(item.amountMinor, item.currency)} {item.currency}
           </Text>
+
           <View style={styles.rowActions}>
             <TouchableOpacity
               style={styles.rowBtn}
@@ -1238,7 +1269,6 @@ export default function ExpensesScreen({ route }) {
     );
   }
 
-  /* ----------------------------- Expense Modal ----------------------------- */
   const ExpenseModal = useCallback(() => {
     if (!modalOpen) return null;
 
@@ -1324,6 +1354,7 @@ export default function ExpensesScreen({ route }) {
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
           <View style={styles.modalCard}>
+            <View style={styles.modalHairline} />
             <ScrollView
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
@@ -1332,7 +1363,6 @@ export default function ExpensesScreen({ route }) {
                 {editing ? "Edit expense" : "New expense"}
               </Text>
 
-              {/* Account chips */}
               <View style={styles.modalField}>
                 <Text style={styles.modalLabel}>Account</Text>
                 <ScrollView
@@ -1368,7 +1398,6 @@ export default function ExpensesScreen({ route }) {
                 </ScrollView>
               </View>
 
-              {/* Amount + currency */}
               <View style={styles.modalRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.modalLabel}>Amount</Text>
@@ -1381,7 +1410,7 @@ export default function ExpensesScreen({ route }) {
                     style={styles.modalInput}
                   />
                 </View>
-                <View style={{ width: 90 }}>
+                <View style={{ width: 95 }}>
                   <Text style={styles.modalLabel}>Currency</Text>
                   <TextInput
                     value={form.currency}
@@ -1396,7 +1425,6 @@ export default function ExpensesScreen({ route }) {
                 </View>
               </View>
 
-              {/* Scan receipt */}
               <View style={styles.modalField}>
                 <TouchableOpacity
                   style={styles.scanBtn}
@@ -1404,7 +1432,7 @@ export default function ExpensesScreen({ route }) {
                   activeOpacity={0.85}
                 >
                   <Text style={styles.scanBtnText}>
-                    Scan receipt QR / barcode (ID)
+                    Scan receipt QR / barcode
                   </Text>
                 </TouchableOpacity>
 
@@ -1414,18 +1442,16 @@ export default function ExpensesScreen({ route }) {
                   activeOpacity={0.85}
                 >
                   <Text style={styles.scanBtnText}>
-                    Smart scan (photo) → auto-fill
+                    Smart scan photo → auto-fill
                   </Text>
                 </TouchableOpacity>
 
                 <Text style={styles.modalHint}>
-                  Barcode/QR usually contains only an ID. Smart scan reads the
-                  whole receipt to extract total + date + merchant and infers a
+                  Use smart scan to extract total, date, merchant, and infer a
                   category.
                 </Text>
               </View>
 
-              {/* Date + next date */}
               <View style={styles.modalRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.modalLabel}>Date</Text>
@@ -1438,7 +1464,7 @@ export default function ExpensesScreen({ route }) {
                   />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.modalLabel}>Next date (optional)</Text>
+                  <Text style={styles.modalLabel}>Next date</Text>
                   <TextInput
                     value={form.nextDate}
                     onChangeText={(v) =>
@@ -1451,7 +1477,6 @@ export default function ExpensesScreen({ route }) {
                 </View>
               </View>
 
-              {/* Category chips */}
               <View style={styles.modalField}>
                 <Text style={styles.modalLabel}>Category</Text>
                 <ScrollView
@@ -1483,7 +1508,6 @@ export default function ExpensesScreen({ route }) {
                 </ScrollView>
               </View>
 
-              {/* Description */}
               <View style={styles.modalField}>
                 <Text style={styles.modalLabel}>Description</Text>
                 <TextInput
@@ -1497,13 +1521,12 @@ export default function ExpensesScreen({ route }) {
                 />
               </View>
 
-              {/* Tags */}
               <View style={styles.modalField}>
-                <Text style={styles.modalLabel}>Tags (comma separated)</Text>
+                <Text style={styles.modalLabel}>Tags</Text>
                 <TextInput
                   value={form.tagsCsv}
                   onChangeText={(v) => setForm((f) => ({ ...f, tagsCsv: v }))}
-                  placeholder="groceries, rent"
+                  placeholder="groceries, dinner"
                   placeholderTextColor={TEXT_MUTED}
                   style={styles.modalInput}
                 />
@@ -1512,7 +1535,6 @@ export default function ExpensesScreen({ route }) {
                 </Text>
               </View>
 
-              {/* Actions */}
               <View style={styles.modalActions}>
                 <TouchableOpacity
                   style={[styles.modalBtn, styles.modalBtnSecondary]}
@@ -1545,48 +1567,64 @@ export default function ExpensesScreen({ route }) {
     openOcrScanner,
   ]);
 
-  /* ------------------------------ Header & Filters ------------------------------ */
   function Header() {
     return (
-      <View style={styles.header}>
-        <View style={styles.headerTopRow}>
+      <View style={styles.headerCard}>
+        <View style={styles.cardGlowGreen} />
+        <View style={styles.cardGlowPink} />
+        <View style={styles.cardHairline} />
+
+        <View style={styles.topBar}>
           <View>
-            <Text style={styles.headerEyebrow}>Spending overview</Text>
-            <Text style={styles.headerTitle}>Expenses</Text>
+            <Text style={styles.logoText}>Nummoria AI</Text>
           </View>
 
-          <View style={styles.headerTopRight}>
-            <TouchableOpacity
-              onPress={() => navigation.navigate("Dashboard")}
-              activeOpacity={0.85}
-              style={styles.headerLogoBtn}
-            >
-              <Image source={logo} style={styles.headerLogoImg} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.headerUpcomingBtn}
-              onPress={() => setShowUpcoming((v) => !v)}
-            >
-              <Text style={styles.headerUpcomingText}>Upcoming</Text>
-              <View style={styles.headerUpcomingBadge}>
-                <Text style={styles.headerUpcomingBadgeText}>
-                  {upcoming.length}
-                </Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.headerIconBtn}
-              onPress={loadAll}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.headerIconPlus}>↻</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            onPress={() => navigation.navigate("Dashboard")}
+            activeOpacity={0.85}
+            style={styles.headerLogoBtn}
+          >
+            <Image source={logo} style={styles.headerLogoImg} />
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.searchContainer}>
+        <View style={styles.greetingBlock}>
+          <Text style={styles.heroTitle}>Expenses</Text>
+          <Text style={styles.heroSubtitle}>
+            Review spending, spot patterns, and keep your outflow
+            decision-ready.
+          </Text>
+        </View>
+
+        <View style={styles.livePill}>
+          <View style={styles.livePillDot} />
+          <Text style={styles.livePillText}>SPENDING OVERVIEW</Text>
+        </View>
+
+        <View style={styles.headerControlsRow}>
+          <TouchableOpacity
+            style={styles.headerActionPill}
+            onPress={() => setShowUpcoming((v) => !v)}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.headerActionPillText}>Upcoming</Text>
+            <View style={styles.headerActionBadge}>
+              <Text style={styles.headerActionBadgeText}>
+                {upcoming.length}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.headerGhostBtn}
+            onPress={loadAll}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.headerGhostBtnText}>Refresh</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.searchWrap}>
           <TextInput
             value={q}
             onChangeText={setQ}
@@ -1617,153 +1655,132 @@ export default function ExpensesScreen({ route }) {
           ))}
         </ScrollView>
 
-        <View style={styles.filterRow}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterChipRow}
-            keyboardShouldPersistTaps="handled"
-          >
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipScrollSmall}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Chip
+            label="All accounts"
+            selected={fAccountId === "ALL"}
+            onPress={() => setFAccountId("ALL")}
+            small
+          />
+          {accounts.map((a) => (
             <Chip
-              label="All accounts"
-              selected={fAccountId === "ALL"}
-              onPress={() => setFAccountId("ALL")}
+              key={a._id}
+              label={a.name}
+              selected={fAccountId === a._id}
+              onPress={() => setFAccountId(a._id)}
               small
             />
-            {accounts.map((a) => (
-              <Chip
-                key={a._id}
-                label={a.name}
-                selected={fAccountId === a._id}
-                onPress={() => setFAccountId(a._id)}
-                small
-              />
-            ))}
-          </ScrollView>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterChipRow}
-            keyboardShouldPersistTaps="handled"
-          >
-            {currencies.map((c) => (
-              <Chip
-                key={c}
-                label={c === "ALL" ? "All currencies" : c}
-                selected={fCurrency === c}
-                onPress={() => setFCurrency(c)}
-                small
-              />
-            ))}
-          </ScrollView>
-        </View>
-
-        <View style={styles.sortRow}>
-          <Text style={styles.sortLabel}>Sorting:</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.sortChipRow}
-            keyboardShouldPersistTaps="handled"
-          >
-            <Chip
-              label="Newest"
-              selected={sortKey === "date_desc"}
-              onPress={() => setSortKey("date_desc")}
-              small
-            />
-            <Chip
-              label="Oldest"
-              selected={sortKey === "date_asc"}
-              onPress={() => setSortKey("date_asc")}
-              small
-            />
-            <Chip
-              label="Amount ↓"
-              selected={sortKey === "amount_desc"}
-              onPress={() => setSortKey("amount_desc")}
-              small
-            />
-            <Chip
-              label="Amount ↑"
-              selected={sortKey === "amount_asc"}
-              onPress={() => setSortKey("amount_asc")}
-              small
-            />
-          </ScrollView>
-        </View>
-
-        <View style={styles.totalsRow}>
-          {totals.map(({ cur, major }) => (
-            <Text key={cur} style={styles.totalsText}>
-              Total {cur}: {major}
-            </Text>
           ))}
-        </View>
+        </ScrollView>
 
-        <View style={styles.headerActionButtons}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.dateFilterChipRow}
-            keyboardShouldPersistTaps="handled"
-          >
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipScrollSmall}
+          keyboardShouldPersistTaps="handled"
+        >
+          {currencies.map((c) => (
             <Chip
-              label="All time"
-              selected={datePreset === "ALL"}
-              onPress={() => setDatePreset("ALL")}
+              key={c}
+              label={c === "ALL" ? "All currencies" : c}
+              selected={fCurrency === c}
+              onPress={() => setFCurrency(c)}
               small
             />
-            <Chip
-              label="This month"
-              selected={datePreset === "THIS_MONTH"}
-              onPress={() => setDatePreset("THIS_MONTH")}
-              small
-            />
-            <Chip
-              label="Last month"
-              selected={datePreset === "LAST_MONTH"}
-              onPress={() => setDatePreset("LAST_MONTH")}
-              small
-            />
-            <Chip
-              label="Last 90 days"
-              selected={datePreset === "LAST_90"}
-              onPress={() => setDatePreset("LAST_90")}
-              small
-            />
-          </ScrollView>
-          <TouchableOpacity
-            style={styles.refreshBtn}
-            onPress={loadAll}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.refreshBtnText}>Refresh</Text>
-          </TouchableOpacity>
-        </View>
+          ))}
+        </ScrollView>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipScrollSmall}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Chip
+            label="Newest"
+            selected={sortKey === "date_desc"}
+            onPress={() => setSortKey("date_desc")}
+            small
+          />
+          <Chip
+            label="Oldest"
+            selected={sortKey === "date_asc"}
+            onPress={() => setSortKey("date_asc")}
+            small
+          />
+          <Chip
+            label="Amount ↓"
+            selected={sortKey === "amount_desc"}
+            onPress={() => setSortKey("amount_desc")}
+            small
+          />
+          <Chip
+            label="Amount ↑"
+            selected={sortKey === "amount_asc"}
+            onPress={() => setSortKey("amount_asc")}
+            small
+          />
+        </ScrollView>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipScrollSmall}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Chip
+            label="All time"
+            selected={datePreset === "ALL"}
+            onPress={() => setDatePreset("ALL")}
+            small
+          />
+          <Chip
+            label="This month"
+            selected={datePreset === "THIS_MONTH"}
+            onPress={() => setDatePreset("THIS_MONTH")}
+            small
+          />
+          <Chip
+            label="Last month"
+            selected={datePreset === "LAST_MONTH"}
+            onPress={() => setDatePreset("LAST_MONTH")}
+            small
+          />
+          <Chip
+            label="Last 90 days"
+            selected={datePreset === "LAST_90"}
+            onPress={() => setDatePreset("LAST_90")}
+            small
+          />
+        </ScrollView>
       </View>
     );
   }
 
-  /* ------------------------------ Upcoming panel ------------------------------ */
   function UpcomingPanel() {
     if (!showUpcoming) return null;
 
     return (
-      <View style={styles.upcomingCard}>
-        <View style={styles.upcomingHeader}>
-          <Text style={styles.upcomingTitle}>
-            Upcoming expenses ({upcoming.length})
-          </Text>
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionHairline} />
+        <View style={styles.sectionHeaderRow}>
+          <View>
+            <Text style={styles.sectionEyebrow}>Scheduled flow</Text>
+            <Text style={styles.sectionTitle}>Upcoming expenses</Text>
+          </View>
           <TouchableOpacity onPress={() => setShowUpcoming(false)}>
-            <Text style={styles.upcomingClose}>Close</Text>
+            <Text style={styles.sectionClose}>Close</Text>
           </TouchableOpacity>
         </View>
 
         {upcoming.length === 0 ? (
-          <Text style={styles.upcomingEmpty}>
-            Nothing upcoming within your filters.
+          <Text style={styles.emptyText}>
+            Nothing upcoming within your current filters.
           </Text>
         ) : (
           upcoming.map((u) => {
@@ -1772,20 +1789,22 @@ export default function ExpensesScreen({ route }) {
             const accName = accountsById.get(u.accountId)?.name || "—";
             const badge =
               u.__kind === "virtual" ? (
-                <Text style={styles.badgePlanned}>Planned (not added)</Text>
+                <Text style={styles.badgePlanned}>Planned</Text>
               ) : (
                 <Text style={styles.badgeInDb}>In database</Text>
               );
 
             return (
-              <View key={u._id} style={styles.upcomingItem}>
-                <View style={{ flex: 1 }}>
+              <View key={u._id} style={styles.rowContainer}>
+                <View style={styles.rowLeft}>
                   <View style={styles.rowTitleLine}>
                     <Text style={styles.rowCategory}>{catName}</Text>
                     {badge}
                   </View>
-                  <View style={styles.rowAccountBadge}>
-                    <Text style={styles.rowAccountText}>{accName}</Text>
+                  <View style={styles.rowMetaWrap}>
+                    <View style={styles.rowMetaPill}>
+                      <Text style={styles.rowMetaPillText}>{accName}</Text>
+                    </View>
                   </View>
                   <Text style={styles.rowDescription} numberOfLines={2}>
                     {u.description || "No description"}
@@ -1794,20 +1813,20 @@ export default function ExpensesScreen({ route }) {
                     Scheduled: {fmtDateUTC(u.date)}
                   </Text>
                 </View>
-                <View style={styles.upcomingRight}>
+
+                <View style={styles.rowRight}>
                   <Text style={styles.rowAmount}>
                     -{minorToMajor(u.amountMinor, u.currency)} {u.currency}
                   </Text>
-                  <View style={styles.upcomingActions}>
+
+                  <View style={styles.rowActionsWrap}>
                     {u.__kind === "virtual" ? (
                       <>
                         <TouchableOpacity
-                          style={[styles.rowBtn, styles.rowBtnPrimaryBg]}
+                          style={[styles.rowBtn, styles.rowBtnPrimary]}
                           onPress={() => addVirtual(u)}
                         >
-                          <Text style={[styles.rowBtnText, { color: "#fff" }]}>
-                            Add
-                          </Text>
+                          <Text style={styles.rowBtnPrimaryTextSmall}>Add</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.rowBtn}
@@ -1856,146 +1875,176 @@ export default function ExpensesScreen({ route }) {
     );
   }
 
-  /* ------------------------------ Insights card ------------------------------ */
   function Insights() {
     const effectiveCur =
       (fCurrency !== "ALL" ? fCurrency : rows[0]?.currency) || "—";
 
     return (
-      <View style={styles.insightsCard}>
-        <View style={styles.insightsHeader}>
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionHairline} />
+
+        <View style={styles.sectionHeaderRow}>
           <View>
-            <Text style={styles.insightsEyebrow}>Spending KPIs</Text>
-            <Text style={styles.insightsTitle}>Insights</Text>
+            <Text style={styles.sectionEyebrow}>Spending KPIs</Text>
+            <Text style={styles.sectionTitle}>Insights</Text>
           </View>
-          <Text style={styles.insightsCurrency}>{effectiveCur}</Text>
+          <View style={styles.currencyPill}>
+            <Text style={styles.currencyPillText}>{effectiveCur}</Text>
+          </View>
         </View>
+
         {noteMixedCurrency && (
-          <Text style={styles.insightsNote}>
+          <Text style={styles.sectionNote}>
             KPIs are calculated in {statsCurrency}. Pick a currency above to
             switch.
           </Text>
         )}
 
-        <View style={styles.insightsKpiRow}>
-          <View style={styles.insightsKpi}>
-            <Text style={styles.insightsKpiLabel}>Last Month</Text>
-            <Text style={styles.insightsKpiValue}>
-              {fmtMoney(kpis.last, statsCurrency)}
-            </Text>
-          </View>
-          <View style={styles.insightsKpi}>
-            <Text style={styles.insightsKpiLabel}>This Month</Text>
-            <Text style={styles.insightsKpiValue}>
-              {fmtMoney(kpis.this, statsCurrency)}
-            </Text>
-          </View>
-          <View style={styles.insightsKpi}>
-            <Text style={styles.insightsKpiLabel}>Yearly Avg</Text>
-            <Text style={styles.insightsKpiValue}>
-              {fmtMoney(kpis.yearlyAvg, statsCurrency)}
-            </Text>
-          </View>
+        <View style={styles.statsGrid}>
+          <StatCard
+            title="Last Month"
+            value={fmtMoney(kpis.last, statsCurrency)}
+            accent="neutral"
+            chipText="LOOKBACK"
+          />
+          <StatCard
+            title="This Month"
+            value={fmtMoney(kpis.this, statsCurrency)}
+            accent="expense"
+            chipText="CURRENT"
+          />
+          <StatCard
+            title="Yearly Avg"
+            value={fmtMoney(kpis.yearlyAvg, statsCurrency)}
+            accent="green"
+            chipText="AVERAGE"
+          />
         </View>
 
-        <View style={styles.chartsRow}>
-          <View style={styles.chartCol}>
-            <Text style={styles.chartTitle}>By category</Text>
-            {!spendingByCategory.length ? (
-              <Text style={styles.chartEmpty}>No data yet.</Text>
-            ) : (
-              spendingByCategory.map((c) => (
-                <View key={c.catId} style={styles.catRow}>
-                  <View style={styles.catRowTop}>
-                    <Text style={styles.catName} numberOfLines={1}>
-                      {c.catName}
-                    </Text>
-                    <Text style={styles.catAmount}>
-                      {fmtMoney(
-                        c.major *
-                          Math.pow(10, decimalsForCurrency(statsCurrency)),
-                        statsCurrency,
-                      )}
-                    </Text>
-                  </View>
-                  <View style={styles.catBarTrack}>
-                    <View
-                      style={[
-                        styles.catBarFill,
-                        { width: `${Math.max(6, c.pct)}%` },
-                      ]}
-                    />
-                  </View>
+        <View style={styles.chartBlock}>
+          <Text style={styles.chartTitle}>By category</Text>
+          {!spendingByCategory.length ? (
+            <Text style={styles.chartEmpty}>No data yet.</Text>
+          ) : (
+            spendingByCategory.map((c) => (
+              <View key={c.catId} style={styles.catRow}>
+                <View style={styles.catRowTop}>
+                  <Text style={styles.catName} numberOfLines={1}>
+                    {c.catName}
+                  </Text>
+                  <Text style={styles.catAmount}>
+                    {fmtMoney(
+                      c.major *
+                        Math.pow(10, decimalsForCurrency(statsCurrency)),
+                      statsCurrency,
+                    )}
+                  </Text>
                 </View>
-              ))
-            )}
-          </View>
-
-          <View style={styles.chartCol}>
-            <Text style={styles.chartTitle}>Last 7 days</Text>
-            {!dailySeries.points.length || dailySeries.max <= 0 ? (
-              <Text style={styles.chartEmpty}>No recent data.</Text>
-            ) : (
-              <View style={styles.sparklineRow}>
-                {dailySeries.points.map((p) => {
-                  const ratio = dailySeries.max ? p.value / dailySeries.max : 0;
-                  const height = 8 + ratio * 32;
-                  return (
-                    <View key={p.label} style={styles.sparkCol}>
-                      <View style={styles.sparkBarTrack}>
-                        <View
-                          style={[
-                            styles.sparkBarFill,
-                            { height, marginTop: 40 - height },
-                          ]}
-                        />
-                      </View>
-                      <Text style={styles.sparkLabel}>{p.label}</Text>
-                    </View>
-                  );
-                })}
+                <View style={styles.catBarTrack}>
+                  <View
+                    style={[
+                      styles.catBarFill,
+                      { width: `${Math.max(6, c.pct)}%` },
+                    ]}
+                  />
+                </View>
               </View>
-            )}
-          </View>
+            ))
+          )}
+        </View>
+
+        <View style={styles.chartBlock}>
+          <Text style={styles.chartTitle}>Last 7 days</Text>
+          {!dailySeries.points.length || dailySeries.max <= 0 ? (
+            <Text style={styles.chartEmpty}>No recent data.</Text>
+          ) : (
+            <View style={styles.sparklineRow}>
+              {dailySeries.points.map((p) => {
+                const ratio = dailySeries.max ? p.value / dailySeries.max : 0;
+                const height = 8 + ratio * 34;
+                return (
+                  <View key={p.label} style={styles.sparkCol}>
+                    <View style={styles.sparkBarTrack}>
+                      <View
+                        style={[
+                          styles.sparkBarFill,
+                          { height, marginTop: 42 - height },
+                        ]}
+                      />
+                    </View>
+                    <Text style={styles.sparkLabel}>{p.label}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </View>
+
+        <View style={styles.totalWrap}>
+          {totals.map(({ cur, major }) => (
+            <View key={cur} style={styles.totalPill}>
+              <Text style={styles.totalPillText}>
+                Total {cur}: {major}
+              </Text>
+            </View>
+          ))}
         </View>
       </View>
     );
   }
 
-  /* ------------------------------ Loading state ------------------------------ */
   if (!initialDone) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <View style={styles.loadingSpinnerOuter}>
-          <ActivityIndicator size="large" color={main} />
-        </View>
+      <SafeAreaView style={styles.loadingScreen}>
+        <View style={styles.loadingGlow} />
+        <ActivityIndicator size="large" color={SECONDARY} />
         <Text style={styles.loadingTitle}>Nummoria</Text>
         <Text style={styles.loadingSubtitle}>Loading your expenses...</Text>
       </SafeAreaView>
     );
   }
 
-  /* ------------------------------ Main render ------------------------------ */
   return (
     <SafeAreaView style={styles.screen}>
+      <View pointerEvents="none" style={styles.bgLayer}>
+        <View style={styles.bgGlowGreen} />
+        <View style={styles.bgGlowPink} />
+        <View style={styles.bgGlowBottom} />
+      </View>
+
       <ScrollView
         ref={scrollRef}
         style={styles.content}
-        contentContainerStyle={{ paddingBottom: 32 }}
+        contentContainerStyle={{ paddingBottom: 132 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
         <Header />
         <UpcomingPanel />
-        {err ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{err}</Text>
+
+        {!!err && (
+          <View style={styles.errorCard}>
+            <View style={styles.errorIconWrap}>
+              <Text style={styles.errorIconText}>!</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.errorTitle}>Something didn't load</Text>
+              <Text style={styles.errorBody}>{err}</Text>
+            </View>
           </View>
-        ) : null}
+        )}
 
         <Insights />
 
-        <View style={styles.listCard}>
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHairline} />
+          <View style={styles.sectionHeaderRow}>
+            <View>
+              <Text style={styles.sectionEyebrow}>Transaction feed</Text>
+              <Text style={styles.sectionTitle}>Expense history</Text>
+            </View>
+          </View>
+
           {rows.length === 0 ? (
             <Text style={styles.emptyText}>
               No expenses found. Add your first one or adjust filters.
@@ -2011,7 +2060,6 @@ export default function ExpensesScreen({ route }) {
         </View>
       </ScrollView>
 
-      {/* ✅ FAB stack (Auto + Add) */}
       <View style={styles.fabContainer}>
         <TouchableOpacity style={styles.fabAuto} onPress={openAutoAdd}>
           <Text style={styles.fabAutoText}>Auto</Text>
@@ -2022,7 +2070,6 @@ export default function ExpensesScreen({ route }) {
         </TouchableOpacity>
       </View>
 
-      {/* ✅ Auto Add Modal */}
       <Modal
         visible={autoOpen}
         transparent
@@ -2034,6 +2081,7 @@ export default function ExpensesScreen({ route }) {
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
           <View style={styles.modalCard}>
+            <View style={styles.modalHairline} />
             <ScrollView
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
@@ -2135,7 +2183,6 @@ export default function ExpensesScreen({ route }) {
 
       {ExpenseModal()}
 
-      {/* FULL-SCREEN CAMERA OVERLAY */}
       {scannerVisible && (
         <View style={styles.fullCamOverlay}>
           <SafeAreaView style={styles.fullCamTopSafe}>
@@ -2146,7 +2193,6 @@ export default function ExpensesScreen({ route }) {
                   setIsScanning(false);
                   setModalOpen(true);
                 }}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Text style={styles.fullCamTopText}>Cancel</Text>
               </TouchableOpacity>
@@ -2201,7 +2247,6 @@ export default function ExpensesScreen({ route }) {
               </TouchableOpacity>
             </View>
 
-            {/* ✅ OCR SHUTTER (Smart scan) - disabled in barcode mode */}
             <TouchableOpacity
               activeOpacity={0.7}
               disabled={isScanning}
@@ -2230,13 +2275,7 @@ export default function ExpensesScreen({ route }) {
                       const result = await TextRecognition.recognize(photo.uri);
                       rawText = result?.text || "";
                       parsed = parseReceiptFromText(rawText);
-                      console.log("[Expenses] OCR text (device):", rawText);
-                    } catch (e) {
-                      console.log(
-                        "[Expenses] on-device OCR failed:",
-                        e?.message,
-                      );
-                    }
+                    } catch {}
                   }
 
                   const missingCritical =
@@ -2277,7 +2316,6 @@ export default function ExpensesScreen({ route }) {
                         );
                         return;
                       }
-                      console.log("[Expenses] backend OCR failed:", e?.message);
                     }
                   }
 
@@ -2301,7 +2339,6 @@ export default function ExpensesScreen({ route }) {
                     "Filled amount + date + description and inferred a category. Please review before saving.",
                   );
                 } catch (e) {
-                  console.log("[Expenses] OCR error", e);
                   setModalOpen(true);
                   Alert.alert(
                     "Scan error",
@@ -2339,22 +2376,9 @@ export default function ExpensesScreen({ route }) {
       )}
 
       {scanProcessing && (
-        <View
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            top: 0,
-            bottom: 0,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: "rgba(0,0,0,0.35)",
-          }}
-        >
-          <ActivityIndicator size="large" color={main} />
-          <Text style={{ color: "#fff", marginTop: 10, fontWeight: "700" }}>
-            Reading receipt…
-          </Text>
+        <View style={styles.processingOverlay}>
+          <ActivityIndicator size="large" color={SECONDARY} />
+          <Text style={styles.processingText}>Reading receipt…</Text>
         </View>
       )}
     </SafeAreaView>
@@ -2372,373 +2396,458 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  /* Header */
-  header: {
+  bgLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
+  },
+  bgGlowGreen: {
+    position: "absolute",
+    top: -30,
+    left: -20,
+    width: 240,
+    height: 240,
+    borderRadius: 999,
+    backgroundColor: GREEN_GLOW,
+  },
+  bgGlowPink: {
+    position: "absolute",
+    top: 10,
+    right: -20,
+    width: 200,
+    height: 200,
+    borderRadius: 999,
+    backgroundColor: PINK_GLOW,
+  },
+  bgGlowBottom: {
+    position: "absolute",
+    bottom: -40,
+    left: 90,
+    width: 260,
+    height: 260,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.04)",
+  },
+
+  headerCard: {
     marginTop: 12,
     marginHorizontal: 16,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 14,
-    borderRadius: 20,
+    padding: 16,
+    borderRadius: 28,
     borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: CARD_DARK,
+    borderColor: CARD_BORDER,
+    backgroundColor: CARD_BG,
+    overflow: "hidden",
   },
-  headerTopRow: {
+  cardGlowGreen: {
+    position: "absolute",
+    top: -36,
+    left: -18,
+    width: 180,
+    height: 180,
+    borderRadius: 999,
+    backgroundColor: "rgba(19,226,67,0.08)",
+  },
+  cardGlowPink: {
+    position: "absolute",
+    top: -22,
+    right: -22,
+    width: 140,
+    height: 140,
+    borderRadius: 999,
+    backgroundColor: "rgba(153,23,70,0.10)",
+  },
+  cardHairline: {
+    position: "absolute",
+    top: 0,
+    left: "15%",
+    right: "15%",
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    opacity: 0.65,
+    borderRadius: 999,
+  },
+
+  topBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 10,
+    marginBottom: 16,
   },
-  headerTopRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  headerEyebrow: {
-    fontSize: 12,
-    color: TEXT_MUTED,
-    marginBottom: 2,
-  },
-  headerTitle: {
-    fontSize: 22,
+  logoText: {
+    fontSize: 18,
     fontWeight: "700",
-    color: TEXT_HEADING,
+    color: "#e5e7eb",
+    letterSpacing: 0.2,
   },
-
-  headerUpcomingBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+  headerLogoBtn: {
+    width: 40,
+    height: 40,
     borderRadius: 999,
+    overflow: "hidden",
     borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
-  },
-  headerUpcomingText: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: TEXT_HEADING,
-  },
-  headerUpcomingBadge: {
-    marginLeft: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 999,
-    backgroundColor: "rgba(22,163,74,0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(34,197,94,0.6)",
-  },
-  headerUpcomingBadgeText: {
-    fontSize: 11,
-    color: "#bbf7d0",
-    fontWeight: "600",
-  },
-  headerIconBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
+    borderColor: CARD_BORDER,
+    backgroundColor: "rgba(255,255,255,0.06)",
     alignItems: "center",
     justifyContent: "center",
   },
-  headerIconPlus: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#bbf7d0",
-    includeFontPadding: false,
+  headerLogoImg: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
   },
 
-  searchContainer: {
-    marginTop: 8,
-    marginBottom: 10,
+  greetingBlock: {
+    marginBottom: 14,
+  },
+  heroTitle: {
+    fontSize: 28,
+    lineHeight: 32,
+    fontWeight: "800",
+    color: TEXT_PRIMARY,
+    letterSpacing: -0.55,
+  },
+  heroSubtitle: {
+    marginTop: 6,
+    fontSize: 14,
+    lineHeight: 20,
+    color: TEXT_MUTED,
+    maxWidth: "95%",
+  },
+
+  livePill: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    marginBottom: 14,
+  },
+  livePillDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: SECONDARY,
+  },
+  livePillText: {
+    fontSize: 11,
+    color: TEXT_MUTED,
+    fontWeight: "700",
+    letterSpacing: 0.8,
+  },
+
+  headerControlsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 12,
+  },
+  headerActionPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+  },
+  headerActionPillText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: TEXT_PRIMARY,
+  },
+  headerActionBadge: {
+    marginLeft: 8,
+    minWidth: 24,
+    height: 24,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(153,23,70,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(153,23,70,0.32)",
+  },
+  headerActionBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#f3f4f6",
+  },
+  headerGhostBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+  },
+  headerGhostBtnText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: TEXT_PRIMARY,
+  },
+
+  searchWrap: {
+    marginBottom: 8,
   },
   searchInput: {
     borderWidth: 1,
-    borderColor: BORDER_DARK,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderColor: CARD_BORDER,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
     fontSize: 14,
-    backgroundColor: "#020617",
-    color: TEXT_HEADING,
+    backgroundColor: CARD_INNER,
+    color: TEXT_PRIMARY,
   },
 
   chipScroll: {
-    paddingVertical: 6,
+    paddingTop: 4,
+    paddingBottom: 8,
     paddingRight: 8,
   },
-  filterRow: {
-    marginTop: 6,
-  },
-  filterChipRow: {
-    paddingVertical: 4,
-    paddingRight: 8,
-  },
-
-  sortRow: {
-    marginTop: 4,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  sortLabel: {
-    fontSize: 12,
-    color: TEXT_MUTED,
-    marginRight: 6,
-  },
-  sortChipRow: {
-    paddingVertical: 4,
+  chipScrollSmall: {
+    paddingTop: 4,
+    paddingBottom: 6,
     paddingRight: 8,
   },
 
-  totalsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 6,
-  },
-  totalsText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: TEXT_SOFT,
-  },
-
-  headerActionButtons: {
-    marginTop: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-  },
-  dateFilterChipRow: {
-    paddingVertical: 4,
-    paddingRight: 8,
-  },
-  refreshBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
-  },
-  refreshBtnText: {
-    fontSize: 12,
-    color: TEXT_SOFT,
-    fontWeight: "600",
-  },
-
-  /* Chips */
   chip: {
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
+    borderColor: CARD_BORDER,
+    backgroundColor: "rgba(255,255,255,0.04)",
     marginRight: 6,
   },
   chipSmall: {
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 6,
   },
   chipSelected: {
-    borderColor: main,
-    backgroundColor: "#022c22",
+    borderColor: "rgba(144,169,85,0.40)",
+    backgroundColor: "rgba(144,169,85,0.14)",
   },
   chipText: {
     fontSize: 13,
-    color: TEXT_SOFT,
+    color: TEXT_MUTED,
   },
   chipTextSmall: {
     fontSize: 12,
   },
   chipTextSelected: {
-    color: "#bbf7d0",
+    color: "#f3f4f6",
     fontWeight: "600",
   },
 
-  /* Upcoming */
-  upcomingCard: {
+  sectionCard: {
     marginHorizontal: 16,
-    marginTop: 12,
-    padding: 12,
-    borderRadius: 16,
-    backgroundColor: CARD_DARK,
+    marginTop: 14,
+    padding: 16,
+    borderRadius: 26,
+    backgroundColor: CARD_BG,
     borderWidth: 1,
-    borderColor: BORDER_DARK,
+    borderColor: CARD_BORDER,
+    overflow: "hidden",
   },
-  upcomingHeader: {
+  sectionHairline: {
+    position: "absolute",
+    top: 0,
+    left: "15%",
+    right: "15%",
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    opacity: 0.6,
+    borderRadius: 999,
+  },
+  sectionHeaderRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
-    marginBottom: 6,
+    marginBottom: 12,
   },
-  upcomingTitle: {
-    fontWeight: "600",
-    fontSize: 14,
-    color: TEXT_HEADING,
+  sectionEyebrow: {
+    fontSize: 12,
+    color: TEXT_MUTED,
+    marginBottom: 2,
   },
-  upcomingClose: {
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: TEXT_PRIMARY,
+    letterSpacing: -0.3,
+  },
+  sectionClose: {
     fontSize: 12,
     color: TEXT_MUTED,
     textDecorationLine: "underline",
   },
-  upcomingEmpty: {
-    fontSize: 13,
-    color: TEXT_MUTED,
-    marginTop: 4,
-  },
-  upcomingItem: {
-    flexDirection: "row",
-    paddingVertical: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: BORDER_DARK,
-  },
-  upcomingRight: {
-    marginLeft: 12,
-    alignItems: "flex-end",
-  },
-  upcomingActions: {
-    marginTop: 4,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "flex-end",
-    gap: 4,
-  },
-
-  badgePlanned: {
-    fontSize: 11,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(34,197,94,0.6)",
-    color: "#bbf7d0",
-  },
-  badgeInDb: {
-    fontSize: 11,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    color: TEXT_MUTED,
-  },
-
-  /* Insights */
-  insightsCard: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    padding: 14,
-    borderRadius: 20,
-    backgroundColor: CARD_DARK,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-  },
-  insightsHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  insightsEyebrow: {
+  sectionNote: {
+    marginTop: -4,
+    marginBottom: 12,
     fontSize: 12,
     color: TEXT_MUTED,
+    lineHeight: 18,
   },
-  insightsTitle: {
-    fontSize: 16,
+
+  currencyPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+  },
+  currencyPillText: {
+    fontSize: 11,
     fontWeight: "700",
-    color: TEXT_HEADING,
+    color: TEXT_MUTED,
+  },
+
+  statsGrid: {
+    marginBottom: 10,
+  },
+  statCard: {
+    position: "relative",
+    overflow: "hidden",
+    borderRadius: 22,
+    padding: 16,
+    marginBottom: 10,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+  },
+  statGlow: {
+    position: "absolute",
+    top: -36,
+    right: -24,
+    width: 140,
+    height: 140,
+    borderRadius: 999,
+  },
+  statHairline: {
+    position: "absolute",
+    top: 0,
+    left: "15%",
+    right: "15%",
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    opacity: 0.65,
+    borderRadius: 999,
+  },
+  statTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 10,
     marginTop: 2,
   },
-  insightsCurrency: {
+  statLabel: {
     fontSize: 11,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    color: TEXT_SOFT,
+  },
+  statValue: {
+    marginTop: 8,
+    fontSize: 28,
+    fontWeight: "700",
+    letterSpacing: -0.7,
+  },
+  statChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: BORDER_DARK,
-    color: TEXT_MUTED,
   },
-  insightsNote: {
-    marginTop: 6,
-    fontSize: 11,
-    color: TEXT_MUTED,
+  statChipDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 999,
   },
-  insightsKpiRow: {
-    flexDirection: "row",
-    marginTop: 10,
-    gap: 8,
-  },
-  insightsKpi: {
-    flex: 1,
-    padding: 10,
-    borderRadius: 12,
-    backgroundColor: "#020617",
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-  },
-  insightsKpiLabel: {
-    fontSize: 11,
-    color: TEXT_MUTED,
-    marginBottom: 4,
-  },
-  insightsKpiValue: {
-    fontSize: 16,
+  statChipText: {
+    fontSize: 10,
     fontWeight: "700",
-    color: TEXT_HEADING,
+    letterSpacing: 0.5,
+    color: "#f3f4f6",
+  },
+  statBottomRow: {
+    marginTop: 14,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.06)",
+  },
+  statHintRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  statHintDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.38)",
+  },
+  statHint: {
+    fontSize: 12,
+    color: TEXT_SOFT,
   },
 
-  chartsRow: {
-    flexDirection: "row",
-    marginTop: 14,
-    gap: 10,
-  },
-  chartCol: {
-    flex: 1,
+  chartBlock: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 18,
+    backgroundColor: CARD_INNER,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
   },
   chartTitle: {
-    fontSize: 12,
+    fontSize: 13,
     color: TEXT_MUTED,
-    marginBottom: 6,
+    marginBottom: 10,
+    fontWeight: "600",
   },
   chartEmpty: {
-    fontSize: 11,
+    fontSize: 12,
     color: TEXT_MUTED,
   },
-
   catRow: {
-    marginBottom: 6,
+    marginBottom: 8,
   },
   catRowTop: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 2,
+    marginBottom: 4,
   },
   catName: {
     fontSize: 12,
-    color: TEXT_SOFT,
+    color: TEXT_PRIMARY,
     flex: 1,
     marginRight: 4,
   },
   catAmount: {
     fontSize: 12,
-    color: "#bbf7d0",
+    color: "#d1fae5",
   },
   catBarTrack: {
-    height: 6,
+    height: 7,
     borderRadius: 999,
-    backgroundColor: "#020617",
+    backgroundColor: "rgba(255,255,255,0.05)",
     overflow: "hidden",
   },
   catBarFill: {
     height: "100%",
     borderRadius: 999,
-    backgroundColor: "rgba(34,197,94,0.9)",
+    backgroundColor: "rgba(144,169,85,0.95)",
   },
 
   sparklineRow: {
@@ -2753,45 +2862,47 @@ const styles = StyleSheet.create({
   },
   sparkBarTrack: {
     width: 10,
-    height: 40,
+    height: 42,
     borderRadius: 999,
-    backgroundColor: "#020617",
+    backgroundColor: "rgba(255,255,255,0.05)",
     overflow: "hidden",
     justifyContent: "flex-end",
   },
   sparkBarFill: {
     width: "100%",
     borderRadius: 999,
-    backgroundColor: "rgba(34,197,94,0.9)",
+    backgroundColor: "rgba(144,169,85,0.95)",
   },
   sparkLabel: {
-    marginTop: 2,
+    marginTop: 4,
     fontSize: 8,
     color: TEXT_MUTED,
   },
 
-  /* List */
-  listCard: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 16,
-    borderRadius: 20,
-    backgroundColor: CARD_DARK,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
+  totalWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 14,
   },
-  emptyText: {
-    padding: 16,
-    fontSize: 13,
-    color: TEXT_MUTED,
-    textAlign: "center",
+  totalPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+  },
+  totalPillText: {
+    fontSize: 12,
+    color: TEXT_PRIMARY,
+    fontWeight: "600",
   },
 
   rowContainer: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: BORDER_DARK,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.06)",
     flexDirection: "row",
     justifyContent: "space-between",
     gap: 12,
@@ -2804,50 +2915,77 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    marginBottom: 4,
+    marginBottom: 5,
+    flexWrap: "wrap",
   },
   rowCategory: {
     fontSize: 14,
     fontWeight: "600",
-    color: TEXT_HEADING,
+    color: TEXT_PRIMARY,
   },
   badgeUpcoming: {
     fontSize: 11,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(34,197,94,0.6)",
-    color: "#bbf7d0",
+    borderColor: "rgba(153,23,70,0.32)",
+    color: "#f3f4f6",
+    backgroundColor: "rgba(153,23,70,0.14)",
   },
-  rowAccountBadge: {
+  badgePlanned: {
+    fontSize: 11,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(144,169,85,0.30)",
+    color: "#f3f4f6",
+    backgroundColor: "rgba(144,169,85,0.12)",
+  },
+  badgeInDb: {
+    fontSize: 11,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    color: TEXT_MUTED,
+    backgroundColor: "rgba(255,255,255,0.04)",
+  },
+
+  rowMetaWrap: {
+    marginBottom: 4,
+  },
+  rowMetaPill: {
     alignSelf: "flex-start",
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: BORDER_DARK,
-    marginBottom: 2,
-    backgroundColor: "#020617",
+    borderColor: CARD_BORDER,
+    backgroundColor: "rgba(255,255,255,0.04)",
   },
-  rowAccountText: {
+  rowMetaPillText: {
     fontSize: 11,
     color: TEXT_MUTED,
   },
+
   rowDescription: {
     fontSize: 13,
     color: TEXT_SOFT,
     marginTop: 2,
+    lineHeight: 18,
   },
   rowDate: {
     fontSize: 11,
     color: TEXT_MUTED,
-    marginTop: 2,
+    marginTop: 4,
   },
   rowTags: {
     fontSize: 12,
-    color: secondary,
-    marginTop: 2,
+    color: SECONDARY,
+    marginTop: 4,
   },
 
   rowRight: {
@@ -2857,40 +2995,97 @@ const styles = StyleSheet.create({
   rowAmount: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#bbf7d0",
+    color: "#f3f4f6",
   },
   rowActions: {
-    marginTop: 6,
+    marginTop: 8,
     flexDirection: "row",
-    gap: 4,
+    gap: 6,
+  },
+  rowActionsWrap: {
+    marginTop: 8,
+    flexDirection: "row",
+    gap: 6,
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
   },
   rowBtn: {
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
+    paddingVertical: 7,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
+    borderColor: CARD_BORDER,
+    backgroundColor: "rgba(255,255,255,0.04)",
   },
   rowBtnText: {
     fontSize: 12,
-    color: TEXT_SOFT,
+    color: TEXT_PRIMARY,
   },
   rowBtnDanger: {
-    borderColor: "#7f1d1d",
+    borderColor: "rgba(153,23,70,0.34)",
+    backgroundColor: "rgba(153,23,70,0.10)",
   },
   rowBtnDangerText: {
     color: "#fecaca",
   },
-  rowBtnPrimaryBg: {
-    backgroundColor: main,
-    borderColor: main,
+  rowBtnPrimary: {
+    backgroundColor: SECONDARY,
+    borderColor: SECONDARY,
+  },
+  rowBtnPrimaryTextSmall: {
+    fontSize: 12,
+    color: "#0b1110",
+    fontWeight: "700",
   },
 
-  /* Modal */
+  emptyText: {
+    paddingVertical: 10,
+    fontSize: 13,
+    color: TEXT_MUTED,
+    textAlign: "center",
+  },
+
+  errorCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    borderRadius: 22,
+    padding: 14,
+    marginHorizontal: 16,
+    marginTop: 14,
+    backgroundColor: CARD_BG,
+    borderWidth: 1,
+    borderColor: "rgba(153,23,70,0.28)",
+  },
+  errorIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "rgba(153,23,70,0.20)",
+    borderWidth: 1,
+    borderColor: "rgba(153,23,70,0.32)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  errorIconText: {
+    fontSize: 16,
+    color: "#f87171",
+  },
+  errorTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: TEXT_PRIMARY,
+    marginBottom: 4,
+  },
+  errorBody: {
+    fontSize: 13,
+    color: TEXT_MUTED,
+    lineHeight: 18,
+  },
+
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(15,23,42,0.9)",
+    backgroundColor: "rgba(7,10,7,0.88)",
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 16,
@@ -2898,120 +3093,121 @@ const styles = StyleSheet.create({
   modalCard: {
     width: "100%",
     maxHeight: "90%",
-    borderRadius: 20,
+    borderRadius: 24,
     padding: 16,
     backgroundColor: BG_DARK,
     borderWidth: 1,
-    borderColor: BORDER_DARK,
+    borderColor: CARD_BORDER,
+    overflow: "hidden",
+  },
+  modalHairline: {
+    position: "absolute",
+    top: 0,
+    left: "15%",
+    right: "15%",
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    opacity: 0.65,
+    borderRadius: 999,
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "700",
-    color: TEXT_HEADING,
+    color: TEXT_PRIMARY,
     marginBottom: 8,
   },
   modalField: {
-    marginTop: 8,
+    marginTop: 10,
   },
   modalLabel: {
     fontSize: 12,
     fontWeight: "600",
     color: TEXT_SOFT,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   modalInput: {
     borderWidth: 1,
-    borderColor: BORDER_DARK,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    borderColor: CARD_BORDER,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     fontSize: 14,
-    backgroundColor: "#020617",
-    color: TEXT_HEADING,
+    backgroundColor: CARD_INNER,
+    color: TEXT_PRIMARY,
   },
   modalHint: {
-    marginTop: 4,
+    marginTop: 5,
     fontSize: 11,
     color: TEXT_MUTED,
+    lineHeight: 16,
   },
   modalRow: {
     flexDirection: "row",
     gap: 8,
-    marginTop: 8,
+    marginTop: 10,
   },
   modalActions: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    marginTop: 16,
+    marginTop: 18,
     gap: 8,
   },
   modalBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 9,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
     borderRadius: 999,
   },
   modalBtnSecondary: {
     borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
+    borderColor: CARD_BORDER,
+    backgroundColor: "rgba(255,255,255,0.04)",
   },
   modalBtnSecondaryText: {
     fontSize: 13,
-    color: TEXT_SOFT,
+    color: TEXT_PRIMARY,
     fontWeight: "500",
   },
   modalBtnPrimary: {
-    backgroundColor: main,
+    backgroundColor: SECONDARY,
   },
   modalBtnPrimaryText: {
     fontSize: 13,
-    color: "#022c22",
-    fontWeight: "600",
+    color: "#0b1110",
+    fontWeight: "700",
   },
 
   scanBtn: {
-    paddingVertical: 10,
-    borderRadius: 12,
+    paddingVertical: 11,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(34,197,94,0.5)",
-    backgroundColor: "#020617",
+    borderColor: "rgba(144,169,85,0.32)",
+    backgroundColor: "rgba(255,255,255,0.04)",
     alignItems: "center",
   },
   scanBtnText: {
-    color: "#bbf7d0",
+    color: "#f3f4f6",
     fontWeight: "700",
     fontSize: 13,
   },
 
-  /* Error */
-  errorBox: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    padding: 10,
-    borderRadius: 12,
-    backgroundColor: "rgba(127,29,29,0.2)",
-    borderWidth: 1,
-    borderColor: "#7f1d1d",
-  },
-  errorText: {
-    fontSize: 13,
-    color: "#fecaca",
-  },
-
-  /* Loading */
-  loadingContainer: {
+  loadingScreen: {
     flex: 1,
     backgroundColor: BG_DARK,
     justifyContent: "center",
     alignItems: "center",
   },
-  loadingSpinnerOuter: {
-    marginBottom: 12,
+  loadingGlow: {
+    position: "absolute",
+    width: 180,
+    height: 180,
+    borderRadius: 999,
+    backgroundColor: "rgba(19,226,67,0.08)",
   },
   loadingTitle: {
     fontSize: 22,
     fontWeight: "700",
-    color: main,
+    color: TEXT_PRIMARY,
+    marginTop: 14,
     marginBottom: 4,
   },
   loadingSubtitle: {
@@ -3019,7 +3215,6 @@ const styles = StyleSheet.create({
     color: TEXT_MUTED,
   },
 
-  /* FAB stack */
   fabContainer: {
     position: "absolute",
     right: 16,
@@ -3028,63 +3223,35 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   fabAuto: {
-    width: 52,
-    height: 52,
+    width: 54,
+    height: 54,
     borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#020617",
-    borderWidth: 2,
-    borderColor: "rgba(34,197,94,0.65)",
-    shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(144,169,85,0.30)",
   },
   fabAutoText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#bbf7d0",
+    color: "#f3f4f6",
   },
   fab: {
-    width: 52,
-    height: 52,
+    width: 58,
+    height: 58,
     borderRadius: 999,
-    backgroundColor: main,
+    backgroundColor: SECONDARY,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
   },
   fabPlus: {
     fontSize: 30,
     lineHeight: 30,
-    color: "white",
+    color: "#0b1110",
+    fontWeight: "700",
   },
 
-  headerLogoBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 999,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 10,
-  },
-  headerLogoImg: {
-    width: "100%",
-    height: "100%",
-    resizeMode: "cover",
-  },
-
-  /* Full camera overlay UI (minimal) */
   fullCamOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "#000",
@@ -3165,5 +3332,21 @@ const styles = StyleSheet.create({
   },
   fullCamShutterInnerActive: {
     backgroundColor: "rgba(255,255,255,0.92)",
+  },
+
+  processingOverlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.35)",
+  },
+  processingText: {
+    color: "#fff",
+    marginTop: 10,
+    fontWeight: "700",
   },
 });
