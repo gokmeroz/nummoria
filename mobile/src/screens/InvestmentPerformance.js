@@ -2,7 +2,13 @@
 /* eslint-disable no-empty */
 // mobile/src/screens/InvestmentPerformance.js
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   SafeAreaView,
@@ -15,23 +21,34 @@ import {
   Image,
   Modal,
   Pressable,
+  FlatList,
 } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 
 import api from "../lib/api";
 import logo from "../../assets/nummoria_logo.png";
 
-const main = "#4f772d";
-const secondary = "#90a955";
-const BG_DARK = "#050816";
-const CARD_BG = "#111827";
-const BORDER_DARK = "#1f2937";
-const TEXT_MUTED = "#9ca3af";
-const TEXT_SOFT = "#e5e7eb";
+/* ──────────────────────────────────────────────────────────
+   THEME — synced with InvestmentScreen / IncomeScreen HUD
+────────────────────────────────────────────────────────── */
+const BG = "#030508";
+const MINT = "#00ff87";
+const CYAN = "#00d4ff";
+const VIOLET = "#a78bfa";
+const ORANGE = "#f97316";
+const GOLD = "#fbbf24";
+
+const CARD_BG = "rgba(255,255,255,0.025)";
+const CARD_BD = "rgba(255,255,255,0.07)";
+const T_HI = "#e2e8f0";
+const T_MID = "rgba(226,232,240,0.55)";
+const T_DIM = "rgba(226,232,240,0.32)";
 
 const DATE_LANG = "en-US";
 
-/* ------------------------------ helpers ------------------------------ */
+/* ──────────────────────────────────────────────────────────
+   DATE / MONEY HELPERS
+────────────────────────────────────────────────────────── */
 function decimalsForCurrency(code) {
   const zero = new Set(["JPY", "KRW", "CLP", "VND"]);
   const three = new Set(["BHD", "IQD", "JOD", "KWD", "OMR", "TND"]);
@@ -60,8 +77,9 @@ function fmtMoneyMinor(minor, cur = "USD") {
 }
 
 function fmtMoneyMajor(major, cur = "USD") {
-  if (major === null || major === undefined || Number.isNaN(Number(major)))
+  if (major === null || major === undefined || Number.isNaN(Number(major))) {
     return "—";
+  }
 
   const currency = cur || "USD";
   const dec = decimalsForCurrency(currency);
@@ -106,13 +124,6 @@ function abbreviateNumber(n) {
   return `${num.toFixed(dp)}${units[i]}`;
 }
 
-function isInvSymbol(sym) {
-  const s = String(sym || "")
-    .trim()
-    .toUpperCase();
-  return /^INV(\b|[-_])/i.test(s) || s === "INV";
-}
-
 function fmtPct(val) {
   if (val == null || Number.isNaN(val)) return "-";
   return `${(val * 100).toFixed(2)}%`;
@@ -132,7 +143,14 @@ function fmtDateTime(dateLike) {
   })}`;
 }
 
-/** Normalize quote payloads (backend may return either "minor" fields or Yahoo-like fields) */
+function isInvSymbol(sym) {
+  const s = String(sym || "")
+    .trim()
+    .toUpperCase();
+  return /^INV(\b|[-_])/i.test(s) || s === "INV";
+}
+
+/** Normalize quote payloads */
 function normalizeQuote(q) {
   const symbol = q?.symbol || "—";
   const name = q?.shortName || q?.longName || q?.name || "—";
@@ -140,16 +158,13 @@ function normalizeQuote(q) {
   const currency =
     q?.currency || q?.financialCurrency || q?.priceCurrency || "USD";
 
-  // Two possible shapes:
-  // 1) Yahoo-like: regularMarketPrice, regularMarketPreviousClose, regularMarketOpen, etc (major units)
-  // 2) Minor-based: priceMinor, changeMinor, changePct (minor units + pct)
   const hasYahoo = typeof q?.regularMarketPrice === "number";
 
   const price = hasYahoo
     ? q.regularMarketPrice
     : q?.priceMinor != null
-    ? Number(q.priceMinor) / Math.pow(10, decimalsForCurrency(currency))
-    : null;
+      ? Number(q.priceMinor) / Math.pow(10, decimalsForCurrency(currency))
+      : null;
 
   const prevClose = hasYahoo ? q?.regularMarketPreviousClose : null;
   const open = hasYahoo ? q?.regularMarketOpen : null;
@@ -181,7 +196,6 @@ function normalizeQuote(q) {
     changePct = prevClose ? changeMajor / prevClose : null;
   }
 
-  // Prefer backend's lastUpdated; fallback none.
   const lastUpdated = q?.lastUpdated || q?.regularMarketTime || null;
 
   return {
@@ -204,130 +218,350 @@ function normalizeQuote(q) {
   };
 }
 
-/* ------------------------------ toast ------------------------------ */
-function useToasts() {
-  const [toast, setToast] = useState(null);
-
-  const show = useCallback((t) => {
-    const obj = { type: t.type || "info", msg: t.msg || String(t) };
-    setToast(obj);
-    setTimeout(() => setToast(null), 3000);
-  }, []);
-
-  return { toast, show };
-}
-
-function Toast({ toast }) {
-  if (!toast) return null;
-
-  const border =
-    toast.type === "error"
-      ? "#fecaca"
-      : toast.type === "success"
-      ? "#6ee7b7"
-      : toast.type === "warning"
-      ? "#fde68a"
-      : "#4b5563";
-
-  const bg =
-    toast.type === "error"
-      ? "#450a0a"
-      : toast.type === "success"
-      ? "#022c22"
-      : toast.type === "warning"
-      ? "#3a2a00"
-      : "#020617";
+/* ──────────────────────────────────────────────────────────
+   HUD PRIMITIVES
+────────────────────────────────────────────────────────── */
+function Brackets({ color = MINT, size = 10, thick = 1.5 }) {
+  const defs = [
+    {
+      top: 0,
+      left: 0,
+      borderTopWidth: thick,
+      borderLeftWidth: thick,
+      borderTopLeftRadius: 2,
+    },
+    {
+      top: 0,
+      right: 0,
+      borderTopWidth: thick,
+      borderRightWidth: thick,
+      borderTopRightRadius: 2,
+    },
+    {
+      bottom: 0,
+      left: 0,
+      borderBottomWidth: thick,
+      borderLeftWidth: thick,
+      borderBottomLeftRadius: 2,
+    },
+    {
+      bottom: 0,
+      right: 0,
+      borderBottomWidth: thick,
+      borderRightWidth: thick,
+      borderBottomRightRadius: 2,
+    },
+  ];
 
   return (
-    <View style={[styles.toast, { borderColor: border, backgroundColor: bg }]}>
-      <Text style={styles.toastType}>{toast.type}</Text>
-      <Text style={styles.toastMsg}>{toast.msg}</Text>
+    <>
+      {defs.map((d, i) => (
+        <View
+          key={i}
+          style={[
+            {
+              position: "absolute",
+              width: size,
+              height: size,
+              borderColor: color,
+            },
+            d,
+          ]}
+        />
+      ))}
+    </>
+  );
+}
+
+function ScanLine({ color = MINT, style: extra }) {
+  return (
+    <View
+      style={[{ flexDirection: "row", alignItems: "center", gap: 6 }, extra]}
+    >
+      <View
+        style={{
+          width: 3,
+          height: 3,
+          borderRadius: 999,
+          backgroundColor: color,
+          opacity: 0.6,
+        }}
+      />
+      <View
+        style={{ flex: 1, height: 1, backgroundColor: color, opacity: 0.2 }}
+      />
+      <View
+        style={{
+          width: 3,
+          height: 3,
+          borderRadius: 999,
+          backgroundColor: color,
+          opacity: 0.6,
+        }}
+      />
     </View>
   );
 }
 
-/* ------------------------------ rows ------------------------------ */
-function HoldingRow({ h }) {
-  const symbol = h.symbol || h.assetSymbol || "—";
-  const side = h.side || "long";
-
-  const cost = fmtMoneyMinor(h.costMinor, h.currency);
-  const value = fmtMoneyMinor(h.valueMinor, h.currency);
-  const pl = fmtMoneyMinor(h.plMinor, h.currency);
-  const plPct = fmtPct(h.plPct);
-
-  const daily = h.dailyChangeMinor;
-  const dailyPct = fmtPct(h.dailyChangePct);
-
-  const isUp = (h.plMinor || 0) >= 0;
+function GridBG() {
+  const { width, height } = require("react-native").Dimensions.get("window");
+  const COLS = 10;
+  const ROWS = 22;
+  const cw = width / COLS;
+  const rh = height / ROWS;
 
   return (
-    <View style={styles.row}>
-      <View style={styles.rowLeft}>
-        <View style={styles.rowTitleRow}>
-          <Text style={styles.rowSymbol}>{symbol}</Text>
-          <View
-            style={[
-              styles.rowSideBadge,
-              side === "short" && {
-                borderColor: "#fecaca",
-                backgroundColor: "#450a0a33",
-              },
-            ]}
-          >
-            <Text style={styles.rowSideText}>{side}</Text>
-          </View>
-        </View>
-
-        <Text style={styles.rowCurrency}>
-          {h.currency} •{" "}
-          {h.units != null ? `${fmtNumber(h.units, 4)} units` : "size n/a"}
-        </Text>
-
-        <View style={styles.rowLine}>
-          <Text style={styles.rowLabel}>Cost</Text>
-          <Text style={styles.rowValue}>{cost}</Text>
-        </View>
-        <View style={styles.rowLine}>
-          <Text style={styles.rowLabel}>Value</Text>
-          <Text style={styles.rowValue}>{value}</Text>
-        </View>
-      </View>
-
-      <View style={styles.rowRight}>
-        <Text style={[styles.rowPL, isUp ? styles.rowPLPos : styles.rowPLNeg]}>
-          {pl} ({plPct})
-        </Text>
-
-        {daily != null && (
-          <Text
-            style={[
-              styles.rowDaily,
-              (h.dailyChangeMinor || 0) >= 0
-                ? styles.rowPLPos
-                : styles.rowPLNeg,
-            ]}
-          >
-            {fmtMoneyMinor(daily, h.currency)} ({dailyPct}) today
-          </Text>
-        )}
-      </View>
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {Array.from({ length: ROWS + 1 }, (_, i) => (
+        <View
+          key={`h${i}`}
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: i * rh,
+            height: 1,
+            backgroundColor: "rgba(0,255,135,0.035)",
+          }}
+        />
+      ))}
+      {Array.from({ length: COLS + 1 }, (_, i) => (
+        <View
+          key={`v${i}`}
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            left: i * cw,
+            width: 1,
+            backgroundColor: "rgba(0,212,255,0.025)",
+          }}
+        />
+      ))}
+      <View
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 2,
+          backgroundColor: MINT,
+          opacity: 0.15,
+        }}
+      />
+      <View
+        style={{
+          position: "absolute",
+          top: height * 0.44,
+          left: 0,
+          right: 0,
+          height: 1,
+          backgroundColor: CYAN,
+          opacity: 0.06,
+        }}
+      />
+      <View
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 1,
+          backgroundColor: VIOLET,
+          opacity: 0.1,
+        }}
+      />
     </View>
   );
 }
 
-/* ------------------------------ quote modal ------------------------------ */
+/* ──────────────────────────────────────────────────────────
+   CHIP / STAT CARD
+────────────────────────────────────────────────────────── */
+function Chip({ label, selected, onPress, small, accent = MINT }) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={[
+        s.chip,
+        small && s.chipSmall,
+        selected && [s.chipSelected, { borderColor: accent + "55" }],
+      ]}
+      activeOpacity={0.75}
+    >
+      {selected && <View style={[s.chipDot, { backgroundColor: accent }]} />}
+      <Text
+        style={[
+          s.chipText,
+          small && s.chipTextSmall,
+          selected && [s.chipTextSelected, { color: accent }],
+        ]}
+      >
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+function StatCard({
+  title,
+  value,
+  accent = "neutral",
+  chipText = "SNAPSHOT",
+  hint = "Updated from filters",
+}) {
+  const accentMap = {
+    market: {
+      color: GOLD,
+      glow: "rgba(251,191,36,0.08)",
+      bd: "rgba(251,191,36,0.22)",
+    },
+    investment: {
+      color: ORANGE,
+      glow: "rgba(249,115,22,0.09)",
+      bd: "rgba(249,115,22,0.22)",
+    },
+    neutral: {
+      color: CYAN,
+      glow: "rgba(0,212,255,0.09)",
+      bd: "rgba(0,212,255,0.22)",
+    },
+    violet: {
+      color: VIOLET,
+      glow: "rgba(167,139,250,0.10)",
+      bd: "rgba(167,139,250,0.22)",
+    },
+    mint: {
+      color: MINT,
+      glow: "rgba(0,255,135,0.10)",
+      bd: "rgba(0,255,135,0.22)",
+    },
+  };
+
+  const a = accentMap[accent] || accentMap.neutral;
+
+  return (
+    <View style={[s.statCard, { borderColor: a.bd, backgroundColor: a.glow }]}>
+      <Brackets color={a.color} size={9} thick={1.5} />
+      <View style={[s.statHairline, { backgroundColor: a.color }]} />
+      <View style={[s.statBadge, { borderColor: a.bd }]}>
+        <View style={[s.statBadgeDot, { backgroundColor: a.color }]} />
+        <Text style={[s.statBadgeTxt, { color: a.color }]}>{chipText}</Text>
+      </View>
+      <Text style={s.statLabel}>{title}</Text>
+      <Text style={[s.statValue, { color: a.color }]}>{value}</Text>
+      <ScanLine color={a.color} style={{ marginTop: 12 }} />
+      <Text style={s.statHint}>{hint}</Text>
+    </View>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────
+   QUOTE STAT / HOLDING ROW
+────────────────────────────────────────────────────────── */
 function QuoteStat({ label, value, valueStyle }) {
   return (
-    <View style={styles.qStat}>
-      <Text style={styles.qStatLabel}>{label}</Text>
-      <Text style={[styles.qStatValue, valueStyle]} numberOfLines={2}>
+    <View style={s.qStat}>
+      <Text style={s.qStatLabel}>{label}</Text>
+      <Text style={[s.qStatValue, valueStyle]} numberOfLines={2}>
         {String(value)}
       </Text>
     </View>
   );
 }
 
+function HoldingRow({ item }) {
+  const symbol = item.symbol || item.assetSymbol || "—";
+  const side = item.side || "long";
+
+  const cost = fmtMoneyMinor(item.costMinor, item.currency);
+  const value = fmtMoneyMinor(item.valueMinor, item.currency);
+  const pl = fmtMoneyMinor(item.plMinor, item.currency);
+  const plPct = fmtPct(item.plPct);
+
+  const daily = item.dailyChangeMinor;
+  const dailyPct = fmtPct(item.dailyChangePct);
+
+  const isUp = (item.plMinor || 0) >= 0;
+
+  return (
+    <View style={s.rowCard}>
+      <Brackets color={ORANGE} size={7} thick={1} />
+      <View style={s.rowTopLine}>
+        <View style={[s.rowCatPill, { borderColor: "rgba(249,115,22,0.22)" }]}>
+          <View style={[s.rowCatDot, { backgroundColor: ORANGE }]} />
+          <Text style={[s.rowCatTxt, { color: ORANGE }]}>{symbol}</Text>
+        </View>
+
+        <View
+          style={[
+            s.badge,
+            side === "short"
+              ? {
+                  borderColor: "rgba(244,114,182,0.28)",
+                  backgroundColor: "rgba(244,114,182,0.10)",
+                }
+              : {
+                  borderColor: "rgba(0,255,135,0.28)",
+                  backgroundColor: "rgba(0,255,135,0.10)",
+                },
+          ]}
+        >
+          <Text
+            style={[s.badgeTxt, { color: side === "short" ? "#fb7185" : MINT }]}
+          >
+            {side.toUpperCase()}
+          </Text>
+        </View>
+
+        <Text style={[s.rowAmount, { color: isUp ? MINT : "#fb7185" }]}>
+          {pl} <Text style={{ fontSize: 9, opacity: 0.7 }}>({plPct})</Text>
+        </Text>
+      </View>
+
+      <View style={s.rowAccLine}>
+        <View style={s.rowAccPill}>
+          <Text style={s.rowAccTxt}>
+            {item.currency} •{" "}
+            {item.units != null
+              ? `${fmtNumber(item.units, 4)} units`
+              : "size n/a"}
+          </Text>
+        </View>
+      </View>
+
+      <View style={s.metricGrid}>
+        <View style={s.metricCell}>
+          <Text style={s.metricLabel}>COST</Text>
+          <Text style={s.metricValue}>{cost}</Text>
+        </View>
+        <View style={s.metricCell}>
+          <Text style={s.metricLabel}>VALUE</Text>
+          <Text style={s.metricValue}>{value}</Text>
+        </View>
+      </View>
+
+      {daily != null ? (
+        <Text
+          style={[
+            s.rowTags,
+            { color: (item.dailyChangeMinor || 0) >= 0 ? CYAN : VIOLET },
+          ]}
+        >
+          Today: {fmtMoneyMinor(daily, item.currency)} ({dailyPct})
+        </Text>
+      ) : (
+        <Text style={[s.rowTags, { color: T_DIM }]}>
+          Live daily move unavailable
+        </Text>
+      )}
+    </View>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────
+   QUOTE MODAL
+────────────────────────────────────────────────────────── */
 function QuoteModal({ visible, onClose, quoteData }) {
   const q = useMemo(() => normalizeQuote(quoteData || {}), [quoteData]);
   const isUp = (q.changeMajor || 0) > 0;
@@ -342,6 +576,7 @@ function QuoteModal({ visible, onClose, quoteData }) {
 
   const dayRange =
     q.dayLow != null && q.dayHigh != null ? `${q.dayLow} – ${q.dayHigh}` : "—";
+
   const wkRange =
     q.wkLow != null && q.wkHigh != null ? `${q.wkLow} – ${q.wkHigh}` : "—";
 
@@ -352,41 +587,34 @@ function QuoteModal({ visible, onClose, quoteData }) {
       transparent
       onRequestClose={onClose}
     >
-      <Pressable style={styles.modalOverlay} onPress={onClose}>
-        <Pressable style={styles.modalCard} onPress={() => {}}>
-          <View style={styles.modalHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.modalTitle}>Market Details</Text>
-              <Text style={styles.modalSubtitle}>
-                More quote info (like web)
-              </Text>
+      <Pressable style={s.modalOverlay} onPress={onClose}>
+        <Pressable style={s.quoteModalCard} onPress={() => {}}>
+          <Brackets color={GOLD} size={10} thick={1.5} />
+          <View style={[s.modalHairline, { backgroundColor: GOLD }]} />
+
+          <View style={s.sectionHeaderRow}>
+            <View>
+              <Text style={s.sectionEyebrow}>MARKET QUOTE</Text>
+              <Text style={s.sectionTitle}>Quote details</Text>
             </View>
-
-            {/* <TouchableOpacity
-              onPress={onClose}
-              style={styles.modalCloseBtn}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.modalCloseText}>✕</Text>
-            </TouchableOpacity> 
-            */}
+            <TouchableOpacity onPress={onClose}>
+              <Text style={[s.sectionClose, { color: T_DIM }]}>CLOSE</Text>
+            </TouchableOpacity>
           </View>
 
-          <View style={styles.modalTopLine}>
-            <Text style={styles.modalSymbol}>{q.symbol}</Text>
-            <Text style={styles.modalName} numberOfLines={1}>
-              {q.name}
-            </Text>
-          </View>
+          <Text style={s.quoteModalSymbol}>{q.symbol}</Text>
+          <Text style={s.quoteModalName} numberOfLines={1}>
+            {q.name}
+          </Text>
 
-          <View style={styles.modalPriceRow}>
-            <Text style={styles.modalPrice}>
+          <View style={s.quoteModalPriceRow}>
+            <Text style={s.quoteModalPrice}>
               {fmtMoneyMajor(q.price, q.currency)}
             </Text>
             <Text
               style={[
-                styles.modalChange,
-                isUp ? styles.rowPLPos : isDown ? styles.rowPLNeg : null,
+                s.quoteModalChange,
+                isUp ? { color: MINT } : isDown ? { color: "#fb7185" } : null,
               ]}
             >
               {changeStr}
@@ -394,12 +622,14 @@ function QuoteModal({ visible, onClose, quoteData }) {
           </View>
 
           {q.lastUpdated ? (
-            <Text style={styles.modalUpdated}>
+            <Text style={s.sectionNote}>
               Updated {fmtDateTime(q.lastUpdated)}
             </Text>
           ) : null}
 
-          <View style={styles.qGrid}>
+          <ScanLine color={GOLD} style={{ marginTop: 12, marginBottom: 14 }} />
+
+          <View style={s.qGrid}>
             <QuoteStat label="Symbol" value={q.symbol} />
             <QuoteStat label="Currency" value={q.currency} />
             <QuoteStat label="Previous Close" value={q.prevClose ?? "—"} />
@@ -417,13 +647,12 @@ function QuoteModal({ visible, onClose, quoteData }) {
             <QuoteStat label="Exchange" value={q.exchange} />
           </View>
 
-          <View style={styles.modalFooter}>
+          <View style={s.modalActions}>
             <TouchableOpacity
+              style={[s.modalBtnPrimary, { backgroundColor: GOLD }]}
               onPress={onClose}
-              style={styles.modalPrimaryBtn}
-              activeOpacity={0.9}
             >
-              <Text style={styles.modalPrimaryBtnText}>Close</Text>
+              <Text style={[s.modalBtnTxt, { color: BG }]}>CLOSE</Text>
             </TouchableOpacity>
           </View>
         </Pressable>
@@ -432,12 +661,13 @@ function QuoteModal({ visible, onClose, quoteData }) {
   );
 }
 
-/* =============================== screen =============================== */
+/* ══════════════════════════════════════════════════════════
+   SCREEN
+══════════════════════════════════════════════════════════ */
 export default function InvestmentPerformanceScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-
-  const { toast, show } = useToasts();
+  const scrollRef = useRef(null);
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -445,8 +675,9 @@ export default function InvestmentPerformanceScreen() {
   const [lastRefreshed, setLastRefreshed] = useState(null);
 
   const [search, setSearch] = useState("");
-  const [sideFilter, setSideFilter] = useState("ALL"); // "ALL" | "long" | "short"
+  const [sideFilter, setSideFilter] = useState("ALL");
   const [curFilter, setCurFilter] = useState("ALL");
+  const [listMode, setListMode] = useState("HOLDINGS");
 
   const [quoteSymbol, setQuoteSymbol] = useState("");
   const [quoteLoading, setQuoteLoading] = useState(false);
@@ -461,39 +692,34 @@ export default function InvestmentPerformanceScreen() {
       setData(payload || { holdings: [], totals: {} });
       setLastRefreshed(new Date());
     } catch (e) {
-      const msg = e?.response?.data?.error || e.message || "Failed to load.";
-      setErr(msg);
-      show({ type: "error", msg });
+      setErr(e?.response?.data?.error || e.message || "Failed to load.");
     } finally {
       setLoading(false);
     }
-  }, [show]);
+  }, []);
 
   useEffect(() => {
     fetchPerf();
   }, [fetchPerf]);
 
-  // Filter out INV holdings (match web)
   const holdings = useMemo(() => {
     const rows = data?.holdings || [];
     return rows.filter((h) => !isInvSymbol(h.symbol || h.assetSymbol));
   }, [data]);
 
-  const [listMode, setListMode] = useState("HOLDINGS"); // "HOLDINGS" | "FAVORITES"
-
-  // favorites passed from InvestmentScreen navigation
   const favorites = (route?.params?.favorites || [])
     .map((s) =>
       String(s || "")
         .toUpperCase()
-        .trim()
+        .trim(),
     )
     .filter(Boolean);
+
   const favoritesSet = useMemo(() => new Set(favorites), [favorites]);
 
   const currencies = useMemo(() => {
-    const s = new Set(holdings.map((h) => h.currency || "USD"));
-    return ["ALL", ...Array.from(s)];
+    const set = new Set(holdings.map((h) => h.currency || "USD"));
+    return ["ALL", ...Array.from(set)];
   }, [holdings]);
 
   const holdingsFiltered = useMemo(() => {
@@ -516,7 +742,7 @@ export default function InvestmentPerformanceScreen() {
       return true;
     });
 
-    filtered.sort((a, b) => (b.plMinor || 0) - (a.plMinor || 0)); // P/L desc
+    filtered.sort((a, b) => (b.plMinor || 0) - (a.plMinor || 0));
     return filtered;
   }, [holdings, search, sideFilter, curFilter]);
 
@@ -535,10 +761,9 @@ export default function InvestmentPerformanceScreen() {
 
   const anyQuotes = useMemo(
     () => holdings.some((h) => typeof h.price === "number"),
-    [holdings]
+    [holdings],
   );
 
-  // Totals should follow current tab + filters (match web behavior)
   const totalsByCurrency = useMemo(() => {
     const m = {};
     const rows = listToRender;
@@ -569,12 +794,20 @@ export default function InvestmentPerformanceScreen() {
     }));
   }, [listToRender]);
 
+  const kpis = useMemo(() => {
+    const totalHoldings = listToRender.length;
+    const winners = listToRender.filter((h) => (h.plMinor || 0) > 0).length;
+    const losers = listToRender.filter((h) => (h.plMinor || 0) < 0).length;
+    const priced = listToRender.filter(
+      (h) => typeof h.valueMinor === "number",
+    ).length;
+
+    return { totalHoldings, winners, losers, priced };
+  }, [listToRender]);
+
   const handleQuoteLookup = async () => {
     const symbol = quoteSymbol.trim().toUpperCase();
-    if (!symbol) {
-      show({ type: "warning", msg: "Enter a symbol to lookup." });
-      return;
-    }
+    if (!symbol) return;
 
     try {
       setQuoteLoading(true);
@@ -583,782 +816,980 @@ export default function InvestmentPerformanceScreen() {
         params: { symbol },
       });
       setQuoteData(qd || null);
-      setQuoteModalOpen(true); // ✅ show the popup
+      setQuoteModalOpen(true);
     } catch (e) {
-      const msg = e?.response?.data?.error || e.message || "Lookup failed.";
-      show({ type: "error", msg });
+      setErr(e?.response?.data?.error || e.message || "Lookup failed.");
     } finally {
       setQuoteLoading(false);
     }
   };
 
-  if (loading) {
+  function Header() {
+    const filterGroups = [
+      {
+        label: "SIDE",
+        small: true,
+        chips: [
+          {
+            key: "ALL",
+            label: "All",
+            sel: sideFilter === "ALL",
+            onPress: () => setSideFilter("ALL"),
+            accent: CYAN,
+          },
+          {
+            key: "long",
+            label: "Long",
+            sel: sideFilter === "long",
+            onPress: () => setSideFilter("long"),
+            accent: MINT,
+          },
+          {
+            key: "short",
+            label: "Short",
+            sel: sideFilter === "short",
+            onPress: () => setSideFilter("short"),
+            accent: VIOLET,
+          },
+        ],
+      },
+      {
+        label: "CURRENCY",
+        small: true,
+        chips: currencies.map((c) => ({
+          key: c,
+          label: c === "ALL" ? "All currencies" : c,
+          sel: curFilter === c,
+          onPress: () => setCurFilter(c),
+          accent: CYAN,
+        })),
+      },
+      {
+        label: "VIEW",
+        small: true,
+        chips: [
+          {
+            key: "HOLDINGS",
+            label: `Holdings (${holdingsFiltered.length})`,
+            sel: listMode === "HOLDINGS",
+            onPress: () => setListMode("HOLDINGS"),
+            accent: ORANGE,
+          },
+          {
+            key: "FAVORITES",
+            label: `Favorites (${favoritesFiltered.length})`,
+            sel: listMode === "FAVORITES",
+            onPress: () => setListMode("FAVORITES"),
+            accent: GOLD,
+          },
+        ],
+      },
+    ];
+
     return (
-      <SafeAreaView style={[styles.screen, { justifyContent: "center" }]}>
-        <ActivityIndicator size="large" color={main} />
-        <Text style={styles.loadingText}>Crunching your performance...</Text>
-      </SafeAreaView>
-    );
-  }
+      <View
+        style={[
+          s.headerCard,
+          {
+            borderColor: "rgba(251,191,36,0.22)",
+            backgroundColor: "rgba(251,191,36,0.04)",
+          },
+        ]}
+      >
+        <Brackets color={GOLD} size={12} thick={1.5} />
+        <View style={[s.headerHairline, { backgroundColor: GOLD }]} />
 
-  return (
-    <SafeAreaView style={styles.screen}>
-      {/* ✅ Top bar: Logo + Back */}
-      <View style={styles.topBar}>
-        <TouchableOpacity
-          onPress={() => {
-            const state = navigation.getState?.();
-            const hasDashboardHere = state?.routeNames?.includes("Dashboard");
-
-            if (hasDashboardHere) {
-              navigation.navigate("Dashboard");
-              return;
-            }
-
-            let parent = navigation.getParent?.();
-            while (parent) {
-              const ps = parent.getState?.();
-              if (ps?.routeNames?.includes("Dashboard")) {
-                parent.navigate("Dashboard");
-                return;
-              }
-              parent = parent.getParent?.();
-            }
-
-            navigation.goBack();
-          }}
-          activeOpacity={0.85}
-          style={styles.headerLogoBtn}
-        >
-          <Image source={logo} style={styles.headerLogoImg} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.backArrow}>←</Text>
-          <Text style={styles.backText}>Back</Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.headerTitle}>Investment Performance</Text>
-            <Text style={styles.headerSubtitle}>
-              See P/L per symbol and by currency.
-            </Text>
+        <View style={s.topBar}>
+          <View style={s.logoRow}>
+            <View style={[s.statusDot, { backgroundColor: GOLD }]} />
+            <Text style={s.logoTxt}>MARKET PERFORMANCE</Text>
+            <View
+              style={[
+                s.livePill,
+                {
+                  borderColor: "rgba(251,191,36,0.25)",
+                  backgroundColor: "rgba(251,191,36,0.12)",
+                },
+              ]}
+            >
+              <Text style={[s.livePillTxt, { color: GOLD }]}>ANALYTICS</Text>
+            </View>
           </View>
 
-          <TouchableOpacity onPress={fetchPerf} style={styles.headerButton}>
-            <Text style={styles.headerButtonText}>Refresh</Text>
+          <TouchableOpacity
+            onPress={() => navigation.navigate("Dashboard")}
+            activeOpacity={0.8}
+            style={s.homeBtn}
+          >
+            <Image source={logo} style={s.homeBtnImg} />
+            <Brackets color={GOLD} size={7} thick={1} />
           </TouchableOpacity>
         </View>
 
-        {lastRefreshed && (
-          <Text style={styles.asOf}>As of {fmtDateTime(lastRefreshed)}</Text>
+        <Text style={s.heroTitle}>Performance{"\n"}Control</Text>
+        <Text style={s.heroSub}>
+          See current positioning, P/L distribution, and quick market checks for
+          your tracked assets.
+        </Text>
+
+        <ScanLine color={GOLD} style={{ marginTop: 12, marginBottom: 14 }} />
+
+        <View style={s.controlsRow}>
+          <TouchableOpacity
+            style={[s.ctrlPill, { borderColor: "rgba(0,212,255,0.22)" }]}
+            onPress={fetchPerf}
+            activeOpacity={0.75}
+          >
+            <View style={[s.ctrlDot, { backgroundColor: CYAN }]} />
+            <Text style={[s.ctrlTxt, { color: CYAN }]}>REFRESH</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[s.ctrlPill, { borderColor: "rgba(251,191,36,0.25)" }]}
+            onPress={() => {
+              requestAnimationFrame(() =>
+                scrollRef.current?.scrollTo({ y: 620, animated: true }),
+              );
+            }}
+            activeOpacity={0.75}
+          >
+            <View style={[s.ctrlDot, { backgroundColor: GOLD }]} />
+            <Text style={[s.ctrlTxt, { color: GOLD }]}>QUOTE LOOKUP</Text>
+          </TouchableOpacity>
+        </View>
+
+        {!!lastRefreshed && (
+          <Text style={s.sectionNote}>As of {fmtDateTime(lastRefreshed)}</Text>
         )}
 
-        {err ? <Text style={styles.errorText}>{err}</Text> : null}
+        <View style={s.searchWrap}>
+          <View style={[s.searchDot, { backgroundColor: GOLD }]} />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search symbol or tags"
+            placeholderTextColor={T_DIM}
+            style={s.searchInput}
+          />
+        </View>
 
-        {/* Live quotes unavailable notice (match web semantics) */}
-        {!err && !loading && !anyQuotes && holdings.length > 0 && (
+        {filterGroups.map((g) => (
+          <View key={g.label} style={{ marginBottom: 2 }}>
+            <Text style={s.filterGroupLabel}>{g.label}</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={s.chipScroll}
+              keyboardShouldPersistTaps="handled"
+            >
+              {g.chips.map((c) => (
+                <Chip
+                  key={c.key}
+                  label={c.label}
+                  selected={c.sel}
+                  onPress={c.onPress}
+                  small={g.small}
+                  accent={c.accent}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        ))}
+      </View>
+    );
+  }
+
+  function Insights() {
+    const firstCurrency = totalsByCurrency[0]?.cur || "USD";
+    const totalValueMinor = totalsByCurrency.reduce(
+      (acc, t) => acc + Number(t.valueMinor || 0),
+      0,
+    );
+    const totalCostMinor = totalsByCurrency.reduce(
+      (acc, t) => acc + Number(t.costMinor || 0),
+      0,
+    );
+    const totalPlMinor = totalsByCurrency.reduce(
+      (acc, t) => acc + Number(t.plMinor || 0),
+      0,
+    );
+
+    return (
+      <View style={s.sectionCard}>
+        <Brackets color={CYAN} size={10} thick={1} />
+        <View style={[s.sectionHairline, { backgroundColor: CYAN }]} />
+        <View style={s.sectionHeaderRow}>
+          <View>
+            <Text style={s.sectionEyebrow}>PORTFOLIO KPIs</Text>
+            <Text style={s.sectionTitle}>Insights</Text>
+          </View>
           <View
-            style={{
-              marginBottom: 10,
-              padding: 10,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: "#fbbf24",
-              backgroundColor: "#92400e33",
-            }}
+            style={[s.currencyPill, { borderColor: "rgba(0,212,255,0.22)" }]}
           >
-            <Text style={{ color: "#fbbf24", fontSize: 12 }}>
-              Live quotes are disabled or unavailable. Value &amp; P/L shown as
+            <View style={[s.ctrlDot, { backgroundColor: CYAN }]} />
+            <Text style={[s.currencyPillTxt, { color: CYAN }]}>{listMode}</Text>
+          </View>
+        </View>
+
+        <View style={{ marginBottom: 10 }}>
+          <StatCard
+            title="Open Positions"
+            value={String(kpis.totalHoldings)}
+            accent="neutral"
+            chipText="COUNT"
+          />
+          <StatCard
+            title="Winners"
+            value={String(kpis.winners)}
+            accent="mint"
+            chipText="POSITIVE"
+          />
+          <StatCard
+            title="Losers"
+            value={String(kpis.losers)}
+            accent="violet"
+            chipText="NEGATIVE"
+          />
+          <StatCard
+            title="Priced Assets"
+            value={String(kpis.priced)}
+            accent="market"
+            chipText="LIVE DATA"
+          />
+        </View>
+
+        <View style={s.chartBlock}>
+          <View style={s.chartHeaderRow}>
+            <View style={[s.ctrlDot, { backgroundColor: ORANGE }]} />
+            <Text style={[s.chartTitle, { color: ORANGE }]}>
+              AGGREGATE SNAPSHOT
+            </Text>
+          </View>
+
+          <View style={s.metricGridBig}>
+            <View style={s.metricCellBig}>
+              <Text style={s.metricLabel}>VALUE</Text>
+              <Text style={s.metricValueBig}>
+                {fmtMoneyMinor(totalValueMinor, firstCurrency)}
+              </Text>
+            </View>
+            <View style={s.metricCellBig}>
+              <Text style={s.metricLabel}>INVESTED</Text>
+              <Text style={s.metricValueBig}>
+                {fmtMoneyMinor(totalCostMinor, firstCurrency)}
+              </Text>
+            </View>
+            <View style={s.metricCellBig}>
+              <Text style={s.metricLabel}>P/L</Text>
+              <Text
+                style={[
+                  s.metricValueBig,
+                  { color: totalPlMinor >= 0 ? MINT : "#fb7185" },
+                ]}
+              >
+                {fmtMoneyMinor(totalPlMinor, firstCurrency)}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {!err && !loading && !anyQuotes && holdings.length > 0 && (
+          <View style={s.chartBlock}>
+            <View style={s.chartHeaderRow}>
+              <View style={[s.ctrlDot, { backgroundColor: GOLD }]} />
+              <Text style={[s.chartTitle, { color: GOLD }]}>
+                LIVE DATA STATUS
+              </Text>
+            </View>
+            <Text style={s.chartEmpty}>
+              Live quotes are disabled or unavailable. Value and P/L may show as
               “—”.
             </Text>
           </View>
         )}
 
-        {/* Totals by currency */}
-        <View style={styles.totalsRow}>
-          {totalsByCurrency.map((t) => {
-            const isUp = (t.plMinor || 0) >= 0;
-            return (
-              <View key={t.cur} style={styles.totalCard}>
-                <Text style={styles.totalLabel}>{t.cur}</Text>
-
-                <Text style={styles.totalMiniLabel}>Value</Text>
-                <Text style={styles.totalValue}>
-                  {fmtMoneyMinor(t.valueMinor, t.cur)}
-                </Text>
-
-                <Text style={styles.totalMiniLabel}>Invested</Text>
-                <Text style={styles.totalInvested}>
-                  {fmtMoneyMinor(t.costMinor, t.cur)}
-                </Text>
-
-                <Text
-                  style={[
-                    styles.totalPL,
-                    isUp ? styles.totalPLPos : styles.totalPLNeg,
-                  ]}
-                >
-                  {fmtMoneyMinor(t.plMinor, t.cur)} ({fmtPct(t.plPct)})
-                </Text>
-              </View>
-            );
-          })}
-        </View>
-
-        {/* Filters */}
-        <View style={styles.filterCard}>
-          <Text style={styles.filterTitle}>Filters</Text>
-
-          <Text style={styles.filterLabel}>Search symbol / tags</Text>
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder="AAPL, BTC-USD, long-term..."
-            placeholderTextColor={TEXT_MUTED}
-            style={styles.searchInput}
-          />
-
-          <Text style={[styles.filterLabel, { marginTop: 10 }]}>Side</Text>
-          <View style={styles.chipRow}>
-            {["ALL", "long", "short"].map((s) => (
-              <TouchableOpacity
-                key={s}
-                onPress={() => setSideFilter(s)}
-                style={[
-                  styles.chip,
-                  sideFilter === s && {
-                    backgroundColor: main,
-                    borderColor: secondary,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    sideFilter === s && { color: "white" },
-                  ]}
-                >
-                  {s === "ALL" ? "All" : s}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <Text style={[styles.filterLabel, { marginTop: 10 }]}>Currency</Text>
-          <View style={styles.chipRow}>
-            {currencies.map((c) => (
-              <TouchableOpacity
-                key={c}
-                onPress={() => setCurFilter(c)}
-                style={[
-                  styles.chip,
-                  curFilter === c && {
-                    backgroundColor: main,
-                    borderColor: secondary,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    curFilter === c && { color: "white" },
-                  ]}
-                >
-                  {c === "ALL" ? "All" : c}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Quick quote */}
-        <View style={styles.quoteCard}>
-          <Text style={styles.sectionTitle}>Quick Quote</Text>
-          <Text style={styles.sectionSubtitle}>
-            Check a symbol&apos;s latest market price.
-          </Text>
-
-          <View style={styles.quoteRow}>
-            <TextInput
-              value={quoteSymbol}
-              onChangeText={setQuoteSymbol}
-              placeholder="AAPL, BTC-USD..."
-              placeholderTextColor={TEXT_MUTED}
-              autoCapitalize="characters"
-              style={[styles.searchInput, { flex: 1 }]}
-            />
-
-            <TouchableOpacity
-              onPress={handleQuoteLookup}
-              disabled={quoteLoading}
-              style={styles.quoteBtn}
+        <View style={s.totalWrap}>
+          {totalsByCurrency.map((t) => (
+            <View
+              key={t.cur}
+              style={[s.totalPill, { borderColor: "rgba(0,212,255,0.22)" }]}
             >
-              {quoteLoading ? (
-                <ActivityIndicator size="small" color="#d1fae5" />
-              ) : (
-                <Text style={styles.quoteBtnText}>Check</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+              <View style={[s.ctrlDot, { backgroundColor: CYAN }]} />
+              <Text style={[s.totalPillTxt, { color: CYAN }]}>
+                {t.cur}: {fmtMoneyMinor(t.valueMinor, t.cur)}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+  }
 
-          {/* Minimal hint (the real info is in the popup) */}
-          <Text style={{ color: TEXT_MUTED, fontSize: 11 }}>
-            Tip: Tap “Check” to open a detailed quote popup.
-          </Text>
+  function QuoteLookup() {
+    return (
+      <View style={s.sectionCard}>
+        <Brackets color={GOLD} size={10} thick={1} />
+        <View style={[s.sectionHairline, { backgroundColor: GOLD }]} />
+        <View style={s.sectionHeaderRow}>
+          <View>
+            <Text style={s.sectionEyebrow}>MARKET ACCESS</Text>
+            <Text style={s.sectionTitle}>Quick quote</Text>
+          </View>
         </View>
 
-        {/* Holdings / Favorites list */}
-        <View style={styles.listCard}>
-          <View style={styles.listHeaderRow}>
-            <View style={styles.listHeaderLeft}>
-              <TouchableOpacity
-                onPress={() => setListMode("HOLDINGS")}
-                activeOpacity={0.8}
-                style={[
-                  styles.listHeaderPill,
-                  listMode === "HOLDINGS" && styles.listHeaderPillActive,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.listHeaderTitle,
-                    listMode !== "HOLDINGS" && styles.listHeaderTitleInactive,
-                  ]}
-                >
-                  Holdings ({holdingsFiltered.length})
-                </Text>
-              </TouchableOpacity>
+        <Text style={s.sectionNote}>
+          Check a symbol’s latest market data and open a detailed quote panel.
+        </Text>
 
-              <TouchableOpacity
-                onPress={() => setListMode("FAVORITES")}
-                activeOpacity={0.8}
-                style={[
-                  styles.listHeaderPill,
-                  listMode === "FAVORITES" && styles.listHeaderPillActive,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.listHeaderMeta,
-                    listMode !== "FAVORITES" && styles.listHeaderMetaInactive,
-                  ]}
-                >
-                  Favorites ({favoritesFiltered.length})
-                </Text>
-              </TouchableOpacity>
+        <View style={s.searchWrap}>
+          <View style={[s.searchDot, { backgroundColor: GOLD }]} />
+          <TextInput
+            value={quoteSymbol}
+            onChangeText={setQuoteSymbol}
+            placeholder="AAPL, BTC-USD..."
+            placeholderTextColor={T_DIM}
+            autoCapitalize="characters"
+            style={s.searchInput}
+          />
+        </View>
+
+        <View style={s.modalActions}>
+          <TouchableOpacity
+            style={[
+              s.modalBtnPrimary,
+              { backgroundColor: GOLD, opacity: quoteLoading ? 0.75 : 1 },
+            ]}
+            onPress={handleQuoteLookup}
+            disabled={quoteLoading}
+          >
+            {quoteLoading ? (
+              <ActivityIndicator size="small" color={BG} />
+            ) : (
+              <Text style={[s.modalBtnTxt, { color: BG }]}>CHECK</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  if (loading) {
+    return (
+      <SafeAreaView style={s.loadingScreen}>
+        <GridBG />
+        <View style={s.loadingInner}>
+          <View
+            style={{
+              width: 70,
+              height: 70,
+              alignItems: "center",
+              justifyContent: "center",
+              position: "relative",
+              marginBottom: 16,
+            }}
+          >
+            <Brackets color={GOLD} size={20} thick={2} />
+            <ActivityIndicator size="large" color={GOLD} />
+          </View>
+          <Text style={s.loadingTitle}>PERFORMANCE</Text>
+          <Text style={s.loadingMono}>Crunching portfolio analytics…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={s.screen}>
+      <GridBG />
+
+      <ScrollView
+        ref={scrollRef}
+        style={s.content}
+        contentContainerStyle={{ paddingBottom: 120 }}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {Header()}
+
+        {!!err && (
+          <View
+            style={[
+              s.errorCard,
+              {
+                backgroundColor: "rgba(167,139,250,0.06)",
+                borderColor: "rgba(167,139,250,0.22)",
+              },
+            ]}
+          >
+            <Brackets color={VIOLET} size={8} thick={1} />
+            <View style={s.errorIconBox}>
+              <Text style={[s.errorIconTxt, { color: VIOLET }]}>!</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.errorTitle}>Performance data failed</Text>
+              <Text style={s.errorBody}>{err}</Text>
+            </View>
+          </View>
+        )}
+
+        {Insights()}
+        {QuoteLookup()}
+
+        <View style={s.sectionCard}>
+          <Brackets color={ORANGE} size={10} thick={1} />
+          <View style={[s.sectionHairline, { backgroundColor: ORANGE }]} />
+          <View style={s.sectionHeaderRow}>
+            <View>
+              <Text style={s.sectionEyebrow}>POSITION FEED</Text>
+              <Text style={s.sectionTitle}>
+                {listMode === "FAVORITES"
+                  ? "Favorite holdings"
+                  : "All holdings"}
+              </Text>
+            </View>
+            <View
+              style={[s.currencyPill, { borderColor: "rgba(249,115,22,0.22)" }]}
+            >
+              <View style={[s.ctrlDot, { backgroundColor: ORANGE }]} />
+              <Text style={[s.currencyPillTxt, { color: ORANGE }]}>
+                {listToRender.length} rows
+              </Text>
             </View>
           </View>
 
           {listToRender.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>
-                {listMode === "FAVORITES" ? "No favorites" : "No positions"}
-              </Text>
-              <Text style={styles.emptySubtitle}>
-                {listMode === "FAVORITES"
-                  ? "Add favorites from the Investments screen to see them here."
-                  : "Try changing filters or add investments first."}
-              </Text>
-            </View>
+            <Text style={s.emptyText}>
+              {listMode === "FAVORITES"
+                ? "No favorite positions found."
+                : "No positions found. Adjust filters or add investments first."}
+            </Text>
           ) : (
-            listToRender.map((h) => (
-              <HoldingRow
-                key={`${h.symbol || h.assetSymbol}-${h.currency}-${
-                  h.side || "long"
-                }`}
-                h={h}
-              />
-            ))
+            <FlatList
+              data={listToRender}
+              keyExtractor={(item, index) =>
+                `${item.symbol || item.assetSymbol}-${item.currency}-${item.side || "long"}-${index}`
+              }
+              renderItem={({ item }) => <HoldingRow item={item} />}
+              scrollEnabled={false}
+            />
           )}
         </View>
       </ScrollView>
+
+      <View style={s.fabWrap}>
+        <TouchableOpacity
+          style={[
+            s.fabAuto,
+            {
+              backgroundColor: "rgba(0,212,255,0.10)",
+              borderColor: "rgba(0,212,255,0.30)",
+            },
+          ]}
+          onPress={fetchPerf}
+          activeOpacity={0.8}
+        >
+          <Brackets color={CYAN} size={8} thick={1} />
+          <Text style={[s.fabTxt, { color: CYAN }]}>SYNC</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            s.fabAdd,
+            {
+              backgroundColor: GOLD,
+              width: 54,
+              height: 54,
+            },
+          ]}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.8}
+        >
+          <Brackets color={BG} size={8} thick={1} />
+          <Text style={[s.fabAddTxt, { fontSize: 18 }]}>←</Text>
+        </TouchableOpacity>
+      </View>
 
       <QuoteModal
         visible={quoteModalOpen}
         onClose={() => setQuoteModalOpen(false)}
         quoteData={quoteData}
       />
-
-      <Toast toast={toast} />
     </SafeAreaView>
   );
 }
 
-/* =============================== styles =============================== */
-const styles = StyleSheet.create({
-  screen: {
+/* ══════════════════════════════════════════════════════════
+   STYLES
+══════════════════════════════════════════════════════════ */
+const s = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: BG },
+  content: { flex: 1 },
+
+  loadingScreen: {
     flex: 1,
-    backgroundColor: BG_DARK,
+    backgroundColor: BG,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  scroll: {
+  loadingInner: { alignItems: "center", position: "relative", padding: 30 },
+  loadingTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: T_HI,
+    letterSpacing: 4,
+    marginBottom: 6,
+  },
+  loadingMono: { fontSize: 10, color: T_DIM, letterSpacing: 1.5 },
+
+  headerCard: {
+    margin: 12,
     padding: 16,
-    paddingBottom: 80,
+    borderRadius: 4,
+    borderWidth: 1,
+    overflow: "hidden",
+    position: "relative",
+  },
+  headerHairline: {
+    position: "absolute",
+    top: 0,
+    left: "10%",
+    right: "10%",
+    height: 1.5,
+    opacity: 0.65,
   },
 
-  // Top bar (logo + back)
   topBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 6,
+    marginBottom: 16,
   },
-  backBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 8,
+  logoRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  statusDot: { width: 6, height: 6, borderRadius: 999 },
+  logoTxt: { fontSize: 13, fontWeight: "800", color: T_HI, letterSpacing: 3 },
+  livePill: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 2,
+    borderWidth: 1,
   },
-  backArrow: {
-    fontSize: 18,
-    color: "white",
-    marginRight: 6,
-  },
-  backText: {
-    fontSize: 14,
-    color: "white",
-  },
-
-  // Clickable logo
-  headerLogoBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 999,
+  livePillTxt: { fontSize: 8, fontWeight: "800", letterSpacing: 1.5 },
+  homeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 2,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
+    borderColor: "rgba(251,191,36,0.20)",
+    backgroundColor: "rgba(255,255,255,0.04)",
     alignItems: "center",
     justifyContent: "center",
+    position: "relative",
   },
-  headerLogoImg: {
-    width: "100%",
-    height: "100%",
-    resizeMode: "cover",
-  },
+  homeBtnImg: { width: "100%", height: "100%", resizeMode: "cover" },
 
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "white",
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: TEXT_MUTED,
-    marginTop: 2,
-  },
-  headerButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
-  },
-  headerButtonText: {
-    color: TEXT_SOFT,
-    fontSize: 12,
-    fontWeight: "500",
-  },
-
-  asOf: {
-    fontSize: 11,
-    color: TEXT_MUTED,
-    marginBottom: 8,
-  },
-  loadingText: {
-    marginTop: 8,
-    textAlign: "center",
-    color: TEXT_MUTED,
-    fontSize: 13,
-  },
-  errorText: {
-    color: "#fecaca",
-    fontSize: 13,
-    marginBottom: 8,
-  },
-
-  totalsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 12,
-  },
-  totalCard: {
-    flexGrow: 1,
-    minWidth: 130,
-    padding: 10,
-    borderRadius: 14,
-    backgroundColor: CARD_BG,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-  },
-  totalLabel: {
-    fontSize: 11,
-    color: TEXT_MUTED,
-    marginBottom: 4,
-  },
-  totalMiniLabel: {
-    fontSize: 10,
-    color: TEXT_MUTED,
-  },
-  totalValue: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: TEXT_SOFT,
-    marginBottom: 4,
-  },
-  totalInvested: {
-    fontSize: 13,
-    color: "#e5e7eb",
-    marginBottom: 4,
-  },
-  totalPL: {
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  totalPLPos: {
-    color: "#4ade80",
-  },
-  totalPLNeg: {
-    color: "#fb7185",
-  },
-
-  filterCard: {
-    borderRadius: 16,
-    backgroundColor: CARD_BG,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    padding: 12,
-    marginBottom: 12,
-  },
-  filterTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: TEXT_SOFT,
+  heroTitle: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: T_HI,
+    letterSpacing: -0.6,
+    lineHeight: 32,
     marginBottom: 6,
   },
-  filterLabel: {
-    fontSize: 11,
-    color: TEXT_MUTED,
-    marginBottom: 4,
-  },
-  searchInput: {
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    backgroundColor: "#020617",
-    color: "white",
-    fontSize: 13,
-  },
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  chip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
-  },
-  chipText: {
-    fontSize: 11,
-    color: TEXT_SOFT,
-  },
+  heroSub: { fontSize: 13, color: T_MID, lineHeight: 18 },
 
-  quoteCard: {
-    borderRadius: 16,
-    backgroundColor: CARD_BG,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    padding: 12,
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: TEXT_SOFT,
-  },
-  sectionSubtitle: {
-    fontSize: 11,
-    color: TEXT_MUTED,
-    marginTop: 2,
-    marginBottom: 8,
-  },
-  quoteRow: {
+  controlsRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginBottom: 8,
+    marginBottom: 12,
+    flexWrap: "wrap",
   },
-  quoteBtn: {
+  ctrlPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: main,
-  },
-  quoteBtnText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "white",
-  },
-
-  listCard: {
-    borderRadius: 16,
-    backgroundColor: CARD_BG,
+    borderRadius: 2,
     borderWidth: 1,
-    borderColor: BORDER_DARK,
-    marginBottom: 16,
-    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.025)",
   },
-  listHeaderRow: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: BORDER_DARK,
-  },
+  ctrlDot: { width: 5, height: 5, borderRadius: 999 },
+  ctrlTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 1.2 },
 
-  row: {
-    flexDirection: "row",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: BORDER_DARK,
-  },
-  rowLeft: {
-    flex: 1,
-    paddingRight: 8,
-  },
-  rowRight: {
-    alignItems: "flex-end",
-    justifyContent: "center",
-  },
-  rowTitleRow: {
+  searchWrap: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 2,
+    borderWidth: 1,
+    borderColor: CARD_BD,
+    borderRadius: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+    backgroundColor: "rgba(255,255,255,0.025)",
+    marginBottom: 10,
   },
-  rowSymbol: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: TEXT_SOFT,
+  searchDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 999,
+    marginRight: 8,
+    opacity: 0.7,
+  },
+  searchInput: { flex: 1, fontSize: 13, color: T_HI, paddingVertical: 10 },
+
+  filterGroupLabel: {
+    fontSize: 8,
+    fontWeight: "800",
+    color: T_DIM,
+    letterSpacing: 2,
+    marginBottom: 3,
+    marginTop: 8,
+  },
+  chipScroll: { paddingBottom: 6, paddingRight: 8 },
+
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 2,
+    borderWidth: 1,
+    borderColor: CARD_BD,
+    backgroundColor: "rgba(255,255,255,0.025)",
     marginRight: 6,
   },
-  rowSideBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 999,
+  chipSmall: { paddingHorizontal: 8, paddingVertical: 5 },
+  chipSelected: { backgroundColor: "rgba(255,255,255,0.04)" },
+  chipDot: { width: 4, height: 4, borderRadius: 999 },
+  chipText: { fontSize: 11, color: T_DIM },
+  chipTextSmall: { fontSize: 10 },
+  chipTextSelected: { fontWeight: "700" },
+
+  sectionCard: {
+    margin: 12,
+    marginTop: 10,
+    padding: 16,
+    borderRadius: 4,
+    backgroundColor: CARD_BG,
     borderWidth: 1,
-    borderColor: "#4ade80",
-    backgroundColor: "#022c2233",
+    borderColor: CARD_BD,
+    overflow: "hidden",
+    position: "relative",
   },
-  rowSideText: {
-    fontSize: 10,
-    color: "#bbf7d0",
-    textTransform: "capitalize",
+  sectionHairline: {
+    position: "absolute",
+    top: 0,
+    left: "10%",
+    right: "10%",
+    height: 1.5,
+    opacity: 0.65,
   },
-  rowCurrency: {
-    fontSize: 11,
-    color: TEXT_MUTED,
-    marginBottom: 4,
-  },
-  rowLine: {
+  sectionHeaderRow: {
     flexDirection: "row",
+    alignItems: "flex-start",
     justifyContent: "space-between",
+    marginBottom: 12,
   },
-  rowLabel: {
-    fontSize: 11,
-    color: TEXT_MUTED,
+  sectionEyebrow: {
+    fontSize: 8,
+    fontWeight: "800",
+    color: T_DIM,
+    letterSpacing: 2,
+    marginBottom: 3,
   },
-  rowValue: {
-    fontSize: 12,
-    color: TEXT_SOFT,
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: T_HI,
+    letterSpacing: -0.3,
   },
-  rowPL: {
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  rowDaily: {
-    fontSize: 11,
+  sectionClose: {
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1.5,
     marginTop: 2,
   },
-
-  emptyState: {
-    paddingVertical: 20,
-    paddingHorizontal: 12,
-    alignItems: "center",
-  },
-  emptyTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: TEXT_SOFT,
-  },
-  emptySubtitle: {
-    fontSize: 12,
-    color: TEXT_MUTED,
-    marginTop: 4,
-    textAlign: "center",
+  sectionNote: {
+    marginTop: -4,
+    marginBottom: 12,
+    fontSize: 11,
+    color: T_MID,
+    lineHeight: 17,
   },
 
-  toast: {
-    position: "absolute",
-    bottom: 16,
-    left: 16,
-    right: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+  currencyPill: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 2,
+    borderWidth: 1,
+    backgroundColor: "rgba(255,255,255,0.025)",
+  },
+  currencyPillTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 1 },
+
+  statCard: {
+    position: "relative",
+    borderRadius: 4,
+    borderWidth: 1,
+    padding: 16,
+    marginBottom: 9,
+    overflow: "hidden",
+  },
+  statHairline: {
+    position: "absolute",
+    top: 0,
+    left: "10%",
+    right: "10%",
+    height: 1.5,
+    opacity: 0.65,
+  },
+  statBadge: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginBottom: 10,
+    backgroundColor: "rgba(0,0,0,0.35)",
+  },
+  statBadgeDot: { width: 5, height: 5, borderRadius: 999 },
+  statBadgeTxt: { fontSize: 8, fontWeight: "800", letterSpacing: 1.4 },
+  statLabel: {
+    fontSize: 9,
+    textTransform: "uppercase",
+    letterSpacing: 1.2,
+    color: T_DIM,
+    marginBottom: 4,
+  },
+  statValue: { fontSize: 28, fontWeight: "700", letterSpacing: -0.8 },
+  statHint: { fontSize: 9, color: T_DIM, marginTop: 5, letterSpacing: 0.3 },
+
+  chartBlock: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.02)",
+    borderWidth: 1,
+    borderColor: CARD_BD,
+  },
+  chartHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 10,
+  },
+  chartTitle: { fontSize: 9, fontWeight: "800", letterSpacing: 2 },
+  chartEmpty: { fontSize: 11, color: T_DIM },
+
+  totalWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
+  totalPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 2,
+    borderWidth: 1,
+    backgroundColor: "rgba(255,255,255,0.025)",
+  },
+  totalPillTxt: { fontSize: 11, fontWeight: "700" },
+
+  rowCard: {
+    position: "relative",
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.04)",
+    marginBottom: 2,
+  },
+  rowTopLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 8,
+    flexWrap: "wrap",
+  },
+  rowCatPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: "rgba(0,0,0,0.3)",
+  },
+  rowCatDot: { width: 5, height: 5, borderRadius: 999 },
+  rowCatTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 0.8 },
+
+  badge: {
+    borderWidth: 1,
+    borderRadius: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+  },
+  badgeTxt: { fontSize: 8, fontWeight: "800", letterSpacing: 1.2 },
+
+  rowAmount: {
+    marginLeft: "auto",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  rowAccLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 6,
+    flexWrap: "wrap",
+  },
+  rowAccPill: {
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderColor: CARD_BD,
+    borderRadius: 2,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    backgroundColor: "rgba(255,255,255,0.025)",
+  },
+  rowAccTxt: { fontSize: 9, color: T_DIM, letterSpacing: 0.3 },
+  rowTags: { fontSize: 10, marginTop: 8, letterSpacing: 0.5 },
+
+  metricGrid: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 4,
+  },
+  metricCell: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: CARD_BD,
+    backgroundColor: "rgba(255,255,255,0.02)",
+    borderRadius: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  metricGridBig: {
     gap: 8,
   },
-  toastType: {
-    fontSize: 11,
-    textTransform: "capitalize",
-    color: TEXT_SOFT,
-    fontWeight: "600",
+  metricCellBig: {
+    borderWidth: 1,
+    borderColor: CARD_BD,
+    backgroundColor: "rgba(255,255,255,0.02)",
+    borderRadius: 2,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginBottom: 8,
   },
-  toastMsg: {
-    flex: 1,
+  metricLabel: {
+    fontSize: 8,
+    fontWeight: "800",
+    color: T_DIM,
+    letterSpacing: 2,
+    marginBottom: 4,
+  },
+  metricValue: {
     fontSize: 12,
-    color: TEXT_SOFT,
-  },
-
-  listHeaderLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  listHeaderPill: {
-    paddingVertical: 2,
-    paddingHorizontal: 2,
-    borderRadius: 999,
-  },
-  listHeaderPillActive: {
-    backgroundColor: "rgba(79,119,45,0.12)",
-  },
-  listHeaderTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: TEXT_SOFT,
-  },
-  listHeaderTitleInactive: {
-    color: TEXT_MUTED,
-    fontWeight: "600",
-  },
-  listHeaderMeta: {
-    fontSize: 14,
+    color: T_HI,
     fontWeight: "700",
-    color: secondary,
   },
-  listHeaderMetaInactive: {
-    color: TEXT_MUTED,
-    fontWeight: "600",
+  metricValueBig: {
+    fontSize: 18,
+    color: T_HI,
+    fontWeight: "800",
   },
 
-  /* ------------------ Modal (quote popup) ------------------ */
+  emptyText: {
+    paddingVertical: 12,
+    fontSize: 12,
+    color: T_DIM,
+    textAlign: "center",
+    letterSpacing: 0.5,
+  },
+
+  errorCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    borderRadius: 4,
+    padding: 14,
+    margin: 12,
+    marginTop: 8,
+    borderWidth: 1,
+    position: "relative",
+    overflow: "hidden",
+  },
+  errorIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 2,
+    backgroundColor: "rgba(167,139,250,0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(167,139,250,0.28)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  errorIconTxt: { fontSize: 16, fontWeight: "800" },
+  errorTitle: { fontSize: 12, fontWeight: "700", color: T_HI, marginBottom: 3 },
+  errorBody: { fontSize: 12, color: T_MID, lineHeight: 17 },
+
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: "rgba(3,5,8,0.92)",
     padding: 16,
     justifyContent: "center",
   },
-  modalCard: {
-    borderRadius: 18,
+  quoteModalCard: {
+    borderRadius: 4,
     borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#0b1220",
-    padding: 14,
+    borderColor: CARD_BD,
+    backgroundColor: BG,
+    padding: 18,
+    position: "relative",
+    overflow: "hidden",
   },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 10,
+  modalHairline: {
+    position: "absolute",
+    top: 0,
+    left: "10%",
+    right: "10%",
+    height: 1.5,
+    opacity: 0.65,
   },
-  modalTitle: {
-    color: "white",
-    fontSize: 16,
-    fontWeight: "800",
-  },
-  modalSubtitle: {
-    color: TEXT_MUTED,
-    fontSize: 11,
-    marginTop: 2,
-  },
-  modalCloseBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  modalCloseText: {
-    color: TEXT_SOFT,
-    fontSize: 14,
-    fontWeight: "800",
-  },
-  modalTopLine: {
-    marginBottom: 6,
-  },
-  modalSymbol: {
-    color: TEXT_SOFT,
-    fontSize: 18,
+  quoteModalSymbol: {
+    color: T_HI,
+    fontSize: 24,
     fontWeight: "900",
+    marginBottom: 4,
   },
-  modalName: {
-    color: TEXT_MUTED,
+  quoteModalName: {
+    color: T_MID,
     fontSize: 12,
-    marginTop: 2,
+    marginBottom: 8,
   },
-  modalPriceRow: {
+  quoteModalPriceRow: {
     flexDirection: "row",
     alignItems: "baseline",
     justifyContent: "space-between",
     gap: 10,
-    marginTop: 6,
+    marginBottom: 6,
   },
-  modalPrice: {
-    color: "white",
-    fontSize: 20,
+  quoteModalPrice: {
+    color: T_HI,
+    fontSize: 22,
     fontWeight: "900",
   },
-  modalChange: {
-    color: TEXT_SOFT,
+  quoteModalChange: {
     fontSize: 12,
     fontWeight: "700",
     textAlign: "right",
   },
-  modalUpdated: {
-    color: TEXT_MUTED,
-    fontSize: 11,
-    marginTop: 6,
-    marginBottom: 10,
-  },
+
   qGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -1366,36 +1797,61 @@ const styles = StyleSheet.create({
   },
   qStat: {
     width: "48%",
-    borderRadius: 14,
+    borderRadius: 2,
     borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
+    borderColor: CARD_BD,
+    backgroundColor: "rgba(255,255,255,0.02)",
     padding: 10,
   },
   qStatLabel: {
-    color: TEXT_MUTED,
+    color: T_DIM,
     fontSize: 10,
     marginBottom: 4,
+    letterSpacing: 1.2,
   },
   qStatValue: {
-    color: TEXT_SOFT,
+    color: T_HI,
     fontSize: 12,
     fontWeight: "700",
   },
-  modalFooter: {
-    marginTop: 12,
+
+  modalActions: {
     flexDirection: "row",
     justifyContent: "flex-end",
+    gap: 8,
+    marginTop: 14,
   },
-  modalPrimaryBtn: {
-    paddingHorizontal: 14,
+  modalBtnPrimary: {
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: main,
+    borderRadius: 2,
   },
-  modalPrimaryBtnText: {
-    color: "white",
-    fontSize: 13,
-    fontWeight: "800",
+  modalBtnTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 1 },
+
+  fabWrap: {
+    position: "absolute",
+    right: 16,
+    bottom: 24,
+    alignItems: "flex-end",
+    gap: 10,
   },
+  fabAuto: {
+    width: 52,
+    height: 52,
+    borderRadius: 2,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    position: "relative",
+  },
+  fabTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 1 },
+  fabAdd: {
+    width: 54,
+    height: 54,
+    borderRadius: 2,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  fabAddTxt: { fontSize: 26, lineHeight: 28, color: BG, fontWeight: "800" },
 });

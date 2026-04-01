@@ -11,9 +11,6 @@ import React, {
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -29,27 +26,307 @@ import { useNavigation } from "@react-navigation/native";
 import api from "../lib/api";
 import logo from "../../assets/nummoria_logo.png";
 
-const BG_DARK = "#020617";
-const CARD_DARK = "#020819";
-const BORDER_DARK = "#0f172a";
-const TEXT_SOFT = "rgba(148,163,184,0.85)";
-const TEXT_MUTED = "rgba(148,163,184,0.7)";
-const TEXT_HEADING = "#e5e7eb";
-const main = "#4f772d";
-const secondary = "#90a955";
+/* ──────────────────────────────────────────────────────────
+   THEME
+────────────────────────────────────────────────────────── */
+const BG = "#030508";
+const MINT = "#00ff87";
+const CYAN = "#00d4ff";
+const VIOLET = "#a78bfa";
+const ORANGE = "#f97316";
+const GOLD = "#fbbf24";
 
-// ───────────── Plan Gate ─────────────
+const CARD_BG = "rgba(255,255,255,0.025)";
+const CARD_BD = "rgba(255,255,255,0.07)";
+const T_HI = "#e2e8f0";
+const T_MID = "rgba(226,232,240,0.55)";
+const T_DIM = "rgba(226,232,240,0.32)";
+
+/* ──────────────────────────────────────────────────────────
+   PLAN GATE
+────────────────────────────────────────────────────────── */
 const ELIGIBLE_PLANS = new Set(["plus", "premium"]);
 function isEligible(plan) {
   if (!plan) return false;
   return ELIGIBLE_PLANS.has(String(plan).toLowerCase());
 }
 
+/* ──────────────────────────────────────────────────────────
+   HUD PRIMITIVES
+────────────────────────────────────────────────────────── */
+function Brackets({ color = MINT, size = 10, thick = 1.5 }) {
+  const defs = [
+    {
+      top: 0,
+      left: 0,
+      borderTopWidth: thick,
+      borderLeftWidth: thick,
+      borderTopLeftRadius: 2,
+    },
+    {
+      top: 0,
+      right: 0,
+      borderTopWidth: thick,
+      borderRightWidth: thick,
+      borderTopRightRadius: 2,
+    },
+    {
+      bottom: 0,
+      left: 0,
+      borderBottomWidth: thick,
+      borderLeftWidth: thick,
+      borderBottomLeftRadius: 2,
+    },
+    {
+      bottom: 0,
+      right: 0,
+      borderBottomWidth: thick,
+      borderRightWidth: thick,
+      borderBottomRightRadius: 2,
+    },
+  ];
+
+  return (
+    <>
+      {defs.map((d, i) => (
+        <View
+          key={i}
+          style={[
+            {
+              position: "absolute",
+              width: size,
+              height: size,
+              borderColor: color,
+            },
+            d,
+          ]}
+        />
+      ))}
+    </>
+  );
+}
+
+function ScanLine({ color = MINT, style: extra }) {
+  return (
+    <View
+      style={[{ flexDirection: "row", alignItems: "center", gap: 6 }, extra]}
+    >
+      <View
+        style={{
+          width: 3,
+          height: 3,
+          borderRadius: 999,
+          backgroundColor: color,
+          opacity: 0.6,
+        }}
+      />
+      <View
+        style={{ flex: 1, height: 1, backgroundColor: color, opacity: 0.2 }}
+      />
+      <View
+        style={{
+          width: 3,
+          height: 3,
+          borderRadius: 999,
+          backgroundColor: color,
+          opacity: 0.6,
+        }}
+      />
+    </View>
+  );
+}
+
+function GridBG() {
+  const { width, height } = require("react-native").Dimensions.get("window");
+  const COLS = 10;
+  const ROWS = 22;
+  const cw = width / COLS;
+  const rh = height / ROWS;
+
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {Array.from({ length: ROWS + 1 }, (_, i) => (
+        <View
+          key={`h${i}`}
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: i * rh,
+            height: 1,
+            backgroundColor: "rgba(0,255,135,0.035)",
+          }}
+        />
+      ))}
+      {Array.from({ length: COLS + 1 }, (_, i) => (
+        <View
+          key={`v${i}`}
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            left: i * cw,
+            width: 1,
+            backgroundColor: "rgba(0,212,255,0.025)",
+          }}
+        />
+      ))}
+      <View
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 2,
+          backgroundColor: MINT,
+          opacity: 0.15,
+        }}
+      />
+      <View
+        style={{
+          position: "absolute",
+          top: height * 0.44,
+          left: 0,
+          right: 0,
+          height: 1,
+          backgroundColor: CYAN,
+          opacity: 0.06,
+        }}
+      />
+      <View
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 1,
+          backgroundColor: VIOLET,
+          opacity: 0.1,
+        }}
+      />
+    </View>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────
+   SMALL COMPONENTS
+────────────────────────────────────────────────────────── */
+function ToneChip({ selected, onPress, label }) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.9}
+      style={[s.toneChip, selected && s.toneChipSelected]}
+    >
+      <Text
+        style={[s.toneChipText, selected && s.toneChipTextSelected]}
+        numberOfLines={1}
+      >
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+function ChatBubble({ role, text }) {
+  const isUser = role === "user";
+  const isAssistant = role === "assistant";
+
+  let wrapAlign = "flex-start";
+  if (isUser) wrapAlign = "flex-end";
+
+  let bubbleStyle = s.bubbleSystem;
+  let bracketColor = VIOLET;
+
+  if (isUser) {
+    bubbleStyle = s.bubbleUser;
+    bracketColor = MINT;
+  } else if (isAssistant) {
+    bubbleStyle = s.bubbleAssistant;
+    bracketColor = CYAN;
+  }
+
+  return (
+    <View style={[s.bubbleRow, { justifyContent: wrapAlign }]}>
+      <View style={[bubbleStyle, { position: "relative" }]}>
+        <Brackets color={bracketColor} size={7} thick={1} />
+        <Text style={s.bubbleText}>{text}</Text>
+      </View>
+    </View>
+  );
+}
+
+function TypingBubble() {
+  return (
+    <View style={[s.bubbleRow, { justifyContent: "flex-start" }]}>
+      <View style={[s.bubbleAssistant, { position: "relative" }]}>
+        <Brackets color={CYAN} size={7} thick={1} />
+        <Text style={s.typingText}>Assistant is typing…</Text>
+      </View>
+    </View>
+  );
+}
+
+function UpgradeOverlay({ plan }) {
+  return (
+    <View style={s.overlay}>
+      <View style={s.overlayCard}>
+        <Brackets color={GOLD} size={10} thick={1.5} />
+        <View style={[s.overlayHairline, { backgroundColor: GOLD }]} />
+
+        <Text style={s.overlayTitle}>Unlock AI Financial Advisor</Text>
+        <Text style={s.overlayText}>
+          Your current plan{" "}
+          <Text style={s.overlayPlanText}>({plan || "free"})</Text> doesn’t
+          include this feature. Upgrade to{" "}
+          <Text style={s.overlayPlanText}>Plus</Text> or{" "}
+          <Text style={s.overlayPlanText}>Premium</Text> to continue.
+        </Text>
+
+        <ScanLine color={GOLD} style={{ marginTop: 14, marginBottom: 14 }} />
+
+        <View style={s.overlayBtnRow}>
+          <TouchableOpacity
+            style={s.overlayPrimaryBtn}
+            onPress={() =>
+              Alert.alert(
+                "Upgrade",
+                "Please upgrade to Plus or Premium from the web app or subscription settings.",
+              )
+            }
+          >
+            <Text style={s.overlayPrimaryBtnText}>SEE PLANS</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={s.overlaySecondaryBtn}
+            onPress={() =>
+              Alert.alert(
+                "Go Premium",
+                "Upgrade to Premium from the web app to unlock this feature.",
+              )
+            }
+          >
+            <Text style={s.overlaySecondaryBtnText}>GO PREMIUM</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={s.overlayFootnote}>
+          Plus & Premium include AI insights, savings tips, and more.
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════
+   SCREEN
+══════════════════════════════════════════════════════════ */
 export default function FinancialAdvisorScreen() {
   const navigation = useNavigation();
-  // ----------------------------- STATE -----------------------------
+
   const [fileId, setFileId] = useState(null);
-  const [tone, setTone] = useState(null); // load from AsyncStorage
+  const [tone, setTone] = useState("formal");
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -63,26 +340,19 @@ export default function FinancialAdvisorScreen() {
   const chatRef = useRef(null);
   const bannerTimeoutRef = useRef(null);
 
-  // ----------------------------- EFFECTS -----------------------------
-  // Load tone preference
   useEffect(() => {
     (async () => {
       try {
         const saved = await AsyncStorage.getItem("fh_tone");
-        if (saved) setTone(saved);
-      } catch {
-        // ignore
-      }
+        if (saved === "formal" || saved === "buddy") setTone(saved);
+      } catch {}
     })();
   }, []);
 
-  // Persist tone when it changes
   useEffect(() => {
-    if (!tone) return;
     AsyncStorage.setItem("fh_tone", tone).catch(() => {});
   }, [tone]);
 
-  // Fetch plan once
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -100,36 +370,35 @@ export default function FinancialAdvisorScreen() {
         if (mounted) setPlanLoading(false);
       }
     })();
+
     return () => {
       mounted = false;
       if (bannerTimeoutRef.current) clearTimeout(bannerTimeoutRef.current);
     };
   }, []);
 
-  // auto-scroll chat to bottom
   useEffect(() => {
     if (chatRef.current) {
       chatRef.current.scrollToEnd({ animated: true });
     }
   }, [messages.length, thinking]);
 
-  // ------------------------- BANNER HELPER -------------------------
   const showBanner = useCallback((msg) => {
     const text = String(msg || "");
     setBanner(text);
-    if (bannerTimeoutRef.current) {
-      clearTimeout(bannerTimeoutRef.current);
-    }
-    bannerTimeoutRef.current = setTimeout(() => {
-      setBanner(null);
-    }, 5000);
+    if (bannerTimeoutRef.current) clearTimeout(bannerTimeoutRef.current);
+    bannerTimeoutRef.current = setTimeout(() => setBanner(null), 5000);
   }, []);
 
-  // ------------------------- FILE UPLOAD -------------------------
+  const toneLabel = useMemo(
+    () => (tone === "buddy" ? "Buddy" : "Formal"),
+    [tone],
+  );
+
   const handlePickFile = useCallback(async () => {
     if (!isEligible(plan)) {
       showBanner(
-        "Uploads require Plus or Premium. Please upgrade to continue."
+        "Uploads require Plus or Premium. Please upgrade to continue.",
       );
       return;
     }
@@ -183,11 +452,12 @@ export default function FinancialAdvisorScreen() {
     } catch (err) {
       const code = err?.response?.data?.code;
       const msg = err?.response?.data?.message || "Upload failed.";
+
       if (code === "NO_TRANSACTIONS") {
         showBanner(msg + " Tip: Export a CSV from your bank and upload that.");
       } else if (code === "PDF_NO_TEXT") {
         showBanner(
-          "This PDF is scanned/image-only. Please export a text-based PDF or CSV."
+          "This PDF is scanned/image-only. Please export a text-based PDF or CSV.",
         );
       } else if (err?.response?.status === 402) {
         showBanner("Upgrade required to use Financial Advisor.");
@@ -200,39 +470,47 @@ export default function FinancialAdvisorScreen() {
     }
   }, [plan, showBanner]);
 
-  // ------------------------- SEND MESSAGE -------------------------
   const onSend = useCallback(async () => {
     if (!isEligible(plan)) {
       showBanner(
-        "Financial Advisor is available on Plus/Premium. Please upgrade to continue."
+        "Financial Advisor is available on Plus/Premium. Please upgrade to continue.",
       );
       return;
     }
 
     const trimmed = input.trim();
-
-    if (!trimmed && !tone) {
-      showBanner("Pick a tone first.");
+    if (!trimmed) {
+      showBanner("Type a message first.");
       return;
     }
 
-    const tonePref = tone || "formal";
-
-    const userMsg = trimmed;
-    setMessages((m) => [
-      ...m,
-      { role: "user", content: userMsg || `(Using tone: ${tonePref})` },
-    ]);
+    setMessages((m) => [...m, { role: "user", content: trimmed }]);
     setInput("");
+
+    const backendMessage = [
+      `User message: ${trimmed}`,
+      "",
+      `Tone preference: ${tone || "formal"}.`,
+      "Reply in English unless the user explicitly writes in another language.",
+      "If there is no attached file/report, still answer the question generally and helpfully.",
+      "Do not refuse only because there is no uploaded statement.",
+      fileId
+        ? `Use attached file context when relevant. fileId=${fileId}`
+        : "No file is attached. Give a general educational answer.",
+    ].join("\n");
 
     try {
       setThinking(true);
       const { data } = await api.post("/ai/financial-helper/chat", {
-        message: userMsg || `Start session. Tone: ${tonePref}`,
-        tonePreference: tonePref,
-        fileId,
+        message: backendMessage,
+        tonePreference: tone || "formal",
+        fileId: fileId || null,
       });
-      setMessages((m) => [...m, { role: "assistant", content: data.reply }]);
+
+      setMessages((m) => [
+        ...m,
+        { role: "assistant", content: data?.reply || "No reply returned." },
+      ]);
     } catch (err) {
       const msg =
         err?.response?.data?.error ||
@@ -248,210 +526,238 @@ export default function FinancialAdvisorScreen() {
     }
   }, [input, tone, plan, fileId, showBanner]);
 
-  // ------------------------------ RENDER HELPERS ------------------------------ //
-  const renderMessages = () => {
-    if (messages.length === 0) {
-      return (
-        <View style={styles.emptyChatWrap}>
-          <Text style={styles.emptyChatText}>
-            {planLoading
-              ? "Checking your plan…"
-              : isEligible(plan)
-              ? "Upload a statement and ask about your budget, savings, or investments."
-              : "Upgrade to Plus or Premium to chat with the advisor."}
-          </Text>
-        </View>
-      );
-    }
-
+  function Header() {
     return (
-      <View>
-        {messages.map((m, idx) => (
-          <ChatBubble key={idx} role={m.role} text={m.content} />
-        ))}
-        {thinking && <TypingBubble />}
-      </View>
-    );
-  };
-
-  // ------------------------------ MAIN RENDER ------------------------------ //
-  if (planLoading && !tone && messages.length === 0) {
-    return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={main} />
-        <Text style={styles.loadingTitle}>Nummoria</Text>
-        <Text style={styles.loadingSubtitle}>
-          Initializing your AI advisor…
-        </Text>
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <SafeAreaView style={styles.screen}>
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={{ paddingBottom: 32 }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+      <View
+        style={[
+          s.headerCard,
+          {
+            borderColor: "rgba(0,255,135,0.22)",
+            backgroundColor: "rgba(0,255,135,0.04)",
+          },
+        ]}
       >
-        {/* Header */}
-        <View style={styles.headerCard}>
-          <View style={styles.headerLeft}>
-            {/* ✅ NEW: Clickable Nummoria logo → Dashboard */}
-            <TouchableOpacity
-              onPress={() => navigation.navigate("Dashboard")} // ✅ NEW: change route name if needed
-              activeOpacity={0.85}
-              style={styles.headerLogoBtn}
+        <Brackets color={MINT} size={10} thick={1.5} />
+        <View style={[s.headerHairline, { backgroundColor: MINT }]} />
+
+        <View style={s.topBar}>
+          <View style={s.logoRow}>
+            <View style={[s.statusDot, { backgroundColor: MINT }]} />
+            <Text style={s.logoTxt}>FINANCIAL ADVISOR</Text>
+          </View>
+
+          <TouchableOpacity
+            onPress={() => navigation.navigate("Dashboard")}
+            activeOpacity={0.8}
+            style={s.homeBtn}
+          >
+            <Image source={logo} style={s.homeBtnImg} />
+            <Brackets color={MINT} size={6} thick={1} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={s.headerBottomRow}>
+          <View style={s.headerTextWrap}>
+            <Text style={s.heroTitle}>Advisor Console</Text>
+            <Text style={s.heroSub}>Educational finance guidance.</Text>
+          </View>
+
+          <View style={s.headerStatusWrap}>
+            <View
+              style={[
+                s.ctrlPillCompact,
+                { borderColor: "rgba(0,255,135,0.25)" },
+              ]}
             >
-              <Image source={logo} style={styles.headerLogoImg} />
-            </TouchableOpacity>
-            <View>
-              <Text style={styles.headerTitle}>AI Financial Advisor</Text>
-              <Text style={styles.headerSubtitle}>
-                Educational only · Not licensed financial advice
+              <View style={[s.ctrlDot, { backgroundColor: MINT }]} />
+              <Text style={[s.ctrlTxt, { color: MINT }]}>
+                {toneLabel.toUpperCase()}
+              </Text>
+            </View>
+
+            <View
+              style={[
+                s.ctrlPillCompact,
+                { borderColor: "rgba(0,212,255,0.22)" },
+              ]}
+            >
+              <View style={[s.ctrlDot, { backgroundColor: CYAN }]} />
+              <Text style={[s.ctrlTxt, { color: CYAN }]}>
+                {planLoading
+                  ? "CHECKING"
+                  : String(plan || "free").toUpperCase()}
+              </Text>
+            </View>
+
+            <View
+              style={[
+                s.ctrlPillCompact,
+                { borderColor: "rgba(167,139,250,0.22)" },
+              ]}
+            >
+              <View style={[s.ctrlDot, { backgroundColor: VIOLET }]} />
+              <Text style={[s.ctrlTxt, { color: VIOLET }]}>
+                {fileId ? "FILE READY" : "NO FILE"}
               </Text>
             </View>
           </View>
-
-          {/* Tone chips (top-right) */}
-          {/* <View style={styles.headerToneRow}>
-            <Text style={styles.headerToneLabel}>Tone:</Text>
-            <ToneChip
-              label="Formal"
-              selected={tone === "formal"}
-              onPress={() => setTone("formal")}
-            />
-            <ToneChip
-              label="Buddy"
-              selected={tone === "buddy"}
-              onPress={() => setTone("buddy")}
-            />
-          </View> */}
         </View>
+      </View>
+    );
+  }
 
-        {/* Banner */}
-        {banner ? (
-          <View style={styles.bannerBox}>
-            <Text style={styles.bannerText}>{banner}</Text>
-          </View>
-        ) : null}
+  function BannerCard() {
+    if (!banner) return null;
 
-        {/* Tone picker card (if none picked yet) */}
-        {!tone && (
-          <View style={styles.toneCard}>
-            <Text style={styles.toneCardTitle}>How should I talk?</Text>
-            <Text style={styles.toneCardSubtitle}>
-              Choose how you want Nummoria to speak with you.
-            </Text>
-            <View style={styles.toneChipRowBig}>
+    return (
+      <View
+        style={[
+          s.errorCard,
+          {
+            backgroundColor: "rgba(251,191,36,0.06)",
+            borderColor: "rgba(251,191,36,0.22)",
+          },
+        ]}
+      >
+        <Brackets color={GOLD} size={8} thick={1} />
+        <View
+          style={[
+            s.errorIconBox,
+            {
+              backgroundColor: "rgba(251,191,36,0.18)",
+              borderColor: "rgba(251,191,36,0.28)",
+            },
+          ]}
+        >
+          <Text style={[s.errorIconTxt, { color: GOLD }]}>!</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={s.errorTitle}>Notice</Text>
+          <Text style={s.errorBody}>{banner}</Text>
+        </View>
+      </View>
+    );
+  }
+
+  function SetupBar() {
+    return (
+      <View style={s.setupCard}>
+        <Brackets color={ORANGE} size={10} thick={1} />
+        <View style={[s.sectionHairline, { backgroundColor: ORANGE }]} />
+
+        <View style={s.setupRow}>
+          <View style={s.setupLeft}>
+            <View style={s.toneChipRowBig}>
               <ToneChip
-                big
                 label="Formal"
                 selected={tone === "formal"}
                 onPress={() => setTone("formal")}
               />
               <ToneChip
-                big
                 label="Buddy"
                 selected={tone === "buddy"}
                 onPress={() => setTone("buddy")}
               />
             </View>
           </View>
-        )}
 
-        {/* Upload card */}
-        <View style={styles.uploadCard}>
-          <View style={styles.uploadTopRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.uploadTitle}>Upload your statement</Text>
-              <Text style={styles.uploadSubtitle}>
-                Accepts <Text style={styles.uploadSubtitleStrong}>PDF</Text>{" "}
-                (text-based)
-                {"  "}or <Text style={styles.uploadSubtitleStrong}>CSV</Text>
-              </Text>
-            </View>
+          <View style={s.setupRight}>
             <TouchableOpacity
               style={[
-                styles.uploadBtn,
+                s.uploadBtn,
                 (!isEligible(plan) || planLoading || uploading) &&
-                  styles.uploadBtnDisabled,
+                  s.uploadBtnDisabled,
               ]}
               disabled={!isEligible(plan) || planLoading || uploading}
               onPress={handlePickFile}
             >
-              <Text style={styles.uploadBtnText}>
-                {uploading ? "Uploading…" : "Choose File"}
+              <Text style={s.uploadBtnText}>
+                {uploading ? "UPLOADING…" : "UPLOAD"}
               </Text>
             </TouchableOpacity>
-          </View>
 
-          {/* progress */}
-          {uploading && (
-            <View style={styles.uploadProgressWrap}>
-              <View style={styles.uploadProgressTrack}>
-                <View
-                  style={[
-                    styles.uploadProgressFill,
-                    { width: `${uploadPct}%` },
-                  ]}
-                />
-              </View>
-              <Text style={styles.uploadProgressText}>{uploadPct}%</Text>
-            </View>
-          )}
-
-          {/* file status + plan gate label */}
-          <View style={styles.uploadStatusRow}>
-            <View
-              style={[
-                styles.fileStatusPill,
-                fileId && styles.fileStatusPillActive,
-              ]}
-            >
-              <View
-                style={[styles.dot, fileId ? styles.dotOk : styles.dotMuted]}
-              />
+            <View style={[s.fileStatusPill, fileId && s.fileStatusPillActive]}>
+              <View style={[s.dot, fileId ? s.dotOk : s.dotMuted]} />
               <Text
-                style={[
-                  styles.fileStatusText,
-                  fileId && styles.fileStatusTextActive,
-                ]}
+                style={[s.fileStatusText, fileId && s.fileStatusTextActive]}
               >
-                {fileId ? "File linked to session" : "No file yet"}
+                {fileId ? "Linked" : "None"}
               </Text>
             </View>
-            {!planLoading && !isEligible(plan) && (
-              <View style={styles.planPill}>
-                <Text style={styles.planPillText}>Plus/Premium required</Text>
-              </View>
-            )}
           </View>
         </View>
 
-        {/* Chat card */}
-        <View style={styles.chatCard}>
-          <View style={styles.chatArea}>
+        {uploading && (
+          <View style={s.uploadProgressWrap}>
+            <View style={s.uploadProgressTrack}>
+              <View
+                style={[s.uploadProgressFill, { width: `${uploadPct}%` }]}
+              />
+            </View>
+            <Text style={s.uploadProgressText}>{uploadPct}%</Text>
+          </View>
+        )}
+      </View>
+    );
+  }
+
+  function ChatPanel() {
+    return (
+      <View style={s.chatCard}>
+        <Brackets color={MINT} size={10} thick={1} />
+        <View style={[s.sectionHairline, { backgroundColor: MINT }]} />
+
+        <View style={s.sectionHeaderRow}>
+          <View>
+            <Text style={s.sectionEyebrow}>ADVISOR CHAT</Text>
+            <Text style={s.sectionTitle}>Conversation</Text>
+          </View>
+          <View
+            style={[s.currencyPill, { borderColor: "rgba(0,255,135,0.22)" }]}
+          >
+            <View style={[s.ctrlDot, { backgroundColor: MINT }]} />
+            <Text style={[s.currencyPillTxt, { color: MINT }]}>
+              {messages.length} msgs
+            </Text>
+          </View>
+        </View>
+
+        <View style={s.chatMain}>
+          <View style={s.chatArea}>
             <ScrollView
               ref={chatRef}
-              style={styles.chatScroll}
-              contentContainerStyle={{ paddingBottom: 8 }}
+              style={s.chatScroll}
+              contentContainerStyle={{ paddingBottom: 8, flexGrow: 1 }}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
-              {renderMessages()}
+              {messages.length === 0 ? (
+                <View style={s.emptyChatWrap}>
+                  <Text style={s.emptyChatText}>
+                    {planLoading
+                      ? "Checking your plan…"
+                      : isEligible(plan)
+                        ? "Upload a statement and ask about your budget, savings, or investments."
+                        : "Upgrade to Plus or Premium to chat with the advisor."}
+                  </Text>
+                </View>
+              ) : (
+                <View>
+                  {messages.map((m, idx) => (
+                    <ChatBubble key={idx} role={m.role} text={m.content} />
+                  ))}
+                  {thinking && <TypingBubble />}
+                </View>
+              )}
             </ScrollView>
 
-            {/* PLAN GATE OVERLAY */}
             {!planLoading && !isEligible(plan) && (
               <UpgradeOverlay plan={plan} />
             )}
           </View>
 
-          {/* Composer */}
-          <View style={styles.composerBox}>
-            <View style={styles.composerRow}>
+          <View style={s.composerBox}>
+            <View style={s.composerRow}>
               <TextInput
                 value={input}
                 onChangeText={setInput}
@@ -459,384 +765,338 @@ export default function FinancialAdvisorScreen() {
                 placeholder={
                   !planLoading && !isEligible(plan)
                     ? "Upgrade to Plus or Premium to chat with the advisor."
-                    : tone
-                    ? "Ask about your budget, risk, or investments…"
-                    : "Pick a tone to start…"
+                    : "Ask about your budget, risk, or investments…"
                 }
-                placeholderTextColor={TEXT_MUTED}
-                editable={!!tone && isEligible(plan) && !planLoading}
+                placeholderTextColor={T_DIM}
+                editable={isEligible(plan) && !planLoading}
                 style={[
-                  styles.composerInput,
-                  (!tone || !isEligible(plan) || planLoading) &&
-                    styles.composerInputDisabled,
+                  s.composerInput,
+                  (!isEligible(plan) || planLoading) && s.composerInputDisabled,
                 ]}
               />
+
               <TouchableOpacity
                 style={[
-                  styles.sendBtn,
-                  (!tone ||
-                    !input.trim() ||
+                  s.sendBtn,
+                  (!input.trim() ||
                     thinking ||
                     !isEligible(plan) ||
                     planLoading) &&
-                    styles.sendBtnDisabled,
+                    s.sendBtnDisabled,
                 ]}
                 disabled={
-                  !tone ||
-                  !input.trim() ||
-                  thinking ||
-                  !isEligible(plan) ||
-                  planLoading
+                  !input.trim() || thinking || !isEligible(plan) || planLoading
                 }
                 onPress={onSend}
               >
-                <Text style={styles.sendBtnText}>
-                  {thinking ? "…" : "Send"}
-                </Text>
+                <Text style={s.sendBtnText}>{thinking ? "…" : "SEND"}</Text>
               </TouchableOpacity>
             </View>
-            {!tone && isEligible(plan) && !planLoading && (
-              <Text style={styles.composerHint}>
-                Select a tone above to enable the composer.
-              </Text>
-            )}
           </View>
         </View>
-      </ScrollView>
+      </View>
+    );
+  }
+
+  if (planLoading && messages.length === 0) {
+    return (
+      <SafeAreaView style={s.loadingScreen}>
+        <GridBG />
+        <View style={s.loadingInner}>
+          <View
+            style={{
+              width: 70,
+              height: 70,
+              alignItems: "center",
+              justifyContent: "center",
+              position: "relative",
+              marginBottom: 16,
+            }}
+          >
+            <Brackets color={MINT} size={20} thick={2} />
+            <ActivityIndicator size="large" color={MINT} />
+          </View>
+          <Text style={s.loadingTitle}>ADVISOR</Text>
+          <Text style={s.loadingMono}>Initialising AI financial console…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={s.screen}>
+      <GridBG />
+      <View style={s.page}>
+        {Header()}
+        {BannerCard()}
+        {SetupBar()}
+        {ChatPanel()}
+      </View>
     </SafeAreaView>
   );
 }
 
-/* ---------------------------- SMALL COMPONENTS ---------------------------- */
-
-function ToneChip({ selected, onPress, label, big }) {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      activeOpacity={0.9}
-      style={[
-        styles.toneChip,
-        big && styles.toneChipBig,
-        selected && styles.toneChipSelected,
-      ]}
-    >
-      <Text
-        style={[
-          styles.toneChipText,
-          big && styles.toneChipTextBig,
-          selected && styles.toneChipTextSelected,
-        ]}
-      >
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
-}
-
-function ChatBubble({ role, text }) {
-  const isUser = role === "user";
-  const isAssistant = role === "assistant";
-  const isSystem = role === "system";
-
-  let wrapAlign = "flex-start";
-  if (isUser) wrapAlign = "flex-end";
-
-  let bubbleStyle = styles.bubbleSystem;
-  if (isUser) bubbleStyle = styles.bubbleUser;
-  else if (isAssistant) bubbleStyle = styles.bubbleAssistant;
-
-  return (
-    <View style={[styles.bubbleRow, { justifyContent: wrapAlign }]}>
-      <View style={bubbleStyle}>
-        <Text style={styles.bubbleText}>{text}</Text>
-      </View>
-    </View>
-  );
-}
-
-function TypingBubble() {
-  return (
-    <View style={[styles.bubbleRow, { justifyContent: "flex-start" }]}>
-      <View style={styles.bubbleAssistant}>
-        <Text style={styles.typingText}>Assistant is typing…</Text>
-      </View>
-    </View>
-  );
-}
-
-function UpgradeOverlay({ plan }) {
-  return (
-    <View style={styles.overlay}>
-      <View style={styles.overlayCard}>
-        <Text style={styles.overlayTitle}>Unlock AI Financial Advisor</Text>
-        <Text style={styles.overlayText}>
-          Your current plan{" "}
-          <Text style={styles.overlayPlanText}>({plan || "free"})</Text> doesn’t
-          include this feature. Upgrade to{" "}
-          <Text style={styles.overlayPlanText}>Plus</Text> or{" "}
-          <Text style={styles.overlayPlanText}>Premium</Text> to continue.
-        </Text>
-        <View style={styles.overlayBtnRow}>
-          <TouchableOpacity
-            style={styles.overlayPrimaryBtn}
-            onPress={() =>
-              Alert.alert(
-                "Upgrade",
-                "Please upgrade to Plus or Premium from the web app or subscription settings."
-              )
-            }
-          >
-            <Text style={styles.overlayPrimaryBtnText}>See Plans</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.overlaySecondaryBtn}
-            onPress={() =>
-              Alert.alert(
-                "Go Premium",
-                "Upgrade to Premium from the web app to unlock this feature."
-              )
-            }
-          >
-            <Text style={styles.overlaySecondaryBtnText}>Go Premium</Text>
-          </TouchableOpacity>
-        </View>
-        <Text style={styles.overlayFootnote}>
-          Plus & Premium include AI insights, savings tips, and more.
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-/* =============================== STYLES =============================== */
-
-const styles = StyleSheet.create({
+/* ══════════════════════════════════════════════════════════
+   STYLES
+══════════════════════════════════════════════════════════ */
+const s = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: BG_DARK,
+    backgroundColor: BG,
   },
-  content: {
+  page: {
     flex: 1,
   },
 
-  /* Loading */
-  loadingContainer: {
+  loadingScreen: {
     flex: 1,
-    backgroundColor: BG_DARK,
+    backgroundColor: BG,
     justifyContent: "center",
     alignItems: "center",
   },
+  loadingInner: { alignItems: "center", position: "relative", padding: 30 },
   loadingTitle: {
-    marginTop: 8,
-    fontSize: 20,
-    fontWeight: "700",
-    color: main,
-  },
-  loadingSubtitle: {
     fontSize: 13,
-    color: TEXT_MUTED,
-    marginTop: 4,
+    fontWeight: "800",
+    color: T_HI,
+    letterSpacing: 4,
+    marginBottom: 6,
   },
+  loadingMono: { fontSize: 10, color: T_DIM, letterSpacing: 1.5 },
 
-  /* Header */
   headerCard: {
-    marginTop: 12,
-    marginHorizontal: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 20,
+    margin: 12,
+    marginBottom: 6,
+    padding: 10,
+    borderRadius: 4,
     borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: CARD_DARK,
+    overflow: "hidden",
+    position: "relative",
+  },
+  headerHairline: {
+    position: "absolute",
+    top: 0,
+    left: "10%",
+    right: "10%",
+    height: 1.5,
+    opacity: 0.65,
+  },
+  topBar: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    alignItems: "center",
+    marginBottom: 6,
   },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    flex: 1,
-  },
-  headerIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 14,
-    backgroundColor: main,
+  logoRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  statusDot: { width: 6, height: 6, borderRadius: 999 },
+  logoTxt: { fontSize: 11, fontWeight: "800", color: T_HI, letterSpacing: 2.2 },
+  homeBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 2,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(0,255,135,0.20)",
+    backgroundColor: "rgba(255,255,255,0.04)",
     alignItems: "center",
     justifyContent: "center",
+    position: "relative",
   },
-  headerIconText: {
-    fontSize: 20,
+  homeBtnImg: { width: "100%", height: "100%", resizeMode: "cover" },
+
+  headerBottomRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  headerTextWrap: {
+    flex: 1,
+    paddingRight: 6,
+  },
+  headerStatusWrap: {
+    alignItems: "flex-end",
+    gap: 6,
+    maxWidth: "42%",
+  },
+  heroTitle: {
+    fontSize: 16,
     fontWeight: "800",
-    color: "#f9fafb",
+    color: T_HI,
+    letterSpacing: -0.3,
+    lineHeight: 18,
+    marginBottom: 2,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: TEXT_HEADING,
+  heroSub: {
+    fontSize: 10,
+    color: T_MID,
+    lineHeight: 13,
   },
-  headerSubtitle: {
-    fontSize: 11,
-    color: TEXT_MUTED,
-    marginTop: 1,
-  },
-  headerToneRow: {
+
+  ctrlPillCompact: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-  },
-  headerToneLabel: {
-    fontSize: 8,
-    color: TEXT_MUTED,
-  },
-
-  /* Banner */
-  bannerBox: {
-    marginTop: 8,
-    marginHorizontal: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: "rgba(251,191,36,0.12)",
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 2,
     borderWidth: 1,
-    borderColor: "rgba(245,158,11,0.4)",
+    backgroundColor: "rgba(255,255,255,0.025)",
   },
-  bannerText: {
-    fontSize: 12,
-    color: "#fbbf24",
-  },
+  ctrlDot: { width: 5, height: 5, borderRadius: 999 },
+  ctrlTxt: { fontSize: 8, fontWeight: "800", letterSpacing: 0.9 },
 
-  /* Tone card */
-  toneCard: {
-    marginTop: 10,
-    marginHorizontal: 16,
-    padding: 14,
-    borderRadius: 18,
-    backgroundColor: CARD_DARK,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
+  sectionHairline: {
+    position: "absolute",
+    top: 0,
+    left: "10%",
+    right: "10%",
+    height: 1.5,
+    opacity: 0.65,
   },
-  toneCardTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: TEXT_HEADING,
-  },
-  toneCardSubtitle: {
-    fontSize: 12,
-    color: TEXT_MUTED,
-    marginTop: 4,
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
     marginBottom: 8,
   },
+  sectionEyebrow: {
+    fontSize: 8,
+    fontWeight: "800",
+    color: T_DIM,
+    letterSpacing: 2,
+    marginBottom: 3,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: T_HI,
+    letterSpacing: -0.3,
+  },
+
+  currencyPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 2,
+    borderWidth: 1,
+    backgroundColor: "rgba(255,255,255,0.025)",
+  },
+  currencyPillTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 1 },
+
+  setupCard: {
+    marginHorizontal: 12,
+    marginBottom: 6,
+    padding: 8,
+    borderRadius: 4,
+    backgroundColor: CARD_BG,
+    borderWidth: 1,
+    borderColor: CARD_BD,
+    position: "relative",
+    overflow: "hidden",
+  },
+  setupRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  setupLeft: {
+    flex: 1,
+  },
+  setupRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+    flex: 1.25,
+  },
+
   toneChipRowBig: {
     flexDirection: "row",
     gap: 8,
+    flexWrap: "wrap",
+  },
+  toneChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 2,
+    borderWidth: 1,
+    borderColor: "rgba(0,255,135,0.22)",
+    backgroundColor: "rgba(255,255,255,0.025)",
+  },
+  toneChipSelected: {
+    backgroundColor: "rgba(0,255,135,0.10)",
+    borderColor: "rgba(0,255,135,0.40)",
+  },
+  toneChipText: {
+    fontSize: 11,
+    color: T_MID,
+    fontWeight: "700",
+  },
+  toneChipTextSelected: {
+    color: MINT,
   },
 
-  /* Upload card */
-  uploadCard: {
-    marginTop: 12,
-    marginHorizontal: 16,
-    padding: 14,
-    borderRadius: 18,
-    backgroundColor: CARD_DARK,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-  },
-  uploadTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  uploadTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: TEXT_HEADING,
-  },
-  uploadSubtitle: {
-    fontSize: 12,
-    color: TEXT_MUTED,
-    marginTop: 2,
-  },
-  uploadSubtitleStrong: {
-    fontWeight: "600",
-    color: TEXT_SOFT,
-  },
   uploadBtn: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 999,
+    borderRadius: 2,
     borderWidth: 1,
-    borderColor: main,
-    backgroundColor: "#020617",
+    borderColor: "rgba(249,115,22,0.35)",
+    backgroundColor: "rgba(249,115,22,0.10)",
   },
   uploadBtnDisabled: {
     opacity: 0.5,
   },
   uploadBtnText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: secondary,
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1,
+    color: ORANGE,
   },
   uploadProgressWrap: {
-    marginTop: 10,
+    marginTop: 8,
   },
   uploadProgressTrack: {
-    height: 6,
-    borderRadius: 999,
-    backgroundColor: "#020617",
+    height: 5,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.06)",
     overflow: "hidden",
   },
   uploadProgressFill: {
     height: "100%",
-    borderRadius: 999,
-    backgroundColor: "rgba(144,169,85,1)",
+    borderRadius: 2,
+    backgroundColor: ORANGE,
   },
   uploadProgressText: {
-    marginTop: 4,
-    fontSize: 11,
-    color: TEXT_MUTED,
-  },
-  uploadStatusRow: {
-    marginTop: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    flexWrap: "wrap",
+    marginTop: 3,
+    fontSize: 10,
+    color: T_MID,
   },
   fileStatusPill: {
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
     paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: "#020617",
+    paddingVertical: 6,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.025)",
     borderWidth: 1,
-    borderColor: BORDER_DARK,
+    borderColor: CARD_BD,
   },
   fileStatusPillActive: {
-    backgroundColor: "rgba(34,197,94,0.12)",
-    borderColor: "rgba(34,197,94,0.7)",
+    backgroundColor: "rgba(0,255,135,0.10)",
+    borderColor: "rgba(0,255,135,0.35)",
   },
   fileStatusText: {
-    fontSize: 11,
-    color: TEXT_MUTED,
+    fontSize: 10,
+    color: T_MID,
   },
   fileStatusTextActive: {
-    color: "#bbf7d0",
-  },
-  planPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: "rgba(251,191,36,0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(245,158,11,0.4)",
-  },
-  planPillText: {
-    fontSize: 11,
-    color: "#fbbf24",
+    color: MINT,
   },
   dot: {
     width: 8,
@@ -844,88 +1104,106 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   dotOk: {
-    backgroundColor: "#22c55e",
+    backgroundColor: MINT,
   },
   dotMuted: {
-    backgroundColor: "#4b5563",
+    backgroundColor: T_DIM,
   },
 
-  /* Chat card */
   chatCard: {
-    marginTop: 12,
-    marginHorizontal: 16,
-    borderRadius: 20,
-    backgroundColor: CARD_DARK,
+    flex: 1,
+    marginHorizontal: 12,
+    marginBottom: 12,
+    padding: 10,
+    borderRadius: 4,
+    backgroundColor: CARD_BG,
     borderWidth: 1,
-    borderColor: BORDER_DARK,
+    borderColor: CARD_BD,
+    position: "relative",
     overflow: "hidden",
+    minHeight: 0,
   },
   chatArea: {
-    height: 320,
-    backgroundColor: "#020617",
+    flex: 1,
+    minHeight: 0,
+    backgroundColor: "rgba(255,255,255,0.015)",
+    borderWidth: 1,
+    borderColor: CARD_BD,
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  chatMain: {
+    flex: 1,
+    minHeight: 0,
   },
   chatScroll: {
     flex: 1,
+    minHeight: 0,
     paddingHorizontal: 12,
     paddingTop: 12,
   },
   emptyChatWrap: {
     flex: 1,
-    minHeight: 260,
+    minHeight: 180,
     alignItems: "center",
     justifyContent: "center",
   },
   emptyChatText: {
     fontSize: 13,
-    color: TEXT_MUTED,
+    color: T_MID,
     textAlign: "center",
     paddingHorizontal: 16,
+    lineHeight: 20,
   },
 
-  /* Bubbles */
   bubbleRow: {
-    marginBottom: 6,
+    marginBottom: 8,
     flexDirection: "row",
   },
   bubbleUser: {
     maxWidth: "82%",
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    backgroundColor: "#166534",
+    borderRadius: 2,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: "rgba(0,255,135,0.10)",
+    borderWidth: 1,
+    borderColor: "rgba(0,255,135,0.22)",
   },
   bubbleAssistant: {
     maxWidth: "85%",
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    backgroundColor: "#020819",
+    borderRadius: 2,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: "rgba(0,212,255,0.06)",
     borderWidth: 1,
-    borderColor: BORDER_DARK,
+    borderColor: "rgba(0,212,255,0.18)",
   },
   bubbleSystem: {
     maxWidth: "85%",
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    backgroundColor: "#111827",
+    borderRadius: 2,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: "rgba(167,139,250,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(167,139,250,0.18)",
   },
   bubbleText: {
     fontSize: 13,
-    color: "#e5e7eb",
+    color: T_HI,
+    lineHeight: 19,
   },
   typingText: {
     fontSize: 12,
-    color: TEXT_MUTED,
+    color: T_MID,
   },
 
-  /* Composer */
   composerBox: {
     borderTopWidth: 1,
-    borderTopColor: BORDER_DARK,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: "#020617",
+    borderTopColor: CARD_BD,
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    paddingBottom: 8,
+    backgroundColor: "rgba(255,255,255,0.015)",
   },
   composerRow: {
     flexDirection: "row",
@@ -934,25 +1212,26 @@ const styles = StyleSheet.create({
   },
   composerInput: {
     flex: 1,
-    maxHeight: 100,
-    borderRadius: 14,
+    maxHeight: 90,
+    minHeight: 42,
+    borderRadius: 2,
     borderWidth: 1,
-    borderColor: BORDER_DARK,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    borderColor: CARD_BD,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     fontSize: 13,
-    color: TEXT_HEADING,
-    backgroundColor: "#020617",
+    color: T_HI,
+    backgroundColor: "rgba(255,255,255,0.025)",
     textAlignVertical: "top",
   },
   composerInputDisabled: {
     opacity: 0.5,
   },
   sendBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 14,
-    backgroundColor: main,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    borderRadius: 2,
+    backgroundColor: MINT,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -960,75 +1239,76 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   sendBtnText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#f9fafb",
-  },
-  composerHint: {
-    marginTop: 4,
     fontSize: 11,
-    color: TEXT_MUTED,
+    fontWeight: "800",
+    letterSpacing: 1,
+    color: BG,
   },
 
-  /* Tone chip */
-  toneChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
+  errorCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    borderRadius: 4,
+    padding: 12,
+    marginHorizontal: 12,
+    marginBottom: 8,
     borderWidth: 1,
-    borderColor: main,
-    backgroundColor: "#020617",
+    position: "relative",
+    overflow: "hidden",
   },
-  toneChipBig: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+  errorIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 2,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
   },
-  toneChipSelected: {
-    backgroundColor: main,
-    borderColor: main,
-  },
-  toneChipText: {
-    fontSize: 11,
-    color: secondary,
-  },
-  toneChipTextBig: {
-    fontSize: 13,
-  },
-  toneChipTextSelected: {
-    color: "#f9fafb",
-    fontWeight: "600",
-  },
+  errorIconTxt: { fontSize: 15, fontWeight: "800" },
+  errorTitle: { fontSize: 12, fontWeight: "700", color: T_HI, marginBottom: 2 },
+  errorBody: { fontSize: 12, color: T_MID, lineHeight: 17 },
 
-  /* Overlay */
   overlay: {
     position: "absolute",
     inset: 0,
-    backgroundColor: "rgba(15,23,42,0.85)",
+    backgroundColor: "rgba(3,5,8,0.86)",
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 20,
   },
   overlayCard: {
     width: "100%",
-    borderRadius: 20,
+    borderRadius: 4,
     padding: 16,
-    backgroundColor: "#020617",
+    backgroundColor: BG,
     borderWidth: 1,
-    borderColor: BORDER_DARK,
+    borderColor: CARD_BD,
+    position: "relative",
+    overflow: "hidden",
+  },
+  overlayHairline: {
+    position: "absolute",
+    top: 0,
+    left: "10%",
+    right: "10%",
+    height: 1.5,
+    opacity: 0.65,
   },
   overlayTitle: {
     fontSize: 16,
-    fontWeight: "700",
-    color: TEXT_HEADING,
+    fontWeight: "800",
+    color: T_HI,
   },
   overlayText: {
     marginTop: 6,
     fontSize: 13,
-    color: TEXT_SOFT,
+    color: T_MID,
+    lineHeight: 20,
   },
   overlayPlanText: {
-    fontWeight: "600",
-    color: secondary,
+    fontWeight: "800",
+    color: GOLD,
   },
   overlayBtnRow: {
     flexDirection: "row",
@@ -1037,52 +1317,37 @@ const styles = StyleSheet.create({
   },
   overlayPrimaryBtn: {
     flex: 1,
-    paddingVertical: 9,
-    borderRadius: 14,
-    backgroundColor: main,
+    paddingVertical: 10,
+    borderRadius: 2,
+    backgroundColor: GOLD,
     alignItems: "center",
     justifyContent: "center",
   },
   overlayPrimaryBtnText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#f9fafb",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1,
+    color: BG,
   },
   overlaySecondaryBtn: {
     flex: 1,
-    paddingVertical: 9,
-    borderRadius: 14,
+    paddingVertical: 10,
+    borderRadius: 2,
     borderWidth: 1,
-    borderColor: main,
+    borderColor: "rgba(251,191,36,0.35)",
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "rgba(251,191,36,0.08)",
   },
   overlaySecondaryBtnText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: secondary,
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1,
+    color: GOLD,
   },
   overlayFootnote: {
     marginTop: 8,
     fontSize: 11,
-    color: TEXT_MUTED,
-  },
-  // ✅ NEW: Header logo button (tap to go Dashboard)
-  headerLogoBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 999,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 10,
-  },
-  headerLogoImg: {
-    width: "100%",
-    height: "100%",
-    resizeMode: "cover",
+    color: T_DIM,
   },
 });

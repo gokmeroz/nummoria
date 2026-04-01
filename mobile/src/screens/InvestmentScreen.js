@@ -1,11 +1,22 @@
 /* eslint-disable no-unused-vars */
 /* eslint-disable no-empty */
 // mobile/src/screens/InvestmentScreen.js
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Modal,
+  KeyboardAvoidingView,
+  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -14,32 +25,82 @@ import {
   TouchableOpacity,
   View,
   Image,
-  KeyboardAvoidingView, // ✅ NEW: for Auto modal
-  Platform, // ✅ NEW: for Auto modal
 } from "react-native";
-import api from "../lib/api";
-import logo from "../../assets/nummoria_logo.png";
+
+import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const main = "#4f772d";
-const secondary = "#90a955";
-const BG_DARK = "#050816";
-const CARD_BG = "#111827";
-const BORDER_DARK = "#1f2937";
-const TEXT_MUTED = "#9ca3af";
-const TEXT_SOFT = "#e5e7eb";
-const CHIP_BG = "#111827";
-const CHIP_BORDER = "#374151";
-const BADGE_BG = "#0f172a";
-const BADGE_BORDER = "#1f2937";
+import api from "../lib/api";
+import logo from "../../assets/nummoria_logo.png";
 
+/* ──────────────────────────────────────────────────────────
+   THEME — synced with IncomeScreen / DashboardScreen HUD
+────────────────────────────────────────────────────────── */
+const BG = "#030508";
+const MINT = "#00ff87";
+const CYAN = "#00d4ff";
+const VIOLET = "#a78bfa";
+const ORANGE = "#f97316";
+const GOLD = "#fbbf24";
+
+const CARD_BG = "rgba(255,255,255,0.025)";
+const CARD_BD = "rgba(255,255,255,0.07)";
+const T_HI = "#e2e8f0";
+const T_MID = "rgba(226,232,240,0.55)";
+const T_DIM = "rgba(226,232,240,0.32)";
+
+const TEXT_PRIMARY = T_HI;
+const TEXT_MUTED = T_MID;
+const TEXT_SOFT = T_DIM;
+const SECONDARY = MINT;
 const DATE_LANG = "en-US";
 
-// ✅ Favorites persistence
 const FAVORITES_KEY = "@nummoria:favoritesSymbols";
-const FAV_YELLOW = "#fbbf24";
 
-/* ----------------------------- Money helpers -------------------------------- */
+/* ──────────────────────────────────────────────────────────
+   DATE HELPERS
+────────────────────────────────────────────────────────── */
+function startOfUTC(dateLike) {
+  const d = new Date(dateLike);
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+}
+function startOfMonthUTC(dateLike) {
+  const d = new Date(dateLike);
+  return startOfUTC(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)));
+}
+function endOfMonthUTC(dateLike) {
+  const d = new Date(dateLike);
+  return new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0, 23, 59, 59, 999),
+  );
+}
+function addMonthsUTC(dateLike, n) {
+  const d = new Date(dateLike);
+  return new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, d.getUTCDate()),
+  );
+}
+function startOfYearUTC(dateLike) {
+  const d = new Date(dateLike);
+  return startOfUTC(new Date(Date.UTC(d.getUTCFullYear(), 0, 1)));
+}
+function endOfYearUTC(dateLike) {
+  const d = new Date(dateLike);
+  return new Date(Date.UTC(d.getUTCFullYear(), 11, 31, 23, 59, 59, 999));
+}
+function fmtDateUTC(dateLike) {
+  const d = new Date(dateLike);
+  return d.toLocaleDateString(DATE_LANG, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
+
+/* ──────────────────────────────────────────────────────────
+   MONEY HELPERS
+────────────────────────────────────────────────────────── */
 function decimalsForCurrency(code) {
   const zero = new Set(["JPY", "KRW", "CLP", "VND"]);
   const three = new Set(["BHD", "IQD", "JOD", "KWD", "OMR", "TND"]);
@@ -48,635 +109,337 @@ function decimalsForCurrency(code) {
   return 2;
 }
 function majorToMinor(amountStr, currency) {
-  const decimals = decimalsForCurrency(currency);
+  const dec = decimalsForCurrency(currency);
   const n = Number(String(amountStr).replace(",", "."));
   if (Number.isNaN(n)) return NaN;
-  return Math.round(n * Math.pow(10, decimals));
+  return Math.round(n * Math.pow(10, dec));
 }
 function minorToMajor(minor, currency) {
-  const decimals = decimalsForCurrency(currency);
-  return (Number(minor || 0) / Math.pow(10, decimals)).toFixed(decimals);
+  const dec = decimalsForCurrency(currency);
+  return (Number(minor || 0) / Math.pow(10, dec)).toFixed(dec);
 }
-function fmtMoney(minor, cur = "USD") {
-  return new Intl.NumberFormat(DATE_LANG, {
+const fmtMoney = (minor, cur = "USD") =>
+  new Intl.NumberFormat(DATE_LANG, {
     style: "currency",
     currency: cur || "USD",
-  }).format(
-    Number(minor || 0) / Math.pow(10, decimalsForCurrency(cur || "USD")) || 0
+  }).format((minor || 0) / Math.pow(10, decimalsForCurrency(cur || "USD")));
+
+/* ──────────────────────────────────────────────────────────
+   CATEGORY HELPERS
+────────────────────────────────────────────────────────── */
+function normalizeValue(v) {
+  return String(v || "")
+    .trim()
+    .toLowerCase();
+}
+
+function looksLikeInvestmentCategory(category) {
+  const kind = normalizeValue(category?.kind);
+  const type = normalizeValue(category?.type);
+  const categoryType = normalizeValue(category?.categoryType);
+  const direction = normalizeValue(category?.direction);
+  const transactionType = normalizeValue(category?.transactionType);
+
+  if (
+    kind === "investment" ||
+    type === "investment" ||
+    categoryType === "investment" ||
+    direction === "investment" ||
+    transactionType === "investment"
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function getInvestmentCategories(rawCategories) {
+  return (rawCategories || []).filter(
+    (c) => !c?.isDeleted && looksLikeInvestmentCategory(c),
   );
 }
 
-/* ----------------------------- Date helpers -------------------------------- */
-function fmtDate(dateLike) {
-  const d = new Date(dateLike);
-  if (Number.isNaN(d.getTime())) return "-";
-  return d.toLocaleDateString(DATE_LANG, {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-}
-
-/* ---------------------------- Tiny Toast System ---------------------------- */
-function useToasts() {
-  const [toasts, setToasts] = useState([]);
-  const push = useCallback((t) => {
-    const id = Math.random().toString(36).slice(2);
-    const toast = { id, type: t.type || "info", msg: t.msg || String(t) };
-    setToasts((prev) => [...prev, toast]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((x) => x.id !== id));
-    }, 3500);
-  }, []);
-  const remove = useCallback((id) => {
-    setToasts((prev) => prev.filter((x) => x.id !== id));
-  }, []);
-  return { toasts, push, remove };
-}
-
-function Toasts({ toasts, onClose }) {
-  const color = (type) => {
-    switch (type) {
-      case "success":
-        return { borderColor: "#6ee7b7", backgroundColor: "#022c22" };
-      case "error":
-        return { borderColor: "#fecaca", backgroundColor: "#450a0a" };
-      case "warning":
-        return { borderColor: "#facc15", backgroundColor: "#422006" };
-      default:
-        return { borderColor: "#4b5563", backgroundColor: "#020617" };
-    }
-  };
-  if (!toasts.length) return null;
+function isStockOrCryptoCategoryName(name) {
   return (
-    <View style={styles.toastContainer}>
-      {toasts.map((t) => {
-        const c = color(t.type);
-        return (
-          <View
-            key={t.id}
-            style={[
-              styles.toast,
-              {
-                borderColor: c.borderColor,
-                backgroundColor: c.backgroundColor,
-              },
-            ]}
-          >
-            <Text style={styles.toastType}>{t.type}</Text>
-            <Text style={styles.toastMsg}>{t.msg}</Text>
-            <TouchableOpacity onPress={() => onClose(t.id)}>
-              <Text style={styles.toastClose}>×</Text>
-            </TouchableOpacity>
-          </View>
-        );
-      })}
+    String(name || "").trim() === "Stock Market" ||
+    String(name || "").trim() === "Crypto Currency Exchange"
+  );
+}
+
+/* ──────────────────────────────────────────────────────────
+   HUD PRIMITIVES
+────────────────────────────────────────────────────────── */
+function Brackets({ color = MINT, size = 10, thick = 1.5 }) {
+  const defs = [
+    {
+      top: 0,
+      left: 0,
+      borderTopWidth: thick,
+      borderLeftWidth: thick,
+      borderTopLeftRadius: 2,
+    },
+    {
+      top: 0,
+      right: 0,
+      borderTopWidth: thick,
+      borderRightWidth: thick,
+      borderTopRightRadius: 2,
+    },
+    {
+      bottom: 0,
+      left: 0,
+      borderBottomWidth: thick,
+      borderLeftWidth: thick,
+      borderBottomLeftRadius: 2,
+    },
+    {
+      bottom: 0,
+      right: 0,
+      borderBottomWidth: thick,
+      borderRightWidth: thick,
+      borderBottomRightRadius: 2,
+    },
+  ];
+  return (
+    <>
+      {defs.map((d, i) => (
+        <View
+          key={i}
+          style={[
+            {
+              position: "absolute",
+              width: size,
+              height: size,
+              borderColor: color,
+            },
+            d,
+          ]}
+        />
+      ))}
+    </>
+  );
+}
+
+function ScanLine({ color = MINT, style: extra }) {
+  return (
+    <View
+      style={[{ flexDirection: "row", alignItems: "center", gap: 6 }, extra]}
+    >
+      <View
+        style={{
+          width: 3,
+          height: 3,
+          borderRadius: 999,
+          backgroundColor: color,
+          opacity: 0.6,
+        }}
+      />
+      <View
+        style={{ flex: 1, height: 1, backgroundColor: color, opacity: 0.2 }}
+      />
+      <View
+        style={{
+          width: 3,
+          height: 3,
+          borderRadius: 999,
+          backgroundColor: color,
+          opacity: 0.6,
+        }}
+      />
     </View>
   );
 }
 
-/* -------------------------- Promise-based Confirm -------------------------- */
-function useConfirm() {
-  const [state, setState] = useState({
-    open: false,
-    message: "",
-    resolve: null,
-  });
+function GridBG() {
+  const { width, height } = require("react-native").Dimensions.get("window");
+  const COLS = 10;
+  const ROWS = 22;
+  const cw = width / COLS;
+  const rh = height / ROWS;
 
-  const ask = useCallback((message) => {
-    return new Promise((resolve) => {
-      setState({ open: true, message, resolve });
-    });
-  }, []);
-
-  const onCancel = () => {
-    state.resolve?.(false);
-    setState((s) => ({ ...s, open: false, resolve: null }));
-  };
-  const onOk = () => {
-    state.resolve?.(true);
-    setState((s) => ({ ...s, open: false, resolve: null }));
-  };
-
-  const Dialog = () =>
-    !state.open ? null : (
-      <View style={styles.confirmBackdrop}>
-        <View style={styles.confirmCard}>
-          <Text style={styles.confirmTitle}>Please confirm</Text>
-          <Text style={styles.confirmText}>{state.message}</Text>
-          <View style={styles.confirmRow}>
-            <TouchableOpacity onPress={onCancel} style={styles.confirmBtn}>
-              <Text style={styles.confirmBtnText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={onOk}
-              style={[styles.confirmBtn, { backgroundColor: main }]}
-            >
-              <Text style={[styles.confirmBtnText, { color: "white" }]}>
-                Confirm
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    );
-
-  return { ask, ConfirmDialog: Dialog };
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {Array.from({ length: ROWS + 1 }, (_, i) => (
+        <View
+          key={`h${i}`}
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: i * rh,
+            height: 1,
+            backgroundColor: "rgba(0,255,135,0.035)",
+          }}
+        />
+      ))}
+      {Array.from({ length: COLS + 1 }, (_, i) => (
+        <View
+          key={`v${i}`}
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            left: i * cw,
+            width: 1,
+            backgroundColor: "rgba(0,212,255,0.025)",
+          }}
+        />
+      ))}
+      <View
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 2,
+          backgroundColor: MINT,
+          opacity: 0.15,
+        }}
+      />
+      <View
+        style={{
+          position: "absolute",
+          top: height * 0.44,
+          left: 0,
+          right: 0,
+          height: 1,
+          backgroundColor: CYAN,
+          opacity: 0.06,
+        }}
+      />
+      <View
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 1,
+          backgroundColor: VIOLET,
+          opacity: 0.1,
+        }}
+      />
+    </View>
+  );
 }
 
-/* --------------------------------- Chip ----------------------------------- */
-function Chip({ label, selected, onPress }) {
+/* ──────────────────────────────────────────────────────────
+   CHIP
+────────────────────────────────────────────────────────── */
+function Chip({ label, selected, onPress, small, accent = MINT }) {
   return (
     <TouchableOpacity
       onPress={onPress}
       style={[
-        styles.chip,
-        selected && { backgroundColor: main, borderColor: secondary },
+        s.chip,
+        small && s.chipSmall,
+        selected && [s.chipSelected, { borderColor: accent + "55" }],
       ]}
-      activeOpacity={0.85}
+      activeOpacity={0.75}
     >
-      <Text style={[styles.chipText, selected && { color: "white" }]}>
+      {selected && <View style={[s.chipDot, { backgroundColor: accent }]} />}
+      <Text
+        style={[
+          s.chipText,
+          small && s.chipTextSmall,
+          selected && [s.chipTextSelected, { color: accent }],
+        ]}
+        numberOfLines={1}
+      >
         {label}
       </Text>
     </TouchableOpacity>
   );
 }
 
-/* --------------------------------- Row ------------------------------------ */
-function InvestmentRow({
-  item,
-  onEdit,
-  onDelete,
-  categoryName,
-  accountName,
-  canFavorite,
-  isFavorite,
-  onToggleFavorite,
-}) {
-  const symbol = (item.assetSymbol || "").toUpperCase();
-  const units = item.units ?? null;
-  const dateLabel = fmtDate(item.date);
+/* ──────────────────────────────────────────────────────────
+   STAT CARD
+────────────────────────────────────────────────────────── */
+function StatCard({ title, value, accent = "neutral", chipText = "SNAPSHOT" }) {
+  const accentMap = {
+    investment: {
+      color: ORANGE,
+      glow: "rgba(249,115,22,0.09)",
+      bd: "rgba(249,115,22,0.22)",
+    },
+    neutral: {
+      color: CYAN,
+      glow: "rgba(0,212,255,0.09)",
+      bd: "rgba(0,212,255,0.22)",
+    },
+    violet: {
+      color: VIOLET,
+      glow: "rgba(167,139,250,0.10)",
+      bd: "rgba(167,139,250,0.22)",
+    },
+  };
+  const a = accentMap[accent] || accentMap.neutral;
 
   return (
-    <View style={styles.rowContainer}>
-      <View style={styles.rowLeft}>
-        <View style={styles.rowTitleRow}>
-          <Text style={styles.rowTitle}>
-            {symbol ? `${symbol} • ${categoryName}` : categoryName}
-          </Text>
-
-          {canFavorite && symbol ? (
-            <TouchableOpacity
-              onPress={() => onToggleFavorite(symbol)}
-              activeOpacity={0.8}
-              style={styles.starBtn}
-            >
-              <Text
-                style={[
-                  styles.starIcon,
-                  isFavorite && {
-                    color: FAV_YELLOW,
-                    textShadowColor: "rgba(0,0,0,0.35)",
-                  },
-                ]}
-              >
-                {isFavorite ? "★" : "☆"}
-              </Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
-
-        <View style={styles.rowSubRow}>
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{accountName}</Text>
-          </View>
-          {units ? <Text style={styles.rowUnits}>{units} units</Text> : null}
-        </View>
-
-        <Text style={styles.rowDescription}>
-          {item.description || "No description"}
-        </Text>
-
-        <View style={styles.rowBottomRow}>
-          <Text style={styles.rowDate}>{dateLabel}</Text>
-          {item.tags?.length ? (
-            <Text style={styles.rowTags}>#{item.tags.join("  #")}</Text>
-          ) : null}
-        </View>
+    <View style={[s.statCard, { borderColor: a.bd, backgroundColor: a.glow }]}>
+      <Brackets color={a.color} size={9} thick={1.5} />
+      <View style={[s.statHairline, { backgroundColor: a.color }]} />
+      <View style={[s.statBadge, { borderColor: a.bd }]}>
+        <View style={[s.statBadgeDot, { backgroundColor: a.color }]} />
+        <Text style={[s.statBadgeTxt, { color: a.color }]}>{chipText}</Text>
       </View>
-
-      <View style={styles.rowRight}>
-        <Text style={styles.rowAmount}>
-          -{minorToMajor(item.amountMinor, item.currency)} {item.currency}
-        </Text>
-        <View style={styles.rowActions}>
-          <TouchableOpacity
-            onPress={() => onEdit(item)}
-            style={styles.rowBtnOutline}
-          >
-            <Text style={styles.rowBtnOutlineText}>Edit</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => onDelete(item)}
-            style={styles.rowBtnDanger}
-          >
-            <Text style={styles.rowBtnDangerText}>Delete</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      <Text style={s.statLabel}>{title}</Text>
+      <Text style={[s.statValue, { color: a.color }]}>{value}</Text>
+      <ScanLine color={a.color} style={{ marginTop: 12 }} />
+      <Text style={s.statHint}>Updated from filters</Text>
     </View>
   );
 }
 
-/* --------------------------------- Modal ---------------------------------- */
-function InvestmentModal({
-  visible,
-  onClose,
-  onSaved,
-  editing,
-  accounts,
-  categories,
-  defaultAccountId,
-  pushToast,
-}) {
-  const isEditing = !!editing;
-
-  const formDefaults = useMemo(() => {
-    if (!editing) {
-      const acc = accounts.find((a) => a._id === defaultAccountId);
-      return {
-        accountId: defaultAccountId,
-        currency: acc?.currency || "USD",
-        amount: "",
-        date: new Date().toISOString().slice(0, 10),
-        nextDate: "",
-        categoryId: categories[0]?._id || "",
-        assetSymbol: "",
-        units: "",
-        description: "",
-        tagsCsv: "",
-      };
-    }
-    return {
-      accountId: editing.accountId || defaultAccountId,
-      currency: editing.currency || "USD",
-      amount: minorToMajor(editing.amountMinor, editing.currency),
-      date: new Date(editing.date).toISOString().slice(0, 10),
-      nextDate: editing.nextDate
-        ? new Date(editing.nextDate).toISOString().slice(0, 10)
-        : "",
-      categoryId: editing.categoryId || categories[0]?._id || "",
-      assetSymbol: (editing.assetSymbol || "").toUpperCase(),
-      units: editing.units != null ? String(editing.units) : "",
-      description: editing.description || "",
-      tagsCsv: (editing.tags || []).join(", "),
-    };
-  }, [editing, accounts, categories, defaultAccountId]);
-
-  const [accountId, setAccountId] = useState(formDefaults.accountId);
-  const [currency, setCurrency] = useState(formDefaults.currency);
-  const [amount, setAmount] = useState(formDefaults.amount);
-  const [date, setDate] = useState(formDefaults.date);
-  const [nextDate, setNextDate] = useState(formDefaults.nextDate);
-  const [categoryId, setCategoryId] = useState(formDefaults.categoryId);
-  const [assetSymbol, setAssetSymbol] = useState(formDefaults.assetSymbol);
-  const [units, setUnits] = useState(formDefaults.units);
-  const [description, setDescription] = useState(formDefaults.description);
-  const [tagsCsv, setTagsCsv] = useState(formDefaults.tagsCsv);
-
-  useEffect(() => {
-    setAccountId(formDefaults.accountId);
-    setCurrency(formDefaults.currency);
-    setAmount(formDefaults.amount);
-    setDate(formDefaults.date);
-    setNextDate(formDefaults.nextDate);
-    setCategoryId(formDefaults.categoryId);
-    setAssetSymbol(formDefaults.assetSymbol);
-    setUnits(formDefaults.units);
-    setDescription(formDefaults.description);
-    setTagsCsv(formDefaults.tagsCsv);
-  }, [formDefaults]);
-
-  const handleSubmit = async () => {
-    const amountMinor = majorToMinor(amount, currency.toUpperCase());
-    if (Number.isNaN(amountMinor)) {
-      pushToast({ type: "warning", msg: "Invalid amount." });
-      return;
-    }
-    if (!categoryId) {
-      pushToast({ type: "warning", msg: "Pick a category." });
-      return;
-    }
-    if (!accountId) {
-      pushToast({ type: "warning", msg: "Pick an account." });
-      return;
-    }
-
-    const rawSymbol = (assetSymbol || "").toUpperCase().trim();
-    const rawUnitsStr = (units || "").trim();
-    const rawUnits = rawUnitsStr === "" ? NaN : Number(rawUnitsStr);
-    const desc = (description || "").trim();
-    const category = categories.find((c) => c._id === categoryId);
-
-    const isStockOrCrypto =
-      !!category &&
-      (category.name === "Stock Market" ||
-        category.name === "Crypto Currency Exchange");
-
-    if (isStockOrCrypto) {
-      if (!rawSymbol) {
-        pushToast({
-          type: "warning",
-          msg: "Asset symbol is required for this category.",
-        });
-        return;
-      }
-      if (!(Number.isFinite(rawUnits) && rawUnits > 0)) {
-        pushToast({
-          type: "warning",
-          msg: "Units must be a positive number for this category.",
-        });
-        return;
-      }
-    }
-
-    const payload = {
-      accountId,
-      categoryId,
-      type: "investment",
-      amountMinor,
-      currency: currency.toUpperCase(),
-      date: new Date(date).toISOString(),
-      description: desc || null,
-      tags: (tagsCsv || "")
-        .split(",")
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0),
-    };
-
-    if (isStockOrCrypto || rawSymbol) payload.assetSymbol = rawSymbol;
-    if (isStockOrCrypto || (Number.isFinite(rawUnits) && rawUnits > 0))
-      payload.units = Number(rawUnits);
-    if (nextDate) payload.nextDate = new Date(nextDate).toISOString();
-
-    try {
-      let saved;
-      if (isEditing) {
-        const { data } = await api.put(`/transactions/${editing._id}`, payload);
-        saved = data;
-      } else {
-        const { data } = await api.post("/transactions", payload);
-        saved = Array.isArray(data?.created) ? data.created[0] : data;
-      }
-      pushToast({
-        type: "success",
-        msg: isEditing ? "Investment updated." : "Investment added.",
-      });
-      onSaved(saved);
-      onClose();
-    } catch (e) {
-      pushToast({
-        type: "error",
-        msg: e?.response?.data?.error || e.message || "Error saving.",
-      });
-    }
-  };
-
-  return (
-    <Modal visible={visible} transparent animationType="fade">
-      <View style={styles.modalBackdrop}>
-        <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>
-            {isEditing ? "Edit Investment" : "New Investment"}
-          </Text>
-
-          {/* Account */}
-          <View style={styles.modalField}>
-            <Text style={styles.modalLabel}>Account</Text>
-            {accounts.length === 0 ? (
-              <View style={styles.modalSelect}>
-                <Text style={styles.modalSelectHint}>
-                  No active accounts found. Add one from web.
-                </Text>
-              </View>
-            ) : (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.filterChipRow}
-              >
-                {accounts.map((a) => (
-                  <Chip
-                    key={a._id}
-                    label={`${a.name} · ${a.currency}`}
-                    selected={accountId === a._id}
-                    onPress={() => {
-                      setAccountId(a._id);
-                      if (!editing) setCurrency(a.currency || "USD");
-                    }}
-                  />
-                ))}
-              </ScrollView>
-            )}
-          </View>
-
-          {/* Total Cost + Currency */}
-          <View style={styles.modalRow}>
-            <View style={[styles.modalField, { flex: 1 }]}>
-              <Text style={styles.modalLabel}>Total Cost</Text>
-              <TextInput
-                value={amount}
-                onChangeText={setAmount}
-                keyboardType="decimal-pad"
-                placeholder="e.g., 1500.00"
-                placeholderTextColor={TEXT_MUTED}
-                style={styles.modalInput}
-              />
-            </View>
-            <View style={[styles.modalField, { width: 90 }]}>
-              <Text style={styles.modalLabel}>Currency</Text>
-              <TextInput
-                value={currency}
-                editable={false}
-                maxLength={3}
-                style={[styles.modalInput, { opacity: 0.8 }]}
-              />
-            </View>
-          </View>
-
-          {/* Symbol + Units */}
-          <View style={styles.modalRow}>
-            <View style={[styles.modalField, { flex: 1 }]}>
-              <Text style={styles.modalLabel}>Asset Symbol</Text>
-              <TextInput
-                value={assetSymbol}
-                onChangeText={(txt) => setAssetSymbol(txt.toUpperCase())}
-                placeholder="AAPL, BTC-USD, VOO"
-                placeholderTextColor={TEXT_MUTED}
-                autoCapitalize="characters"
-                style={styles.modalInput}
-              />
-            </View>
-            <View style={[styles.modalField, { width: 110 }]}>
-              <Text style={styles.modalLabel}>Units</Text>
-              <TextInput
-                value={units}
-                onChangeText={setUnits}
-                keyboardType="decimal-pad"
-                placeholder="e.g., 2.5"
-                placeholderTextColor={TEXT_MUTED}
-                style={styles.modalInput}
-              />
-            </View>
-          </View>
-
-          {/* Dates */}
-          <View style={styles.modalField}>
-            <Text style={styles.modalLabel}>Date</Text>
-            <TextInput
-              value={date}
-              onChangeText={setDate}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={TEXT_MUTED}
-              style={styles.modalInput}
-            />
-          </View>
-
-          <View style={styles.modalField}>
-            <Text style={styles.modalLabel}>Next date (optional)</Text>
-            <TextInput
-              value={nextDate}
-              onChangeText={setNextDate}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={TEXT_MUTED}
-              style={styles.modalInput}
-            />
-            <Text style={styles.modalHelp}>
-              If set, this shows up as a planned upcoming investment.
-            </Text>
-          </View>
-
-          {/* Category */}
-          <View style={styles.modalField}>
-            <Text style={styles.modalLabel}>Category</Text>
-            {categories.length === 0 ? (
-              <View style={styles.modalSelect}>
-                <Text style={styles.modalSelectHint}>
-                  No investment categories found. Add on web.
-                </Text>
-              </View>
-            ) : (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.filterChipRow}
-              >
-                {categories.map((c) => (
-                  <Chip
-                    key={c._id}
-                    label={c.name}
-                    selected={categoryId === c._id}
-                    onPress={() => setCategoryId(c._id)}
-                  />
-                ))}
-              </ScrollView>
-            )}
-          </View>
-
-          {/* Description */}
-          <View style={styles.modalField}>
-            <Text style={styles.modalLabel}>Description</Text>
-            <TextInput
-              value={description}
-              onChangeText={setDescription}
-              placeholder="Optional memo"
-              placeholderTextColor={TEXT_MUTED}
-              style={styles.modalInput}
-            />
-          </View>
-
-          {/* Tags */}
-          <View style={styles.modalField}>
-            <Text style={styles.modalLabel}>Tags (comma-separated)</Text>
-            <TextInput
-              value={tagsCsv}
-              onChangeText={setTagsCsv}
-              placeholder="long-term, dividend"
-              placeholderTextColor={TEXT_MUTED}
-              style={styles.modalInput}
-            />
-          </View>
-
-          <View style={styles.modalActions}>
-            <TouchableOpacity onPress={onClose} style={styles.modalBtnGhost}>
-              <Text style={styles.modalBtnGhostText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleSubmit}
-              style={styles.modalBtnPrimary}
-            >
-              <Text style={styles.modalBtnPrimaryText}>
-                {isEditing ? "Save" : "Add"}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-/* ---------------------------------- Screen ---------------------------------- */
-export default function InvestmentScreen({ navigation }) {
-  const { toasts, push, remove } = useToasts();
-  const { ask, ConfirmDialog } = useConfirm();
+/* ══════════════════════════════════════════════════════════
+   SCREEN
+══════════════════════════════════════════════════════════ */
+export default function InvestmentScreen({ route }) {
+  const navigation = useNavigation();
+  const scrollRef = useRef(null);
+  const accountId = route?.params?.accountId;
 
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [favoriteSymbols, setFavoriteSymbols] = useState(new Set());
 
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
-
-  // filters
-  const [q, setQ] = useState("");
-  const [fAccountId, setFAccountId] = useState("ALL");
-  const [fCategoryId, setFCategoryId] = useState("ALL");
-  const [fCurrency, setFCurrency] = useState("ALL");
-  const [fMin, setFMin] = useState("");
-  const [fMax, setFMax] = useState("");
-
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState(null);
-
-  // ✅ AUTO ADD state
   const [autoOpen, setAutoOpen] = useState(false);
   const [autoText, setAutoText] = useState("");
   const [autoAccountId, setAutoAccountId] = useState("");
   const [autoLoading, setAutoLoading] = useState(false);
 
-  const defaultAccountId = accounts[0]?._id || "";
+  const [initialDone, setInitialDone] = useState(false);
+  const [err, setErr] = useState("");
 
-  const currencies = useMemo(() => {
-    const s = new Set(
-      transactions
-        .filter((t) => t.type === "investment")
-        .map((t) => t.currency || "USD")
-    );
-    return ["ALL", ...Array.from(s)];
-  }, [transactions]);
+  const [q, setQ] = useState("");
+  const [fAccountId, setFAccountId] = useState("ALL");
+  const [fCategoryId, setFCategoryId] = useState("ALL");
+  const [fCurrency, setFCurrency] = useState("ALL");
+  const [sortKey, setSortKey] = useState("date_desc");
+  const [datePreset, setDatePreset] = useState("ALL");
+  const [showUpcoming, setShowUpcoming] = useState(false);
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
 
-  const categoriesFiltered = useMemo(
-    () => categories.filter((c) => c.kind === "investment" && !c.isDeleted),
-    [categories]
-  );
+  const [form, setForm] = useState({
+    amount: "",
+    currency: "USD",
+    date: new Date().toISOString().slice(0, 10),
+    nextDate: "",
+    categoryId: "",
+    assetSymbol: "",
+    units: "",
+    description: "",
+    tagsCsv: "",
+    accountId: "",
+  });
 
   const categoriesById = useMemo(() => {
     const m = new Map();
-    for (const c of categoriesFiltered) m.set(c._id, c);
+    for (const c of categories) m.set(c._id, c);
     return m;
-  }, [categoriesFiltered]);
+  }, [categories]);
 
   const accountsById = useMemo(() => {
     const m = new Map();
@@ -684,29 +447,39 @@ export default function InvestmentScreen({ navigation }) {
     return m;
   }, [accounts]);
 
-  const isStockOrCryptoCategoryName = (name) =>
-    name === "Stock Market" || name === "Crypto Currency Exchange";
+  const defaultAccountId = accounts[0]?._id || "";
+
+  const currencies = useMemo(() => {
+    const set = new Set(
+      transactions
+        .filter((t) => t.type === "investment" && !t.isDeleted)
+        .map((t) => t.currency || "USD"),
+    );
+    return ["ALL", ...Array.from(set)];
+  }, [transactions]);
 
   const loadAll = useCallback(async () => {
     try {
-      setLoading(true);
       setErr("");
       const [txRes, catRes, accRes] = await Promise.all([
         api.get("/transactions", { params: { type: "investment" } }),
         api.get("/categories"),
         api.get("/accounts"),
       ]);
-      setTransactions(txRes.data || []);
-      setCategories(catRes.data || []);
+
+      setCategories(getInvestmentCategories(catRes.data || []));
       setAccounts((accRes.data || []).filter((a) => !a.isDeleted));
+      setTransactions(
+        (txRes.data || []).filter(
+          (t) => t.type === "investment" && !t.isDeleted,
+        ),
+      );
     } catch (e) {
-      const msg = e?.response?.data?.error || e.message || "Failed to load.";
-      setErr(msg);
-      push({ type: "error", msg });
+      setErr(e?.response?.data?.error || e.message || "Failed to load data");
     } finally {
-      setLoading(false);
+      setInitialDone(true);
     }
-  }, [push]);
+  }, []);
 
   useEffect(() => {
     loadAll();
@@ -721,7 +494,7 @@ export default function InvestmentScreen({ navigation }) {
           .map((s) =>
             String(s || "")
               .toUpperCase()
-              .trim()
+              .trim(),
           )
           .filter(Boolean);
         setFavoriteSymbols(new Set(cleaned));
@@ -731,67 +504,110 @@ export default function InvestmentScreen({ navigation }) {
     })();
   }, []);
 
-  const toggleFavorite = useCallback(
-    async (symbol) => {
-      const s = String(symbol || "")
-        .toUpperCase()
-        .trim();
-      if (!s) return;
+  const toggleFavorite = useCallback(async (symbol) => {
+    const sym = String(symbol || "")
+      .toUpperCase()
+      .trim();
+    if (!sym) return;
 
-      setFavoriteSymbols((prev) => {
-        const next = new Set(prev);
-        if (next.has(s)) {
-          next.delete(s);
-          push({ type: "info", msg: `Removed ${s} from favorites.` });
-        } else {
-          next.add(s);
-          push({ type: "success", msg: `Added ${s} to favorites.` });
-        }
+    setFavoriteSymbols((prev) => {
+      const next = new Set(prev);
+      if (next.has(sym)) next.delete(sym);
+      else next.add(sym);
 
-        AsyncStorage.setItem(
-          FAVORITES_KEY,
-          JSON.stringify(Array.from(next))
-        ).catch(() => {});
+      AsyncStorage.setItem(
+        FAVORITES_KEY,
+        JSON.stringify(Array.from(next)),
+      ).catch(() => {});
 
-        return next;
-      });
-    },
-    [push]
-  );
+      return next;
+    });
+  }, []);
+
+  function passesDateFilter(dateStr, preset) {
+    if (preset === "ALL") return true;
+    const txDate = startOfUTC(new Date(dateStr));
+    if (Number.isNaN(txDate.getTime())) return false;
+    const today = startOfUTC(new Date());
+
+    if (preset === "THIS_MONTH")
+      return txDate >= startOfMonthUTC(today) && txDate <= endOfMonthUTC(today);
+
+    if (preset === "LAST_MONTH") {
+      const r = addMonthsUTC(today, -1);
+      return txDate >= startOfMonthUTC(r) && txDate <= endOfMonthUTC(r);
+    }
+
+    if (preset === "LAST_90") {
+      const from = new Date(today);
+      from.setUTCDate(from.getUTCDate() - 90);
+      return txDate >= from && txDate <= today;
+    }
+
+    if (preset === "THIS_YEAR") {
+      return txDate >= startOfYearUTC(today) && txDate <= endOfYearUTC(today);
+    }
+
+    return true;
+  }
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    const minNum = fMin !== "" ? Number(fMin) : null;
-    const maxNum = fMax !== "" ? Number(fMax) : null;
 
     const filtered = transactions.filter((t) => {
-      if ((t.type || "") !== "investment") return false;
+      if ((t.type || "") !== "investment" || t.isDeleted) return false;
       if (fAccountId !== "ALL" && String(t.accountId) !== String(fAccountId))
         return false;
       if (fCategoryId !== "ALL" && String(t.categoryId) !== String(fCategoryId))
         return false;
+      if (fCurrency !== "ALL" && (t.currency || "USD") !== fCurrency)
+        return false;
+      if (!passesDateFilter(t.date, datePreset)) return false;
 
-      const cur = t.currency || "USD";
-      if (fCurrency !== "ALL" && cur !== fCurrency) return false;
+      const symbol = String(t.assetSymbol || "")
+        .toUpperCase()
+        .trim();
 
-      const major =
-        Number(t.amountMinor || 0) / Math.pow(10, decimalsForCurrency(cur));
-      if (minNum !== null && major < minNum) return false;
-      if (maxNum !== null && major > maxNum) return false;
+      if (showFavoritesOnly && !favoriteSymbols.has(symbol)) return false;
 
       if (needle) {
-        const cat = categoriesById.get(t.categoryId)?.name || "";
-        const acc = accountsById.get(t.accountId)?.name || "";
-        const hay = `${t.description || ""} ${t.notes || ""} ${cat} ${acc} ${
-          (t.tags || []).join(" ") || ""
-        } ${(t.assetSymbol || "").toUpperCase()}`.toLowerCase();
+        const hay = `${t.description || ""} ${t.notes || ""} ${
+          categoriesById.get(t.categoryId)?.name || ""
+        } ${accountsById.get(t.accountId)?.name || ""} ${(t.tags || []).join(" ")} ${
+          t.assetSymbol || ""
+        }`.toLowerCase();
         if (!hay.includes(needle)) return false;
       }
-
       return true;
     });
 
-    filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+    filtered.sort((a, b) => {
+      switch (sortKey) {
+        case "date_asc":
+          return new Date(a.date) - new Date(b.date);
+        case "amount_desc": {
+          const av =
+            Number(a.amountMinor || 0) /
+            Math.pow(10, decimalsForCurrency(a.currency || "USD"));
+          const bv =
+            Number(b.amountMinor || 0) /
+            Math.pow(10, decimalsForCurrency(b.currency || "USD"));
+          return bv - av;
+        }
+        case "amount_asc": {
+          const av =
+            Number(a.amountMinor || 0) /
+            Math.pow(10, decimalsForCurrency(a.currency || "USD"));
+          const bv =
+            Number(b.amountMinor || 0) /
+            Math.pow(10, decimalsForCurrency(b.currency || "USD"));
+          return av - bv;
+        }
+        default:
+          return new Date(b.date) - new Date(a.date);
+      }
+    });
+
     return filtered;
   }, [
     transactions,
@@ -799,420 +615,815 @@ export default function InvestmentScreen({ navigation }) {
     fAccountId,
     fCategoryId,
     fCurrency,
-    fMin,
-    fMax,
     categoriesById,
     accountsById,
+    sortKey,
+    datePreset,
+    showFavoritesOnly,
+    favoriteSymbols,
   ]);
 
-  const totalsByCurrency = useMemo(() => {
-    const m = {};
+  const totals = useMemo(() => {
+    const byCur = {};
     for (const t of rows) {
       const cur = t.currency || "USD";
-      m[cur] = (m[cur] || 0) + Number(t.amountMinor || 0);
+      byCur[cur] = (byCur[cur] || 0) + Number(t.amountMinor || 0);
     }
-    return Object.entries(m).map(([cur, minor]) => ({ cur, minor }));
+    return Object.entries(byCur).map(([cur, minor]) => ({
+      cur,
+      major: (Number(minor) / Math.pow(10, decimalsForCurrency(cur))).toFixed(
+        decimalsForCurrency(cur),
+      ),
+    }));
   }, [rows]);
 
-  const openCreate = () => {
-    setEditing(null);
-    setModalOpen(true);
-  };
+  const upcoming = useMemo(() => {
+    const today = startOfUTC(new Date());
 
-  const openEdit = (tx) => {
-    setEditing(tx);
-    setModalOpen(true);
-  };
+    const keyOf = (t) =>
+      [
+        t.accountId,
+        t.categoryId,
+        t.type,
+        t.amountMinor,
+        t.currency,
+        startOfUTC(t.date).toISOString(),
+        (t.description || "").trim(),
+        (t.assetSymbol || "").trim().toUpperCase(),
+        t.units || "",
+      ].join("|");
 
-  const handleSaved = async () => {
-    await loadAll();
-  };
+    const map = new Map();
 
-  const handleDelete = async (tx) => {
-    const ok = await ask("Delete this investment?");
-    if (!ok) return;
-    try {
-      await api.delete(`/transactions/${tx._id}`);
-      push({ type: "success", msg: "Investment deleted." });
-      await loadAll();
-    } catch (e) {
-      push({
-        type: "error",
-        msg: e?.response?.data?.error || e.message || "Delete failed.",
-      });
+    for (const t of transactions) {
+      if (t.type !== "investment" || t.isDeleted) continue;
+      if (new Date(t.date) > today)
+        map.set(keyOf(t), { ...t, __kind: "actual" });
     }
-  };
 
-  // ✅ AUTO ADD submit
-  const submitAuto = async () => {
+    for (const t of transactions) {
+      if (t.type !== "investment" || !t.nextDate || t.isDeleted) continue;
+      const nd = new Date(t.nextDate);
+      if (nd <= today) continue;
+
+      const v = {
+        ...t,
+        _id: `virtual-${t._id}`,
+        date: nd.toISOString(),
+        __kind: "virtual",
+        __parentId: t._id,
+      };
+      if (!map.has(keyOf(v))) map.set(keyOf(v), v);
+    }
+
+    const needle = q.trim().toLowerCase();
+
+    const arr = Array.from(map.values()).filter((t) => {
+      if (fAccountId !== "ALL" && String(t.accountId) !== String(fAccountId))
+        return false;
+      if (fCategoryId !== "ALL" && String(t.categoryId) !== String(fCategoryId))
+        return false;
+      if (fCurrency !== "ALL" && (t.currency || "USD") !== fCurrency)
+        return false;
+      if (!passesDateFilter(t.date, datePreset)) return false;
+
+      const symbol = String(t.assetSymbol || "")
+        .toUpperCase()
+        .trim();
+
+      if (showFavoritesOnly && !favoriteSymbols.has(symbol)) return false;
+
+      if (needle) {
+        const hay = `${t.description || ""} ${t.notes || ""} ${
+          categoriesById.get(t.categoryId)?.name || ""
+        } ${accountsById.get(t.accountId)?.name || ""} ${(t.tags || []).join(" ")} ${
+          t.assetSymbol || ""
+        }`.toLowerCase();
+        if (!hay.includes(needle)) return false;
+      }
+      return true;
+    });
+
+    arr.sort((a, b) => new Date(a.date) - new Date(b.date));
+    return arr;
+  }, [
+    transactions,
+    q,
+    fAccountId,
+    fCategoryId,
+    fCurrency,
+    categoriesById,
+    accountsById,
+    datePreset,
+    showFavoritesOnly,
+    favoriteSymbols,
+  ]);
+
+  const { statsCurrency, kpis, noteMixedCurrency } = useMemo(() => {
+    const chosen = fCurrency !== "ALL" ? fCurrency : rows[0]?.currency || "USD";
+    const byCur = rows.filter((r) => r.currency === chosen);
+    const now = new Date();
+
+    const within = (arr, s, e) =>
+      arr.filter((t) => {
+        const d = new Date(t.date);
+        return d >= s && d <= e;
+      });
+
+    const minSum = (arr) =>
+      arr.reduce((acc, t) => acc + Number(t.amountMinor || 0), 0);
+
+    const passed = now.getUTCMonth() + 1;
+    let yearMinor = 0;
+
+    for (let m = 0; m < passed; m++) {
+      const ref = new Date(Date.UTC(now.getUTCFullYear(), m, 1));
+      yearMinor += minSum(
+        within(byCur, startOfMonthUTC(ref), endOfMonthUTC(ref)),
+      );
+    }
+
+    return {
+      statsCurrency: chosen,
+      kpis: {
+        last: minSum(
+          within(
+            byCur,
+            startOfMonthUTC(addMonthsUTC(now, -1)),
+            endOfMonthUTC(addMonthsUTC(now, -1)),
+          ),
+        ),
+        this: minSum(within(byCur, startOfMonthUTC(now), endOfMonthUTC(now))),
+        yearlyAvg: passed ? Math.round(yearMinor / passed) : 0,
+      },
+      noteMixedCurrency: fCurrency === "ALL",
+    };
+  }, [rows, fCurrency]);
+
+  const investmentByCategory = useMemo(() => {
+    if (!rows.length) return [];
+    const map = new Map();
+
+    for (const t of rows) {
+      if (t.currency !== statsCurrency) continue;
+      const key = t.categoryId || "UNCAT";
+      map.set(key, (map.get(key) || 0) + Number(t.amountMinor || 0));
+    }
+
+    const entries = Array.from(map.entries()).filter(([, sum]) => sum > 0);
+    if (!entries.length) return [];
+
+    const total = entries.reduce((acc, [, s]) => acc + s, 0);
+    entries.sort((a, b) => b[1] - a[1]);
+
+    return entries.slice(0, 5).map(([catId, sum]) => ({
+      catId,
+      catName: categoriesById.get(catId)?.name || "Other",
+      major: sum / Math.pow(10, decimalsForCurrency(statsCurrency || "USD")),
+      pct: total ? Math.round((sum / total) * 100) : 0,
+    }));
+  }, [rows, statsCurrency, categoriesById]);
+
+  const dailySeries = useMemo(() => {
+    const today = startOfUTC(new Date());
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setUTCDate(d.getUTCDate() - i);
+      days.push({ key: d.toISOString().slice(0, 10), date: d });
+    }
+
+    const sums = new Map();
+    for (const t of rows) {
+      if (t.currency !== statsCurrency) continue;
+      const key = startOfUTC(new Date(t.date)).toISOString().slice(0, 10);
+      sums.set(key, (sums.get(key) || 0) + Number(t.amountMinor || 0));
+    }
+
+    const points = days.map((d) => ({
+      label: d.date.toLocaleDateString(DATE_LANG, {
+        month: "2-digit",
+        day: "2-digit",
+      }),
+      value:
+        (sums.get(d.key) || 0) /
+        Math.pow(10, decimalsForCurrency(statsCurrency || "USD")),
+    }));
+
+    return { points, max: points.reduce((m, p) => Math.max(m, p.value), 0) };
+  }, [rows, statsCurrency]);
+
+  const favoriteCount = useMemo(() => favoriteSymbols.size, [favoriteSymbols]);
+
+  const favoriteRowsCount = useMemo(
+    () =>
+      rows.filter((r) =>
+        favoriteSymbols.has(
+          String(r.assetSymbol || "")
+            .toUpperCase()
+            .trim(),
+        ),
+      ).length,
+    [rows, favoriteSymbols],
+  );
+
+  /* ── actions ── */
+  const openAutoAdd = useCallback(() => {
+    setAutoAccountId(accountId || defaultAccountId || "");
+    setAutoText("");
+    setAutoOpen(true);
+  }, [accountId, defaultAccountId]);
+
+  const submitAuto = useCallback(async () => {
     const text = String(autoText || "").trim();
-    const accId = autoAccountId || defaultAccountId;
+    const accId = autoAccountId || accountId || defaultAccountId;
 
     if (!accId) {
-      Alert.alert("Missing account", "Pick an account for auto add.");
+      Alert.alert("Missing account", "Pick an account.");
       return;
     }
     if (!text) {
-      Alert.alert(
-        "Missing text",
-        "Type what you want to add (natural language)."
-      );
+      Alert.alert("Missing text", "Type what you want to add.");
       return;
     }
 
     try {
       setAutoLoading(true);
-
-      const { data } = await api.post("/auto/transactions/text", {
-        accountId: accId,
-        text,
-      });
-
-      push({
-        type: "success",
-        msg: data?.created ? "Auto added." : "Parsed. Draft may be created.",
-      });
-
+      await api.post("/auto/transactions/text", { accountId: accId, text });
       setAutoOpen(false);
       setAutoText("");
       setAutoAccountId("");
       await loadAll();
     } catch (e) {
-      const msg = e?.response?.data?.error || e.message || "Auto add failed.";
-      push({ type: "error", msg });
-      Alert.alert("Auto add failed", msg);
+      Alert.alert(
+        "Auto add failed",
+        e?.response?.data?.error || e.message || "Auto add failed.",
+      );
     } finally {
       setAutoLoading(false);
     }
-  };
+  }, [autoText, autoAccountId, accountId, defaultAccountId, loadAll]);
 
-  const openAuto = () => {
-    setAutoAccountId(defaultAccountId || "");
-    setAutoText("");
-    setAutoOpen(true);
-  };
+  function openCreate() {
+    const aId = accountId || accounts[0]?._id || "";
+    const cur = accounts.find((a) => a._id === aId)?.currency || "USD";
 
-  if (loading) {
-    return (
-      <SafeAreaView style={[styles.screen, { justifyContent: "center" }]}>
-        <View style={styles.loadingBox} />
-        <View style={styles.loadingBrand}>
-          <View style={styles.loadingLogoWrap}>
-            <View style={styles.loadingLogoBorder}>
-              <View style={styles.loadingLogoInner}>
-                <Text style={styles.loadingLogoText}>N</Text>
-              </View>
-            </View>
-          </View>
-          <Text style={styles.loadingTitle}>Nummoria</Text>
-        </View>
-        <Text style={styles.loadingSubtitle}>Loading your investments...</Text>
-      </SafeAreaView>
-    );
+    setEditing(null);
+    setForm({
+      amount: "",
+      currency: cur,
+      date: new Date().toISOString().slice(0, 10),
+      nextDate: "",
+      categoryId: categories[0]?._id || "",
+      assetSymbol: "",
+      units: "",
+      description: "",
+      tagsCsv: "",
+      accountId: aId,
+    });
+    setModalOpen(true);
   }
 
-  return (
-    <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        {/* HEADER */}
-        <View style={styles.header}>
-          <View style={{ flex: 1, paddingRight: 10 }}>
-            <Text style={styles.headerTitle}>Investments</Text>
-            <Text style={styles.headerSubtitle}>
-              Track your buys and long-term moves.
+  function openCreateSeed(seed) {
+    setEditing(null);
+    setForm({
+      amount: minorToMajor(seed.amountMinor, seed.currency),
+      currency: seed.currency,
+      date: new Date(seed.date).toISOString().slice(0, 10),
+      nextDate: "",
+      categoryId: seed.categoryId || categories[0]?._id || "",
+      assetSymbol: (seed.assetSymbol || "").toUpperCase(),
+      units: seed.units != null ? String(seed.units) : "",
+      description: seed.description || "",
+      tagsCsv: (seed.tags || []).join(", "),
+      accountId: seed.accountId || accountId || accounts[0]?._id || "",
+    });
+    setModalOpen(true);
+  }
+
+  function openEdit(tx) {
+    setEditing(tx);
+    setForm({
+      amount: minorToMajor(tx.amountMinor, tx.currency),
+      currency: tx.currency,
+      date: new Date(tx.date).toISOString().slice(0, 10),
+      nextDate: tx.nextDate
+        ? new Date(tx.nextDate).toISOString().slice(0, 10)
+        : "",
+      categoryId: tx.categoryId || categories[0]?._id || "",
+      assetSymbol: (tx.assetSymbol || "").toUpperCase(),
+      units: tx.units != null ? String(tx.units) : "",
+      description: tx.description || "",
+      tagsCsv: (tx.tags || []).join(", "),
+      accountId: tx.accountId || accountId || accounts[0]?._id || "",
+    });
+    setModalOpen(true);
+  }
+
+  async function softDelete(tx) {
+    Alert.alert("Delete investment?", "This action can't be undone.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await api.delete(`/transactions/${tx._id}`);
+            setTransactions((prev) =>
+              prev.filter((t) => String(t._id) !== String(tx._id)),
+            );
+          } catch (e) {
+            Alert.alert(
+              "Error",
+              e?.response?.data?.error || e.message || "Error deleting",
+            );
+          }
+        },
+      },
+    ]);
+  }
+
+  async function addVirtual(v) {
+    try {
+      const { data } = await api.post("/transactions", {
+        accountId: v.accountId,
+        categoryId: v.categoryId,
+        type: "investment",
+        amountMinor: v.amountMinor,
+        currency: v.currency,
+        date: new Date(v.date).toISOString(),
+        description: v.description || null,
+        tags: v.tags || [],
+        assetSymbol: v.assetSymbol || undefined,
+        units: v.units || undefined,
+      });
+
+      if (v.__kind === "virtual" && v.__parentId) {
+        try {
+          const { data: p } = await api.put(`/transactions/${v.__parentId}`, {
+            nextDate: null,
+          });
+          setTransactions((prev) =>
+            prev.map((t) => (String(t._id) === String(p._id) ? p : t)),
+          );
+        } catch {}
+      }
+
+      const created = Array.isArray(data?.created) ? data.created : [data];
+      setTransactions((prev) => [...created, ...prev]);
+    } catch (e) {
+      Alert.alert(
+        "Error",
+        e?.response?.data?.error || e.message || "Add failed",
+      );
+    }
+  }
+
+  async function deleteUpcoming(item) {
+    if (item.__kind === "virtual") {
+      try {
+        const { data } = await api.put(`/transactions/${item.__parentId}`, {
+          nextDate: null,
+        });
+        setTransactions((prev) =>
+          prev.map((t) => (String(t._id) === String(data._id) ? data : t)),
+        );
+      } catch (e) {
+        Alert.alert(
+          "Error",
+          e?.response?.data?.error || e.message || "Delete failed",
+        );
+      }
+    } else {
+      await softDelete(item);
+    }
+  }
+
+  const openUpcomingAuto = useCallback(() => {
+    setShowUpcoming(true);
+    requestAnimationFrame(() =>
+      scrollRef.current?.scrollTo({ y: 0, animated: true }),
+    );
+  }, []);
+
+  /* ── row renderer ── */
+  function renderRow({ item }) {
+    const catName =
+      categories.find((c) => c._id === item.categoryId)?.name || "—";
+    const accName = accountsById.get(item.accountId)?.name || "—";
+    const isFuture = new Date(item.date) > startOfUTC(new Date());
+    const symbol = String(item.assetSymbol || "")
+      .toUpperCase()
+      .trim();
+    const isFavorite = symbol ? favoriteSymbols.has(symbol) : false;
+    const canFavorite = isStockOrCryptoCategoryName(catName);
+
+    return (
+      <View style={s.rowCard}>
+        <Brackets color={ORANGE} size={7} thick={1} />
+        <View style={s.rowTopLine}>
+          <View
+            style={[s.rowCatPill, { borderColor: "rgba(249,115,22,0.22)" }]}
+          >
+            <View style={[s.rowCatDot, { backgroundColor: ORANGE }]} />
+            <Text style={[s.rowCatTxt, { color: ORANGE }]} numberOfLines={1}>
+              {symbol ? `${symbol} • ${catName}` : catName}
             </Text>
           </View>
 
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
+          {canFavorite && symbol ? (
             <TouchableOpacity
-              onPress={() => navigation.navigate("Dashboard")}
-              activeOpacity={0.85}
-              style={styles.headerLogoBtn}
-            >
-              <Image source={logo} style={styles.headerLogoImg} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() =>
-                navigation.navigate("InvestmentPerformance", {
-                  favorites: Array.from(favoriteSymbols),
-                })
-              }
-              style={[styles.headerRefreshBtn, { marginRight: 8 }]}
+              onPress={() => toggleFavorite(symbol)}
+              activeOpacity={0.75}
+              style={[
+                s.badge,
+                {
+                  borderColor: isFavorite
+                    ? "rgba(251,191,36,0.28)"
+                    : "rgba(226,232,240,0.12)",
+                  backgroundColor: isFavorite
+                    ? "rgba(251,191,36,0.10)"
+                    : "rgba(255,255,255,0.03)",
+                },
+              ]}
             >
               <Text
                 style={[
-                  styles.headerRefreshText,
-                  { color: secondary, fontWeight: "600" },
+                  s.badgeTxt,
+                  { color: isFavorite ? GOLD : T_DIM, letterSpacing: 0.6 },
                 ]}
               >
-                View market
+                {isFavorite ? "★ FAV" : "☆ STAR"}
               </Text>
             </TouchableOpacity>
+          ) : null}
 
-            <TouchableOpacity onPress={loadAll} style={styles.headerRefreshBtn}>
-              <Text style={styles.headerRefreshText}>Refresh</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* TOTALS */}
-        <View style={styles.totalsRow}>
-          {totalsByCurrency.map(({ cur, minor }) => (
-            <View key={cur} style={styles.totalCard}>
-              <Text style={styles.totalLabel}>Total {cur}</Text>
-              <Text style={styles.totalValue}>{fmtMoney(minor, cur)}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* SEARCH */}
-        <View style={styles.searchRow}>
-          <TextInput
-            value={q}
-            onChangeText={setQ}
-            placeholder="Search symbol, description, tags, account, category"
-            placeholderTextColor={TEXT_MUTED}
-            style={styles.searchInput}
-          />
-        </View>
-
-        {/* CATEGORY CHIPS */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipRow}
-        >
-          <Chip
-            label="All categories"
-            selected={fCategoryId === "ALL"}
-            onPress={() => setFCategoryId("ALL")}
-          />
-          {categoriesFiltered.map((c) => (
-            <Chip
-              key={c._id}
-              label={c.name}
-              selected={fCategoryId === c._id}
-              onPress={() => setFCategoryId(c._id)}
-            />
-          ))}
-        </ScrollView>
-
-        {/* FILTERS */}
-        <View style={styles.filtersCard}>
-          {/* Account */}
-          <View style={styles.filterField}>
-            <Text style={styles.filterLabel}>Account</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.filterChipRow}
+          {isFuture && (
+            <View
+              style={[
+                s.badge,
+                {
+                  borderColor: "rgba(249,115,22,0.28)",
+                  backgroundColor: "rgba(249,115,22,0.10)",
+                },
+              ]}
             >
-              <Chip
-                label="All"
-                selected={fAccountId === "ALL"}
-                onPress={() => setFAccountId("ALL")}
-              />
-              {accounts.map((a) => (
-                <Chip
-                  key={a._id}
-                  label={`${a.name} · ${a.currency}`}
-                  selected={fAccountId === a._id}
-                  onPress={() => setFAccountId(a._id)}
-                />
-              ))}
-            </ScrollView>
-          </View>
-
-          {/* Currency */}
-          <View style={styles.filterField}>
-            <Text style={styles.filterLabel}>Currency</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.filterChipRow}
-            >
-              {currencies.map((cur) => (
-                <Chip
-                  key={cur}
-                  label={cur === "ALL" ? "All" : cur}
-                  selected={fCurrency === cur}
-                  onPress={() => setFCurrency(cur)}
-                />
-              ))}
-            </ScrollView>
-          </View>
-
-          {/* Min / Max */}
-          <View style={styles.filterRow}>
-            <View style={[styles.filterField, { flex: 1 }]}>
-              <Text style={styles.filterLabel}>Min amount</Text>
-              <TextInput
-                value={fMin}
-                onChangeText={setFMin}
-                keyboardType="decimal-pad"
-                placeholder="e.g., 100"
-                placeholderTextColor={TEXT_MUTED}
-                style={styles.filterInput}
-              />
+              <Text style={[s.badgeTxt, { color: ORANGE }]}>UPCOMING</Text>
             </View>
-            <View style={{ width: 12 }} />
-            <View style={[styles.filterField, { flex: 1 }]}>
-              <Text style={styles.filterLabel}>Max amount</Text>
-              <TextInput
-                value={fMax}
-                onChangeText={setFMax}
-                keyboardType="decimal-pad"
-                placeholder="e.g., 5000"
-                placeholderTextColor={TEXT_MUTED}
-                style={styles.filterInput}
-              />
-            </View>
-          </View>
-
-          <View style={styles.filterButtonsRow}>
-            <TouchableOpacity
-              onPress={() => {
-                setFAccountId("ALL");
-                setFCategoryId("ALL");
-                setFCurrency("ALL");
-                setFMin("");
-                setFMax("");
-              }}
-              style={styles.filterClearBtn}
-            >
-              <Text style={styles.filterClearText}>Clear</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* LIST */}
-        <View style={styles.listCard}>
-          {err ? (
-            <Text style={styles.errorText}>{err}</Text>
-          ) : rows.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>No investments yet</Text>
-              <Text style={styles.emptySubtitle}>
-                Add your first investment or adjust filters.
-              </Text>
-            </View>
-          ) : (
-            rows.map((item) => {
-              const catName = categoriesById.get(item.categoryId)?.name || "—";
-              const accName = accountsById.get(item.accountId)?.name || "—";
-              const symbol = (item.assetSymbol || "").toUpperCase().trim();
-
-              const canFavorite = isStockOrCryptoCategoryName(catName);
-              const isFavorite = symbol ? favoriteSymbols.has(symbol) : false;
-
-              return (
-                <InvestmentRow
-                  key={item._id}
-                  item={item}
-                  onEdit={openEdit}
-                  onDelete={handleDelete}
-                  categoryName={catName}
-                  accountName={accName}
-                  canFavorite={canFavorite}
-                  isFavorite={isFavorite}
-                  onToggleFavorite={toggleFavorite}
-                />
-              );
-            })
           )}
+
+          <Text style={[s.rowAmount, { color: ORANGE }]}>
+            -{minorToMajor(item.amountMinor, item.currency)}{" "}
+            <Text style={{ fontSize: 9, opacity: 0.6 }}>{item.currency}</Text>
+          </Text>
         </View>
-      </ScrollView>
 
-      {/* ✅ FAB STACK: Auto + Add */}
-      <View style={styles.fabStack}>
-        <TouchableOpacity
-          style={[styles.fab, styles.fabAuto]}
-          onPress={openAuto}
-          activeOpacity={0.9}
-        >
-          <Text style={styles.fabAutoText}>Auto</Text>
-        </TouchableOpacity>
+        <View style={s.rowAccLine}>
+          <View style={s.rowAccPill}>
+            <Text style={s.rowAccTxt}>{accName}</Text>
+          </View>
+          {item.units != null && item.units !== "" ? (
+            <View style={[s.rowAccPill, { marginLeft: 6 }]}>
+              <Text style={s.rowAccTxt}>{item.units} units</Text>
+            </View>
+          ) : null}
+        </View>
 
-        <TouchableOpacity style={styles.fab} onPress={openCreate}>
-          <Text style={styles.fabPlus}>＋</Text>
-        </TouchableOpacity>
+        <Text style={s.rowDesc} numberOfLines={2}>
+          {item.description || "No description"}
+        </Text>
+        <Text style={s.rowDate}>{fmtDateUTC(item.date)}</Text>
+        {item.tags?.length ? (
+          <Text style={[s.rowTags, { color: CYAN }]}>
+            #{item.tags.join("  #")}
+          </Text>
+        ) : null}
+
+        <ScanLine color={ORANGE} style={{ marginTop: 10, marginBottom: 8 }} />
+
+        <View style={s.rowActions}>
+          <TouchableOpacity
+            style={s.rowBtnEdit}
+            onPress={() => openEdit(item)}
+            activeOpacity={0.75}
+          >
+            <Text style={[s.rowBtnTxt, { color: CYAN }]}>EDIT</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={s.rowBtnDel}
+            onPress={() => softDelete(item)}
+            activeOpacity={0.75}
+          >
+            <Text style={[s.rowBtnTxt, { color: VIOLET }]}>DELETE</Text>
+          </TouchableOpacity>
+        </View>
       </View>
+    );
+  }
 
-      {/* ✅ Auto Add Modal */}
+  /* ── investment modal ── */
+  const InvestmentModal = useCallback(() => {
+    if (!modalOpen) return null;
+
+    const submit = async () => {
+      const {
+        amount,
+        currency,
+        date,
+        nextDate,
+        categoryId,
+        assetSymbol,
+        units,
+        description,
+        tagsCsv,
+        accountId: aId,
+      } = form;
+
+      const cur = (currency || "USD").toString().toUpperCase();
+      const pickedAccountId = aId || accountId || accounts[0]?._id || "";
+      const amountMinor = majorToMinor(amount, cur);
+      const pickedCategory = categories.find((c) => c._id === categoryId);
+      const symbol = String(assetSymbol || "")
+        .toUpperCase()
+        .trim();
+      const unitsNum =
+        String(units || "").trim() === "" ? NaN : Number(String(units).trim());
+
+      if (Number.isNaN(amountMinor)) {
+        Alert.alert("Invalid amount", "Enter a valid number.");
+        return;
+      }
+      if (!categoryId) {
+        Alert.alert("Missing category", "Pick a category.");
+        return;
+      }
+      if (!pickedAccountId) {
+        Alert.alert("Missing account", "Pick an account.");
+        return;
+      }
+
+      const requiresSymbolUnits = isStockOrCryptoCategoryName(
+        pickedCategory?.name || "",
+      );
+
+      if (requiresSymbolUnits && !symbol) {
+        Alert.alert("Missing symbol", "Asset symbol is required.");
+        return;
+      }
+      if (
+        requiresSymbolUnits &&
+        !(Number.isFinite(unitsNum) && Number(unitsNum) > 0)
+      ) {
+        Alert.alert("Invalid units", "Units must be a positive number.");
+        return;
+      }
+
+      const payload = {
+        accountId: pickedAccountId,
+        categoryId,
+        type: "investment",
+        amountMinor,
+        currency: cur,
+        date: new Date(date || new Date()).toISOString(),
+        description: (description || "").trim() || null,
+        tags: (tagsCsv || "")
+          .split(",")
+          .map((x) => x.trim())
+          .filter((x) => x.length > 0),
+      };
+
+      if (symbol) payload.assetSymbol = symbol;
+      if (Number.isFinite(unitsNum) && unitsNum > 0) payload.units = unitsNum;
+      if ((nextDate || "").trim())
+        payload.nextDate = new Date(nextDate).toISOString();
+
+      try {
+        if (!editing) {
+          const { data } = await api.post("/transactions", payload);
+          const created = Array.isArray(data?.created) ? data.created : [data];
+          setTransactions((prev) => [...created, ...prev]);
+        } else {
+          const { data } = await api.put(
+            `/transactions/${editing._id}`,
+            payload,
+          );
+          setTransactions((prev) =>
+            prev.map((t) => (String(t._id) === String(data._id) ? data : t)),
+          );
+        }
+        setModalOpen(false);
+      } catch (e) {
+        Alert.alert("Error", e?.response?.data?.error || e.message || "Error");
+      }
+    };
+
+    return (
       <Modal
-        visible={autoOpen}
+        visible={modalOpen}
         transparent
         animationType="slide"
-        onRequestClose={() => setAutoOpen(false)}
+        onRequestClose={() => setModalOpen(false)}
       >
         <KeyboardAvoidingView
-          style={styles.modalBackdrop}
+          style={s.modalBackdrop}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-          <View style={styles.modalCard}>
+          <View style={s.modalCard}>
+            <Brackets color={ORANGE} size={10} thick={1.5} />
+            <View style={[s.modalHairline, { backgroundColor: ORANGE }]} />
             <ScrollView
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
-              <Text style={styles.modalTitle}>Auto add investment</Text>
+              <Text style={s.modalTitle}>
+                {editing ? "EDIT INVESTMENT" : "NEW INVESTMENT"}
+              </Text>
 
-              <Text style={styles.modalLabel}>Account</Text>
-              {accounts.length === 0 ? (
-                <Text style={styles.modalHelp}>
-                  No active accounts found. Create one first.
-                </Text>
+              <Text style={s.modalLabel}>ACCOUNT</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                style={{ marginBottom: 10 }}
+              >
+                {accounts.map((a) => (
+                  <Chip
+                    key={a._id}
+                    label={a.name}
+                    accent={CYAN}
+                    selected={form.accountId === a._id}
+                    onPress={() =>
+                      setForm((f) => ({
+                        ...f,
+                        accountId: a._id,
+                        currency: a.currency || f.currency,
+                      }))
+                    }
+                  />
+                ))}
+              </ScrollView>
+
+              <View style={s.modalRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.modalLabel}>TOTAL COST</Text>
+                  <TextInput
+                    value={form.amount}
+                    onChangeText={(v) => setForm((f) => ({ ...f, amount: v }))}
+                    keyboardType="numeric"
+                    placeholder="0.00"
+                    placeholderTextColor={T_DIM}
+                    style={s.modalInput}
+                  />
+                </View>
+                <View style={{ width: 88 }}>
+                  <Text style={s.modalLabel}>CCY</Text>
+                  <TextInput
+                    value={form.currency}
+                    onChangeText={(v) =>
+                      setForm((f) => ({ ...f, currency: v.toUpperCase() }))
+                    }
+                    autoCapitalize="characters"
+                    placeholder="USD"
+                    placeholderTextColor={T_DIM}
+                    style={s.modalInput}
+                  />
+                </View>
+              </View>
+
+              <View style={s.modalRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.modalLabel}>ASSET SYMBOL</Text>
+                  <TextInput
+                    value={form.assetSymbol}
+                    onChangeText={(v) =>
+                      setForm((f) => ({ ...f, assetSymbol: v.toUpperCase() }))
+                    }
+                    autoCapitalize="characters"
+                    placeholder="AAPL, BTC, VOO"
+                    placeholderTextColor={T_DIM}
+                    style={s.modalInput}
+                  />
+                </View>
+                <View style={{ width: 110 }}>
+                  <Text style={s.modalLabel}>UNITS</Text>
+                  <TextInput
+                    value={form.units}
+                    onChangeText={(v) => setForm((f) => ({ ...f, units: v }))}
+                    keyboardType="numeric"
+                    placeholder="2.5"
+                    placeholderTextColor={T_DIM}
+                    style={s.modalInput}
+                  />
+                </View>
+              </View>
+
+              <View style={s.modalRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.modalLabel}>DATE</Text>
+                  <TextInput
+                    value={form.date}
+                    onChangeText={(v) => setForm((f) => ({ ...f, date: v }))}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor={T_DIM}
+                    style={s.modalInput}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.modalLabel}>NEXT DATE</Text>
+                  <TextInput
+                    value={form.nextDate}
+                    onChangeText={(v) =>
+                      setForm((f) => ({ ...f, nextDate: v }))
+                    }
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor={T_DIM}
+                    style={s.modalInput}
+                  />
+                </View>
+              </View>
+
+              <Text style={s.modalLabel}>CATEGORY</Text>
+              {categories.length === 0 ? (
+                <View
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "rgba(167,139,250,0.25)",
+                    backgroundColor: "rgba(167,139,250,0.06)",
+                    borderRadius: 2,
+                    paddingHorizontal: 12,
+                    paddingVertical: 12,
+                    marginBottom: 10,
+                  }}
+                >
+                  <Text style={{ color: T_MID, fontSize: 11 }}>
+                    No investment categories found.
+                  </Text>
+                </View>
               ) : (
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.filterChipRow}
                   keyboardShouldPersistTaps="handled"
+                  style={{ marginBottom: 10 }}
                 >
-                  {accounts.map((a) => (
+                  {categories.map((c) => (
                     <Chip
-                      key={a._id}
-                      label={`${a.name} · ${a.currency}`}
-                      selected={autoAccountId === a._id}
-                      onPress={() => setAutoAccountId(a._id)}
+                      key={c._id}
+                      label={c.name}
+                      accent={ORANGE}
+                      selected={form.categoryId === c._id}
+                      onPress={() =>
+                        setForm((f) => ({ ...f, categoryId: c._id }))
+                      }
                     />
                   ))}
                 </ScrollView>
               )}
 
-              <View style={{ marginTop: 10 }}>
-                <Text style={styles.modalLabel}>Text</Text>
-                <TextInput
-                  value={autoText}
-                  onChangeText={setAutoText}
-                  placeholder="e.g. bought 2 AAPL for 380 usd"
-                  placeholderTextColor={TEXT_MUTED}
-                  style={[styles.modalInput, { minHeight: 80 }]}
-                  multiline
-                />
-                <Text style={styles.modalHelp}>
-                  Tip: include symbol + units + total cost + currency.
-                </Text>
-              </View>
+              <Text style={s.modalLabel}>DESCRIPTION</Text>
+              <TextInput
+                value={form.description}
+                onChangeText={(v) => setForm((f) => ({ ...f, description: v }))}
+                placeholder="Optional description"
+                placeholderTextColor={T_DIM}
+                style={[s.modalInput, { marginBottom: 10 }]}
+              />
 
-              <View style={styles.modalActions}>
+              <Text style={s.modalLabel}>TAGS</Text>
+              <TextInput
+                value={form.tagsCsv}
+                onChangeText={(v) => setForm((f) => ({ ...f, tagsCsv: v }))}
+                placeholder="long-term, dividend"
+                placeholderTextColor={T_DIM}
+                style={s.modalInput}
+              />
+              <Text style={s.modalHint}>
+                Comma-separated · e.g. long-term, etf, dividend
+              </Text>
+
+              <ScanLine
+                color={ORANGE}
+                style={{ marginTop: 18, marginBottom: 14 }}
+              />
+
+              <View style={s.modalActions}>
                 <TouchableOpacity
-                  onPress={() => setAutoOpen(false)}
-                  style={styles.modalBtnGhost}
+                  style={s.modalBtnCancel}
+                  onPress={() => setModalOpen(false)}
                 >
-                  <Text style={styles.modalBtnGhostText}>Cancel</Text>
+                  <Text style={[s.modalBtnTxt, { color: T_MID }]}>CANCEL</Text>
                 </TouchableOpacity>
-
                 <TouchableOpacity
-                  onPress={submitAuto}
                   style={[
-                    styles.modalBtnPrimary,
-                    autoLoading && { opacity: 0.75 },
+                    s.modalBtnPrimary,
+                    { backgroundColor: ORANGE },
+                    categories.length === 0 && { opacity: 0.45 },
                   ]}
-                  disabled={autoLoading}
+                  onPress={submit}
+                  disabled={categories.length === 0}
                 >
-                  <Text style={styles.modalBtnPrimaryText}>
-                    {autoLoading ? "Parsing…" : "Create"}
+                  <Text style={[s.modalBtnTxt, { color: BG }]}>
+                    {editing ? "SAVE" : "ADD"}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1220,426 +1431,1389 @@ export default function InvestmentScreen({ navigation }) {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+    );
+  }, [modalOpen, form, editing, accounts, categories, accountId]);
 
-      <InvestmentModal
-        visible={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSaved={handleSaved}
-        editing={editing}
-        accounts={accounts}
-        categories={categoriesFiltered}
-        defaultAccountId={defaultAccountId}
-        pushToast={push}
-      />
+  /* ── sections ── */
+  function Header() {
+    const filterGroups = [
+      {
+        label: "CATEGORY",
+        chips: [
+          {
+            key: "ALL",
+            label: "All categories",
+            sel: fCategoryId === "ALL",
+            onPress: () => setFCategoryId("ALL"),
+            accent: CYAN,
+          },
+          ...categories.map((c) => ({
+            key: c._id,
+            label: c.name,
+            sel: fCategoryId === c._id,
+            onPress: () => setFCategoryId(c._id),
+            accent: ORANGE,
+          })),
+        ],
+      },
+      {
+        label: "ACCOUNT",
+        small: true,
+        chips: [
+          {
+            key: "ALL",
+            label: "All accounts",
+            sel: fAccountId === "ALL",
+            onPress: () => setFAccountId("ALL"),
+            accent: CYAN,
+          },
+          ...accounts.map((a) => ({
+            key: a._id,
+            label: a.name,
+            sel: fAccountId === a._id,
+            onPress: () => setFAccountId(a._id),
+            accent: MINT,
+          })),
+        ],
+      },
+      {
+        label: "CURRENCY",
+        small: true,
+        chips: currencies.map((c) => ({
+          key: c,
+          label: c === "ALL" ? "All currencies" : c,
+          sel: fCurrency === c,
+          onPress: () => setFCurrency(c),
+          accent: CYAN,
+        })),
+      },
+      {
+        label: "SORT",
+        small: true,
+        chips: [
+          {
+            key: "date_desc",
+            label: "Newest",
+            sel: sortKey === "date_desc",
+            onPress: () => setSortKey("date_desc"),
+            accent: ORANGE,
+          },
+          {
+            key: "date_asc",
+            label: "Oldest",
+            sel: sortKey === "date_asc",
+            onPress: () => setSortKey("date_asc"),
+            accent: ORANGE,
+          },
+          {
+            key: "amount_desc",
+            label: "Amount ↓",
+            sel: sortKey === "amount_desc",
+            onPress: () => setSortKey("amount_desc"),
+            accent: ORANGE,
+          },
+          {
+            key: "amount_asc",
+            label: "Amount ↑",
+            sel: sortKey === "amount_asc",
+            onPress: () => setSortKey("amount_asc"),
+            accent: ORANGE,
+          },
+        ],
+      },
+      {
+        label: "PERIOD",
+        small: true,
+        chips: [
+          {
+            key: "ALL",
+            label: "All time",
+            sel: datePreset === "ALL",
+            onPress: () => setDatePreset("ALL"),
+            accent: CYAN,
+          },
+          {
+            key: "THIS_MONTH",
+            label: "This month",
+            sel: datePreset === "THIS_MONTH",
+            onPress: () => setDatePreset("THIS_MONTH"),
+            accent: CYAN,
+          },
+          {
+            key: "LAST_MONTH",
+            label: "Last month",
+            sel: datePreset === "LAST_MONTH",
+            onPress: () => setDatePreset("LAST_MONTH"),
+            accent: CYAN,
+          },
+          {
+            key: "LAST_90",
+            label: "Last 90 days",
+            sel: datePreset === "LAST_90",
+            onPress: () => setDatePreset("LAST_90"),
+            accent: CYAN,
+          },
+          {
+            key: "THIS_YEAR",
+            label: "This year",
+            sel: datePreset === "THIS_YEAR",
+            onPress: () => setDatePreset("THIS_YEAR"),
+            accent: CYAN,
+          },
+        ],
+      },
+      {
+        label: "WATCHLIST",
+        small: true,
+        chips: [
+          {
+            key: "ALL_W",
+            label: "All assets",
+            sel: !showFavoritesOnly,
+            onPress: () => setShowFavoritesOnly(false),
+            accent: CYAN,
+          },
+          {
+            key: "FAV_ONLY",
+            label: `Favorites only (${favoriteCount})`,
+            sel: showFavoritesOnly,
+            onPress: () => setShowFavoritesOnly(true),
+            accent: GOLD,
+          },
+        ],
+      },
+    ];
 
-      <Toasts toasts={toasts} onClose={remove} />
-      <ConfirmDialog />
+    return (
+      <View
+        style={[
+          s.headerCard,
+          {
+            borderColor: "rgba(249,115,22,0.22)",
+            backgroundColor: "rgba(249,115,22,0.04)",
+          },
+        ]}
+      >
+        <Brackets color={ORANGE} size={12} thick={1.5} />
+        <View style={[s.headerHairline, { backgroundColor: ORANGE }]} />
+        <View style={s.topBar}>
+          <View style={s.logoRow}>
+            <View style={[s.statusDot, { backgroundColor: ORANGE }]} />
+            <Text style={s.logoTxt}>INVESTMENTS</Text>
+            <View
+              style={[
+                s.livePill,
+                {
+                  borderColor: "rgba(249,115,22,0.25)",
+                  backgroundColor: "rgba(249,115,22,0.12)",
+                },
+              ]}
+            >
+              <Text style={[s.livePillTxt, { color: ORANGE }]}>MODULE</Text>
+            </View>
+          </View>
+
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <TouchableOpacity
+              onPress={() =>
+                navigation.navigate("InvestmentPerformance", {
+                  favorites: Array.from(favoriteSymbols),
+                })
+              }
+              activeOpacity={0.8}
+              style={[
+                s.ctrlPill,
+                { borderColor: "rgba(251,191,36,0.25)", paddingHorizontal: 10 },
+              ]}
+            >
+              <View style={[s.ctrlDot, { backgroundColor: GOLD }]} />
+              <Text style={[s.ctrlTxt, { color: GOLD }]}>MARKET</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => navigation.navigate("Dashboard")}
+              activeOpacity={0.8}
+              style={s.homeBtn}
+            >
+              <Image source={logo} style={s.homeBtnImg} />
+              <Brackets color={ORANGE} size={7} thick={1} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <Text style={s.heroTitle}>Investment{"\n"}Control</Text>
+        <Text style={s.heroSub}>
+          Track deployed capital, monitor favorite assets, and keep your
+          long-term positioning decision-ready.
+        </Text>
+
+        <ScanLine color={ORANGE} style={{ marginTop: 12, marginBottom: 14 }} />
+
+        <View style={s.controlsRow}>
+          <TouchableOpacity
+            style={[s.ctrlPill, { borderColor: "rgba(249,115,22,0.25)" }]}
+            onPress={() => setShowUpcoming((v) => !v)}
+            activeOpacity={0.75}
+          >
+            <View style={[s.ctrlDot, { backgroundColor: ORANGE }]} />
+            <Text style={[s.ctrlTxt, { color: ORANGE }]}>UPCOMING</Text>
+            <View
+              style={[
+                s.upcomingBadge,
+                {
+                  backgroundColor: "rgba(249,115,22,0.18)",
+                  borderColor: "rgba(249,115,22,0.28)",
+                },
+              ]}
+            >
+              <Text style={[s.upcomingBadgeTxt, { color: ORANGE }]}>
+                {upcoming.length}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[s.ctrlPill, { borderColor: "rgba(251,191,36,0.22)" }]}
+            onPress={() => setShowFavoritesOnly((v) => !v)}
+            activeOpacity={0.75}
+          >
+            <View style={[s.ctrlDot, { backgroundColor: GOLD }]} />
+            <Text style={[s.ctrlTxt, { color: GOLD }]}>FAVORITES</Text>
+            <View
+              style={[
+                s.upcomingBadge,
+                {
+                  backgroundColor: "rgba(251,191,36,0.12)",
+                  borderColor: "rgba(251,191,36,0.22)",
+                },
+              ]}
+            >
+              <Text style={[s.upcomingBadgeTxt, { color: GOLD }]}>
+                {favoriteRowsCount}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[s.ctrlPill, { borderColor: "rgba(0,212,255,0.22)" }]}
+            onPress={loadAll}
+            activeOpacity={0.75}
+          >
+            <View style={[s.ctrlDot, { backgroundColor: CYAN }]} />
+            <Text style={[s.ctrlTxt, { color: CYAN }]}>REFRESH</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={s.searchWrap}>
+          <View style={[s.searchDot, { backgroundColor: ORANGE }]} />
+          <TextInput
+            value={q}
+            onChangeText={setQ}
+            placeholder="Search symbol, description, account, category or #tags"
+            placeholderTextColor={T_DIM}
+            style={s.searchInput}
+          />
+        </View>
+
+        {filterGroups.map((g) => (
+          <View key={g.label} style={{ marginBottom: 2 }}>
+            <Text style={s.filterGroupLabel}>{g.label}</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={s.chipScroll}
+              keyboardShouldPersistTaps="handled"
+            >
+              {g.chips.map((c) => (
+                <Chip
+                  key={c.key}
+                  label={c.label}
+                  selected={c.sel}
+                  onPress={c.onPress}
+                  small={g.small}
+                  accent={c.accent}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        ))}
+      </View>
+    );
+  }
+
+  function UpcomingPanel() {
+    if (!showUpcoming) return null;
+
+    return (
+      <View style={s.sectionCard}>
+        <Brackets color={ORANGE} size={10} thick={1} />
+        <View style={[s.sectionHairline, { backgroundColor: ORANGE }]} />
+        <View style={s.sectionHeaderRow}>
+          <View>
+            <Text style={s.sectionEyebrow}>SCHEDULED DEPLOYMENT</Text>
+            <Text style={s.sectionTitle}>Upcoming investments</Text>
+          </View>
+          <TouchableOpacity onPress={() => setShowUpcoming(false)}>
+            <Text style={[s.sectionClose, { color: T_DIM }]}>CLOSE</Text>
+          </TouchableOpacity>
+        </View>
+
+        {upcoming.length === 0 ? (
+          <Text style={s.emptyText}>
+            Nothing upcoming within current filters.
+          </Text>
+        ) : (
+          upcoming.map((u) => {
+            const catName =
+              categories.find((c) => c._id === u.categoryId)?.name || "—";
+            const accName = accountsById.get(u.accountId)?.name || "—";
+            const isVirtual = u.__kind === "virtual";
+            const ac = isVirtual ? CYAN : ORANGE;
+            const symbol = String(u.assetSymbol || "")
+              .toUpperCase()
+              .trim();
+
+            return (
+              <View key={u._id} style={s.rowCard}>
+                <Brackets color={ac} size={7} thick={1} />
+                <View style={s.rowTopLine}>
+                  <View style={[s.rowCatPill, { borderColor: ac + "44" }]}>
+                    <View style={[s.rowCatDot, { backgroundColor: ac }]} />
+                    <Text
+                      style={[s.rowCatTxt, { color: ac }]}
+                      numberOfLines={1}
+                    >
+                      {symbol ? `${symbol} • ${catName}` : catName}
+                    </Text>
+                  </View>
+
+                  <View
+                    style={[
+                      s.badge,
+                      { borderColor: ac + "44", backgroundColor: ac + "14" },
+                    ]}
+                  >
+                    <Text style={[s.badgeTxt, { color: ac }]}>
+                      {isVirtual ? "PLANNED" : "IN DB"}
+                    </Text>
+                  </View>
+
+                  <Text style={[s.rowAmount, { color: ORANGE }]}>
+                    -{minorToMajor(u.amountMinor, u.currency)}{" "}
+                    <Text style={{ fontSize: 9, opacity: 0.6 }}>
+                      {u.currency}
+                    </Text>
+                  </Text>
+                </View>
+
+                <View style={s.rowAccLine}>
+                  <View style={s.rowAccPill}>
+                    <Text style={s.rowAccTxt}>{accName}</Text>
+                  </View>
+                  {u.units != null && u.units !== "" ? (
+                    <View style={[s.rowAccPill, { marginLeft: 6 }]}>
+                      <Text style={s.rowAccTxt}>{u.units} units</Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                <Text style={s.rowDesc} numberOfLines={2}>
+                  {u.description || "No description"}
+                </Text>
+                <Text style={s.rowDate}>Scheduled: {fmtDateUTC(u.date)}</Text>
+
+                <ScanLine
+                  color={ac}
+                  style={{ marginTop: 10, marginBottom: 8 }}
+                />
+
+                <View style={s.rowActions}>
+                  {isVirtual ? (
+                    <>
+                      <TouchableOpacity
+                        style={[s.rowBtnEdit, { borderColor: ORANGE + "44" }]}
+                        onPress={() => addVirtual(u)}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={[s.rowBtnTxt, { color: ORANGE }]}>
+                          ADD
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={s.rowBtnEdit}
+                        onPress={() => openCreateSeed(u)}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={[s.rowBtnTxt, { color: CYAN }]}>EDIT</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={s.rowBtnDel}
+                        onPress={() => deleteUpcoming(u)}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={[s.rowBtnTxt, { color: VIOLET }]}>
+                          SKIP
+                        </Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <>
+                      <TouchableOpacity
+                        style={s.rowBtnEdit}
+                        onPress={() => openEdit(u)}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={[s.rowBtnTxt, { color: CYAN }]}>EDIT</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={s.rowBtnDel}
+                        onPress={() => deleteUpcoming(u)}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={[s.rowBtnTxt, { color: VIOLET }]}>
+                          DELETE
+                        </Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                </View>
+              </View>
+            );
+          })
+        )}
+      </View>
+    );
+  }
+
+  function Insights() {
+    const effectiveCur =
+      (fCurrency !== "ALL" ? fCurrency : rows[0]?.currency) || "—";
+
+    return (
+      <View style={s.sectionCard}>
+        <Brackets color={CYAN} size={10} thick={1} />
+        <View style={[s.sectionHairline, { backgroundColor: CYAN }]} />
+        <View style={s.sectionHeaderRow}>
+          <View>
+            <Text style={s.sectionEyebrow}>INVESTMENT KPIs</Text>
+            <Text style={s.sectionTitle}>Insights</Text>
+          </View>
+          <View
+            style={[s.currencyPill, { borderColor: "rgba(0,212,255,0.22)" }]}
+          >
+            <View style={[s.ctrlDot, { backgroundColor: CYAN }]} />
+            <Text style={[s.currencyPillTxt, { color: CYAN }]}>
+              {effectiveCur}
+            </Text>
+          </View>
+        </View>
+
+        {noteMixedCurrency && (
+          <Text style={s.sectionNote}>
+            KPIs calculated in {statsCurrency}. Pick a currency above to switch.
+          </Text>
+        )}
+
+        <View style={{ marginBottom: 10 }}>
+          <StatCard
+            title="Last Month"
+            value={fmtMoney(kpis.last, statsCurrency)}
+            accent="neutral"
+            chipText="LOOKBACK"
+          />
+          <StatCard
+            title="This Month"
+            value={fmtMoney(kpis.this, statsCurrency)}
+            accent="investment"
+            chipText="CURRENT"
+          />
+          <StatCard
+            title="Yearly Avg"
+            value={fmtMoney(kpis.yearlyAvg, statsCurrency)}
+            accent="violet"
+            chipText="AVERAGE"
+          />
+        </View>
+
+        <View style={s.chartBlock}>
+          <View style={s.chartHeaderRow}>
+            <View style={[s.ctrlDot, { backgroundColor: ORANGE }]} />
+            <Text style={[s.chartTitle, { color: ORANGE }]}>BY CATEGORY</Text>
+          </View>
+          {!investmentByCategory.length ? (
+            <Text style={s.chartEmpty}>No data yet.</Text>
+          ) : (
+            investmentByCategory.map((c) => (
+              <View key={c.catId} style={s.catRow}>
+                <View style={s.catRowTop}>
+                  <Text style={s.catName} numberOfLines={1}>
+                    {c.catName}
+                  </Text>
+                  <Text style={[s.catAmount, { color: ORANGE }]}>
+                    {fmtMoney(
+                      c.major *
+                        Math.pow(10, decimalsForCurrency(statsCurrency)),
+                      statsCurrency,
+                    )}
+                  </Text>
+                </View>
+                <View style={s.catBarTrack}>
+                  <View
+                    style={[
+                      s.catBarFill,
+                      {
+                        width: `${Math.max(6, c.pct)}%`,
+                        backgroundColor: ORANGE,
+                      },
+                    ]}
+                  />
+                </View>
+              </View>
+            ))
+          )}
+        </View>
+
+        <View style={s.chartBlock}>
+          <View style={s.chartHeaderRow}>
+            <View style={[s.ctrlDot, { backgroundColor: CYAN }]} />
+            <Text style={[s.chartTitle, { color: CYAN }]}>LAST 7 DAYS</Text>
+          </View>
+          {!dailySeries.points.length || dailySeries.max <= 0 ? (
+            <Text style={s.chartEmpty}>No recent data.</Text>
+          ) : (
+            <View style={s.sparklineRow}>
+              {dailySeries.points.map((p) => {
+                const ratio = dailySeries.max ? p.value / dailySeries.max : 0;
+                const barH = 8 + ratio * 34;
+                return (
+                  <View key={p.label} style={s.sparkCol}>
+                    <View style={s.sparkBarTrack}>
+                      <View
+                        style={[
+                          s.sparkBarFill,
+                          {
+                            height: barH,
+                            marginTop: 42 - barH,
+                            backgroundColor: CYAN,
+                          },
+                        ]}
+                      />
+                    </View>
+                    <Text style={s.sparkLabel}>{p.label}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </View>
+
+        <View style={s.totalWrap}>
+          {totals.map(({ cur, major }) => (
+            <View
+              key={cur}
+              style={[s.totalPill, { borderColor: "rgba(0,212,255,0.22)" }]}
+            >
+              <View style={[s.ctrlDot, { backgroundColor: CYAN }]} />
+              <Text style={[s.totalPillTxt, { color: CYAN }]}>
+                Total {cur}: {major}
+              </Text>
+            </View>
+          ))}
+
+          <View style={[s.totalPill, { borderColor: "rgba(251,191,36,0.22)" }]}>
+            <View style={[s.ctrlDot, { backgroundColor: GOLD }]} />
+            <Text style={[s.totalPillTxt, { color: GOLD }]}>
+              Favorites tracked: {favoriteCount}
+            </Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  /* ── loading ── */
+  if (!initialDone) {
+    return (
+      <SafeAreaView style={s.loadingScreen}>
+        <GridBG />
+        <View style={s.loadingInner}>
+          <View
+            style={{
+              width: 70,
+              height: 70,
+              alignItems: "center",
+              justifyContent: "center",
+              position: "relative",
+              marginBottom: 16,
+            }}
+          >
+            <Brackets color={ORANGE} size={20} thick={2} />
+            <ActivityIndicator size="large" color={ORANGE} />
+          </View>
+          <Text style={s.loadingTitle}>INVESTMENTS</Text>
+          <Text style={s.loadingMono}>Initialising module…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={s.screen}>
+      <GridBG />
+      <ScrollView
+        ref={scrollRef}
+        style={s.content}
+        contentContainerStyle={{ paddingBottom: 132 }}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Header />
+        <UpcomingPanel />
+
+        {!!err && (
+          <View
+            style={[
+              s.errorCard,
+              {
+                backgroundColor: "rgba(167,139,250,0.06)",
+                borderColor: "rgba(167,139,250,0.22)",
+              },
+            ]}
+          >
+            <Brackets color={VIOLET} size={8} thick={1} />
+            <View style={s.errorIconBox}>
+              <Text style={[s.errorIconTxt, { color: VIOLET }]}>!</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.errorTitle}>Something didn't load</Text>
+              <Text style={s.errorBody}>{err}</Text>
+            </View>
+          </View>
+        )}
+
+        <Insights />
+
+        <View style={s.sectionCard}>
+          <Brackets color={ORANGE} size={10} thick={1} />
+          <View style={[s.sectionHairline, { backgroundColor: ORANGE }]} />
+          <View style={s.sectionHeaderRow}>
+            <View>
+              <Text style={s.sectionEyebrow}>TRANSACTION FEED</Text>
+              <Text style={s.sectionTitle}>Investment history</Text>
+            </View>
+            <View
+              style={[s.currencyPill, { borderColor: "rgba(249,115,22,0.22)" }]}
+            >
+              <View style={[s.ctrlDot, { backgroundColor: ORANGE }]} />
+              <Text style={[s.currencyPillTxt, { color: ORANGE }]}>
+                {rows.length} records
+              </Text>
+            </View>
+          </View>
+
+          {rows.length === 0 ? (
+            <Text style={s.emptyText}>
+              No investments found. Add your first one or adjust filters.
+            </Text>
+          ) : (
+            <FlatList
+              data={rows}
+              keyExtractor={(item) => String(item._id)}
+              renderItem={renderRow}
+              scrollEnabled={false}
+            />
+          )}
+        </View>
+      </ScrollView>
+
+      {/* FABs */}
+      <View style={s.fabWrap}>
+        <TouchableOpacity
+          style={[
+            s.fabAuto,
+            {
+              backgroundColor: "rgba(0,212,255,0.10)",
+              borderColor: "rgba(0,212,255,0.30)",
+            },
+          ]}
+          onPress={openAutoAdd}
+          activeOpacity={0.8}
+        >
+          <Brackets color={CYAN} size={8} thick={1} />
+          <Text style={[s.fabTxt, { color: CYAN }]}>AUTO</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[s.fabAuto, { borderColor: "rgba(251,191,36,0.30)" }]}
+          onPress={() =>
+            navigation.navigate("InvestmentPerformance", {
+              favorites: Array.from(favoriteSymbols),
+            })
+          }
+          activeOpacity={0.8}
+        >
+          <Brackets color={GOLD} size={8} thick={1} />
+          <Text style={[s.fabTxt, { color: GOLD }]}>MKT</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[s.fabAdd, { backgroundColor: ORANGE }]}
+          onPress={openCreate}
+          activeOpacity={0.8}
+        >
+          <Brackets color={BG} size={8} thick={1} />
+          <Text style={s.fabAddTxt}>+</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Auto-add modal */}
+      <Modal
+        visible={autoOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAutoOpen(false)}
+      >
+        <KeyboardAvoidingView
+          style={s.modalBackdrop}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <View style={s.modalCard}>
+            <Brackets color={CYAN} size={10} thick={1.5} />
+            <View style={[s.modalHairline, { backgroundColor: CYAN }]} />
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={s.modalTitle}>AUTO ADD INVESTMENT</Text>
+
+              <Text style={s.modalLabel}>ACCOUNT</Text>
+              {accounts.length === 0 ? (
+                <Text style={s.modalHint}>
+                  No active accounts. Create one first.
+                </Text>
+              ) : (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  style={{ marginBottom: 10 }}
+                >
+                  {accounts.map((a) => (
+                    <Chip
+                      key={a._id}
+                      label={`${a.name} · ${a.currency}`}
+                      accent={CYAN}
+                      selected={autoAccountId === a._id}
+                      onPress={() => setAutoAccountId(a._id)}
+                    />
+                  ))}
+                </ScrollView>
+              )}
+
+              <Text style={s.modalLabel}>TEXT INPUT</Text>
+              <TextInput
+                value={autoText}
+                onChangeText={setAutoText}
+                placeholder="e.g. bought 2 AAPL for 380 usd"
+                placeholderTextColor={T_DIM}
+                style={[s.modalInput, { minHeight: 90 }]}
+                multiline
+              />
+              <Text style={s.modalHint}>
+                Include symbol + units + total cost + currency if possible.
+              </Text>
+
+              <ScanLine
+                color={CYAN}
+                style={{ marginTop: 16, marginBottom: 14 }}
+              />
+
+              <View style={s.modalActions}>
+                <TouchableOpacity
+                  style={s.modalBtnCancel}
+                  onPress={() => setAutoOpen(false)}
+                >
+                  <Text style={[s.modalBtnTxt, { color: T_MID }]}>CANCEL</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    s.modalBtnPrimary,
+                    { backgroundColor: CYAN },
+                    autoLoading && { opacity: 0.7 },
+                  ]}
+                  onPress={submitAuto}
+                  disabled={autoLoading}
+                >
+                  <Text style={[s.modalBtnTxt, { color: BG }]}>
+                    {autoLoading ? "PARSING…" : "CREATE"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => {
+                  setAutoOpen(false);
+                  openUpcomingAuto();
+                }}
+                style={{ marginTop: 10 }}
+              >
+                <Text
+                  style={[
+                    s.modalHint,
+                    { color: CYAN, textDecorationLine: "underline" },
+                  ]}
+                >
+                  Open Upcoming panel instead
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {InvestmentModal()}
     </SafeAreaView>
   );
 }
 
-/* --------------------------------- Styles --------------------------------- */
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: BG_DARK },
-  scroll: { padding: 16, paddingBottom: 140 },
+/* ══════════════════════════════════════════════════════════
+   STYLES — synced to IncomeScreen HUD
+══════════════════════════════════════════════════════════ */
+const s = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: BG },
+  content: { flex: 1 },
 
-  header: {
+  loadingScreen: {
+    flex: 1,
+    backgroundColor: BG,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingInner: { alignItems: "center", position: "relative", padding: 30 },
+  loadingTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: T_HI,
+    letterSpacing: 4,
+    marginBottom: 6,
+  },
+  loadingMono: { fontSize: 10, color: T_DIM, letterSpacing: 1.5 },
+
+  headerCard: {
+    margin: 12,
+    padding: 16,
+    borderRadius: 4,
+    borderWidth: 1,
+    overflow: "hidden",
+    position: "relative",
+  },
+  headerHairline: {
+    position: "absolute",
+    top: 0,
+    left: "10%",
+    right: "10%",
+    height: 1.5,
+    opacity: 0.65,
+  },
+
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  logoRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  statusDot: { width: 6, height: 6, borderRadius: 999 },
+  logoTxt: { fontSize: 13, fontWeight: "800", color: T_HI, letterSpacing: 3 },
+  livePill: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 2,
+    borderWidth: 1,
+  },
+  livePillTxt: { fontSize: 8, fontWeight: "800", letterSpacing: 1.5 },
+  homeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 2,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(249,115,22,0.20)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  homeBtnImg: { width: "100%", height: "100%", resizeMode: "cover" },
+
+  heroTitle: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: T_HI,
+    letterSpacing: -0.6,
+    lineHeight: 32,
+    marginBottom: 6,
+  },
+  heroSub: { fontSize: 13, color: T_MID, lineHeight: 18 },
+
+  controlsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+    flexWrap: "wrap",
+  },
+  ctrlPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 2,
+    borderWidth: 1,
+    backgroundColor: "rgba(255,255,255,0.025)",
+  },
+  ctrlDot: { width: 5, height: 5, borderRadius: 999 },
+  ctrlTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 1.2 },
+  upcomingBadge: {
+    marginLeft: 4,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 2,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+  },
+  upcomingBadgeTxt: { fontSize: 10, fontWeight: "800" },
+
+  searchWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: CARD_BD,
+    borderRadius: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+    backgroundColor: "rgba(255,255,255,0.025)",
+    marginBottom: 10,
+  },
+  searchDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 999,
+    marginRight: 8,
+    opacity: 0.7,
+  },
+  searchInput: { flex: 1, fontSize: 13, color: T_HI, paddingVertical: 10 },
+
+  filterGroupLabel: {
+    fontSize: 8,
+    fontWeight: "800",
+    color: T_DIM,
+    letterSpacing: 2,
+    marginBottom: 3,
+    marginTop: 8,
+  },
+  chipScroll: { paddingBottom: 6, paddingRight: 8 },
+
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 2,
+    borderWidth: 1,
+    borderColor: CARD_BD,
+    backgroundColor: "rgba(255,255,255,0.025)",
+    marginRight: 6,
+  },
+  chipSmall: { paddingHorizontal: 8, paddingVertical: 5 },
+  chipSelected: { backgroundColor: "rgba(255,255,255,0.04)" },
+  chipDot: { width: 4, height: 4, borderRadius: 999 },
+  chipText: { fontSize: 11, color: T_DIM },
+  chipTextSmall: { fontSize: 10 },
+  chipTextSelected: { fontWeight: "700" },
+
+  sectionCard: {
+    margin: 12,
+    marginTop: 10,
+    padding: 16,
+    borderRadius: 4,
+    backgroundColor: CARD_BG,
+    borderWidth: 1,
+    borderColor: CARD_BD,
+    overflow: "hidden",
+    position: "relative",
+  },
+  sectionHairline: {
+    position: "absolute",
+    top: 0,
+    left: "10%",
+    right: "10%",
+    height: 1.5,
+    opacity: 0.65,
+  },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  sectionEyebrow: {
+    fontSize: 8,
+    fontWeight: "800",
+    color: T_DIM,
+    letterSpacing: 2,
+    marginBottom: 3,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: T_HI,
+    letterSpacing: -0.3,
+  },
+  sectionClose: {
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1.5,
+    marginTop: 2,
+  },
+  sectionNote: {
+    marginTop: -4,
+    marginBottom: 12,
+    fontSize: 11,
+    color: T_MID,
+    lineHeight: 17,
+  },
+
+  currencyPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 2,
+    borderWidth: 1,
+    backgroundColor: "rgba(255,255,255,0.025)",
+  },
+  currencyPillTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 1 },
+
+  statCard: {
+    position: "relative",
+    borderRadius: 4,
+    borderWidth: 1,
+    padding: 16,
+    marginBottom: 9,
+    overflow: "hidden",
+  },
+  statHairline: {
+    position: "absolute",
+    top: 0,
+    left: "10%",
+    right: "10%",
+    height: 1.5,
+    opacity: 0.65,
+  },
+  statBadge: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginBottom: 10,
+    backgroundColor: "rgba(0,0,0,0.35)",
+  },
+  statBadgeDot: { width: 5, height: 5, borderRadius: 999 },
+  statBadgeTxt: { fontSize: 8, fontWeight: "800", letterSpacing: 1.4 },
+  statLabel: {
+    fontSize: 9,
+    textTransform: "uppercase",
+    letterSpacing: 1.2,
+    color: T_DIM,
+    marginBottom: 4,
+  },
+  statValue: { fontSize: 28, fontWeight: "700", letterSpacing: -0.8 },
+  statHint: { fontSize: 9, color: T_DIM, marginTop: 5, letterSpacing: 0.3 },
+
+  chartBlock: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.02)",
+    borderWidth: 1,
+    borderColor: CARD_BD,
+  },
+  chartHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 10,
+  },
+  chartTitle: { fontSize: 9, fontWeight: "800", letterSpacing: 2 },
+  chartEmpty: { fontSize: 11, color: T_DIM },
+  catRow: { marginBottom: 8 },
+  catRowTop: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
-  },
-  headerTitle: { fontSize: 22, fontWeight: "700", color: "white" },
-  headerSubtitle: { fontSize: 13, color: TEXT_MUTED, marginTop: 4 },
-  headerRefreshBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
-  },
-  headerRefreshText: { color: TEXT_SOFT, fontSize: 12, fontWeight: "500" },
-
-  totalsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 12,
-  },
-  totalCard: {
-    flexGrow: 1,
-    minWidth: 110,
-    padding: 10,
-    borderRadius: 12,
-    backgroundColor: CARD_BG,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-  },
-  totalLabel: { fontSize: 11, color: TEXT_MUTED, marginBottom: 4 },
-  totalValue: { fontSize: 16, fontWeight: "700", color: "#e5e7eb" },
-
-  searchRow: { marginBottom: 8 },
-  searchInput: {
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    color: "white",
-    backgroundColor: "#020617",
-    fontSize: 13,
-  },
-
-  chipRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 8,
-  },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: CHIP_BORDER,
-    backgroundColor: CHIP_BG,
-  },
-  chipText: { fontSize: 12, color: TEXT_SOFT, fontWeight: "500" },
-
-  filtersCard: {
-    marginTop: 4,
-    marginBottom: 16,
-    padding: 12,
-    borderRadius: 16,
-    backgroundColor: CARD_BG,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-  },
-  filterField: { marginBottom: 10 },
-  filterLabel: { fontSize: 11, color: TEXT_MUTED, marginBottom: 4 },
-  filterChipRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  filterRow: { flexDirection: "row", alignItems: "flex-start", marginTop: 4 },
-  filterInput: {
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: "#020617",
-    color: "white",
-    fontSize: 13,
-  },
-  filterButtonsRow: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    marginTop: 4,
-  },
-  filterClearBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-  },
-  filterClearText: { fontSize: 12, color: TEXT_MUTED },
-
-  listCard: {
-    borderRadius: 16,
-    backgroundColor: CARD_BG,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    overflow: "hidden",
-  },
-  errorText: { color: "#fecaca", padding: 12, fontSize: 13 },
-  emptyState: {
-    paddingVertical: 24,
-    paddingHorizontal: 16,
-    alignItems: "center",
-  },
-  emptyTitle: {
-    color: "white",
-    fontSize: 16,
-    fontWeight: "600",
     marginBottom: 4,
   },
-  emptySubtitle: { color: TEXT_MUTED, fontSize: 13, textAlign: "center" },
-
-  rowContainer: {
+  catName: { fontSize: 11, color: T_HI, flex: 1, marginRight: 4 },
+  catAmount: { fontSize: 11, fontWeight: "700" },
+  catBarTrack: {
+    height: 5,
+    borderRadius: 1,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    overflow: "hidden",
+  },
+  catBarFill: { height: "100%", borderRadius: 1 },
+  sparklineRow: {
     flexDirection: "row",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: BORDER_DARK,
-  },
-  rowLeft: { flex: 1, paddingRight: 8 },
-  rowRight: { alignItems: "flex-end", justifyContent: "space-between" },
-  rowTitleRow: { flexDirection: "row", alignItems: "center", marginBottom: 4 },
-  rowTitle: { color: "white", fontSize: 14, fontWeight: "600" },
-  rowSubRow: { flexDirection: "row", alignItems: "center", marginBottom: 4 },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: BADGE_BORDER,
-    backgroundColor: BADGE_BG,
-  },
-  badgeText: { fontSize: 10, color: TEXT_SOFT },
-  rowUnits: { marginLeft: 8, fontSize: 11, color: TEXT_MUTED },
-  rowDescription: { fontSize: 12, color: TEXT_SOFT },
-  rowBottomRow: { marginTop: 4 },
-  rowDate: { fontSize: 11, color: TEXT_MUTED },
-  rowTags: { marginTop: 2, fontSize: 11, color: secondary },
-  rowAmount: { fontSize: 14, fontWeight: "700", color: "#f97316" },
-  rowActions: { flexDirection: "row", marginTop: 6 },
-  rowBtnOutline: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    marginRight: 6,
-  },
-  rowBtnOutlineText: { fontSize: 11, color: TEXT_SOFT },
-  rowBtnDanger: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "#b91c1c",
-  },
-  rowBtnDangerText: { fontSize: 11, color: "#fecaca" },
-
-  // ✅ FAB STACK
-  fabStack: {
-    position: "absolute",
-    right: 16,
-    bottom: 24,
-    gap: 10,
+    justifyContent: "space-between",
     alignItems: "flex-end",
+    marginTop: 2,
   },
-  fab: {
-    width: 52,
-    height: 52,
-    borderRadius: 999,
-    backgroundColor: main,
+  sparkCol: { alignItems: "center", flex: 1 },
+  sparkBarTrack: {
+    width: 8,
+    height: 42,
+    borderRadius: 1,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    overflow: "hidden",
+    justifyContent: "flex-end",
+  },
+  sparkBarFill: { width: "100%", borderRadius: 1 },
+  sparkLabel: { marginTop: 4, fontSize: 7, color: T_DIM },
+  totalWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
+  totalPill: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
-  },
-  fabPlus: { fontSize: 30, lineHeight: 30, color: "white" },
-
-  fabAuto: {
-    width: 52,
-    height: 40,
-    borderRadius: 999,
-    backgroundColor: "#020617",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 2,
     borderWidth: 1,
-    borderColor: main,
+    backgroundColor: "rgba(255,255,255,0.025)",
+  },
+  totalPillTxt: { fontSize: 11, fontWeight: "700" },
+
+  rowCard: {
+    position: "relative",
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.04)",
+    marginBottom: 2,
+  },
+  rowTopLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 8,
+    flexWrap: "wrap",
+  },
+  rowCatPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: "rgba(0,0,0,0.3)",
+  },
+  rowCatDot: { width: 5, height: 5, borderRadius: 999 },
+  rowCatTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 0.8 },
+  badge: {
+    borderWidth: 1,
+    borderRadius: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+  },
+  badgeTxt: { fontSize: 8, fontWeight: "800", letterSpacing: 1.2 },
+  rowAmount: {
+    marginLeft: "auto",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  rowAccLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 6,
+    flexWrap: "wrap",
+  },
+  rowAccPill: {
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderColor: CARD_BD,
+    borderRadius: 2,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    backgroundColor: "rgba(255,255,255,0.025)",
+  },
+  rowAccTxt: { fontSize: 9, color: T_DIM, letterSpacing: 0.3 },
+  rowDesc: { fontSize: 12, color: T_MID, lineHeight: 17, marginBottom: 3 },
+  rowDate: { fontSize: 10, color: T_DIM, letterSpacing: 0.3 },
+  rowTags: { fontSize: 10, marginTop: 4, letterSpacing: 0.5 },
+  rowActions: { flexDirection: "row", gap: 8 },
+  rowBtnEdit: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 2,
+    borderWidth: 1,
+    borderColor: "rgba(0,212,255,0.25)",
+    backgroundColor: "rgba(0,212,255,0.06)",
+  },
+  rowBtnDel: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 2,
+    borderWidth: 1,
+    borderColor: "rgba(167,139,250,0.25)",
+    backgroundColor: "rgba(167,139,250,0.06)",
+  },
+  rowBtnTxt: { fontSize: 8, fontWeight: "800", letterSpacing: 1 },
+
+  emptyText: {
+    paddingVertical: 12,
+    fontSize: 12,
+    color: T_DIM,
+    textAlign: "center",
+    letterSpacing: 0.5,
+  },
+
+  errorCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    borderRadius: 4,
+    padding: 14,
+    margin: 12,
+    marginTop: 8,
+    borderWidth: 1,
+    position: "relative",
+    overflow: "hidden",
+  },
+  errorIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 2,
+    backgroundColor: "rgba(167,139,250,0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(167,139,250,0.28)",
     alignItems: "center",
     justifyContent: "center",
   },
-  fabAutoText: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#d9f99d",
-  },
+  errorIconTxt: { fontSize: 16, fontWeight: "800" },
+  errorTitle: { fontSize: 12, fontWeight: "700", color: T_HI, marginBottom: 3 },
+  errorBody: { fontSize: 12, color: T_MID, lineHeight: 17 },
 
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(15,23,42,0.85)",
-    alignItems: "center",
+    backgroundColor: "rgba(3,5,8,0.92)",
     justifyContent: "center",
+    alignItems: "center",
     paddingHorizontal: 16,
   },
   modalCard: {
     width: "100%",
-    maxHeight: "88%",
-    borderRadius: 20,
-    backgroundColor: "#020617",
+    maxHeight: "90%",
+    borderRadius: 4,
+    padding: 18,
+    backgroundColor: BG,
     borderWidth: 1,
-    borderColor: BORDER_DARK,
-    padding: 16,
+    borderColor: CARD_BD,
+    overflow: "hidden",
+    position: "relative",
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "white",
-    marginBottom: 8,
-  },
-  modalField: { marginTop: 10 },
-  modalLabel: { fontSize: 12, color: TEXT_MUTED, marginBottom: 4 },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    color: "white",
-    backgroundColor: "#020617",
-    fontSize: 13,
-  },
-  modalRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-    marginTop: 6,
-  },
-  modalSelect: {
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    backgroundColor: "#020617",
-  },
-  modalSelectHint: { fontSize: 11, color: TEXT_MUTED },
-  modalHelp: { marginTop: 4, fontSize: 11, color: TEXT_MUTED },
-  modalActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    marginTop: 16,
-    gap: 8,
-  },
-  modalBtnGhost: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-  },
-  modalBtnGhostText: { fontSize: 13, color: TEXT_MUTED },
-  modalBtnPrimary: {
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: main,
-  },
-  modalBtnPrimaryText: { fontSize: 13, fontWeight: "600", color: "white" },
-
-  toastContainer: { position: "absolute", right: 12, bottom: 88, width: "78%" },
-  toast: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 8,
-  },
-  toastType: {
-    fontSize: 11,
-    fontWeight: "600",
-    marginRight: 6,
-    color: TEXT_SOFT,
-    textTransform: "capitalize",
-  },
-  toastMsg: { flex: 1, fontSize: 12, color: TEXT_SOFT },
-  toastClose: { fontSize: 16, color: TEXT_MUTED, paddingHorizontal: 4 },
-
-  confirmBackdrop: {
+  modalHairline: {
     position: "absolute",
     top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(15,23,42,0.85)",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 24,
+    left: "10%",
+    right: "10%",
+    height: 1.5,
+    opacity: 0.65,
   },
-  confirmCard: {
-    width: "100%",
-    borderRadius: 18,
-    backgroundColor: "#020617",
+  modalTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: T_HI,
+    letterSpacing: 3,
+    marginBottom: 14,
+    marginTop: 4,
+  },
+  modalLabel: {
+    fontSize: 8,
+    fontWeight: "800",
+    color: T_DIM,
+    letterSpacing: 2,
+    marginBottom: 6,
+    marginTop: 10,
+  },
+  modalInput: {
     borderWidth: 1,
-    borderColor: BORDER_DARK,
-    padding: 16,
+    borderColor: CARD_BD,
+    borderRadius: 2,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+    backgroundColor: "rgba(255,255,255,0.025)",
+    color: T_HI,
   },
-  confirmTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "white",
-    marginBottom: 4,
+  modalHint: {
+    marginTop: 5,
+    fontSize: 10,
+    color: T_DIM,
+    lineHeight: 15,
+    letterSpacing: 0.3,
   },
-  confirmText: { fontSize: 13, color: TEXT_MUTED, marginBottom: 12 },
-  confirmRow: { flexDirection: "row", justifyContent: "flex-end", gap: 8 },
-  confirmBtn: {
+  modalRow: { flexDirection: "row", gap: 8 },
+  modalActions: { flexDirection: "row", justifyContent: "flex-end", gap: 8 },
+  modalBtnCancel: {
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
+    paddingVertical: 10,
+    borderRadius: 2,
     borderWidth: 1,
-    borderColor: BORDER_DARK,
+    borderColor: CARD_BD,
+    backgroundColor: "rgba(255,255,255,0.025)",
   },
-  confirmBtnText: { fontSize: 13, color: TEXT_SOFT },
+  modalBtnPrimary: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 2,
+  },
+  modalBtnTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 1 },
 
-  loadingBox: {
-    width: 56,
-    height: 56,
-    borderRadius: 999,
-    borderWidth: 3,
-    borderColor: "#1e293b",
-    borderTopColor: main,
-    marginBottom: 10,
-    alignSelf: "center",
+  fabWrap: {
+    position: "absolute",
+    right: 16,
+    bottom: 24,
+    alignItems: "flex-end",
+    gap: 10,
   },
-  loadingBrand: {
-    flexDirection: "row",
-    justifyContent: "center",
+  fabAuto: {
+    width: 52,
+    height: 52,
+    borderRadius: 2,
     alignItems: "center",
-    marginBottom: 4,
-  },
-  loadingLogoWrap: { marginRight: 8 },
-  loadingLogoBorder: {
-    width: 32,
-    height: 32,
-    borderRadius: 999,
+    justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#1f2937",
+    position: "relative",
+  },
+  fabTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 1 },
+  fabAdd: {
+    width: 54,
+    height: 54,
+    borderRadius: 2,
     alignItems: "center",
     justifyContent: "center",
+    position: "relative",
   },
-  loadingLogoInner: {
-    width: 26,
-    height: 26,
-    borderRadius: 999,
-    backgroundColor: main,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loadingLogoText: { color: "white", fontWeight: "700", fontSize: 16 },
-  loadingTitle: { fontSize: 20, fontWeight: "700", color: "white" },
-  loadingSubtitle: { fontSize: 13, color: TEXT_MUTED, textAlign: "center" },
-
-  // Header logo
-  headerLogoBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 999,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 10,
-  },
-  headerLogoImg: { width: "100%", height: "100%", resizeMode: "cover" },
-
-  // Favorite star
-  starBtn: {
-    marginLeft: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
-  },
-  starIcon: { fontSize: 18, lineHeight: 18, color: TEXT_MUTED },
+  fabAddTxt: { fontSize: 26, lineHeight: 28, color: BG, fontWeight: "800" },
 });

@@ -9,6 +9,7 @@ import { User } from "../models/user.js";
 import { requireEnv } from "../config/env.js";
 import { setAuthCookie, clearAuthCookie } from "../utils/cookies.js";
 import { createRegToken, readRegToken } from "../utils/registrationToken.js";
+import { seedDefaultCategoriesForUser } from "../services/categorySeedService.js";
 
 // Apple Sign-In verification + client_secret JWT
 import { SignJWT, importPKCS8, createRemoteJWKSet, jwtVerify } from "jose";
@@ -302,31 +303,35 @@ export async function register(req, res) {
       req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ error: "Email and password are required" });
+      return res.status(400).json({
+        error: "Email and password are required",
+      });
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedEmail = String(email).toLowerCase().trim();
 
     const existing = await User.findOne({ email: normalizedEmail });
     if (existing) {
-      return res.status(400).json({ error: "Email already registered" });
+      return res.status(400).json({
+        error: "Email already registered",
+      });
     }
 
-    // Prepare signup data but DO NOT create User yet
+    // Prepare signup payload for deferred user creation
     const passwordHash = await bcrypt.hash(password, 10);
 
     const code = makeVerificationCode();
     const codeHash = await bcrypt.hash(code, 10);
-    const expiresAt = Date.now() + 15 * 60 * 1000; // 15 min
+    const expiresAt = Date.now() + 15 * 60 * 1000; // 15 minutes
 
     const regToken = createRegToken({
       email: normalizedEmail,
       passwordHash,
-      name,
-      profession,
-      role,
-      tz,
-      baseCurrency,
+      name: name || "",
+      profession: profession || "",
+      role: role || "user",
+      tz: tz || "UTC",
+      baseCurrency: baseCurrency || "USD",
       codeHash,
       expiresAt,
       iat: Date.now(),
@@ -337,7 +342,13 @@ export async function register(req, res) {
         email: normalizedEmail,
         code,
       });
-      await sendMail({ to: normalizedEmail, subject, text, html });
+
+      await sendMail({
+        to: normalizedEmail,
+        subject,
+        text,
+        html,
+      });
     } else {
       console.log("[VERIFY:DEV] Code for %s => %s", normalizedEmail, code);
     }
@@ -353,7 +364,9 @@ export async function register(req, res) {
         : {}),
     });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({
+      error: err.message || "Registration failed",
+    });
   }
 }
 
@@ -477,7 +490,7 @@ export async function verifyEmail(req, res) {
       isActive: true,
       emailVerifiedAt: new Date(),
     });
-
+    await seedDefaultCategoriesForUser(user._id);
     return res.status(201).json({
       message: "Email verified. Account created.",
       user: {
