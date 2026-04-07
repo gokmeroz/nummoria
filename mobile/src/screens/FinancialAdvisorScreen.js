@@ -737,7 +737,7 @@ export default function FinancialAdvisorScreen() {
                     {planLoading
                       ? "Checking your plan…"
                       : isEligible(plan)
-                        ? "Upload a statement and ask about your budget, savings, or investments."
+                        ? "Optional: Upload statement for deeper analysis, ask about your budget, savings, or investments."
                         : "Upgrade to Plus or Premium to chat with the advisor."}
                   </Text>
                 </View>

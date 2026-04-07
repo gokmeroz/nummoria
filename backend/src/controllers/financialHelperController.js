@@ -3,7 +3,7 @@
 // ---------- IMPORTS ----------
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-const pdf = require("pdf-parse"); // CJS import that works in ESM
+const pdf = require("pdf-parse");
 
 import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -17,7 +17,7 @@ import { parseTransactionsFromText } from "../ai/pdfParser.js";
 import { getPromptForSubscription } from "../ai/prompts/index.js";
 
 // ----------------------------------------------------
-// 2. AGENT CONFIGURATION & INITIALIZATION
+// AGENT CONFIGURATION
 // ----------------------------------------------------
 const ACTIVE_AGENT = process.env.FINANCIAL_HELPER_AGENT || "openai";
 const GEMINI_MODEL = "gemini-2.5-flash";
@@ -33,6 +33,10 @@ const gemini = process.env.GEMINI_API_KEY
 
 const isDev = process.env.NODE_ENV !== "production";
 
+/* -------------------------------------------------------------------------- */
+/*                               LLM CALL HELPER                              */
+/* -------------------------------------------------------------------------- */
+
 async function callLLM(
   systemPrompt,
   context,
@@ -40,23 +44,51 @@ async function callLLM(
   message,
   modelType,
 ) {
-  const input = [
-    "SYSTEM:",
-    systemPrompt,
-    "",
-    "USER:",
-    JSON.stringify({ tonePreference, context, message }, null, 2),
-  ].join("\n");
+  const safeTone = tonePreference === "buddy" ? "buddy" : "formal";
+
+  const userPayload = {
+    tonePreference: safeTone,
+    message: String(message || "").trim(),
+    context: {
+      parsedTransactions: Array.isArray(context?.parsedTransactions)
+        ? context.parsedTransactions
+        : [],
+      computedMetrics:
+        context?.computedMetrics && typeof context.computedMetrics === "object"
+          ? context.computedMetrics
+          : {},
+    },
+  };
 
   if (modelType === "gemini" && gemini) {
-    const model = gemini.getGenerativeModel({ model: GEMINI_MODEL });
-    const response = await model.generateContent(input);
+    const model = gemini.getGenerativeModel({
+      model: GEMINI_MODEL,
+      systemInstruction: systemPrompt,
+    });
+
+    const response = await model.generateContent({
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              text: JSON.stringify(userPayload, null, 2),
+            },
+          ],
+        },
+      ],
+      generationConfig: {
+        temperature: 0.3,
+      },
+    });
+
     const text =
       typeof response?.response?.text === "function"
         ? response.response.text()
         : typeof response?.text === "function"
           ? response.text()
           : "";
+
     return (text || "").trim() || "Sorry, I couldn’t generate a response.";
   }
 
@@ -65,8 +97,10 @@ async function callLLM(
       const completion = await openai.responses.create({
         model: OPENAI_MODEL,
         temperature: 0.3,
-        input,
+        instructions: systemPrompt,
+        input: JSON.stringify(userPayload, null, 2),
       });
+
       return (
         completion.output_text?.trim() ||
         completion.content?.[0]?.text?.trim() ||
@@ -76,8 +110,15 @@ async function callLLM(
       const completion = await openai.chat.completions.create({
         model: OPENAI_MODEL,
         temperature: 0.3,
-        messages: [{ role: "user", content: input }],
+        messages: [
+          { role: "system", content: systemPrompt },
+          {
+            role: "user",
+            content: JSON.stringify(userPayload, null, 2),
+          },
+        ],
       });
+
       return (
         completion.choices?.[0]?.message?.content?.trim() ||
         "Sorry, I couldn't generate a response."
@@ -88,8 +129,9 @@ async function callLLM(
   throw new Error(`Agent '${modelType}' not configured or API key missing.`);
 }
 
-/* ------------------------- OFFLINE Q&A HELPERS ------------------------- */
-/* (unchanged — your existing helpers stay as-is) */
+/* -------------------------------------------------------------------------- */
+/*                          OFFLINE Q&A / RULE HELPERS                        */
+/* -------------------------------------------------------------------------- */
 
 // Basic month-name map (EN + TR)
 const MONTHS = {
@@ -147,17 +189,18 @@ function parseDateRangeFromQuery(q) {
 
   const between =
     /between\s+(\d{4}-\d{2}-\d{2})\s+(?:and|to)\s+(\d{4}-\d{2}-\d{2})/.exec(s);
-  if (between)
+  if (between) {
     return {
       start: new Date(between[1]),
       end: new Date(between[2]),
       label: `between ${between[1]} and ${between[2]}`,
     };
+  }
 
   const yyyymm = /(\d{4})[-\/\.](\d{1,2})/.exec(s);
   if (yyyymm) {
-    const y = +yyyymm[1],
-      m = +yyyymm[2] - 1;
+    const y = +yyyymm[1];
+    const m = +yyyymm[2] - 1;
     return {
       start: new Date(y, m, 1),
       end: endOfMonth(new Date(y, m, 1)),
@@ -169,9 +212,10 @@ function parseDateRangeFromQuery(q) {
     `(${Object.keys(MONTHS).join("|")})\\s*(\\d{4})`,
     "i",
   ).exec(s);
+
   if (monthYear) {
-    const m = MONTHS[monthYear[1].toLowerCase()],
-      y = +monthYear[2];
+    const m = MONTHS[monthYear[1].toLowerCase()];
+    const y = +monthYear[2];
     return {
       start: new Date(y, m - 1, 1),
       end: endOfMonth(new Date(y, m - 1, 1)),
@@ -184,6 +228,7 @@ function parseDateRangeFromQuery(q) {
     const end = endOfMonth(start);
     return { start, end, label: "last month" };
   }
+
   if (/this\s+month|bu\s+ay/.test(s)) {
     return {
       start: startOfMonth(new Date()),
@@ -191,18 +236,21 @@ function parseDateRangeFromQuery(q) {
       label: "this month",
     };
   }
+
   if (/last\s+30\s*days|son\s+30\s*g[uü]n/.test(s)) {
     const end = new Date();
     const start = new Date();
     start.setDate(end.getDate() - 30);
     return { start, end, label: "last 30 days" };
   }
+
   if (/last\s+7\s*days|son\s+7\s*g[uü]n/.test(s)) {
     const end = new Date();
     const start = new Date();
     start.setDate(end.getDate() - 7);
     return { start, end, label: "last 7 days" };
   }
+
   if (/yesterday|d[uü]n/.test(s)) {
     const d = new Date();
     d.setDate(d.getDate() - 1);
@@ -279,12 +327,16 @@ function topN(arr, n) {
   return arr.slice(0, n);
 }
 
-// ---------- FILE/CSV HELPERS ----------
+/* -------------------------------------------------------------------------- */
+/*                            FILE / CSV HELPER UTILS                         */
+/* -------------------------------------------------------------------------- */
+
 function normalizeAmount(s) {
   if (s == null) return NaN;
   const raw = String(s).replace(/[^0-9.,-]/g, "");
   const neg = raw.includes("-");
   let numStr = raw;
+
   if (raw.includes(".") && raw.includes(",")) {
     if (raw.lastIndexOf(",") > raw.lastIndexOf(".")) {
       numStr = raw.replace(/\./g, "").replace(",", ".");
@@ -294,6 +346,7 @@ function normalizeAmount(s) {
   } else if (raw.includes(",") && !raw.includes(".")) {
     numStr = raw.replace(",", ".");
   }
+
   const v = parseFloat(numStr);
   return neg ? -Math.abs(v) : v;
 }
@@ -303,8 +356,9 @@ function normalizeDate(s) {
   let d, m, y;
 
   if (p[2]?.length === 4) {
-    const a = +p[0],
-      b = +p[1];
+    const a = +p[0];
+    const b = +p[1];
+
     if (a > 12) {
       d = a;
       m = b;
@@ -315,11 +369,13 @@ function normalizeDate(s) {
       m = a;
       d = b;
     }
+
     y = p[2];
   } else {
-    const a = +p[0],
-      b = +p[1];
+    const a = +p[0];
+    const b = +p[1];
     y = String(2000 + +(p[2] || "0"));
+
     if (a > 12) {
       d = a;
       m = b;
@@ -334,9 +390,6 @@ function normalizeDate(s) {
 
 function csvToTxRows(buf) {
   const text = buf.toString("utf8");
-
-  // Important: csv-parse/sync does NOT accept an array of delimiters.
-  // We'll implement a small delimiter fallback.
   const delimiters = [",", ";", "\t", "|"];
   let rows = [];
 
@@ -350,7 +403,7 @@ function csvToTxRows(buf) {
         relax_quotes: true,
         trim: true,
       });
-      // If it parsed into objects with multiple keys, accept it.
+
       if (Array.isArray(rows) && rows.length) break;
     } catch {
       // try next delimiter
@@ -367,21 +420,25 @@ function csvToTxRows(buf) {
       r.Tarih ||
       r["Transaction Date"] ||
       r["İşlem Tarihi"] ||
-      r["islemTarihi"];
+      r.islemTarihi;
+
     const desc =
       r.Description ||
       r.Açıklama ||
       r["Transaction Description"] ||
-      r["Aciklama"] ||
+      r.Aciklama ||
       r["Islem Aciklama"];
-    const credit = r.Credit || r.Alacak || r["Yatan"] || r["Credit Amount"];
-    const debit = r.Debit || r.Borç || r["Çekilen"] || r["Debit Amount"];
+
+    const credit = r.Credit || r.Alacak || r.Yatan || r["Credit Amount"];
+    const debit = r.Debit || r.Borç || r.Çekilen || r["Debit Amount"];
     const amountRaw =
       r.Amount || r.Tutar || r["İşlem Tutarı"] || r["Islem Tutari"];
 
     let amount = NaN;
-    if (amountRaw != null) amount = normalizeAmount(amountRaw);
-    else if (credit != null || debit != null) {
+
+    if (amountRaw != null) {
+      amount = normalizeAmount(amountRaw);
+    } else if (credit != null || debit != null) {
       const c = normalizeAmount(credit ?? "0");
       const d = normalizeAmount(debit ?? "0");
       amount = (isNaN(c) ? 0 : c) - (isNaN(d) ? 0 : d);
@@ -403,8 +460,78 @@ function csvToTxRows(buf) {
   return out;
 }
 
-/* ---------------------- OFFLINE, INTENT-AWARE ANSWERS ---------------------- */
-/* (unchanged — your existing buildRuleBasedReply stays as-is) */
+/* -------------------------------------------------------------------------- */
+/*                        RULE-BASED FALLBACK REPLIES                         */
+/* -------------------------------------------------------------------------- */
+
+function buildNoDataReply(tone, userMsg) {
+  const isBuddy = tone === "buddy";
+  const q = String(userMsg || "").toLowerCase();
+
+  const savingQuestion =
+    /save|saving|budget|cut back|spend less|spending|before summer|75 days|money plan/.test(
+      q,
+    );
+
+  if (savingQuestion) {
+    if (isBuddy) {
+      return [
+        "Quick take: if you only have 75 days, the fastest wins usually come from cutting variable spending hard and automating savings immediately.",
+        "",
+        "• Freeze non-essential shopping for the full 75 days.",
+        "• Set a weekly spending cap for dining, coffee, delivery, and random small purchases.",
+        "• Move a fixed amount into savings the same day income hits, even if it’s modest.",
+        "• Cancel or pause at least 1–3 subscriptions you do not actively use.",
+        "• Track every discretionary purchase for the next 14 days so the leaks become obvious.",
+        "",
+        "Metric snapshot: even saving just 10 per day for 75 days creates 750 in extra cash.",
+        "",
+        "Upload a CSV or text-based PDF whenever you want a deeper analysis based on your real numbers.",
+        "",
+        "This is educational, not licensed financial advice.",
+      ].join("\n");
+    }
+
+    return [
+      "Quick take: with only 75 days, the highest-impact approach is to reduce variable expenses aggressively and automate savings immediately.",
+      "",
+      "• Pause non-essential spending for the next 75 days.",
+      "• Set a weekly cap for dining, coffee, delivery, and impulse purchases.",
+      "• Transfer a fixed amount to savings on each payday before spending anything else.",
+      "• Cancel or pause 1–3 subscriptions that are not actively useful.",
+      "• Track every discretionary purchase for the next 14 days to identify recurring leaks.",
+      "",
+      "Metric snapshot: saving just 10 per day for 75 days adds 750 in extra cash.",
+      "",
+      "You can upload a CSV or text-based PDF later if you want a more precise analysis.",
+      "",
+      "Note: Educational guidance, not licensed financial advice.",
+    ].join("\n");
+  }
+
+  if (isBuddy) {
+    return [
+      "I can still help without an uploaded file.",
+      "",
+      "• Ask me a budgeting, saving, spending, or investing question and I’ll answer directly.",
+      "• If you upload a CSV or text-based PDF later, I can make the advice more precise.",
+      "• If you want, I can also work from rough numbers you type manually.",
+      "",
+      "This is educational, not licensed financial advice.",
+    ].join("\n");
+  }
+
+  return [
+    "I can still help without an uploaded file.",
+    "",
+    "• Ask a budgeting, saving, spending, or investing question and I will answer directly.",
+    "• If you upload a CSV or text-based PDF later, I can make the analysis more precise.",
+    "• I can also work from rough numbers you type manually.",
+    "",
+    "Note: Educational guidance, not licensed financial advice.",
+  ].join("\n");
+}
+
 function buildRuleBasedReply(ctx, tone, userMsg) {
   const txs = ctx.parsedTransactions || [];
   const m = ctx.computedMetrics || {};
@@ -417,9 +544,7 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
       : "Note: Educational guidance, not licensed financial advice.";
 
   if (!txCount) {
-    return `${
-      tone === "buddy" ? "Heads up:" : "Note:"
-    } I don't see any transactions yet. Upload a CSV (preferred) or a text-based PDF so I can run the numbers.\n\n${disclaimer}`;
+    return buildNoDataReply(tone, userMsg);
   }
 
   const q = (userMsg || "").trim();
@@ -459,6 +584,7 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
       const cnt = base.length;
       const avg = cnt ? total / cnt : 0;
       const catLine = category ? `${category} ` : "";
+
       if (cnt) {
         const lines = [
           `${head}`,
@@ -466,18 +592,22 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
             2,
           )} (${cnt} tx, avg ${avg.toFixed(2)}).`,
         ];
+
         const byCat = groupByCategory(base).map(
           ([k, v]) => `${k}: ${Math.abs(v).toFixed(2)}`,
         );
-        if (!category && byCat.length)
+
+        if (!category && byCat.length) {
           lines.push(`\nBreakdown: ${topN(byCat, 5).join(" • ")}`);
+        }
+
         lines.push(`\n${disclaimer}`);
         return lines.join("\n");
-      } else {
-        return `${head}\n${bullet} I don't see ${
-          category ? category + " " : ""
-        }expenses in ${label}. Try a wider range or upload a statement that includes expenses.\n\n${disclaimer}`;
       }
+
+      return `${head}\n${bullet} I don't see ${
+        category ? `${category} ` : ""
+      }expenses in ${label}. Try a wider range.\n\n${disclaimer}`;
     }
 
     if (askIncome) {
@@ -485,26 +615,28 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
       const total = sumAmounts(base.filter((t) => t.amount > 0));
       const cnt = base.length;
       const avg = cnt ? total / cnt : 0;
+
       if (cnt) {
         return `${head}\n${bullet} Income in ${label}: ${total.toFixed(
           2,
         )} (${cnt} tx, avg ${avg.toFixed(2)}).\n\n${disclaimer}`;
-      } else {
-        return `${head}\n${bullet} I don't see income in ${label}. If this seems wrong, upload a period covering payroll.\n\n${disclaimer}`;
       }
+
+      return `${head}\n${bullet} I don't see income in ${label}.\n\n${disclaimer}`;
     }
 
     if (askInvest) {
       const base = filterTx(txs, { start, end, category: "Investments" });
       const total = Math.abs(sumAmounts(base.filter((t) => t.amount !== 0)));
       const cnt = base.length;
+
       if (cnt) {
         return `${head}\n${bullet} Investments in ${label}: ${total.toFixed(
           2,
         )} (${cnt} tx).\n\n${disclaimer}`;
-      } else {
-        return `${head}\n${bullet} No investment transactions found in ${label}. Try a wider window or confirm category labels.\n\n${disclaimer}`;
       }
+
+      return `${head}\n${bullet} No investment transactions found in ${label}.\n\n${disclaimer}`;
     }
 
     if (askTopCats) {
@@ -512,9 +644,11 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
       if (!base.length) {
         return `${head}\n${bullet} No transactions in ${label}. Try a wider range.\n\n${disclaimer}`;
       }
+
       const byCat = groupByCategory(base).map(
         ([k, v]) => `${k}: ${v.toFixed(2)}`,
       );
+
       return `${head}\n${bullet} Top categories in ${label}: ${topN(
         byCat,
         5,
@@ -527,9 +661,11 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
       );
       base.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
       const top = topN(base, 5);
+
       if (!top.length) {
         return `${head}\n${bullet} I don't see expenses in ${label}.\n\n${disclaimer}`;
       }
+
       const list = top
         .map(
           (t) =>
@@ -538,13 +674,15 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
             ).toFixed(2)})`,
         )
         .join("\n");
+
       return `${head}\nLargest expenses in ${label}:\n${list}\n\n${disclaimer}`;
     }
 
     if (askBurn) {
-      let startM,
-        endM,
-        lbl = label;
+      let startM;
+      let endM;
+      let lbl = label;
+
       if (start && end) {
         startM = new Date(start.getFullYear(), start.getMonth(), 1);
         endM = endOfMonth(startM);
@@ -553,30 +691,36 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
         endM = endOfMonth(startM);
         lbl = "last month";
       }
+
       const exp = filterTx(txs, {
         start: startM,
         end: endM,
         type: "expense",
       }).filter((t) => t.amount < 0);
+
       const burn = Math.abs(sumAmounts(exp));
       const cnt = exp.length;
+
       return `${head}\n${bullet} Monthly burn (${lbl}): ${burn.toFixed(2)} ${
-        cnt ? `(${cnt} tx)` : ``
+        cnt ? `(${cnt} tx)` : ""
       }\n\n${disclaimer}`;
     }
 
     if (askTrend) {
       const now = startOfMonth(new Date());
       const m3 = [addMonths(now, -3), addMonths(now, -2), addMonths(now, -1)];
+
       const lines = m3
         .map((d) => {
-          const startM = d,
-            endM = endOfMonth(d);
+          const startM = d;
+          const endM = endOfMonth(d);
+
           const income = sumAmounts(
             filterTx(txs, { start: startM, end: endM, type: "income" }).filter(
               (t) => t.amount > 0,
             ),
           );
+
           const expense = Math.abs(
             sumAmounts(
               filterTx(txs, {
@@ -586,7 +730,9 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
               }).filter((t) => t.amount < 0),
             ),
           );
+
           const net = income - expense;
+
           return `- ${startM.getFullYear()}-${String(
             startM.getMonth() + 1,
           ).padStart(2, "0")}: income ${income.toFixed(
@@ -594,6 +740,7 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
           )} • out ${expense.toFixed(2)} • net ${net.toFixed(2)}`;
         })
         .join("\n");
+
       return `${head}\nLast 3 months trend:\n${lines}\n\n${disclaimer}`;
     }
   }
@@ -608,58 +755,66 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
     .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
     .slice(0, 3)
     .map(([k, v]) => `${k} (${Number(v).toFixed(2)})`);
+
   const topCats = topCatsArr.length ? topCatsArr.join(", ") : "none";
 
   const recs = [];
+
   if (typeof sr === "number") {
-    if (sr < 15)
+    if (sr < 15) {
       recs.push(
-        `Push savings rate toward 20%+. Start with +5% auto-transfer on payday.`,
+        "Push savings rate toward 20%+. Start with a small automatic transfer on payday.",
       );
-    else if (sr < 30)
-      recs.push(`Solid savings rate (${sr}%). Nudge +1% each quarter.`);
-    else
-      recs.push(
-        `Strong savings rate (${sr}%). Maintain ≥20% and review quarterly.`,
-      );
+    } else if (sr < 30) {
+      recs.push(`Solid savings rate (${sr}%). Nudge it upward gradually.`);
+    } else {
+      recs.push(`Strong savings rate (${sr}%). Maintain and review quarterly.`);
+    }
   }
+
   if (typeof burn === "number" && burn > 0) {
     recs.push(
-      `Monthly burn ≈ ${burn.toFixed(
+      `Monthly burn is about ${burn.toFixed(
         2,
-      )}. Set weekly caps for Dining/Groceries/Transport and enable alerts.`,
+      )}. Set weekly caps for dining, groceries, and transport.`,
     );
   }
+
   if (typeof alloc === "number") {
-    if (alloc < 10)
+    if (alloc < 10) {
       recs.push(
-        `Low investment allocation (${alloc}%). After 3–6 mo EF, DCA into diversified ETFs.`,
+        `Investment allocation is low (${alloc}%). Build liquidity first, then increase steadily.`,
       );
-    else if (alloc > 60)
+    } else if (alloc > 60) {
       recs.push(
-        `High allocation (${alloc}%). Ensure 3–6 months liquidity and rebalance.`,
+        `Investment allocation is high (${alloc}%). Make sure liquidity is sufficient and rebalance if needed.`,
       );
-    else
+    } else {
       recs.push(
-        `Investment allocation (${alloc}%). Rebalance quarterly to your target mix.`,
+        `Investment allocation is ${alloc}%. Rebalance periodically to stay aligned with your target mix.`,
       );
+    }
   }
+
   if (typeof stab === "number" && stab < 70) {
     recs.push(
-      `Income stability ${stab}%. Build/maintain a 3–6 month emergency fund first.`,
+      `Income stability is ${stab}%. Prioritize emergency fund strength.`,
     );
   }
+
   if (typeof risk === "number") {
     recs.push(
       risk < 55
-        ? `Risk score ${risk}/100 (riskier). Trim concentrated bets and rebalance.`
-        : `Risk score ${risk}/100 (okay). Rebalance quarterly.`,
+        ? `Risk score is ${risk}/100. Consider reducing concentration and tightening cash reserves.`
+        : `Risk score is ${risk}/100. Continue reviewing allocation and liquidity periodically.`,
     );
   }
-  if (!recs.length)
+
+  if (!recs.length) {
     recs.push(
-      `Upload more months (CSV preferred) so I can give sharper, number-backed actions.`,
+      "Upload more months of data for sharper, number-backed guidance.",
     );
+  }
 
   const snap = [
     typeof sr === "number" ? `Savings rate: ${sr}%` : null,
@@ -681,24 +836,60 @@ ${snap}
 ${disclaimer}`;
 }
 
-/* =============================== INGEST (FILE MANAGEMENT) =============================== */
-/**
- * NOTE: This function name is kept as `ingestPdf` for compatibility with your current route:
- *   router.post("/ingest", upload.single("file"), ctrl.ingestPdf);
- *
- * It now supports BOTH CSV and PDF, returns consistent payloads, and gives clear errors.
- */
+/* -------------------------------------------------------------------------- */
+/*                        UNIFIED CONTEXT / SUBSCRIPTION                       */
+/* -------------------------------------------------------------------------- */
+
+async function getSubscriptionForUser(userId) {
+  if (!userId) return "Free";
+
+  const user = await User.findById(userId).select("subscription");
+  if (user?.subscription === "Premium" || user?.subscription === "Plus") {
+    return user.subscription;
+  }
+
+  return "Free";
+}
+
+async function getLatestFileForUser(userId, fileId) {
+  if (fileId) {
+    return await AiAdvisorFile.findById(fileId);
+  }
+
+  if (!userId) {
+    return null;
+  }
+
+  return await AiAdvisorFile.findOne({ userId }).sort({ createdAt: -1 });
+}
+
+function buildContextFromFile(fileDoc) {
+  if (!fileDoc) {
+    return {
+      parsedTransactions: [],
+      computedMetrics: {},
+    };
+  }
+
+  return {
+    parsedTransactions: fileDoc.parsedTransactions || [],
+    computedMetrics: fileDoc.computedMetrics || {},
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/*                            FILE INGEST FOR ADVISOR                          */
+/* -------------------------------------------------------------------------- */
+
 export async function ingestPdf(req, res) {
   try {
-    // 1) Most common real-world cause of req.file missing:
-    //    client sent application/json instead of multipart/form-data
     const ct = String(req.headers["content-type"] || "").toLowerCase();
     if (!ct.includes("multipart/form-data")) {
       return res.status(415).json({
         ok: false,
         code: "BAD_CONTENT_TYPE",
         message:
-          "Upload requires multipart/form-data. Your request did not include a multipart boundary. If you use Axios, do NOT set Content-Type manually; let the browser set it for FormData.",
+          "Upload requires multipart/form-data. If you use Axios, do NOT set Content-Type manually; let the browser set it for FormData.",
       });
     }
 
@@ -718,7 +909,8 @@ export async function ingestPdf(req, res) {
     const isCsv =
       mimetype.includes("csv") ||
       name.endsWith(".csv") ||
-      mimetype === "application/vnd.ms-excel"; // some browsers report CSV like this
+      mimetype === "application/vnd.ms-excel";
+
     const isPdf = mimetype === "application/pdf" || name.endsWith(".pdf");
 
     if (!isCsv && !isPdf) {
@@ -731,7 +923,7 @@ export async function ingestPdf(req, res) {
     }
 
     let parsedTransactions = [];
-    let note = isCsv ? "csv" : "pdf";
+    const note = isCsv ? "csv" : "pdf";
 
     if (isCsv) {
       parsedTransactions = csvToTxRows(req.file.buffer);
@@ -741,12 +933,11 @@ export async function ingestPdf(req, res) {
           ok: false,
           code: "NO_TRANSACTIONS",
           message:
-            "We couldn't read any transactions from this CSV. Ensure it has headers like Date/Description/Amount (or Credit/Debit).",
+            "We couldn't read any transactions from this CSV. Ensure it has headers like Date/Description/Amount or Credit/Debit.",
           note,
         });
       }
     } else {
-      // PDF: extract text
       const data = await pdf(req.file.buffer);
       const contentText = (data.text || "").replace(/\u0000/g, "");
 
@@ -755,11 +946,10 @@ export async function ingestPdf(req, res) {
           ok: false,
           code: "PDF_NO_TEXT",
           message:
-            "PDF has no extractable text (likely scanned). Export a text-based PDF or CSV.",
+            "PDF has no extractable text. Upload a text-based PDF or CSV.",
         });
       }
 
-      // LLM fallback allowed if either key exists
       parsedTransactions = await parseTransactionsFromText(contentText, {
         useLLMFallback: Boolean(
           process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY,
@@ -779,14 +969,18 @@ export async function ingestPdf(req, res) {
 
     const computedMetrics = computeMetrics(parsedTransactions);
 
-    // Save if Mongo is connected; otherwise return in-memory result
     let fileId = null;
     try {
       if (mongoose.connection.readyState === 1) {
         const doc = await AiAdvisorFile.create({
-          userId: req.user?._id || req.userId || req.body.userId || null,
+          userId:
+            req.user?._id ||
+            req.user?.id ||
+            req.userId ||
+            req.body.userId ||
+            null,
           fileName: req.file.originalname,
-          contentText: undefined, // do not store full text to avoid bloat
+          contentText: undefined,
           parsedTransactions,
           computedMetrics,
         });
@@ -829,7 +1023,11 @@ export async function ingestPdf(req, res) {
     });
   }
 }
-// ---------------- AI ADVISOR (quota-limited) ----------------
+
+/* -------------------------------------------------------------------------- */
+/*                              AI ADVISOR ROUTE                              */
+/* -------------------------------------------------------------------------- */
+
 export async function aiAdvisor(req, res) {
   try {
     const userId = req.user?._id || req.user?.id || null;
@@ -839,45 +1037,14 @@ export async function aiAdvisor(req, res) {
       return res.status(400).json({ error: "Missing message" });
     }
 
-    // Plan prompt selection (your system uses User.subscription = Plus/Premium)
-    let subscription = "Plus";
-    if (userId) {
-      const user = await User.findById(userId).select("subscription");
-      if (user?.subscription === "Premium" || user?.subscription === "Plus") {
-        subscription = user.subscription;
-      } else {
-        // if user exists but has no subscription set, treat as free
-        subscription = "Free";
-      }
-    } else {
-      subscription = "Free";
-    }
-
+    const subscription = await getSubscriptionForUser(userId);
     const systemPrompt = getPromptForSubscription(subscription);
+    const fileDoc = await getLatestFileForUser(userId, fileId);
+    const context = buildContextFromFile(fileDoc);
+    const safeTone = tonePreference === "buddy" ? "buddy" : "formal";
 
-    // Optional context (same behavior as chat)
-    let fileDoc = null;
-    if (fileId) fileDoc = await AiAdvisorFile.findById(fileId);
-    else if (userId)
-      fileDoc = await AiAdvisorFile.findOne({ userId }).sort({ createdAt: -1 });
-
-    const context = fileDoc
-      ? {
-          parsedTransactions: fileDoc.parsedTransactions || [],
-          computedMetrics: fileDoc.computedMetrics || {},
-        }
-      : {
-          parsedTransactions: [],
-          computedMetrics: {},
-        };
-
-    // If no API keys, fallback to rule-based (won't be amazing but works)
     if (!openai && !gemini) {
-      const reply = buildRuleBasedReply(
-        context,
-        tonePreference || "formal",
-        message,
-      );
+      const reply = buildRuleBasedReply(context, safeTone, message);
       return res.json({
         reply,
         quota: req.aiQuota || null,
@@ -890,27 +1057,29 @@ export async function aiAdvisor(req, res) {
       const reply = await callLLM(
         systemPrompt,
         context,
-        tonePreference,
+        safeTone,
         message,
         agentToUse,
       );
 
       return res.json({
         reply,
-        quota: req.aiQuota || null, // include remaining/reset info for UI
+        quota: req.aiQuota || null,
       });
     } catch (e) {
-      // fallback if LLM fails
-      const reply = buildRuleBasedReply(
-        context,
-        tonePreference || "formal",
-        message,
-      );
+      if (isDev) {
+        console.warn(
+          `${agentToUse} failed in aiAdvisor, using rule fallback:`,
+          e?.status || e?.code,
+          e?.message,
+        );
+      }
+
+      const reply = buildRuleBasedReply(context, safeTone, message);
 
       return res.json({
         reply: isDev
-          ? reply +
-            `\n\n(Dev note: AI call to ${agentToUse} failed; served rule-based reply.)`
+          ? `${reply}\n\n(Dev note: AI call to ${agentToUse} failed; served rule-based reply.)`
           : reply,
         quota: req.aiQuota || null,
       });
@@ -921,52 +1090,31 @@ export async function aiAdvisor(req, res) {
   }
 }
 
-/* =============================== CHAT (UNCHANGED LOGIC) =============================== */
+/* -------------------------------------------------------------------------- */
+/*                                  CHAT ROUTE                                */
+/* -------------------------------------------------------------------------- */
+
 export async function chat(req, res) {
   try {
-    const userId = req.user?._id || req.userId || req.body.userId || null;
+    const userId = req.user?._id || req.user?.id || req.userId || null;
     const { message, tonePreference, fileId } = req.body;
-    if (!message && !tonePreference) {
+
+    if (!message || !String(message).trim()) {
       return res.status(400).json({ error: "Missing message" });
     }
 
-    let subscription = "Plus";
-    if (userId) {
-      const user = await User.findById(userId).select("subscription");
-      if (user?.subscription === "Premium" || user?.subscription === "Plus") {
-        subscription = user.subscription;
-      }
-    }
-
+    const subscription = await getSubscriptionForUser(userId);
     const systemPrompt = getPromptForSubscription(subscription);
+    const fileDoc = await getLatestFileForUser(userId, fileId);
+    const context = buildContextFromFile(fileDoc);
+    const safeTone = tonePreference === "buddy" ? "buddy" : "formal";
 
-    let fileDoc = null;
-    if (fileId) fileDoc = await AiAdvisorFile.findById(fileId);
-    else if (userId)
-      fileDoc = await AiAdvisorFile.findOne({ userId }).sort({ createdAt: -1 });
-    else fileDoc = await AiAdvisorFile.findOne({}).sort({ createdAt: -1 });
-
-    if (!fileDoc) {
-      const tone =
-        (tonePreference || "formal") === "buddy" ? "buddy" : "formal";
-      const msg =
-        tone === "buddy"
-          ? "Bro, henüz hareket göremiyorum. Bir CSV ya da metin tabanlı PDF yükle; istersen demo verilerle deneme yapabilirim—'run with demo data' yaz yeter 👍"
-          : "Henüz analiz edebileceğim veri yok. Lütfen bir CSV ya da metin tabanlı PDF yükleyin. İsterseniz 'run with demo data' yazarak örnek verilerle deneme yapabilirim.";
-      return res.json({ reply: msg });
-    }
-
-    const context = {
-      parsedTransactions: fileDoc.parsedTransactions || [],
-      computedMetrics: fileDoc.computedMetrics || {},
-    };
+    // IMPORTANT:
+    // No more hardcoded "upload CSV/PDF" early-return.
+    // The model or fallback should still answer even with empty context.
 
     if (!openai && !gemini) {
-      const reply = buildRuleBasedReply(
-        context,
-        tonePreference || "formal",
-        message,
-      );
+      const reply = buildRuleBasedReply(context, safeTone, message);
       return res.json({ reply });
     }
 
@@ -976,30 +1124,31 @@ export async function chat(req, res) {
       const reply = await callLLM(
         systemPrompt,
         context,
-        tonePreference,
+        safeTone,
         message,
         agentToUse,
       );
+
       return res.json({ reply });
     } catch (e) {
-      if (isDev)
+      if (isDev) {
         console.warn(
-          `${agentToUse} failed, using fallback:`,
+          `${agentToUse} failed in chat, using rule fallback:`,
           e?.status || e?.code,
           e?.message,
         );
-      const reply = buildRuleBasedReply(
-        context,
-        tonePreference || "formal",
-        message,
-      );
+      }
+
+      const reply = buildRuleBasedReply(context, safeTone, message);
+
       if (isDev) {
         return res.json({
           reply:
             reply +
-            `\n\n(Dev note: AI call to ${agentToUse} failed; served rule-based reply. Check API Key / network.)`,
+            `\n\n(Dev note: AI call to ${agentToUse} failed; served rule-based reply. Check API key, network, or model config.)`,
         });
       }
+
       return res.json({ reply });
     }
   } catch (err) {
@@ -1008,4 +1157,4 @@ export async function chat(req, res) {
   }
 }
 
-export default { ingestPdf, chat };
+export default { ingestPdf, aiAdvisor, chat };
