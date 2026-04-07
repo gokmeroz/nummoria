@@ -21,15 +21,23 @@ import { useNavigation } from "@react-navigation/native";
 import api from "../lib/api";
 import logo from "../../assets/nummoria_logo.png";
 
-const main = "#22c55e";
-const secondary = "#4ade80";
-const BG_DARK = "#020617";
-const CARD_DARK = "#020819";
-const BORDER_DARK = "#0f172a";
-const TEXT_SOFT = "rgba(148,163,184,0.85)";
-const TEXT_MUTED = "rgba(148,163,184,0.7)";
-const TEXT_HEADING = "#e5e7eb";
+/* ──────────────────────────────────────────────────────────
+   THEME — synced with Dashboard / Expenses / Auth HUD
+────────────────────────────────────────────────────────── */
+const BG = "#030508";
+const MINT = "#00ff87";
+const CYAN = "#00d4ff";
+const VIOLET = "#a78bfa";
+const CARD_BG = "rgba(255,255,255,0.025)";
+const CARD_BD = "rgba(255,255,255,0.07)";
+const T_HI = "#e2e8f0";
+const T_MID = "rgba(226,232,240,0.55)";
+const T_DIM = "rgba(226,232,240,0.32)";
 const DATE_LANG = "en-US";
+
+/* legacy aliases if needed */
+const main = MINT;
+const secondary = CYAN;
 
 /* ------------------------------ Money helpers ------------------------------ */
 function decimalsForCurrency(code) {
@@ -59,12 +67,10 @@ function fmtDate(dateLike) {
   });
 }
 
-// helper to format YYYY-MM-DD for quick ranges
 function toISODate(d) {
   return d.toISOString().slice(0, 10);
 }
 
-/* ------- Build marked dates for calendar "period" (start–end range) ------- */
 function buildMarkedDates(startStr, endStr) {
   if (!startStr && !endStr) return {};
 
@@ -83,8 +89,8 @@ function buildMarkedDates(startStr, endStr) {
     marked[start] = {
       startingDay: true,
       endingDay: true,
-      color: main,
-      textColor: "#0f172a",
+      color: MINT,
+      textColor: BG,
     };
     return marked;
   }
@@ -99,8 +105,8 @@ function buildMarkedDates(startStr, endStr) {
     marked[key] = {
       startingDay: key === start,
       endingDay: key === end,
-      color: main,
-      textColor: "#0f172a",
+      color: MINT,
+      textColor: BG,
     };
     cursor.setDate(cursor.getDate() + 1);
   }
@@ -108,8 +114,165 @@ function buildMarkedDates(startStr, endStr) {
   return marked;
 }
 
+/* ──────────────────────────────────────────────────────────
+   HUD PRIMITIVES
+────────────────────────────────────────────────────────── */
+function Brackets({ color = MINT, size = 10, thick = 1.5 }) {
+  const defs = [
+    {
+      top: 0,
+      left: 0,
+      borderTopWidth: thick,
+      borderLeftWidth: thick,
+      borderTopLeftRadius: 2,
+    },
+    {
+      top: 0,
+      right: 0,
+      borderTopWidth: thick,
+      borderRightWidth: thick,
+      borderTopRightRadius: 2,
+    },
+    {
+      bottom: 0,
+      left: 0,
+      borderBottomWidth: thick,
+      borderLeftWidth: thick,
+      borderBottomLeftRadius: 2,
+    },
+    {
+      bottom: 0,
+      right: 0,
+      borderBottomWidth: thick,
+      borderRightWidth: thick,
+      borderBottomRightRadius: 2,
+    },
+  ];
+
+  return (
+    <>
+      {defs.map((d, i) => (
+        <View
+          key={i}
+          style={[
+            {
+              position: "absolute",
+              width: size,
+              height: size,
+              borderColor: color,
+            },
+            d,
+          ]}
+        />
+      ))}
+    </>
+  );
+}
+
+function ScanLine({ color = MINT, style: extra }) {
+  return (
+    <View
+      style={[{ flexDirection: "row", alignItems: "center", gap: 6 }, extra]}
+    >
+      <View
+        style={{
+          width: 3,
+          height: 3,
+          borderRadius: 999,
+          backgroundColor: color,
+          opacity: 0.6,
+        }}
+      />
+      <View
+        style={{ flex: 1, height: 1, backgroundColor: color, opacity: 0.2 }}
+      />
+      <View
+        style={{
+          width: 3,
+          height: 3,
+          borderRadius: 999,
+          backgroundColor: color,
+          opacity: 0.6,
+        }}
+      />
+    </View>
+  );
+}
+
+function GridBG() {
+  const { width, height } = require("react-native").Dimensions.get("window");
+  const COLS = 10;
+  const ROWS = 22;
+  const cw = width / COLS;
+  const rh = height / ROWS;
+
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {Array.from({ length: ROWS + 1 }, (_, i) => (
+        <View
+          key={`h${i}`}
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: i * rh,
+            height: 1,
+            backgroundColor: "rgba(0,255,135,0.035)",
+          }}
+        />
+      ))}
+      {Array.from({ length: COLS + 1 }, (_, i) => (
+        <View
+          key={`v${i}`}
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            left: i * cw,
+            width: 1,
+            backgroundColor: "rgba(0,212,255,0.025)",
+          }}
+        />
+      ))}
+      <View
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 2,
+          backgroundColor: MINT,
+          opacity: 0.15,
+        }}
+      />
+      <View
+        style={{
+          position: "absolute",
+          top: height * 0.44,
+          left: 0,
+          right: 0,
+          height: 1,
+          backgroundColor: CYAN,
+          opacity: 0.06,
+        }}
+      />
+      <View
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 1,
+          backgroundColor: VIOLET,
+          opacity: 0.1,
+        }}
+      />
+    </View>
+  );
+}
+
 /* ----------------------------- Small components ---------------------------- */
-function Chip({ label, selected, onPress, small }) {
+function Chip({ label, selected, onPress, small, accent = MINT }) {
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -117,15 +280,18 @@ function Chip({ label, selected, onPress, small }) {
       style={[
         styles.chip,
         small && styles.chipSmall,
-        selected && styles.chipSelected,
+        selected && [styles.chipSelected, { borderColor: `${accent}55` }],
       ]}
     >
+      {selected && (
+        <View style={[styles.chipDot, { backgroundColor: accent }]} />
+      )}
       <Text
         numberOfLines={1}
         style={[
           styles.chipText,
           small && styles.chipTextSmall,
-          selected && styles.chipTextSelected,
+          selected && [styles.chipTextSelected, { color: accent }],
         ]}
       >
         {label}
@@ -134,23 +300,66 @@ function Chip({ label, selected, onPress, small }) {
   );
 }
 
-/* =============================== Screen =============================== */
+function StatCard({ title, value, accent = MINT, sub }) {
+  return (
+    <View
+      style={[
+        styles.statCard,
+        {
+          borderColor: `${accent}30`,
+          backgroundColor:
+            accent === VIOLET
+              ? "rgba(167,139,250,0.08)"
+              : accent === CYAN
+                ? "rgba(0,212,255,0.08)"
+                : "rgba(0,255,135,0.08)",
+        },
+      ]}
+    >
+      <Brackets color={accent} size={9} thick={1.5} />
+      <View style={[styles.statHairline, { backgroundColor: accent }]} />
+      <Text style={[styles.statEyebrow, { color: accent }]}>{title}</Text>
+      <Text style={[styles.statValue, { color: accent }]}>{value}</Text>
+      {sub ? <Text style={styles.statSub}>{sub}</Text> : null}
+    </View>
+  );
+}
 
+function StatusCard({ title, body, accent = VIOLET }) {
+  return (
+    <View
+      style={[
+        styles.statusCard,
+        {
+          borderColor: `${accent}33`,
+          backgroundColor:
+            accent === VIOLET
+              ? "rgba(167,139,250,0.08)"
+              : "rgba(0,255,135,0.08)",
+        },
+      ]}
+    >
+      <Brackets color={accent} size={8} thick={1} />
+      <Text style={[styles.statusTitle, { color: accent }]}>{title}</Text>
+      <Text style={styles.statusBody}>{body}</Text>
+    </View>
+  );
+}
+
+/* =============================== Screen =============================== */
 export default function ReportsScreen() {
   const navigation = useNavigation();
-  // data
+
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
   const [accounts, setAccounts] = useState([]);
 
-  // ui
   const [loading, setLoading] = useState(true);
   const [initialDone, setInitialDone] = useState(false);
   const [err, setErr] = useState("");
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
 
-  // APPLIED filters (these control the actual filtering)
   const [fStart, setFStart] = useState("");
   const [fEnd, setFEnd] = useState("");
   const [fType, setFType] = useState("ALL");
@@ -161,10 +370,8 @@ export default function ReportsScreen() {
   const [fMax, setFMax] = useState("");
   const [rangePreset, setRangePreset] = useState("ALL");
 
-  // filters sheet
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  /* ----------------------------- Debounce search ----------------------------- */
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedQ(q);
@@ -172,7 +379,6 @@ export default function ReportsScreen() {
     return () => clearTimeout(timer);
   }, [q]);
 
-  /* ----------------------------- Load data ----------------------------- */
   const loadAll = useCallback(async () => {
     try {
       setLoading(true);
@@ -189,7 +395,7 @@ export default function ReportsScreen() {
       setAccounts((accRes.data || []).filter((a) => !a?.isDeleted));
     } catch (e) {
       setErr(
-        e?.response?.data?.error || e.message || "Failed to load reports data"
+        e?.response?.data?.error || e.message || "Failed to load reports data",
       );
     } finally {
       setLoading(false);
@@ -201,7 +407,6 @@ export default function ReportsScreen() {
     loadAll();
   }, [loadAll]);
 
-  /* --------------------------- Lookups/helpers --------------------------- */
   const categoriesById = useMemo(() => {
     const m = new Map();
     for (const c of categories) m.set(c._id, c);
@@ -219,7 +424,6 @@ export default function ReportsScreen() {
     return ["ALL", ...Array.from(s)];
   }, [transactions]);
 
-  /* --------------------------- Reset filters --------------------------- */
   const resetAllFilters = useCallback(() => {
     setFStart("");
     setFEnd("");
@@ -253,7 +457,6 @@ export default function ReportsScreen() {
     fMax,
   ]);
 
-  /* ------------------------------- Filtering ------------------------------- */
   const rows = useMemo(() => {
     let start = null;
     if (/^\d{4}-\d{2}-\d{2}$/.test(fStart)) {
@@ -322,7 +525,6 @@ export default function ReportsScreen() {
     accountsById,
   ]);
 
-  /* ------------------------------ Totals / flow ------------------------------ */
   const totalsByCurrency = useMemo(() => {
     const map = new Map();
     for (const t of rows) {
@@ -364,7 +566,6 @@ export default function ReportsScreen() {
     return arr.slice(0, 6);
   }, [rows, sankeyCurrency, categoriesById]);
 
-  /* ------------------------------ Import / Export ------------------------------ */
   const handleImportCsv = async () => {
     try {
       const DocumentPicker = await import("expo-document-picker");
@@ -389,13 +590,13 @@ export default function ReportsScreen() {
 
       Alert.alert(
         "Success",
-        response.data.message || "CSV imported successfully"
+        response.data.message || "CSV imported successfully",
       );
       loadAll();
     } catch (err) {
       Alert.alert(
         "Error",
-        err?.response?.data?.error || err.message || "Failed to import CSV"
+        err?.response?.data?.error || err.message || "Failed to import CSV",
       );
     } finally {
       setLoading(false);
@@ -426,13 +627,13 @@ export default function ReportsScreen() {
 
       Alert.alert(
         "Success",
-        response.data.message || "PDF imported successfully"
+        response.data.message || "PDF imported successfully",
       );
       loadAll();
     } catch (err) {
       Alert.alert(
         "Error",
-        err?.response?.data?.error || err.message || "Failed to import PDF"
+        err?.response?.data?.error || err.message || "Failed to import PDF",
       );
     } finally {
       setLoading(false);
@@ -479,7 +680,6 @@ export default function ReportsScreen() {
 
       const csvContent = csvLines.join("\n");
 
-      // ✅ proper dynamic imports
       const FSModule = await import("expo-file-system");
       const SharingModule = await import("expo-sharing");
 
@@ -521,7 +721,6 @@ export default function ReportsScreen() {
 
       setLoading(true);
 
-      // 1) Build simple HTML table for the PDF
       const tableRowsHtml = rows
         .map((tx) => {
           const cat = categoriesById.get(tx.categoryId)?.name || "";
@@ -604,7 +803,6 @@ export default function ReportsScreen() {
       </html>
     `;
 
-      // 2) Use expo-print to create a PDF file from this HTML
       const PrintModule = await import("expo-print");
       const { printToFileAsync } = PrintModule;
 
@@ -613,7 +811,6 @@ export default function ReportsScreen() {
         base64: false,
       });
 
-      // 3) Share / save the PDF using expo-sharing
       const SharingModule = await import("expo-sharing");
       const Sharing = SharingModule.default || SharingModule;
 
@@ -635,127 +832,172 @@ export default function ReportsScreen() {
     }
   };
 
-  /* ------------------------------ Row render ------------------------------ */
   function renderRow({ item }) {
     const accName = accountsById.get(item.accountId)?.name || "—";
     const catName = categoriesById.get(item.categoryId)?.name || "—";
     const isIncome = item.type === "income";
     const sign = isIncome ? "+" : "-";
+    const accent = isIncome ? MINT : VIOLET;
 
     return (
-      <View style={styles.rowContainer}>
-        <View style={styles.rowLeft}>
-          <View style={styles.rowTitleLine}>
-            <Text style={styles.rowCategory}>{catName}</Text>
-            <View style={styles.rowTypeBadge}>
-              <Text style={styles.rowTypeText}>{item.type}</Text>
-            </View>
+      <View style={styles.rowCard}>
+        <Brackets color={accent} size={7} thick={1} />
+        <View style={styles.rowTopLine}>
+          <View style={[styles.rowCatPill, { borderColor: `${accent}44` }]}>
+            <View style={[styles.rowCatDot, { backgroundColor: accent }]} />
+            <Text
+              style={[styles.rowCatTxt, { color: accent }]}
+              numberOfLines={1}
+            >
+              {catName}
+            </Text>
           </View>
-          <View style={styles.rowAccountBadge}>
-            <Text style={styles.rowAccountText}>{accName}</Text>
+
+          <View style={styles.rowTypeBadge}>
+            <Text style={styles.rowTypeText}>{item.type}</Text>
           </View>
-          <Text style={styles.rowDescription} numberOfLines={2}>
-            {item.description || "No description"}
-          </Text>
-          <Text style={styles.rowDate}>{fmtDate(item.date)}</Text>
-        </View>
-        <View style={styles.rowRight}>
-          <Text style={[styles.rowAmount, !isIncome && { color: "#fecaca" }]}>
+
+          <Text style={[styles.rowAmount, { color: accent }]}>
             {sign}
             {fmtMoneyUI(item.amountMinor, item.currency)}
           </Text>
         </View>
+
+        <View style={styles.rowAccountPill}>
+          <Text style={styles.rowAccountTxt}>{accName}</Text>
+        </View>
+
+        <Text style={styles.rowDescription} numberOfLines={2}>
+          {item.description || "No description"}
+        </Text>
+
+        <Text style={styles.rowDate}>{fmtDate(item.date)}</Text>
+
+        <ScanLine color={accent} style={{ marginTop: 10 }} />
       </View>
     );
   }
 
-  /* ------------------------------ Header / top ------------------------------ */
   function Header() {
     return (
-      <View style={styles.header}>
-        <View className="header-top" style={styles.headerTopRow}>
-          <View>
-            <Text style={styles.headerEyebrow}>Reports</Text>
-            <Text style={styles.headerTitle}>Money Flow</Text>
+      <View style={styles.headerCard}>
+        <Brackets color={MINT} size={12} thick={1.5} />
+        <View style={[styles.headerHairline, { backgroundColor: MINT }]} />
+
+        <View style={styles.topBar}>
+          <View style={styles.logoRow}>
+            <View style={[styles.statusDot, { backgroundColor: MINT }]} />
+            <Text style={styles.logoTxt}>REPORTS</Text>
+            <View
+              style={[
+                styles.livePill,
+                {
+                  borderColor: "rgba(0,255,135,0.25)",
+                  backgroundColor: "rgba(0,255,135,0.12)",
+                },
+              ]}
+            >
+              <Text style={[styles.livePillTxt, { color: MINT }]}>
+                ANALYTICS MODULE
+              </Text>
+            </View>
           </View>
-          {/* ✅ NEW: Clickable Nummoria logo → Dashboard */}
+
           <TouchableOpacity
-            onPress={() => navigation.navigate("Dashboard")} // ✅ NEW: change route name if needed
+            onPress={() => navigation.navigate("Dashboard")}
             activeOpacity={0.85}
-            style={styles.headerLogoBtn}
+            style={styles.homeBtn}
           >
-            <Image source={logo} style={styles.headerLogoImg} />
+            <Image source={logo} style={styles.homeBtnImg} />
+            <Brackets color={MINT} size={7} thick={1} />
           </TouchableOpacity>
+        </View>
+
+        <Text style={styles.heroTitle}>Reports{"\n"}Command</Text>
+        <Text style={styles.heroSub}>
+          Review money flow, filter transactions, and import or export
+          structured reports.
+        </Text>
+
+        <ScanLine color={MINT} style={{ marginTop: 12, marginBottom: 14 }} />
+
+        <View style={styles.actionRow}>
           <TouchableOpacity
-            style={styles.headerIconBtn}
+            style={[styles.ctrlPill, { borderColor: "rgba(0,255,135,0.25)" }]}
             onPress={loadAll}
-            activeOpacity={0.85}
+            activeOpacity={0.8}
           >
-            <Text style={styles.headerIconPlus}>↻</Text>
+            <View style={[styles.ctrlDot, { backgroundColor: MINT }]} />
+            <Text style={[styles.ctrlTxt, { color: MINT }]}>REFRESH</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.ctrlPill, { borderColor: "rgba(0,212,255,0.25)" }]}
+            onPress={() => setFiltersOpen(true)}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.ctrlDot, { backgroundColor: CYAN }]} />
+            <Text style={[styles.ctrlTxt, { color: CYAN }]}>FILTERS</Text>
+            {activeFilterCount > 0 && (
+              <View style={styles.upcomingBadge}>
+                <Text style={styles.upcomingBadgeTxt}>{activeFilterCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 
-        <View style={styles.ieRow}>
+        <View style={styles.importRow}>
           <TouchableOpacity
-            style={[styles.ieBtn, styles.ieBtnOutline]}
+            style={[styles.ioBtn, { borderColor: "rgba(0,255,135,0.22)" }]}
             onPress={handleImportCsv}
+            activeOpacity={0.8}
           >
-            <Text style={styles.ieBtnText}>Import CSV</Text>
+            <Text style={[styles.ioBtnTxt, { color: MINT }]}>IMPORT CSV</Text>
           </TouchableOpacity>
+
           <TouchableOpacity
-            style={[styles.ieBtn, styles.ieBtnSolid]}
+            style={[styles.ioBtn, { borderColor: "rgba(0,212,255,0.22)" }]}
             onPress={handleImportPdf}
+            activeOpacity={0.8}
           >
-            <Text style={styles.ieBtnTextSolid}>Import PDF</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={[styles.ieRow, { marginTop: 6 }]}>
-          <TouchableOpacity
-            style={[styles.ieBtn, styles.ieBtnOutline]}
-            onPress={handleDownloadCsv}
-          >
-            <Text style={styles.ieBtnText}>Download CSV</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.ieBtn, styles.ieBtnSolid]}
-            onPress={handleDownloadPdf}
-          >
-            <Text style={styles.ieBtnTextSolid}>Download PDF</Text>
+            <Text style={[styles.ioBtnTxt, { color: CYAN }]}>IMPORT PDF</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.searchContainer}>
+        <View style={styles.importRow}>
+          <TouchableOpacity
+            style={[styles.ioBtn, { borderColor: "rgba(167,139,250,0.22)" }]}
+            onPress={handleDownloadCsv}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.ioBtnTxt, { color: VIOLET }]}>EXPORT CSV</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.ioBtn, { borderColor: "rgba(0,255,135,0.22)" }]}
+            onPress={handleDownloadPdf}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.ioBtnTxt, { color: MINT }]}>EXPORT PDF</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.searchWrap}>
+          <View style={[styles.searchDot, { backgroundColor: MINT }]} />
           <TextInput
             value={q}
             onChangeText={setQ}
             placeholder="Search description, notes, #tags, account, category"
-            placeholderTextColor={TEXT_MUTED}
+            placeholderTextColor={T_DIM}
             style={styles.searchInput}
             returnKeyType="search"
             blurOnSubmit={false}
           />
         </View>
-
-        <View style={styles.headerFilterRow}>
-          <TouchableOpacity
-            style={styles.filterPill}
-            onPress={() => setFiltersOpen(true)}
-            activeOpacity={0.9}
-          >
-            <Text style={styles.filterPillIcon}>☰</Text>
-            <Text style={styles.filterPillText}>Filters</Text>
-            {activeFilterCount > 0 && (
-              <View style={styles.filterBadge}>
-                <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
       </View>
     );
   }
 
-  /* ------------------------------ Filters sheet ------------------------------ */
   function FiltersSheet() {
     const [localStart, setLocalStart] = useState("");
     const [localEnd, setLocalEnd] = useState("");
@@ -868,12 +1110,12 @@ export default function ReportsScreen() {
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalSheet}>
+            <Brackets color={CYAN} size={10} thick={1.5} />
+            <View style={[styles.modalHairline, { backgroundColor: CYAN }]} />
+
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Filters</Text>
-              <TouchableOpacity
-                onPress={() => setFiltersOpen(false)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
+              <Text style={styles.modalTitle}>FILTER MATRIX</Text>
+              <TouchableOpacity onPress={() => setFiltersOpen(false)}>
                 <Text style={styles.modalClose}>✕</Text>
               </TouchableOpacity>
             </View>
@@ -884,56 +1126,61 @@ export default function ReportsScreen() {
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
             >
-              <View style={styles.sectionRow}>
-                <Text style={styles.sectionLabel}>Quick range</Text>
+              <View style={styles.modalSection}>
+                <Text style={styles.filterGroupLabel}>QUICK RANGE</Text>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.chipRow}
+                  contentContainerStyle={styles.chipScroll}
                 >
                   <Chip
                     label="All time"
                     selected={localRangePreset === "ALL"}
                     onPress={() => applyLocalRangePreset("ALL")}
                     small
+                    accent={CYAN}
                   />
                   <Chip
                     label="Last 7 days"
                     selected={localRangePreset === "7D"}
                     onPress={() => applyLocalRangePreset("7D")}
                     small
+                    accent={CYAN}
                   />
                   <Chip
                     label="Last 30 days"
                     selected={localRangePreset === "30D"}
                     onPress={() => applyLocalRangePreset("30D")}
                     small
+                    accent={CYAN}
                   />
                   <Chip
                     label="Last 90 days"
                     selected={localRangePreset === "90D"}
                     onPress={() => applyLocalRangePreset("90D")}
                     small
+                    accent={CYAN}
                   />
                   <Chip
                     label="Year to date"
                     selected={localRangePreset === "YTD"}
                     onPress={() => applyLocalRangePreset("YTD")}
                     small
+                    accent={CYAN}
                   />
                 </ScrollView>
               </View>
 
               <View style={styles.modalSection}>
-                <Text style={styles.sectionLabel}>Date range</Text>
+                <Text style={styles.filterGroupLabel}>DATE RANGE</Text>
 
                 <View style={styles.dateRangePill}>
                   <Text style={styles.dateRangeText}>
                     {localStart && localEnd
                       ? `${fmtDate(localStart)} - ${fmtDate(localEnd)}`
                       : localStart
-                      ? `${fmtDate(localStart)} - Select end date`
-                      : "Select dates"}
+                        ? `${fmtDate(localStart)} - Select end date`
+                        : "Select dates"}
                   </Text>
                 </View>
 
@@ -944,65 +1191,71 @@ export default function ReportsScreen() {
                     markedDates={markedDates}
                     maxDate={toISODate(new Date())}
                     theme={{
-                      backgroundColor: CARD_DARK,
-                      calendarBackground: CARD_DARK,
-                      textSectionTitleColor: TEXT_MUTED,
-                      monthTextColor: TEXT_HEADING,
-                      dayTextColor: TEXT_SOFT,
-                      todayTextColor: main,
-                      arrowColor: main,
-                      textDisabledColor: "rgba(148,163,184,0.35)",
+                      backgroundColor: BG,
+                      calendarBackground: BG,
+                      textSectionTitleColor: T_MID,
+                      monthTextColor: T_HI,
+                      dayTextColor: T_HI,
+                      todayTextColor: MINT,
+                      arrowColor: MINT,
+                      textDisabledColor: "rgba(226,232,240,0.25)",
+                      selectedDayBackgroundColor: MINT,
                     }}
                   />
                 </View>
               </View>
 
-              <View style={styles.sectionRow}>
-                <Text style={styles.sectionLabel}>Type</Text>
+              <View style={styles.modalSection}>
+                <Text style={styles.filterGroupLabel}>TYPE</Text>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.chipRow}
+                  contentContainerStyle={styles.chipScroll}
                 >
                   <Chip
                     label="All"
                     selected={localType === "ALL"}
                     onPress={() => setLocalType("ALL")}
                     small
+                    accent={MINT}
                   />
                   <Chip
                     label="Income"
                     selected={localType === "income"}
                     onPress={() => setLocalType("income")}
                     small
+                    accent={MINT}
                   />
                   <Chip
                     label="Expense"
                     selected={localType === "expense"}
                     onPress={() => setLocalType("expense")}
                     small
+                    accent={VIOLET}
                   />
                   <Chip
                     label="Investment"
                     selected={localType === "investment"}
                     onPress={() => setLocalType("investment")}
                     small
+                    accent={CYAN}
                   />
                 </ScrollView>
               </View>
 
-              <View style={styles.sectionRowColumn}>
-                <Text style={styles.sectionLabel}>Accounts</Text>
+              <View style={styles.modalSection}>
+                <Text style={styles.filterGroupLabel}>ACCOUNT</Text>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.chipRow}
+                  contentContainerStyle={styles.chipScroll}
                 >
                   <Chip
                     label="All accounts"
                     selected={localAccountId === "ALL"}
                     onPress={() => setLocalAccountId("ALL")}
                     small
+                    accent={CYAN}
                   />
                   {accounts.map((a) => (
                     <Chip
@@ -1011,23 +1264,25 @@ export default function ReportsScreen() {
                       selected={localAccountId === a._id}
                       onPress={() => setLocalAccountId(a._id)}
                       small
+                      accent={MINT}
                     />
                   ))}
                 </ScrollView>
+              </View>
 
-                <Text style={[styles.sectionLabel, { marginTop: 6 }]}>
-                  Categories
-                </Text>
+              <View style={styles.modalSection}>
+                <Text style={styles.filterGroupLabel}>CATEGORY</Text>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.chipRow}
+                  contentContainerStyle={styles.chipScroll}
                 >
                   <Chip
                     label="All categories"
                     selected={localCategoryId === "ALL"}
                     onPress={() => setLocalCategoryId("ALL")}
                     small
+                    accent={CYAN}
                   />
                   {categories.map((c) => (
                     <Chip
@@ -1036,17 +1291,18 @@ export default function ReportsScreen() {
                       selected={localCategoryId === c._id}
                       onPress={() => setLocalCategoryId(c._id)}
                       small
+                      accent={VIOLET}
                     />
                   ))}
                 </ScrollView>
               </View>
 
-              <View style={styles.sectionRow}>
-                <Text style={styles.sectionLabel}>Currency</Text>
+              <View style={styles.modalSection}>
+                <Text style={styles.filterGroupLabel}>CURRENCY</Text>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.chipRow}
+                  contentContainerStyle={styles.chipScroll}
                 >
                   {currencies.map((c) => (
                     <Chip
@@ -1055,31 +1311,32 @@ export default function ReportsScreen() {
                       selected={localCurrency === c}
                       onPress={() => setLocalCurrency(c)}
                       small
+                      accent={CYAN}
                     />
                   ))}
                 </ScrollView>
               </View>
 
-              <View style={styles.filtersGrid}>
-                <View style={styles.filtersCol}>
-                  <Text style={styles.sectionLabel}>Min amount</Text>
+              <View style={styles.modalInputRow}>
+                <View style={styles.modalInputCol}>
+                  <Text style={styles.filterGroupLabel}>MIN AMOUNT</Text>
                   <TextInput
                     value={localMin}
                     onChangeText={setLocalMin}
                     placeholder="0"
                     keyboardType="numeric"
-                    placeholderTextColor={TEXT_MUTED}
+                    placeholderTextColor={T_DIM}
                     style={styles.filterInput}
                   />
                 </View>
-                <View style={styles.filtersCol}>
-                  <Text style={styles.sectionLabel}>Max amount</Text>
+                <View style={styles.modalInputCol}>
+                  <Text style={styles.filterGroupLabel}>MAX AMOUNT</Text>
                   <TextInput
                     value={localMax}
                     onChangeText={setLocalMax}
                     placeholder="No max"
                     keyboardType="numeric"
-                    placeholderTextColor={TEXT_MUTED}
+                    placeholderTextColor={T_DIM}
                     style={styles.filterInput}
                   />
                 </View>
@@ -1088,16 +1345,20 @@ export default function ReportsScreen() {
 
             <View style={styles.modalActions}>
               <TouchableOpacity
-                style={[styles.modalBtn, styles.modalBtnOutline]}
+                style={styles.modalBtnCancel}
                 onPress={handleClear}
+                activeOpacity={0.8}
               >
-                <Text style={styles.modalBtnOutlineText}>Clear</Text>
+                <Text style={[styles.modalBtnTxt, { color: T_MID }]}>
+                  CLEAR
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalBtn, styles.modalBtnSolid]}
+                style={styles.modalBtnPrimary}
                 onPress={handleApply}
+                activeOpacity={0.8}
               >
-                <Text style={styles.modalBtnSolidText}>View results</Text>
+                <Text style={styles.modalPrimaryTxt}>VIEW RESULTS</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1106,22 +1367,34 @@ export default function ReportsScreen() {
     );
   }
 
-  /* ------------------------------ Loading state ------------------------------ */
   if (!initialDone) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <View style={styles.loadingSpinnerOuter}>
-          <ActivityIndicator size="large" color={main} />
+      <SafeAreaView style={styles.loadingScreen}>
+        <GridBG />
+        <View style={styles.loadingInner}>
+          <View
+            style={{
+              width: 70,
+              height: 70,
+              alignItems: "center",
+              justifyContent: "center",
+              position: "relative",
+              marginBottom: 16,
+            }}
+          >
+            <Brackets color={MINT} size={20} thick={2} />
+            <ActivityIndicator size="large" color={MINT} />
+          </View>
+          <Text style={styles.loadingTitle}>REPORTS</Text>
+          <Text style={styles.loadingMono}>Initialising analytics…</Text>
         </View>
-        <Text style={styles.loadingTitle}>Nummoria</Text>
-        <Text style={styles.loadingSubtitle}>Loading your reports…</Text>
       </SafeAreaView>
     );
   }
 
-  /* ------------------------------ Main render ------------------------------ */
   return (
     <SafeAreaView style={styles.screen}>
+      <GridBG />
       <FiltersSheet />
 
       <ScrollView
@@ -1132,45 +1405,52 @@ export default function ReportsScreen() {
       >
         <Header />
 
-        {err ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{err}</Text>
-          </View>
-        ) : null}
+        {!!err && (
+          <StatusCard title="REPORTS ERROR" body={err} accent={VIOLET} />
+        )}
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Totals / Money Flow</Text>
+        <View style={styles.sectionCard}>
+          <Brackets color={MINT} size={10} thick={1} />
+          <View style={[styles.sectionHairline, { backgroundColor: MINT }]} />
+          <View style={styles.sectionHeaderRow}>
+            <View>
+              <Text style={styles.sectionEyebrow}>FLOW SNAPSHOT</Text>
+              <Text style={styles.sectionTitle}>Totals / money flow</Text>
+            </View>
+          </View>
+
           {totalsByCurrency.length === 0 ? (
             <Text style={styles.emptyText}>
               No transactions match these filters.
             </Text>
           ) : (
-            <View style={styles.totalsGrid}>
+            <View style={styles.statsWrap}>
               {totalsByCurrency.map((t) => {
                 const netUp = t.netMinor >= 0;
                 return (
-                  <View key={t.currency} style={styles.totalCard}>
-                    <Text style={styles.totalCur}>{t.currency}</Text>
-                    <Text style={styles.totalLine}>
-                      Income:{" "}
-                      <Text style={styles.totalValue}>
-                        {fmtMoneyUI(t.incomeMinor, t.currency)}
-                      </Text>
-                    </Text>
-                    <Text style={styles.totalLine}>
-                      Outflow:{" "}
-                      <Text style={styles.totalValue}>
-                        {fmtMoneyUI(t.outMinor, t.currency)}
-                      </Text>
-                    </Text>
-                    <Text
-                      style={[
-                        styles.totalNet,
-                        netUp ? styles.totalNetUp : styles.totalNetDown,
-                      ]}
-                    >
-                      Net: {fmtMoneyUI(t.netMinor, t.currency)}
-                    </Text>
+                  <View key={t.currency} style={styles.statsCol}>
+                    <StatCard
+                      title={`${t.currency} · INCOME`}
+                      value={fmtMoneyUI(t.incomeMinor, t.currency)}
+                      accent={MINT}
+                      sub="Tracked within current filter scope"
+                    />
+                    <StatCard
+                      title={`${t.currency} · OUTFLOW`}
+                      value={fmtMoneyUI(t.outMinor, t.currency)}
+                      accent={VIOLET}
+                      sub="Expense-side money movement"
+                    />
+                    <StatCard
+                      title={`${t.currency} · NET`}
+                      value={fmtMoneyUI(t.netMinor, t.currency)}
+                      accent={netUp ? CYAN : VIOLET}
+                      sub={
+                        netUp
+                          ? "Positive balance flow"
+                          : "Negative balance flow"
+                      }
+                    />
                   </View>
                 );
               })}
@@ -1178,23 +1458,30 @@ export default function ReportsScreen() {
           )}
         </View>
 
-        <View style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardTitle}>
-              Top spending categories
-              {sankeyCurrency ? ` · ${sankeyCurrency}` : ""}
-            </Text>
-            {!sankeyCurrency && (
-              <Text style={styles.cardHint}>
-                Pick a single currency in filters to see details.
+        <View style={styles.sectionCard}>
+          <Brackets color={CYAN} size={10} thick={1} />
+          <View style={[styles.sectionHairline, { backgroundColor: CYAN }]} />
+          <View style={styles.sectionHeaderRow}>
+            <View>
+              <Text style={styles.sectionEyebrow}>SPENDING SHAPE</Text>
+              <Text style={styles.sectionTitle}>
+                Top spending categories
+                {sankeyCurrency ? ` · ${sankeyCurrency}` : ""}
               </Text>
-            )}
+            </View>
           </View>
+
+          {!sankeyCurrency && (
+            <Text style={styles.sectionNote}>
+              Pick a single currency in filters to inspect category
+              concentration.
+            </Text>
+          )}
 
           {!sankeyCurrency || !topCategories.length ? (
             <Text style={styles.emptyText}>No flow to display.</Text>
           ) : (
-            topCategories.map((c) => (
+            topCategories.map((c, i) => (
               <View key={c.catId} style={styles.catRow}>
                 <View style={styles.catRowTop}>
                   <Text style={styles.catName}>{c.name}</Text>
@@ -1203,20 +1490,33 @@ export default function ReportsScreen() {
                   </Text>
                 </View>
                 <View style={styles.catBarTrack}>
-                  <View style={styles.catBarFill} />
+                  <View
+                    style={[
+                      styles.catBarFill,
+                      { width: `${Math.max(8, 100 - i * 12)}%` },
+                    ]}
+                  />
                 </View>
               </View>
             ))
           )}
         </View>
 
-        <View style={styles.listCard}>
-          <Text style={styles.cardTitle}>
-            All Transactions{" "}
-            <Text style={styles.cardSubtitle}>
-              ({rows.length} result{rows.length === 1 ? "" : "s"})
-            </Text>
-          </Text>
+        <View style={styles.sectionCard}>
+          <Brackets color={VIOLET} size={10} thick={1} />
+          <View style={[styles.sectionHairline, { backgroundColor: VIOLET }]} />
+          <View style={styles.sectionHeaderRow}>
+            <View>
+              <Text style={styles.sectionEyebrow}>TRANSACTION FEED</Text>
+              <Text style={styles.sectionTitle}>
+                All transactions{" "}
+                <Text style={styles.sectionTitleSub}>
+                  ({rows.length} result{rows.length === 1 ? "" : "s"})
+                </Text>
+              </Text>
+            </View>
+          </View>
+
           {rows.length === 0 ? (
             <Text style={styles.emptyText}>No transactions found.</Text>
           ) : (
@@ -1230,8 +1530,8 @@ export default function ReportsScreen() {
         </View>
 
         <Text style={styles.footerTip}>
-          Tip: Tap the Filters button to narrow reports by date range, type,
-          accounts, categories, currency, and amount.
+          Tip: use Filters to narrow reports by date, type, account, category,
+          currency, or amount band.
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -1239,527 +1539,515 @@ export default function ReportsScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: {
+  screen: { flex: 1, backgroundColor: BG },
+  content: { flex: 1 },
+
+  loadingScreen: {
     flex: 1,
-    backgroundColor: BG_DARK,
-  },
-  content: {
-    flex: 1,
-  },
-  header: {
-    marginTop: 12,
-    marginHorizontal: 16,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 14,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: CARD_DARK,
-  },
-  headerTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 10,
-  },
-  headerEyebrow: {
-    fontSize: 12,
-    color: TEXT_MUTED,
-    marginBottom: 2,
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: TEXT_HEADING,
-  },
-  headerIconBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
-    alignItems: "center",
+    backgroundColor: BG,
     justifyContent: "center",
+    alignItems: "center",
   },
-  headerIconPlus: {
-    fontSize: 18,
+  loadingInner: { alignItems: "center", position: "relative", padding: 30 },
+  loadingTitle: {
+    fontSize: 13,
     fontWeight: "800",
-    color: "#bbf7d0",
-  },
-  ieRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 4,
-  },
-  ieBtn: {
-    flex: 1,
-    paddingVertical: 7,
-    borderRadius: 999,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  ieBtnOutline: {
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
-  },
-  ieBtnSolid: {
-    borderColor: main,
-    backgroundColor: "#022c22",
-  },
-  ieBtnText: {
-    fontSize: 12,
-    color: TEXT_SOFT,
-  },
-  ieBtnTextSolid: {
-    fontSize: 12,
-    color: "#bbf7d0",
-    fontWeight: "600",
-  },
-  searchContainer: {
-    marginTop: 10,
+    color: T_HI,
+    letterSpacing: 4,
     marginBottom: 6,
   },
-  searchInput: {
+  loadingMono: { fontSize: 10, color: T_DIM, letterSpacing: 1.5 },
+
+  headerCard: {
+    margin: 12,
+    padding: 16,
+    borderRadius: 4,
     borderWidth: 1,
-    borderColor: BORDER_DARK,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 14,
-    backgroundColor: "#020617",
-    color: TEXT_HEADING,
+    borderColor: "rgba(0,255,135,0.20)",
+    backgroundColor: "rgba(0,255,135,0.04)",
+    overflow: "hidden",
+    position: "relative",
   },
-  headerFilterRow: {
-    marginTop: 8,
-    alignItems: "flex-start",
+  headerHairline: {
+    position: "absolute",
+    top: 0,
+    left: "10%",
+    right: "10%",
+    height: 1.5,
+    opacity: 0.65,
   },
-  filterPill: {
+
+  topBar: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: "#020617",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  logoRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  statusDot: { width: 6, height: 6, borderRadius: 999 },
+  logoTxt: { fontSize: 13, fontWeight: "800", color: T_HI, letterSpacing: 3 },
+  livePill: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 2,
     borderWidth: 1,
-    borderColor: BORDER_DARK,
   },
-  filterPillIcon: {
-    fontSize: 14,
-    color: TEXT_SOFT,
-    marginRight: 6,
+  livePillTxt: { fontSize: 8, fontWeight: "800", letterSpacing: 1.5 },
+
+  homeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 2,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(0,255,135,0.20)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
   },
-  filterPillText: {
-    fontSize: 13,
-    color: TEXT_HEADING,
-    fontWeight: "500",
+  homeBtnImg: { width: "100%", height: "100%", resizeMode: "cover" },
+
+  heroTitle: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: T_HI,
+    letterSpacing: -0.6,
+    lineHeight: 32,
+    marginBottom: 6,
   },
-  filterBadge: {
-    marginLeft: 8,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: main,
+  heroSub: { fontSize: 13, color: T_MID, lineHeight: 18 },
+
+  actionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 10,
+  },
+  ctrlPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 2,
+    borderWidth: 1,
+    backgroundColor: "rgba(255,255,255,0.025)",
+  },
+  ctrlDot: { width: 5, height: 5, borderRadius: 999 },
+  ctrlTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 1.2 },
+  upcomingBadge: {
+    marginLeft: 4,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 2,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,212,255,0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(0,212,255,0.28)",
+  },
+  upcomingBadgeTxt: { fontSize: 10, fontWeight: "800", color: CYAN },
+
+  importRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 6,
+  },
+  ioBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 2,
+    borderWidth: 1,
+    backgroundColor: "rgba(255,255,255,0.025)",
     alignItems: "center",
     justifyContent: "center",
   },
-  filterBadgeText: {
-    fontSize: 11,
-    color: "#022c22",
-    fontWeight: "700",
+  ioBtnTxt: {
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1.1,
   },
-  sectionRow: {
-    marginTop: 8,
-  },
-  sectionRowColumn: {
-    marginTop: 10,
-  },
-  sectionLabel: {
-    fontSize: 12,
-    color: TEXT_MUTED,
-    marginBottom: 4,
-  },
-  chipRow: {
-    paddingVertical: 4,
-    paddingRight: 8,
-  },
-  filtersGrid: {
+
+  searchWrap: {
     flexDirection: "row",
-    gap: 8,
-    marginTop: 10,
-  },
-  filtersCol: {
-    flex: 1,
-  },
-  filterInput: {
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: BORDER_DARK,
-    borderRadius: 10,
+    borderColor: CARD_BD,
+    borderRadius: 2,
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    fontSize: 13,
-    backgroundColor: "#020617",
-    color: TEXT_HEADING,
-  },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
-    marginRight: 6,
-  },
-  chipSmall: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  chipSelected: {
-    borderColor: main,
-    backgroundColor: "#022c22",
-  },
-  chipText: {
-    fontSize: 13,
-    color: TEXT_SOFT,
-  },
-  chipTextSmall: {
-    fontSize: 12,
-  },
-  chipTextSelected: {
-    color: "#bbf7d0",
-    fontWeight: "600",
-  },
-  card: {
-    marginHorizontal: 16,
+    paddingVertical: 2,
+    backgroundColor: "rgba(255,255,255,0.025)",
     marginTop: 12,
-    padding: 14,
-    borderRadius: 20,
-    backgroundColor: CARD_DARK,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
   },
-  cardHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
-    gap: 8,
+  searchDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 999,
+    marginRight: 8,
+    opacity: 0.7,
   },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: TEXT_HEADING,
-  },
-  cardSubtitle: {
+  searchInput: {
+    flex: 1,
     fontSize: 13,
-    fontWeight: "400",
-    color: TEXT_MUTED,
+    color: T_HI,
+    paddingVertical: 10,
   },
-  cardHint: {
-    fontSize: 11,
-    color: TEXT_MUTED,
-  },
-  totalsGrid: {
-    marginTop: 8,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  totalCard: {
-    flexBasis: "48%",
-    padding: 10,
-    borderRadius: 12,
-    backgroundColor: "#020617",
+
+  statusCard: {
+    position: "relative",
+    borderRadius: 4,
     borderWidth: 1,
-    borderColor: BORDER_DARK,
+    padding: 12,
+    marginHorizontal: 12,
+    marginBottom: 2,
+    overflow: "hidden",
   },
-  totalCur: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: TEXT_HEADING,
-    marginBottom: 4,
+  statusTitle: {
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1.6,
+    marginBottom: 6,
   },
-  totalLine: {
+  statusBody: {
     fontSize: 12,
-    color: TEXT_MUTED,
+    color: T_HI,
+    lineHeight: 17,
   },
-  totalValue: {
-    color: TEXT_SOFT,
-    fontWeight: "600",
+
+  sectionCard: {
+    margin: 12,
+    marginTop: 10,
+    padding: 16,
+    borderRadius: 4,
+    backgroundColor: CARD_BG,
+    borderWidth: 1,
+    borderColor: CARD_BD,
+    overflow: "hidden",
+    position: "relative",
   },
-  totalNet: {
-    marginTop: 4,
-    fontSize: 13,
-    fontWeight: "700",
+  sectionHairline: {
+    position: "absolute",
+    top: 0,
+    left: "10%",
+    right: "10%",
+    height: 1.5,
+    opacity: 0.65,
   },
-  totalNetUp: {
-    color: "#22c55e",
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    marginBottom: 12,
   },
-  totalNetDown: {
-    color: "#fecaca",
+  sectionEyebrow: {
+    fontSize: 8,
+    fontWeight: "800",
+    color: T_DIM,
+    letterSpacing: 2,
+    marginBottom: 3,
   },
-  catRow: {
-    marginTop: 8,
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: T_HI,
+    letterSpacing: -0.3,
   },
+  sectionTitleSub: {
+    fontSize: 14,
+    fontWeight: "400",
+    color: T_MID,
+  },
+  sectionNote: {
+    marginTop: -4,
+    marginBottom: 12,
+    fontSize: 11,
+    color: T_MID,
+    lineHeight: 17,
+  },
+
+  statsWrap: { gap: 10 },
+  statsCol: { gap: 10 },
+
+  statCard: {
+    position: "relative",
+    borderRadius: 4,
+    borderWidth: 1,
+    padding: 16,
+    overflow: "hidden",
+  },
+  statHairline: {
+    position: "absolute",
+    top: 0,
+    left: "10%",
+    right: "10%",
+    height: 1.5,
+    opacity: 0.65,
+  },
+  statEyebrow: {
+    fontSize: 8,
+    fontWeight: "800",
+    letterSpacing: 1.8,
+    marginBottom: 8,
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: "800",
+    letterSpacing: -0.6,
+    marginBottom: 6,
+  },
+  statSub: {
+    fontSize: 10,
+    color: T_DIM,
+    lineHeight: 15,
+  },
+
+  catRow: { marginTop: 8 },
   catRowTop: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 2,
+    marginBottom: 4,
+    gap: 8,
   },
-  catName: {
-    fontSize: 13,
-    color: TEXT_SOFT,
-    flex: 1,
-    marginRight: 4,
-  },
-  catAmount: {
-    fontSize: 13,
-    color: "#bbf7d0",
-  },
+  catName: { fontSize: 13, color: T_HI, flex: 1 },
+  catAmount: { fontSize: 13, color: CYAN, fontWeight: "700" },
   catBarTrack: {
     height: 6,
-    borderRadius: 999,
-    backgroundColor: "#020617",
+    borderRadius: 1,
+    backgroundColor: "rgba(255,255,255,0.04)",
     overflow: "hidden",
   },
   catBarFill: {
     height: "100%",
-    borderRadius: 999,
-    backgroundColor: "rgba(34,197,94,0.9)",
+    borderRadius: 1,
+    backgroundColor: CYAN,
   },
-  listCard: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 16,
-    padding: 14,
-    borderRadius: 20,
-    backgroundColor: CARD_DARK,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
+
+  rowCard: {
+    position: "relative",
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.04)",
+    marginBottom: 2,
   },
-  rowContainer: {
-    paddingVertical: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: BORDER_DARK,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  rowLeft: {
-    flex: 1,
-    minWidth: 0,
-  },
-  rowTitleLine: {
+  rowTopLine: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    marginBottom: 4,
+    marginBottom: 8,
+    flexWrap: "wrap",
   },
-  rowCategory: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: TEXT_HEADING,
+  rowCatPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: "rgba(0,0,0,0.3)",
   },
+  rowCatDot: { width: 5, height: 5, borderRadius: 999 },
+  rowCatTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 0.8 },
   rowTypeBadge: {
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
+    paddingVertical: 4,
+    borderRadius: 2,
     borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
+    borderColor: CARD_BD,
+    backgroundColor: "rgba(255,255,255,0.025)",
   },
   rowTypeText: {
-    fontSize: 11,
-    color: TEXT_MUTED,
-    textTransform: "capitalize",
-  },
-  rowAccountBadge: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    marginBottom: 2,
-    backgroundColor: "#020617",
-  },
-  rowAccountText: {
-    fontSize: 11,
-    color: TEXT_MUTED,
-  },
-  rowDescription: {
-    fontSize: 13,
-    color: TEXT_SOFT,
-    marginTop: 2,
-  },
-  rowDate: {
-    fontSize: 11,
-    color: TEXT_MUTED,
-    marginTop: 2,
-  },
-  rowRight: {
-    alignItems: "flex-end",
-    justifyContent: "center",
+    fontSize: 8,
+    color: T_DIM,
+    fontWeight: "800",
+    letterSpacing: 1.1,
+    textTransform: "uppercase",
   },
   rowAmount: {
+    marginLeft: "auto",
     fontSize: 14,
-    fontWeight: "700",
-    color: "#bbf7d0",
+    fontWeight: "800",
   },
-  emptyText: {
-    paddingTop: 6,
-    fontSize: 13,
-    color: TEXT_MUTED,
-  },
-  errorBox: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    padding: 10,
-    borderRadius: 12,
-    backgroundColor: "rgba(127,29,29,0.2)",
+  rowAccountPill: {
+    alignSelf: "flex-start",
     borderWidth: 1,
-    borderColor: "#7f1d1d",
+    borderColor: CARD_BD,
+    borderRadius: 2,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    backgroundColor: "rgba(255,255,255,0.025)",
+    marginBottom: 6,
   },
-  errorText: {
-    fontSize: 13,
-    color: "#fecaca",
+  rowAccountTxt: { fontSize: 9, color: T_DIM, letterSpacing: 0.3 },
+  rowDescription: {
+    fontSize: 12,
+    color: T_MID,
+    lineHeight: 17,
+    marginBottom: 3,
   },
+  rowDate: { fontSize: 10, color: T_DIM, letterSpacing: 0.3 },
+
+  emptyText: {
+    paddingVertical: 12,
+    fontSize: 12,
+    color: T_DIM,
+    textAlign: "center",
+    letterSpacing: 0.5,
+  },
+
   footerTip: {
     marginHorizontal: 16,
     marginBottom: 8,
     fontSize: 11,
-    color: TEXT_MUTED,
+    color: T_DIM,
     textAlign: "center",
   },
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: BG_DARK,
-    justifyContent: "center",
+
+  chip: {
+    flexDirection: "row",
     alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 2,
+    borderWidth: 1,
+    borderColor: CARD_BD,
+    backgroundColor: "rgba(255,255,255,0.025)",
+    marginRight: 6,
   },
-  loadingSpinnerOuter: {
-    marginBottom: 12,
-  },
-  loadingTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: main,
-    marginBottom: 4,
-  },
-  loadingSubtitle: {
-    fontSize: 13,
-    color: TEXT_MUTED,
-  },
+  chipSmall: { paddingHorizontal: 8, paddingVertical: 5 },
+  chipSelected: { backgroundColor: "rgba(255,255,255,0.04)" },
+  chipDot: { width: 4, height: 4, borderRadius: 999 },
+  chipText: { fontSize: 11, color: T_DIM },
+  chipTextSmall: { fontSize: 10 },
+  chipTextSelected: { fontWeight: "700" },
+
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(15,23,42,0.7)",
+    backgroundColor: "rgba(3,5,8,0.92)",
     justifyContent: "flex-end",
   },
   modalSheet: {
-    maxHeight: "85%",
-    backgroundColor: BG_DARK,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    maxHeight: "88%",
+    backgroundColor: BG,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
     paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 8,
+    paddingTop: 14,
+    paddingBottom: 10,
     borderTopWidth: 1,
-    borderColor: BORDER_DARK,
+    borderColor: CARD_BD,
+    position: "relative",
+    overflow: "hidden",
+  },
+  modalHairline: {
+    position: "absolute",
+    top: 0,
+    left: "10%",
+    right: "10%",
+    height: 1.5,
+    opacity: 0.65,
   },
   modalHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 6,
+    marginBottom: 8,
   },
   modalTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: TEXT_HEADING,
+    fontSize: 13,
+    fontWeight: "800",
+    color: T_HI,
+    letterSpacing: 2.2,
   },
   modalClose: {
     fontSize: 18,
-    color: TEXT_MUTED,
+    color: T_DIM,
   },
-  modalScroll: {
-    flexGrow: 0,
+  modalScroll: { flexGrow: 0 },
+
+  modalSection: { marginTop: 10 },
+  filterGroupLabel: {
+    fontSize: 8,
+    fontWeight: "800",
+    color: T_DIM,
+    letterSpacing: 2,
+    marginBottom: 6,
   },
-  modalSection: {
-    marginTop: 10,
-  },
+  chipScroll: { paddingBottom: 6, paddingRight: 8 },
+
   dateRangePill: {
     marginTop: 4,
     marginBottom: 8,
-    borderRadius: 12,
+    borderRadius: 2,
     borderWidth: 1,
-    borderColor: BORDER_DARK,
+    borderColor: CARD_BD,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: "#020617",
+    backgroundColor: "rgba(255,255,255,0.025)",
   },
   dateRangeText: {
-    fontSize: 14,
-    color: TEXT_HEADING,
+    fontSize: 13,
+    color: T_HI,
     textAlign: "center",
   },
   calendarCard: {
     marginTop: 8,
-    borderRadius: 16,
+    borderRadius: 4,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: CARD_DARK,
+    borderColor: CARD_BD,
+    backgroundColor: BG,
   },
-  modalActions: {
+
+  modalInputRow: {
     flexDirection: "row",
     gap: 8,
-    marginTop: 8,
+    marginTop: 10,
   },
-  modalBtn: {
-    flex: 1,
+  modalInputCol: { flex: 1 },
+  filterInput: {
+    borderWidth: 1,
+    borderColor: CARD_BD,
+    borderRadius: 2,
+    paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: 999,
+    fontSize: 13,
+    backgroundColor: "rgba(255,255,255,0.025)",
+    color: T_HI,
+  },
+
+  modalActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 8,
+    marginTop: 10,
+  },
+  modalBtnCancel: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 2,
+    borderWidth: 1,
+    borderColor: CARD_BD,
+    backgroundColor: "rgba(255,255,255,0.025)",
+  },
+  modalBtnPrimary: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 2,
+    backgroundColor: CYAN,
     alignItems: "center",
     justifyContent: "center",
+    minWidth: 140,
   },
-  modalBtnOutline: {
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
-  },
-  modalBtnSolid: {
-    borderWidth: 1,
-    borderColor: main,
-    backgroundColor: main,
-  },
-  modalBtnOutlineText: {
-    fontSize: 13,
-    color: TEXT_SOFT,
-    fontWeight: "500",
-  },
-  modalBtnSolidText: {
-    fontSize: 13,
-    color: "#022c22",
-    fontWeight: "700",
-  },
-  // ✅ NEW: Header logo button (tap to go Dashboard)
-  headerLogoBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 999,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: BORDER_DARK,
-    backgroundColor: "#020617",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 10,
-  },
-  headerLogoImg: {
-    width: "100%",
-    height: "100%",
-    resizeMode: "cover",
+  modalBtnTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 1 },
+  modalPrimaryTxt: {
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1,
+    color: BG,
   },
 });

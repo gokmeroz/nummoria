@@ -1,4 +1,6 @@
 // mobile/src/screens/LoginScreen.js
+/* eslint-disable no-unused-vars */
+
 import React, { useMemo, useState } from "react";
 import {
   View,
@@ -14,24 +16,235 @@ import {
   Image,
   Linking,
   Modal,
+  SafeAreaView,
 } from "react-native";
 import { AntDesign } from "@expo/vector-icons";
 import * as AppleAuthentication from "expo-apple-authentication";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api from "../lib/api";
+import logo from "../../assets/nummoria_logo.png";
 
-const BG_DARK = "#020617";
-const CARD_DARK = "#020819";
-const BRAND_GREEN = "#22c55e";
-const TEXT_MUTED = "rgba(148,163,184,1)";
-const TEXT_SOFT = "rgba(148,163,184,0.8)";
+/* ──────────────────────────────────────────────────────────
+   THEME — synced with Dashboard / Expenses cyberpunk HUD
+────────────────────────────────────────────────────────── */
+const BG = "#030508";
+const MINT = "#00ff87";
+const CYAN = "#00d4ff";
+const VIOLET = "#a78bfa";
+const CARD_BG = "rgba(255,255,255,0.025)";
+const CARD_BD = "rgba(255,255,255,0.07)";
+const T_HI = "#e2e8f0";
+const T_MID = "rgba(226,232,240,0.55)";
+const T_DIM = "rgba(226,232,240,0.32)";
+const DANGER = "#fb7185";
 
-// Consent (local gate)
+/* Consent (local gate) */
 const CONSENT_KEY = (userId) => `consent:${String(userId)}`;
 
-// ✅ Verification persistence keys
+/* Verification persistence keys */
 const PENDING_VERIFY_EMAIL_KEY = "pendingVerifyEmail";
 const PENDING_REG_TOKEN_KEY = "pendingRegToken";
+
+/* ──────────────────────────────────────────────────────────
+   HUD PRIMITIVES
+────────────────────────────────────────────────────────── */
+function Brackets({ color = MINT, size = 10, thick = 1.5 }) {
+  const defs = [
+    {
+      top: 0,
+      left: 0,
+      borderTopWidth: thick,
+      borderLeftWidth: thick,
+      borderTopLeftRadius: 2,
+    },
+    {
+      top: 0,
+      right: 0,
+      borderTopWidth: thick,
+      borderRightWidth: thick,
+      borderTopRightRadius: 2,
+    },
+    {
+      bottom: 0,
+      left: 0,
+      borderBottomWidth: thick,
+      borderLeftWidth: thick,
+      borderBottomLeftRadius: 2,
+    },
+    {
+      bottom: 0,
+      right: 0,
+      borderBottomWidth: thick,
+      borderRightWidth: thick,
+      borderBottomRightRadius: 2,
+    },
+  ];
+
+  return (
+    <>
+      {defs.map((d, i) => (
+        <View
+          key={i}
+          style={[
+            {
+              position: "absolute",
+              width: size,
+              height: size,
+              borderColor: color,
+            },
+            d,
+          ]}
+        />
+      ))}
+    </>
+  );
+}
+
+function ScanLine({ color = MINT, style: extra }) {
+  return (
+    <View
+      style={[{ flexDirection: "row", alignItems: "center", gap: 6 }, extra]}
+    >
+      <View
+        style={{
+          width: 3,
+          height: 3,
+          borderRadius: 999,
+          backgroundColor: color,
+          opacity: 0.6,
+        }}
+      />
+      <View
+        style={{ flex: 1, height: 1, backgroundColor: color, opacity: 0.2 }}
+      />
+      <View
+        style={{
+          width: 3,
+          height: 3,
+          borderRadius: 999,
+          backgroundColor: color,
+          opacity: 0.6,
+        }}
+      />
+    </View>
+  );
+}
+
+function GridBG() {
+  const { width, height } = require("react-native").Dimensions.get("window");
+  const COLS = 10;
+  const ROWS = 22;
+  const cw = width / COLS;
+  const rh = height / ROWS;
+
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {Array.from({ length: ROWS + 1 }, (_, i) => (
+        <View
+          key={`h${i}`}
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: i * rh,
+            height: 1,
+            backgroundColor: "rgba(0,255,135,0.035)",
+          }}
+        />
+      ))}
+      {Array.from({ length: COLS + 1 }, (_, i) => (
+        <View
+          key={`v${i}`}
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            left: i * cw,
+            width: 1,
+            backgroundColor: "rgba(0,212,255,0.025)",
+          }}
+        />
+      ))}
+
+      <View
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 2,
+          backgroundColor: MINT,
+          opacity: 0.15,
+        }}
+      />
+      <View
+        style={{
+          position: "absolute",
+          top: height * 0.42,
+          left: 0,
+          right: 0,
+          height: 1,
+          backgroundColor: CYAN,
+          opacity: 0.06,
+        }}
+      />
+      <View
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 1,
+          backgroundColor: VIOLET,
+          opacity: 0.1,
+        }}
+      />
+    </View>
+  );
+}
+
+function ChipButton({ label, accent = MINT, onPress, disabled, loading }) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      disabled={disabled}
+      activeOpacity={0.8}
+      style={[
+        styles.ctrlPill,
+        { borderColor: `${accent}55` },
+        disabled && { opacity: 0.6 },
+      ]}
+    >
+      <View style={[styles.ctrlDot, { backgroundColor: accent }]} />
+      <Text style={[styles.ctrlTxt, { color: accent }]}>
+        {loading ? "PROCESSING" : label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+function StatusCard({ title, body, accent = VIOLET }) {
+  return (
+    <View
+      style={[
+        styles.infoCard,
+        {
+          borderColor: `${accent}33`,
+          backgroundColor:
+            accent === DANGER
+              ? "rgba(251,113,133,0.08)"
+              : accent === MINT
+                ? "rgba(0,255,135,0.08)"
+                : "rgba(167,139,250,0.08)",
+        },
+      ]}
+    >
+      <Brackets color={accent} size={8} thick={1} />
+      <Text style={[styles.infoTitle, { color: accent }]}>{title}</Text>
+      <Text style={styles.infoBody}>{body}</Text>
+    </View>
+  );
+}
 
 export default function LoginScreen({ navigation, onLoggedIn }) {
   const [loginEmail, setLoginEmail] = useState("");
@@ -52,7 +265,6 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
   const [verifying, setVerifying] = useState(false);
   const [resending, setResending] = useState(false);
 
-  // ✅ Define API_BASE (for browser OAuth: Google/GitHub/etc.)
   const API_BASE =
     (api?.defaults?.baseURL || "").replace(/\/+$/, "") ||
     "http://localhost:4000";
@@ -64,8 +276,8 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
     if (!d) return email;
     const maskU =
       u.length <= 2
-        ? u[0] + "*"
-        : u[0] + "*".repeat(Math.max(1, u.length - 2)) + u[u.length - 1];
+        ? `${u[0]}*`
+        : `${u[0]}${"*".repeat(Math.max(1, u.length - 2))}${u[u.length - 1]}`;
     return `${maskU}@${d}`;
   }, [verifyEmail]);
 
@@ -151,8 +363,6 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
   }
 
   async function onLogin() {
-    console.log("[Login] button pressed (MOBILE)");
-
     try {
       setLoginErr("");
       setLoginReason("");
@@ -175,12 +385,10 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
       });
 
       const data = resp?.data || {};
-
       setLoginLoading(false);
 
       await routeAfterAuth(data);
     } catch (e) {
-      console.log("[Login] error:", e?.message, e?.response?.data);
       setLoginLoading(false);
 
       const status = e?.response?.status;
@@ -208,7 +416,6 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
     }
   }
 
-  // Browser-based OAuth (Google/GitHub etc.)
   async function startSocial(provider) {
     try {
       setSocialErr("");
@@ -229,7 +436,6 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
     }
   }
 
-  // ✅ Native Apple Sign-In (iOS only)
   async function signInWithAppleNative() {
     try {
       if (Platform.OS !== "ios") {
@@ -262,7 +468,6 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
             .join(" ")
         : "";
 
-      // ✅ Mobile-only: backend verifies identityToken, uses payload.sub as appleId
       const resp = await api.post("/auth/apple/mobile", {
         identityToken: cred.identityToken,
         fullName,
@@ -275,7 +480,6 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
     } catch (e) {
       setSocialLoading(false);
 
-      // user cancelled
       if (e?.code === "ERR_REQUEST_CANCELED") return;
 
       setSocialErr(
@@ -309,7 +513,7 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
 
       if (!storedRegToken) {
         setVerifying(false);
-        setVerifyErr("Missing verification token. Please tap “Resend code”.");
+        setVerifyErr("Missing verification token. Please tap Resend code.");
         return;
       }
 
@@ -343,8 +547,6 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
 
   async function onResendCode() {
     try {
-      // ⚠️ your backend expects { regToken }.
-      // This flow only works if verifyRegToken exists.
       const storedRegToken =
         verifyRegToken || (await AsyncStorage.getItem(PENDING_REG_TOKEN_KEY));
 
@@ -377,7 +579,9 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
   }
 
   return (
-    <View style={styles.root}>
+    <SafeAreaView style={styles.screen}>
+      <GridBG />
+
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -385,126 +589,194 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.authCard}>
-            <View style={styles.brandRow}>
-              <View style={styles.logoBadge}>
-                <Image
-                  source={require("../../assets/nummoria_logo.png")}
-                  style={styles.logo}
-                  resizeMode="contain"
-                />
+          <View style={styles.headerCard}>
+            <Brackets color={MINT} size={12} thick={1.5} />
+            <View style={[styles.headerHairline, { backgroundColor: MINT }]} />
+
+            <View style={styles.topBar}>
+              <View style={styles.logoRow}>
+                <View style={[styles.statusDot, { backgroundColor: MINT }]} />
+                <Text style={styles.logoTxt}>AUTH</Text>
+                <View
+                  style={[
+                    styles.livePill,
+                    {
+                      borderColor: "rgba(0,255,135,0.25)",
+                      backgroundColor: "rgba(0,255,135,0.12)",
+                    },
+                  ]}
+                >
+                  <Text style={[styles.livePillTxt, { color: MINT }]}>
+                    LOGIN MODULE
+                  </Text>
+                </View>
               </View>
-              <Text style={styles.brandName}>Nummoria</Text>
+
+              <View style={styles.homeBtn}>
+                <Image source={logo} style={styles.homeBtnImg} />
+                <Brackets color={MINT} size={7} thick={1} />
+              </View>
             </View>
 
-            <Text style={styles.sectionTitle}>Sign in</Text>
-            <Text style={styles.sectionSubtitle}>
-              Log in with your Nummoria account to see your dashboard.
+            <Text style={styles.heroTitle}>Access{"\n"}Nummoria</Text>
+            <Text style={styles.heroSub}>
+              Sign in to your account and return to your financial command
+              center.
             </Text>
 
+            <ScanLine
+              color={MINT}
+              style={{ marginTop: 12, marginBottom: 14 }}
+            />
+
+            <View style={styles.controlsRow}>
+              <ChipButton
+                label="LOGIN"
+                accent={MINT}
+                disabled={loginLoading || socialLoading}
+              />
+              <ChipButton
+                label="SECURE"
+                accent={CYAN}
+                disabled={loginLoading || socialLoading}
+              />
+            </View>
+
             {loginErr ? (
-              <View style={styles.errorBox}>
-                <Text style={styles.errorText}>{loginErr}</Text>
-                {loginReason === "UNVERIFIED" && (
-                  <View style={styles.errorActionsRow}>
-                    <TouchableOpacity
-                      onPress={onResendCode}
-                      disabled={resending}
-                    >
-                      <Text style={styles.errorLink}>
-                        {resending ? "Resending..." : "Resend code"}
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => setShowVerify(true)}>
-                      <Text style={styles.errorLink}>Enter code</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
+              <StatusCard
+                title={
+                  loginReason === "UNVERIFIED" ? "UNVERIFIED" : "AUTH ERROR"
+                }
+                body={loginErr}
+                accent={DANGER}
+              />
             ) : null}
-
-            <View style={styles.field}>
-              <Text style={styles.label}>Email address</Text>
-              <TextInput
-                style={styles.input}
-                value={loginEmail}
-                onChangeText={setLoginEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                placeholder="you@nummoria.com"
-                placeholderTextColor={TEXT_MUTED}
-                editable={!loginLoading}
-              />
-            </View>
-
-            <View style={styles.field}>
-              <Text style={styles.label}>Password</Text>
-              <TextInput
-                style={styles.input}
-                value={loginPassword}
-                onChangeText={setLoginPassword}
-                secureTextEntry={true}
-                placeholder="••••••••"
-                placeholderTextColor={TEXT_MUTED}
-                editable={!loginLoading}
-              />
-            </View>
-
-            <TouchableOpacity
-              style={[
-                styles.button,
-                styles.loginBtn,
-                loginLoading && styles.buttonDisabled,
-              ]}
-              onPress={onLogin}
-              disabled={loginLoading}
-              activeOpacity={0.7}
-            >
-              {loginLoading ? (
-                <ActivityIndicator color="#0b1120" />
-              ) : (
-                <Text style={styles.loginText}>Log in</Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() =>
-                Alert.alert(
-                  "Forgot password",
-                  "Password reset flow coming soon.",
-                )
-              }
-            >
-              <Text style={styles.forgotText}>Forgot password?</Text>
-            </TouchableOpacity>
-
-            <View style={styles.dividerRow}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or continue with</Text>
-              <View style={styles.dividerLine} />
-            </View>
 
             {socialErr ? (
-              <View style={styles.socialErrBox}>
-                <Text style={styles.socialErrText}>{socialErr}</Text>
-              </View>
+              <StatusCard
+                title="SOCIAL AUTH"
+                body={socialErr}
+                accent={VIOLET}
+              />
             ) : null}
+
+            <View style={styles.formBlock}>
+              <Text style={styles.fieldLabel}>EMAIL ADDRESS</Text>
+              <View style={styles.inputWrap}>
+                <View style={[styles.inputDot, { backgroundColor: MINT }]} />
+                <TextInput
+                  style={styles.input}
+                  value={loginEmail}
+                  onChangeText={setLoginEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  placeholder="you@nummoria.com"
+                  placeholderTextColor={T_DIM}
+                  editable={!loginLoading}
+                />
+              </View>
+
+              <Text style={styles.fieldLabel}>PASSWORD</Text>
+              <View style={styles.inputWrap}>
+                <View style={[styles.inputDot, { backgroundColor: VIOLET }]} />
+                <TextInput
+                  style={styles.input}
+                  value={loginPassword}
+                  onChangeText={setLoginPassword}
+                  secureTextEntry
+                  placeholder="••••••••"
+                  placeholderTextColor={T_DIM}
+                  editable={!loginLoading}
+                />
+              </View>
+
+              <TouchableOpacity
+                onPress={() =>
+                  Alert.alert(
+                    "Forgot password",
+                    "Password reset flow coming soon.",
+                  )
+                }
+                activeOpacity={0.75}
+              >
+                <Text style={styles.forgotText}>FORGOT PASSWORD?</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.primaryBtn,
+                  loginLoading && styles.buttonDisabled,
+                ]}
+                onPress={onLogin}
+                disabled={loginLoading}
+                activeOpacity={0.8}
+              >
+                <Brackets color={BG} size={8} thick={1} />
+                {loginLoading ? (
+                  <ActivityIndicator color={BG} />
+                ) : (
+                  <Text style={styles.primaryBtnTxt}>ENTER SYSTEM</Text>
+                )}
+              </TouchableOpacity>
+
+              {loginReason === "UNVERIFIED" ? (
+                <View style={styles.inlineActions}>
+                  <TouchableOpacity
+                    style={styles.inlineBtn}
+                    onPress={onResendCode}
+                    disabled={resending}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.inlineBtnTxt, { color: CYAN }]}>
+                      {resending ? "RESENDING..." : "RESEND CODE"}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.inlineBtn,
+                      { borderColor: "rgba(0,255,135,0.22)" },
+                    ]}
+                    onPress={() => setShowVerify(true)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.inlineBtnTxt, { color: MINT }]}>
+                      ENTER CODE
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+            </View>
+
+            <ScanLine
+              color={CYAN}
+              style={{ marginTop: 18, marginBottom: 14 }}
+            />
+
+            <View style={styles.sectionRow}>
+              <Text style={styles.sectionEyebrow}>SOCIAL ACCESS</Text>
+              <Text style={styles.sectionHint}>Browser / native providers</Text>
+            </View>
 
             <TouchableOpacity
               style={[styles.socialBtn, socialLoading && styles.buttonDisabled]}
               onPress={() => startSocial("google")}
               disabled={socialLoading}
-              activeOpacity={0.7}
+              activeOpacity={0.8}
             >
-              <AntDesign name="google" size={18} color="#e5e7eb" />
+              <View
+                style={[styles.socialIconBox, { borderColor: `${CYAN}44` }]}
+              >
+                <AntDesign name="google" size={16} color={CYAN} />
+              </View>
               <Text style={styles.socialText}>
-                {socialLoading ? "Redirecting..." : "Sign in with Google"}
+                {socialLoading ? "REDIRECTING..." : "SIGN IN WITH GOOGLE"}
               </Text>
             </TouchableOpacity>
 
-            {/* ✅ Official Apple button (App Store friendly) */}
             {Platform.OS === "ios" ? (
               <View style={{ marginTop: 10 }}>
                 <AppleAuthentication.AppleAuthenticationButton
@@ -514,18 +786,21 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
                   buttonStyle={
                     AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
                   }
-                  cornerRadius={999}
-                  style={{ width: "100%", height: 44 }}
+                  cornerRadius={4}
+                  style={{ width: "100%", height: 48 }}
                   onPress={signInWithAppleNative}
                   disabled={socialLoading}
                 />
               </View>
             ) : null}
 
-            <View style={styles.signupRow}>
-              <Text style={styles.signupHint}>New around here?</Text>
-              <TouchableOpacity onPress={() => navigation.navigate("SignUp")}>
-                <Text style={styles.signupLink}>Sign up</Text>
+            <View style={styles.footerRow}>
+              <Text style={styles.footerHint}>NEW AROUND HERE?</Text>
+              <TouchableOpacity
+                onPress={() => navigation.navigate("SignUp")}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.footerLink}>CREATE ACCOUNT</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -534,378 +809,465 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
 
       <Modal
         visible={showVerify}
-        transparent={true}
+        transparent
         animationType="fade"
         onRequestClose={() => setShowVerify(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          style={styles.modalBackdrop}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
           <View style={styles.modalCard}>
+            <Brackets color={VIOLET} size={10} thick={1.5} />
+            <View style={[styles.modalHairline, { backgroundColor: VIOLET }]} />
+
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Verify your email</Text>
+              <View>
+                <Text style={styles.modalTitle}>VERIFY EMAIL</Text>
+                <Text style={styles.modalSub}>
+                  We sent a six-digit code to{" "}
+                  <Text style={styles.modalEmail}>{maskedEmail}</Text>
+                </Text>
+              </View>
+
               <TouchableOpacity onPress={() => setShowVerify(false)}>
                 <Text style={styles.modalClose}>×</Text>
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.modalText}>
-              We sent a six-digit code to{" "}
-              <Text style={styles.modalEmail}>{maskedEmail}</Text>.
-            </Text>
-
             {verifyErr ? (
-              <View style={styles.modalErrorBox}>
-                <Text style={styles.modalErrorText}>{verifyErr}</Text>
-              </View>
+              <StatusCard
+                title="VERIFY ERROR"
+                body={verifyErr}
+                accent={DANGER}
+              />
             ) : null}
 
             {verifyMsg ? (
-              <View style={styles.modalMsgBox}>
-                <Text style={styles.modalMsgText}>{verifyMsg}</Text>
-              </View>
+              <StatusCard
+                title="VERIFY STATUS"
+                body={verifyMsg}
+                accent={MINT}
+              />
             ) : null}
 
-            <View style={styles.field}>
-              <Text style={styles.modalLabel}>Verification code</Text>
+            <Text style={styles.fieldLabel}>VERIFICATION CODE</Text>
+            <View style={styles.inputWrap}>
+              <View style={[styles.inputDot, { backgroundColor: VIOLET }]} />
               <TextInput
-                style={styles.modalInput}
+                style={styles.input}
                 keyboardType="number-pad"
                 maxLength={6}
                 value={code}
                 onChangeText={(t) => setCode(t.replace(/\D/g, ""))}
                 placeholder="Enter 6-digit code"
-                placeholderTextColor={TEXT_MUTED}
+                placeholderTextColor={T_DIM}
                 editable={!verifying}
               />
-              <Text style={styles.modalHint}>
-                Code expires 15 minutes after request.
-              </Text>
+            </View>
+
+            <Text style={styles.modalHint}>
+              Code expires 15 minutes after request.
+            </Text>
+
+            <ScanLine
+              color={VIOLET}
+              style={{ marginTop: 16, marginBottom: 14 }}
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalBtnCancel}
+                onPress={() => setShowVerify(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.modalBtnTxt, { color: T_MID }]}>
+                  CANCEL
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.modalBtnPrimary,
+                  verifying && styles.buttonDisabled,
+                ]}
+                onPress={onVerifySubmit}
+                disabled={verifying}
+                activeOpacity={0.8}
+              >
+                {verifying ? (
+                  <ActivityIndicator color={BG} />
+                ) : (
+                  <Text style={styles.modalPrimaryTxt}>VERIFY & CONTINUE</Text>
+                )}
+              </TouchableOpacity>
             </View>
 
             <TouchableOpacity
-              style={[
-                styles.button,
-                styles.modalBtn,
-                verifying && styles.buttonDisabled,
-              ]}
-              onPress={onVerifySubmit}
-              disabled={verifying}
-              activeOpacity={0.7}
+              onPress={onResendCode}
+              disabled={resending}
+              activeOpacity={0.75}
+              style={{ marginTop: 12 }}
             >
-              {verifying ? (
-                <ActivityIndicator color="#0b1120" />
-              ) : (
-                <Text style={styles.modalBtnText}>Verify & continue</Text>
-              )}
+              <Text style={styles.resendLink}>
+                {resending ? "RESENDING..." : "RESEND CODE"}
+              </Text>
             </TouchableOpacity>
-
-            <View style={styles.modalFooterRow}>
-              <Text style={styles.modalFooterText}>Didn't get the code?</Text>
-              <TouchableOpacity onPress={onResendCode} disabled={resending}>
-                <Text style={styles.modalFooterLink}>
-                  {resending ? "Resending..." : "Resend code"}
-                </Text>
-              </TouchableOpacity>
-            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  root: {
-    flex: 1,
-    backgroundColor: BG_DARK,
-  },
+  screen: { flex: 1, backgroundColor: BG },
+
   scrollContent: {
     flexGrow: 1,
-    justifyContent: "flex-start",
-    paddingHorizontal: 18,
-    paddingTop: 90,
-    paddingBottom: 40,
+    justifyContent: "center",
+    paddingHorizontal: 14,
+    paddingTop: 26,
+    paddingBottom: 32,
   },
 
-  brandRow: {
+  headerCard: {
+    marginVertical: 8,
+    padding: 16,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: "rgba(0,255,135,0.20)",
+    backgroundColor: "rgba(0,255,135,0.035)",
+    overflow: "hidden",
+    position: "relative",
+  },
+  headerHairline: {
+    position: "absolute",
+    top: 0,
+    left: "10%",
+    right: "10%",
+    height: 1.5,
+    opacity: 0.65,
+  },
+
+  topBar: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 16,
   },
-  logoBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 999,
-    backgroundColor: "rgba(15,23,42,1)",
+  logoRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  statusDot: { width: 6, height: 6, borderRadius: 999 },
+  logoTxt: { fontSize: 13, fontWeight: "800", color: T_HI, letterSpacing: 3 },
+  livePill: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 2,
+    borderWidth: 1,
+  },
+  livePillTxt: { fontSize: 8, fontWeight: "800", letterSpacing: 1.3 },
+
+  homeBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 2,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(0,255,135,0.20)",
+    backgroundColor: "rgba(255,255,255,0.04)",
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 8,
+    position: "relative",
   },
-  logo: {
-    width: 22,
-    height: 22,
+  homeBtnImg: { width: "100%", height: "100%", resizeMode: "cover" },
+
+  heroTitle: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: T_HI,
+    letterSpacing: -0.7,
+    lineHeight: 32,
+    marginBottom: 6,
   },
-  brandName: {
-    fontSize: 15,
-    color: TEXT_SOFT,
-    fontWeight: "600",
+  heroSub: { fontSize: 13, color: T_MID, lineHeight: 18 },
+
+  controlsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
+  ctrlPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 2,
+    borderWidth: 1,
+    backgroundColor: "rgba(255,255,255,0.025)",
+  },
+  ctrlDot: { width: 5, height: 5, borderRadius: 999 },
+  ctrlTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 1.2 },
+
+  infoCard: {
+    position: "relative",
+    borderRadius: 4,
+    borderWidth: 1,
+    padding: 12,
+    marginBottom: 10,
+    overflow: "hidden",
+  },
+  infoTitle: {
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1.6,
+    marginBottom: 6,
+  },
+  infoBody: {
+    fontSize: 12,
+    color: T_HI,
+    lineHeight: 17,
+    paddingRight: 6,
   },
 
-  authCard: {
-    borderRadius: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    backgroundColor: CARD_DARK,
+  formBlock: { marginTop: 2 },
+
+  fieldLabel: {
+    fontSize: 8,
+    fontWeight: "800",
+    color: T_DIM,
+    letterSpacing: 2,
+    marginBottom: 6,
+    marginTop: 10,
+  },
+  inputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: "rgba(15,23,42,1)",
+    borderColor: CARD_BD,
+    borderRadius: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+    backgroundColor: "rgba(255,255,255,0.025)",
   },
-  sectionTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#f9fafb",
-  },
-  sectionSubtitle: {
-    marginTop: 4,
-    fontSize: 13,
-    color: TEXT_SOFT,
-  },
-  field: {
-    marginTop: 14,
-  },
-  label: {
-    fontSize: 13,
-    color: "#e5e7eb",
-    marginBottom: 4,
+  inputDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 999,
+    marginRight: 8,
+    opacity: 0.75,
   },
   input: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(31,41,55,1)",
-    backgroundColor: "#020617",
-    paddingHorizontal: 16,
+    flex: 1,
+    fontSize: 13,
+    color: T_HI,
     paddingVertical: 10,
-    fontSize: 14,
-    color: "#f9fafb",
   },
-  button: {
-    marginTop: 18,
-    borderRadius: 999,
-    paddingVertical: 11,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  loginBtn: {
-    backgroundColor: BRAND_GREEN,
-  },
-  loginText: {
-    color: "#022c22",
-    fontWeight: "700",
-    fontSize: 15,
-  },
+
   forgotText: {
     marginTop: 10,
-    fontSize: 13,
-    color: TEXT_SOFT,
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+    color: CYAN,
     textAlign: "right",
   },
-  errorBox: {
-    marginTop: 12,
-    borderRadius: 12,
-    padding: 10,
-    backgroundColor: "rgba(248,113,113,0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(248,113,113,0.3)",
-  },
-  errorText: {
-    fontSize: 13,
-    color: "#fecaca",
-  },
-  errorActionsRow: {
-    marginTop: 6,
-    flexDirection: "row",
-    gap: 16,
-  },
-  errorLink: {
-    fontSize: 13,
-    color: BRAND_GREEN,
-    textDecorationLine: "underline",
-  },
-  dividerRow: {
-    flexDirection: "row",
+
+  primaryBtn: {
+    marginTop: 18,
+    height: 52,
+    borderRadius: 2,
+    backgroundColor: MINT,
     alignItems: "center",
-    marginTop: 22,
-    marginBottom: 10,
+    justifyContent: "center",
+    position: "relative",
   },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "rgba(31,41,55,1)",
+  primaryBtnTxt: {
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1.6,
+    color: BG,
   },
-  dividerText: {
-    marginHorizontal: 8,
-    fontSize: 12,
-    color: TEXT_SOFT,
+
+  buttonDisabled: { opacity: 0.65 },
+
+  inlineActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 10,
+    flexWrap: "wrap",
   },
-  socialErrBox: {
-    marginTop: 4,
-    marginBottom: 8,
-    padding: 8,
-    borderRadius: 10,
-    backgroundColor: "rgba(248,113,113,0.08)",
+  inlineBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 2,
     borderWidth: 1,
-    borderColor: "rgba(248,113,113,0.3)",
+    borderColor: "rgba(0,212,255,0.22)",
+    backgroundColor: "rgba(255,255,255,0.025)",
   },
-  socialErrText: {
-    color: "#fecaca",
-    fontSize: 13,
+  inlineBtnTxt: {
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1.1,
   },
+
+  sectionRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  sectionEyebrow: {
+    fontSize: 8,
+    fontWeight: "800",
+    color: T_DIM,
+    letterSpacing: 2,
+  },
+  sectionHint: {
+    fontSize: 9,
+    color: T_DIM,
+    letterSpacing: 0.6,
+  },
+
   socialBtn: {
     marginTop: 10,
-    paddingVertical: 11,
+    paddingVertical: 13,
     paddingHorizontal: 14,
-    borderRadius: 999,
+    borderRadius: 2,
     borderWidth: 1,
-    borderColor: "rgba(31,41,55,1)",
-    backgroundColor: "#020617",
+    borderColor: CARD_BD,
+    backgroundColor: CARD_BG,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
   },
-
+  socialIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 2,
+    borderWidth: 1,
+    backgroundColor: "rgba(255,255,255,0.025)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   socialText: {
-    fontSize: 14,
-    color: "#e5e7eb",
-    fontWeight: "500",
+    fontSize: 11,
+    color: T_HI,
+    fontWeight: "800",
+    letterSpacing: 1.1,
   },
 
-  signupRow: {
+  footerRow: {
     marginTop: 20,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
+    gap: 6,
   },
-  signupHint: {
-    fontSize: 13,
-    color: TEXT_SOFT,
+  footerHint: {
+    fontSize: 11,
+    color: T_DIM,
+    letterSpacing: 0.8,
   },
-  signupLink: {
-    marginLeft: 4,
-    fontSize: 13,
-    fontWeight: "600",
-    color: BRAND_GREEN,
-    textDecorationLine: "underline",
+  footerLink: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: MINT,
+    letterSpacing: 1,
   },
 
-  modalOverlay: {
+  modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(15,23,42,0.85)",
-    alignItems: "center",
+    backgroundColor: "rgba(3,5,8,0.92)",
     justifyContent: "center",
-    padding: 20,
+    alignItems: "center",
+    paddingHorizontal: 16,
   },
   modalCard: {
     width: "100%",
-    maxWidth: 380,
-    borderRadius: 22,
+    maxWidth: 420,
+    borderRadius: 4,
     padding: 18,
-    backgroundColor: "#020617",
+    backgroundColor: BG,
     borderWidth: 1,
-    borderColor: "rgba(31,41,55,1)",
+    borderColor: CARD_BD,
+    overflow: "hidden",
+    position: "relative",
+  },
+  modalHairline: {
+    position: "absolute",
+    top: 0,
+    left: "10%",
+    right: "10%",
+    height: 1.5,
+    opacity: 0.65,
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#f9fafb",
-  },
-  modalClose: {
-    fontSize: 24,
-    color: TEXT_SOFT,
-  },
-  modalText: {
-    marginTop: 6,
-    fontSize: 13,
-    color: TEXT_SOFT,
-  },
-  modalEmail: {
-    color: "#e5e7eb",
-    fontWeight: "600",
-  },
-  modalErrorBox: {
-    marginTop: 10,
-    borderRadius: 10,
-    padding: 8,
-    backgroundColor: "rgba(248,113,113,0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(248,113,113,0.3)",
-  },
-  modalErrorText: {
-    fontSize: 13,
-    color: "#fecaca",
-  },
-  modalMsgBox: {
-    marginTop: 10,
-    borderRadius: 10,
-    padding: 8,
-    backgroundColor: "rgba(16,185,129,0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(16,185,129,0.4)",
-  },
-  modalMsgText: {
-    fontSize: 13,
-    color: BRAND_GREEN,
-  },
-  modalLabel: {
-    marginTop: 12,
-    fontSize: 13,
-    color: "#e5e7eb",
+    alignItems: "flex-start",
+    gap: 12,
     marginBottom: 4,
   },
-  modalInput: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(31,41,55,1)",
-    backgroundColor: "#020617",
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    fontSize: 14,
-    color: "#f9fafb",
+  modalTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: T_HI,
+    letterSpacing: 2.4,
+    marginBottom: 6,
+    marginTop: 4,
+  },
+  modalSub: { fontSize: 12, color: T_MID, lineHeight: 18, maxWidth: "92%" },
+  modalEmail: { color: T_HI, fontWeight: "700" },
+  modalClose: {
+    fontSize: 26,
+    lineHeight: 26,
+    color: T_DIM,
+    marginTop: 2,
   },
   modalHint: {
-    marginTop: 4,
-    fontSize: 11,
-    color: TEXT_SOFT,
+    marginTop: 5,
+    fontSize: 10,
+    color: T_DIM,
+    lineHeight: 15,
+    letterSpacing: 0.3,
   },
-  modalBtn: {
-    marginTop: 16,
-    backgroundColor: BRAND_GREEN,
-  },
-  modalBtnText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#022c22",
-  },
-  modalFooterRow: {
-    marginTop: 10,
+  modalActions: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "flex-end",
+    gap: 8,
+  },
+  modalBtnCancel: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 2,
+    borderWidth: 1,
+    borderColor: CARD_BD,
+    backgroundColor: "rgba(255,255,255,0.025)",
+  },
+  modalBtnPrimary: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 2,
+    backgroundColor: VIOLET,
     alignItems: "center",
+    justifyContent: "center",
+    minWidth: 138,
   },
-  modalFooterText: {
-    fontSize: 13,
-    color: TEXT_SOFT,
+  modalBtnTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 1 },
+  modalPrimaryTxt: {
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1,
+    color: BG,
   },
-  modalFooterLink: {
-    fontSize: 13,
-    color: BRAND_GREEN,
-    textDecorationLine: "underline",
+  resendLink: {
+    textAlign: "center",
+    fontSize: 10,
+    color: CYAN,
+    fontWeight: "800",
+    letterSpacing: 1,
   },
 });
