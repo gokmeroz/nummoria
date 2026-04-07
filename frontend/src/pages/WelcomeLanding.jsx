@@ -2,6 +2,15 @@
 import { useState, useEffect, useRef } from "react";
 
 const logoUrl = new URL("../assets/nummoria_logo.png", import.meta.url).href;
+const phone1 = new URL("../assets/phone-1.png", import.meta.url).href;
+const phone2 = new URL("../assets/phone-2.png", import.meta.url).href;
+const phone3 = new URL("../assets/phone-3.png", import.meta.url).href;
+const phone4 = new URL("../assets/phone-4.png", import.meta.url).href;
+const phone5 = new URL("../assets/phone-5.png", import.meta.url).href;
+// const phone6 = new URL("../assets/phone-6.png", import.meta.url).href;
+const phone7 = new URL("../assets/phone-7.png", import.meta.url).href;
+const phone8 = new URL("../assets/phone-8.png", import.meta.url).href;
+const phone9 = new URL("../assets/phone-9.png", import.meta.url).href;
 
 /* ─── GLOBAL STYLES ─── */
 const G = `
@@ -137,6 +146,31 @@ const G = `
     transition: border-color .2s, background .2s, transform .2s;
   }
   .cta-ghost:hover { border-color: rgba(0,255,135,.28); background: rgba(0,255,135,.05); transform: translateY(-1px); }
+    @keyframes phone-float {
+    0%,100% { transform: translateY(0px); }
+    50% { transform: translateY(-12px); }
+  }
+
+  @keyframes phone-glow-pulse {
+    0%,100% { opacity: .5; transform: scale(1); }
+    50% { opacity: .92; transform: scale(1.06); }
+  }
+
+  @keyframes screen-scan {
+    0%   { transform: translateY(-130%); opacity: 0; }
+    14%  { opacity: .2; }
+    100% { transform: translateY(240%); opacity: 0; }
+  }
+
+  @keyframes phone-orb-float-a {
+    0%,100% { transform: translate3d(0,0,0); }
+    50% { transform: translate3d(0,-14px,0); }
+  }
+
+  @keyframes phone-orb-float-b {
+    0%,100% { transform: translate3d(0,0,0); }
+    50% { transform: translate3d(0,12px,0); }
+  }
 `;
 
 /* ─── PARTICLE CANVAS ─── */
@@ -952,7 +986,496 @@ function FAQ({ q, a }) {
     </div>
   );
 }
+function HeroPhoneShowcase() {
+  const screens = [
+    phone1,
+    phone2,
+    phone3,
+    phone4,
+    phone5,
+    // phone6,
+    phone7,
+    phone8,
+    phone9,
+  ];
 
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setIndex((prev) => (prev + 1) % screens.length);
+    }, 2200);
+
+    return () => clearInterval(id);
+  }, [screens.length]);
+
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        minHeight: 640,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      {/* ambient back glow */}
+      <div
+        style={{
+          position: "absolute",
+          width: 430,
+          height: 430,
+          borderRadius: "50%",
+          background:
+            "radial-gradient(circle, rgba(0,255,135,.16) 0%, rgba(0,212,255,.08) 35%, transparent 72%)",
+          filter: "blur(30px)",
+          animation: "phone-glow-pulse 5.5s ease-in-out infinite",
+          pointerEvents: "none",
+        }}
+      />
+
+      {/* floating accent orb top right */}
+      <div
+        style={{
+          position: "absolute",
+          top: 42,
+          right: 38,
+          width: 92,
+          height: 92,
+          borderRadius: "50%",
+          background:
+            "radial-gradient(circle, rgba(0,255,135,.18), transparent 66%)",
+          animation: "phone-orb-float-a 6s ease-in-out infinite",
+          pointerEvents: "none",
+        }}
+      />
+
+      {/* floating accent orb bottom left */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 52,
+          left: 34,
+          width: 76,
+          height: 76,
+          borderRadius: "50%",
+          background:
+            "radial-gradient(circle, rgba(0,212,255,.16), transparent 66%)",
+          animation: "phone-orb-float-b 7s ease-in-out infinite",
+          pointerEvents: "none",
+        }}
+      />
+
+      {/* LEFT TOP */}
+      <div
+        style={{
+          position: "absolute",
+          left: -80,
+          top: 150,
+          zIndex: 3,
+          width: 172,
+          padding: "14px 16px",
+          borderRadius: 18,
+          border: "1px solid rgba(255,255,255,.12)",
+          background:
+            "linear-gradient(180deg, rgba(10,16,24,.92), rgba(6,10,16,.84))",
+          backdropFilter: "blur(18px)",
+          WebkitBackdropFilter: "blur(18px)",
+          boxShadow:
+            "0 18px 50px rgba(0,0,0,.42), 0 0 0 1px rgba(0,255,135,.08), 0 0 26px rgba(0,255,135,.10)",
+          animation: "float-y 5.4s ease-in-out infinite",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 14,
+            right: 14,
+            height: 1,
+            background:
+              "linear-gradient(to right, transparent, rgba(0,255,135,.45), transparent)",
+          }}
+        />
+        <div
+          style={{
+            fontSize: 10,
+            color: "rgba(226,232,240,.56)",
+            fontFamily: "'DM Mono', monospace",
+            letterSpacing: ".12em",
+            marginBottom: 8,
+          }}
+        >
+          AI INSIGHT
+        </div>
+        <div
+          style={{
+            fontSize: 14,
+            fontWeight: 800,
+            color: "#f8fafc",
+            lineHeight: 1.35,
+          }}
+        >
+          Subscriptions
+          <br />
+          detected
+        </div>
+      </div>
+
+      {/* LEFT LOWER */}
+      <div
+        style={{
+          position: "absolute",
+          left: -80,
+          top: 365,
+          zIndex: 3,
+          width: 172,
+          padding: "14px 16px",
+          borderRadius: 18,
+          border: "1px solid rgba(0,212,255,.14)",
+          background:
+            "linear-gradient(180deg, rgba(10,16,24,.92), rgba(6,10,16,.84))",
+          backdropFilter: "blur(18px)",
+          WebkitBackdropFilter: "blur(18px)",
+          boxShadow:
+            "0 18px 50px rgba(0,0,0,.42), 0 0 0 1px rgba(0,212,255,.08), 0 0 28px rgba(0,212,255,.10)",
+          animation: "float-y 6.2s ease-in-out infinite 0.8s",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 14,
+            right: 14,
+            height: 1,
+            background:
+              "linear-gradient(to right, transparent, rgba(0,212,255,.45), transparent)",
+          }}
+        />
+        <div
+          style={{
+            fontSize: 10,
+            color: "rgba(226,232,240,.56)",
+            fontFamily: "'DM Mono', monospace",
+            letterSpacing: ".12em",
+            marginBottom: 8,
+          }}
+        >
+          CASH FLOW
+        </div>
+        <div
+          style={{
+            fontSize: 14,
+            fontWeight: 800,
+            color: "#7dd3fc",
+            lineHeight: 1.35,
+          }}
+        >
+          Inflow sources
+          <br />
+          visible
+        </div>
+      </div>
+
+      {/* RIGHT TOP */}
+      <div
+        style={{
+          position: "absolute",
+          right: -80,
+          top: 170,
+          zIndex: 3,
+          width: 172,
+          padding: "14px 16px",
+          borderRadius: 18,
+          border: "1px solid rgba(0,255,135,.16)",
+          background:
+            "linear-gradient(180deg, rgba(10,16,24,.94), rgba(6,10,16,.86))",
+          backdropFilter: "blur(18px)",
+          WebkitBackdropFilter: "blur(18px)",
+          boxShadow:
+            "0 18px 50px rgba(0,0,0,.42), 0 0 0 1px rgba(0,255,135,.10), 0 0 34px rgba(0,255,135,.15)",
+          animation: "float-y 5.8s ease-in-out infinite 0.5s",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 14,
+            right: 14,
+            height: 1,
+            background:
+              "linear-gradient(to right, transparent, rgba(0,255,135,.5), transparent)",
+          }}
+        />
+        <div
+          style={{
+            fontSize: 10,
+            color: "rgba(226,232,240,.58)",
+            fontFamily: "'DM Mono', monospace",
+            letterSpacing: ".12em",
+            marginBottom: 8,
+          }}
+        >
+          MONTHLY CLARITY
+        </div>
+        <div
+          style={{
+            fontSize: 15,
+            fontWeight: 800,
+            color: "#00ff87",
+            lineHeight: 1.32,
+            textShadow: "0 0 14px rgba(0,255,135,.18)",
+          }}
+        >
+          + better
+          <br />
+          visibility
+        </div>
+      </div>
+
+      {/* RIGHT LOWER */}
+      <div
+        style={{
+          position: "absolute",
+          right: -80,
+          top: 392,
+          zIndex: 3,
+          width: 172,
+          padding: "14px 16px",
+          borderRadius: 18,
+          border: "1px solid rgba(167,139,250,.16)",
+          background:
+            "linear-gradient(180deg, rgba(10,16,24,.92), rgba(6,10,16,.84))",
+          backdropFilter: "blur(18px)",
+          WebkitBackdropFilter: "blur(18px)",
+          boxShadow:
+            "0 18px 50px rgba(0,0,0,.42), 0 0 0 1px rgba(167,139,250,.08), 0 0 28px rgba(167,139,250,.12)",
+          animation: "float-y 6.6s ease-in-out infinite 1.2s",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 14,
+            right: 14,
+            height: 1,
+            background:
+              "linear-gradient(to right, transparent, rgba(167,139,250,.45), transparent)",
+          }}
+        />
+        <div
+          style={{
+            fontSize: 10,
+            color: "rgba(226,232,240,.56)",
+            fontFamily: "'DM Mono', monospace",
+            letterSpacing: ".12em",
+            marginBottom: 8,
+          }}
+        >
+          PORTFOLIO VIEW
+        </div>
+        <div
+          style={{
+            fontSize: 14,
+            fontWeight: 800,
+            color: "#c4b5fd",
+            lineHeight: 1.35,
+          }}
+        >
+          Assets in one
+          <br />
+          system
+        </div>
+      </div>
+
+      {/* phone shell */}
+      <div
+        style={{
+          position: "relative",
+          width: 305,
+          height: 620,
+          borderRadius: 44,
+          padding: 10,
+          background:
+            "linear-gradient(155deg, rgba(255,255,255,.13), rgba(255,255,255,.04))",
+          border: "1px solid rgba(255,255,255,.12)",
+          boxShadow:
+            "0 50px 120px rgba(0,0,0,.55), 0 0 0 1px rgba(0,255,135,.07), 0 0 90px rgba(0,255,135,.12)",
+          animation: "phone-float 5.8s ease-in-out infinite",
+          backdropFilter: "blur(18px)",
+        }}
+      >
+        {/* metal edge */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: 44,
+            boxShadow:
+              "inset 0 0 0 1px rgba(255,255,255,.05), inset 0 0 40px rgba(255,255,255,.03)",
+            pointerEvents: "none",
+          }}
+        />
+
+        {/* notch */}
+        <div
+          style={{
+            position: "absolute",
+            top: 14,
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: 108,
+            height: 28,
+            borderRadius: 100,
+            background: "#020304",
+            zIndex: 6,
+            boxShadow: "0 1px 0 rgba(255,255,255,.06)",
+          }}
+        />
+
+        {/* screen */}
+        <div
+          style={{
+            position: "relative",
+            width: "100%",
+            height: "100%",
+            overflow: "hidden",
+            borderRadius: 35,
+            background: "#05070a",
+          }}
+        >
+          {screens.map((src, i) => {
+            const active = i === index;
+            const previous =
+              i === (index - 1 + screens.length) % screens.length;
+
+            return (
+              <img
+                key={src}
+                src={src}
+                alt={`Nummoria screen ${i + 1}`}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain",
+                  background: "#05070a",
+                  transition:
+                    "transform 1s cubic-bezier(.22,1,.36,1), opacity 1s cubic-bezier(.22,1,.36,1), filter .8s ease",
+                  transform: active
+                    ? "translateY(0%) scale(1)"
+                    : previous
+                      ? "translateY(-10%) scale(.985)"
+                      : "translateY(12%) scale(1.02)",
+                  opacity: active ? 1 : previous ? 0 : 0,
+                  filter: active ? "blur(0px)" : "blur(8px)",
+                }}
+              />
+            );
+          })}
+
+          {/* top reflection */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background:
+                "linear-gradient(115deg, rgba(255,255,255,.13) 0%, rgba(255,255,255,.03) 18%, transparent 32%, transparent 68%, rgba(255,255,255,.04) 100%)",
+              pointerEvents: "none",
+            }}
+          />
+
+          {/* scan beam */}
+          <div
+            style={{
+              position: "absolute",
+              top: "-40%",
+              left: 0,
+              right: 0,
+              height: "28%",
+              background:
+                "linear-gradient(to bottom, transparent, rgba(255,255,255,.08), transparent)",
+              animation: "screen-scan 4.8s linear infinite",
+              pointerEvents: "none",
+            }}
+          />
+
+          {/* subtle bottom overlay */}
+          <div
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: 130,
+              background:
+                "linear-gradient(to top, rgba(3,5,8,.72), rgba(3,5,8,.18), transparent)",
+              pointerEvents: "none",
+            }}
+          />
+
+          {/* bottom status */}
+          <div
+            style={{
+              position: "absolute",
+              left: 18,
+              right: 18,
+              bottom: 18,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              zIndex: 7,
+            }}
+          >
+            <div
+              style={{
+                padding: "7px 12px",
+                borderRadius: 999,
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: ".08em",
+                fontFamily: "'DM Mono', monospace",
+                color: "#00ff87",
+                background: "rgba(0,0,0,.42)",
+                border: "1px solid rgba(0,255,135,.18)",
+                backdropFilter: "blur(10px)",
+              }}
+            >
+              LIVE PREVIEW
+            </div>
+
+            <div style={{ display: "flex", gap: 6 }}>
+              {screens.map((_, i) => (
+                <span
+                  key={i}
+                  style={{
+                    width: i === index ? 18 : 6,
+                    height: 6,
+                    borderRadius: 999,
+                    background:
+                      i === index ? "#00ff87" : "rgba(255,255,255,.22)",
+                    boxShadow:
+                      i === index ? "0 0 10px rgba(0,255,135,.65)" : "none",
+                    transition: "all .35s ease",
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 /* ═══════════════════════════════════════ MAIN ═══════════════════════════════════════ */
 export default function NummoriasLanding() {
   useReveal();
@@ -1207,7 +1730,7 @@ export default function NummoriasLanding() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
+            gridTemplateColumns: "1.08fr .92fr",
             gap: 68,
             alignItems: "center",
           }}
@@ -1354,374 +1877,9 @@ export default function NummoriasLanding() {
           </div>
 
           {/* RIGHT */}
-          <Tilt className="rv rv-rgt" style={{ position: "relative" }}>
-            <div
-              style={{
-                position: "absolute",
-                top: -22,
-                right: -22,
-                width: 84,
-                height: 84,
-                borderRadius: "50%",
-                background:
-                  "radial-gradient(circle,rgba(0,255,135,.16),transparent 65%)",
-                animation: "float-y 5.5s ease-in-out infinite",
-                pointerEvents: "none",
-              }}
-            />
-            <div
-              style={{
-                position: "absolute",
-                bottom: -18,
-                left: -18,
-                width: 66,
-                height: 66,
-                borderRadius: "50%",
-                background:
-                  "radial-gradient(circle,rgba(0,212,255,.12),transparent 65%)",
-                animation: "float-y 7s ease-in-out infinite 1.5s",
-                pointerEvents: "none",
-              }}
-            />
-
-            <div
-              style={{
-                borderRadius: 28,
-                border: "1px solid rgba(0,255,135,.13)",
-                background: "rgba(255,255,255,.04)",
-                backdropFilter: "blur(40px)",
-                padding: 26,
-                boxShadow: "0 40px 110px -55px rgba(0,255,135,.28)",
-                position: "relative",
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  position: "absolute",
-                  top: -40,
-                  right: -40,
-                  width: 170,
-                  height: 170,
-                  borderRadius: "50%",
-                  background:
-                    "radial-gradient(circle,rgba(0,255,135,.09),transparent 58%)",
-                  pointerEvents: "none",
-                }}
-              />
-              <div
-                style={{
-                  position: "absolute",
-                  bottom: -35,
-                  left: -35,
-                  width: 140,
-                  height: 140,
-                  borderRadius: "50%",
-                  background:
-                    "radial-gradient(circle,rgba(0,212,255,.06),transparent 58%)",
-                  pointerEvents: "none",
-                }}
-              />
-              <div
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: 1,
-                  background:
-                    "linear-gradient(to right,transparent,rgba(0,255,135,.55),rgba(0,212,255,.38),transparent)",
-                }}
-              />
-
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  justifyContent: "space-between",
-                  gap: 12,
-                  marginBottom: 20,
-                  position: "relative",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: 9,
-                      background:
-                        "linear-gradient(135deg,rgba(0,255,135,.2),rgba(0,212,255,.1))",
-                      border: "1px solid rgba(0,255,135,.2)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontFamily: "'Syne',sans-serif",
-                      fontWeight: 800,
-                      fontSize: 14,
-                      color: "#00ff87",
-                    }}
-                  >
-                    <img
-                      src={logoUrl}
-                      alt="Nummoria Logo"
-                      style={{ width: 32, height: 32, borderRadius: 9 }}
-                    />
-                  </div>
-                  <div>
-                    <div
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 700,
-                        fontFamily: "'Syne',sans-serif",
-                      }}
-                    >
-                      Stop leaking money quietly
-                    </div>
-                    <div
-                      style={{ fontSize: 11, color: "rgba(226,232,240,.42)" }}
-                    >
-                      Upgrade to get AI that finds the leaks.
-                    </div>
-                  </div>
-                </div>
-                <span className="chip" style={{ fontSize: 9, flexShrink: 0 }}>
-                  most popular: Plus
-                </span>
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 10,
-                  marginBottom: 16,
-                }}
-              >
-                {[
-                  [
-                    "Habit cost → annual impact",
-                    "Turn daily spending into real yearly numbers.",
-                    "AI",
-                  ],
-                  [
-                    "Break-even comparisons",
-                    "Compare options with ROI logic and tradeoffs.",
-                    "AI",
-                  ],
-                  [
-                    "Monthly clarity report",
-                    "A clean snapshot you can act on in minutes.",
-                    "Plus",
-                  ],
-                  [
-                    "Investments overview",
-                    "Unified view across assets and currencies.",
-                    "Plus",
-                  ],
-                ].map(([t, d, b]) => (
-                  <div
-                    key={t}
-                    style={{
-                      padding: "11px 12px",
-                      borderRadius: 14,
-                      border: "1px solid rgba(255,255,255,.07)",
-                      background: "rgba(255,255,255,.03)",
-                      transition: "all .25s",
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = "rgba(0,255,135,.18)";
-                      e.currentTarget.style.background = "rgba(0,255,135,.045)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor =
-                        "rgba(255,255,255,.07)";
-                      e.currentTarget.style.background =
-                        "rgba(255,255,255,.03)";
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "flex-start",
-                        gap: 6,
-                        marginBottom: 5,
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 700,
-                          fontFamily: "'Syne',sans-serif",
-                          lineHeight: 1.3,
-                        }}
-                      >
-                        {t}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: 8,
-                          fontWeight: 700,
-                          padding: "2px 6px",
-                          borderRadius: 100,
-                          border: "1px solid rgba(255,255,255,.09)",
-                          background: "rgba(0,0,0,.38)",
-                          color: "rgba(226,232,240,.48)",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {b}
-                      </span>
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 10,
-                        color: "rgba(226,232,240,.48)",
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      {d}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div
-                style={{
-                  borderRadius: 18,
-                  border: "1px solid rgba(255,255,255,.07)",
-                  background: "rgba(0,0,0,.32)",
-                  padding: "14px 16px",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: 12,
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 700,
-                      fontFamily: "'Syne',sans-serif",
-                    }}
-                  >
-                    What you get
-                  </span>
-                  <span
-                    style={{ fontSize: 10, color: "rgba(226,232,240,.38)" }}
-                  >
-                    cancel anytime
-                  </span>
-                </div>
-                {[
-                  "Personalized insights from your own entries (not templates).",
-                  'Clear "what changed + why it matters" explanations.',
-                  "Action steps with tradeoffs, not orders.",
-                ].map((t, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      display: "flex",
-                      alignItems: "flex-start",
-                      gap: 8,
-                      marginBottom: 8,
-                      fontSize: 11,
-                      color: "rgba(226,232,240,.62)",
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: 5,
-                        height: 5,
-                        borderRadius: "50%",
-                        background: "#00ff87",
-                        flexShrink: 0,
-                        marginTop: 4,
-                        boxShadow: "0 0 5px #00ff87",
-                      }}
-                    />
-                    {t}
-                  </div>
-                ))}
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: 9,
-                    marginTop: 14,
-                  }}
-                >
-                  <a
-                    href="#pricing"
-                    className="cta-primary"
-                    style={{ height: 38, fontSize: 11 }}
-                  >
-                    See plans & upgrade
-                  </a>
-                  <a
-                    href="/signup"
-                    className="cta-ghost"
-                    style={{ height: 38, fontSize: 11 }}
-                  >
-                    Start free first
-                  </a>
-                </div>
-                <div
-                  style={{
-                    marginTop: 12,
-                    display: "flex",
-                    justifyContent: "space-between",
-                    flexWrap: "wrap",
-                    gap: 8,
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: 10,
-                      color: "rgba(226,232,240,.38)",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 5,
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: 5,
-                        height: 5,
-                        borderRadius: "50%",
-                        background: "rgba(0,255,135,.5)",
-                      }}
-                    />
-                    Purchases in mobile app
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 10,
-                      color: "rgba(226,232,240,.38)",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 5,
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: 5,
-                        height: 5,
-                        borderRadius: "50%",
-                        background: "rgba(0,212,255,.5)",
-                      }}
-                    />
-                    Private by default
-                  </span>
-                </div>
-              </div>
-            </div>
-          </Tilt>
+          <div className="rv rv-rgt" style={{ position: "relative" }}>
+            <HeroPhoneShowcase />
+          </div>
         </div>
       </section>
 
