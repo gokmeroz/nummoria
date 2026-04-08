@@ -4,10 +4,16 @@ import Footer from "../components/Footer";
 import api from "../lib/api";
 import HeroSlider from "../components/HeroSlider";
 
-// ✅ import local assets instead of using ../../src/... strings
 import seeItImg from "../assets/see_it_track_it_1.avif";
 
-/* money utils */
+/* ─────────────────────────────────────────────────────────────
+   PALETTE & UTILS
+───────────────────────────────────────────────────────────── */
+const BG = "#030508";
+const MINT = "#00ff87";
+const CYAN = "#00d4ff";
+const VIOLET = "#a78bfa";
+
 function decimalsForCurrency(code) {
   const zero = new Set(["JPY", "KRW", "CLP", "VND"]);
   const three = new Set(["BHD", "IQD", "JOD", "KWD", "OMR", "TND"]);
@@ -20,7 +26,21 @@ function minorToMajorNumber(minor, currency) {
   return minor / Math.pow(10, d);
 }
 
-/* hooks */
+function formatCurrency(n, currency = "USD") {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 0,
+    }).format(n);
+  } catch {
+    return `$${Number(n || 0).toLocaleString()}`;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   HOOKS
+───────────────────────────────────────────────────────────── */
 function useMonthlyExpenseTotal(baseCurrency) {
   const [tx, setTx] = useState([]),
     [loading, setLoading] = useState(true),
@@ -73,6 +93,7 @@ function useMonthlyExpenseTotal(baseCurrency) {
   }, [tx, baseCurrency]);
   return { totalMajor, loading, error };
 }
+
 function useMonthlyIncomeTotal(baseCurrency) {
   const [tx, setTx] = useState([]),
     [loading, setLoading] = useState(true),
@@ -125,6 +146,7 @@ function useMonthlyIncomeTotal(baseCurrency) {
   }, [tx, baseCurrency]);
   return { totalMajor, loading, error };
 }
+
 function useMonthlyInvestmentTotal(baseCurrency) {
   const [tx, setTx] = useState([]),
     [loading, setLoading] = useState(true),
@@ -178,18 +200,105 @@ function useMonthlyInvestmentTotal(baseCurrency) {
   return { totalMajor, loading, error };
 }
 
+/* ─────────────────────────────────────────────────────────────
+   DECORATOR COMPONENTS
+───────────────────────────────────────────────────────────── */
+function Brackets({ color = MINT, size = "10px", thick = "1.5px" }) {
+  return (
+    <>
+      <div
+        className="absolute top-0 left-0"
+        style={{
+          width: size,
+          height: size,
+          borderTop: `${thick} solid ${color}`,
+          borderLeft: `${thick} solid ${color}`,
+        }}
+      />
+      <div
+        className="absolute top-0 right-0"
+        style={{
+          width: size,
+          height: size,
+          borderTop: `${thick} solid ${color}`,
+          borderRight: `${thick} solid ${color}`,
+        }}
+      />
+      <div
+        className="absolute bottom-0 left-0"
+        style={{
+          width: size,
+          height: size,
+          borderBottom: `${thick} solid ${color}`,
+          borderLeft: `${thick} solid ${color}`,
+        }}
+      />
+      <div
+        className="absolute bottom-0 right-0"
+        style={{
+          width: size,
+          height: size,
+          borderBottom: `${thick} solid ${color}`,
+          borderRight: `${thick} solid ${color}`,
+        }}
+      />
+    </>
+  );
+}
+
+function ScanLine({ color = MINT, className = "" }) {
+  return (
+    <div className={`flex items-center gap-1.5 ${className}`}>
+      <div
+        className="w-[3px] h-[3px] rounded-full opacity-60"
+        style={{ backgroundColor: color }}
+      />
+      <div
+        className="flex-1 h-[1px] opacity-20"
+        style={{ backgroundColor: color }}
+      />
+      <div
+        className="w-[3px] h-[3px] rounded-full opacity-60"
+        style={{ backgroundColor: color }}
+      />
+    </div>
+  );
+}
+
+function ActionChip({ label, accent = CYAN, href }) {
+  return (
+    <a
+      href={href}
+      className="inline-flex items-center gap-2 px-4 py-2.5 border bg-black/40 hover:bg-white/5 transition-colors"
+      style={{ borderColor: `${accent}44` }}
+    >
+      <span
+        className="w-1.5 h-1.5 rounded-full"
+        style={{ backgroundColor: accent }}
+      />
+      <span
+        className="text-xs font-bold tracking-wide"
+        style={{ color: accent }}
+      >
+        {label}
+      </span>
+    </a>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   MAIN DASHBOARD
+───────────────────────────────────────────────────────────── */
 export default function Dashboard() {
   const [me, setMe] = useState(null);
   const [err, setErr] = useState("");
+
   useEffect(() => {
     api
       .get("/me")
       .then(({ data }) => setMe(data))
       .catch((e) => setErr(e.response?.data?.error || "Failed to load /me"));
   }, []);
-
-  const main = "#4f772d";
-  const secondary = "#90a955";
 
   const {
     totalMajor: monthlyExpense,
@@ -207,14 +316,13 @@ export default function Dashboard() {
     error: invErr,
   } = useMonthlyInvestmentTotal(me?.baseCurrency || "USD");
 
-  /* Slides */
   const slides = [
     {
-      image: seeItImg, // ✅ imported asset
+      image: seeItImg,
       alt: "Finance background",
       title: "See it. Track it.",
       subtitle:
-        "Real-time visibility into your cash flow, spending, and investments — all in one place. Stay compliant with your own rules and never miss a beat.",
+        "Real-time visibility into your cash flow, spending, and investments.",
       ctas: [
         { label: "GET ADVICE", href: "/ai/financial-advice" },
         { label: "VIEW REPORTS", href: "/reports" },
@@ -260,57 +368,48 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="min-h-dvh bg-[#070A07] text-white">
-      {/* subtle background texture + glow */}
-      <div className="pointer-events-none fixed inset-0 -z-10">
-        <div className="absolute inset-0 bg-[radial-gradient(1200px_800px_at_20%_10%,rgba(19,226,67,0.10),transparent_55%),radial-gradient(900px_700px_at_80%_20%,rgba(153,23,70,0.12),transparent_55%),radial-gradient(900px_700px_at_50%_90%,rgba(255,255,255,0.06),transparent_60%)]" />
-        <div className="absolute inset-0 opacity-[0.10] mix-blend-overlay bg-[linear-gradient(to_right,rgba(255,255,255,0.10)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.10)_1px,transparent_1px)] bg-[size:56px_56px]" />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/40 to-black/70" />
-      </div>
-
-      {/* FULL-BLEED HERO */}
-      <section className="relative w-screen">
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute -top-16 left-8 h-40 w-40 rounded-full blur-3xl opacity-30 bg-[#13e243]" />
-          <div className="absolute -top-12 right-10 h-40 w-40 rounded-full blur-3xl opacity-25 bg-[#991746]" />
-        </div>
-
-        {/* Keep your HeroSlider intact; we just wrap it for styling */}
+    <div className="min-h-dvh text-[#e2e8f0] bg-[#030508]">
+      {/* ── FULL-BLEED HERO ── */}
+      <section className="relative w-full">
         <div className="relative">
-          <HeroSlider
-            slides={slides}
-            minHeight={520}
-            className="rounded-none"
-          />
-          {/* bottom fade to merge with dark content */}
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-transparent to-[#070A07]" />
+          <HeroSlider slides={slides} minHeight={520} className="w-full" />
+          {/* Bottom fade to merge seamlessly into the dark content area */}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-b from-transparent to-[#030508]" />
         </div>
       </section>
 
-      {/* Content */}
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12 md:py-16">
-        <div className="flex flex-col items-center text-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/70 backdrop-blur-md">
+      {/* ── DASHBOARD CONTENT ── */}
+      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header Row */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-2 text-[10px] font-extrabold tracking-[0.2em] text-white/70 uppercase">
             <span
-              className="inline-block h-2 w-2 rounded-full"
-              style={{ background: secondary }}
+              className="w-1.5 h-1.5 rounded-full"
+              style={{ backgroundColor: MINT }}
             />
-            LIVE MONTHLY SNAPSHOT
+            Live Monthly Snapshot
           </div>
+          <div className="text-[10px] font-bold tracking-[0.15em] text-white/40 uppercase">
+            {new Date().toLocaleString("default", {
+              month: "short",
+              year: "numeric",
+            })}
+          </div>
+        </div>
 
-          <h2 className="mt-5 text-3xl md:text-4xl font-semibold tracking-tight">
+        {/* Title & Description */}
+        <div className="mb-8">
+          <h2 className="text-3xl font-extrabold tracking-tight text-white mb-2">
             A clear picture of your money — instantly
           </h2>
-
-          <p className="mt-3 max-w-3xl text-base md:text-lg text-white/70">
-            From students to growing teams: track expenses, monitor income, and
-            keep an eye on investments with Nummoria. Export, share, and
-            automate.
+          <p className="text-[13px] text-white/50 max-w-2xl leading-relaxed">
+            Track expenses, monitor income, and keep an eye on investments with
+            Nummoria. Export, share, and automate.
           </p>
         </div>
 
-        {/* Stats */}
-        <div className="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
           <StatCard
             title="This Month's Expenses"
             value={
@@ -318,8 +417,6 @@ export default function Dashboard() {
                 ? "…"
                 : formatCurrency(monthlyExpense, me?.baseCurrency || "USD")
             }
-            main={main}
-            secondary={secondary}
             accent="expense"
           />
           <StatCard
@@ -329,8 +426,6 @@ export default function Dashboard() {
                 ? "…"
                 : formatCurrency(monthlyIncome, me?.baseCurrency || "USD")
             }
-            main={main}
-            secondary={secondary}
             accent="income"
           />
           <StatCard
@@ -340,129 +435,174 @@ export default function Dashboard() {
                 ? "…"
                 : formatCurrency(monthlyInvestments, me?.baseCurrency || "USD")
             }
-            main={main}
-            secondary={secondary}
             accent="invest"
           />
         </div>
 
-        {/* Errors (kept same logic, upgraded UI) */}
+        {/* Errors */}
         {(err || expErr || incErr || invErr) && (
-          <div className="mt-10">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-md p-4 md:p-5">
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 h-9 w-9 rounded-xl bg-[#991746]/20 border border-[#991746]/30 grid place-items-center">
-                  <span className="text-sm">!</span>
-                </div>
-                <div className="min-w-0">
-                  <div className="text-sm font-medium text-white">
-                    Something didn’t load
-                  </div>
-                  <div className="mt-1 text-sm text-white/70 space-y-1">
-                    {err && <div>{err}</div>}
-                    {expErr && <div>{expErr}</div>}
-                    {incErr && <div>{incErr}</div>}
-                    {invErr && <div>{invErr}</div>}
-                  </div>
-                </div>
+          <div className="relative flex items-start gap-3 p-4 mb-10 border bg-[#a78bfa]/5 border-[#a78bfa]/20">
+            <Brackets color={VIOLET} size="8px" thick="1px" />
+            <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center border bg-[#a78bfa]/10 border-[#a78bfa]/30">
+              <span className="text-sm font-bold" style={{ color: VIOLET }}>
+                !
+              </span>
+            </div>
+            <div>
+              <h3 className="text-[11px] font-bold text-white tracking-widest uppercase mb-1">
+                System Warning
+              </h3>
+              <div className="text-xs text-white/60 space-y-1">
+                {err && <div>[User]: {err}</div>}
+                {expErr && <div>[Expenses]: {expErr}</div>}
+                {incErr && <div>[Income]: {incErr}</div>}
+                {invErr && <div>[Invest]: {invErr}</div>}
               </div>
             </div>
           </div>
         )}
-      </section>
 
+        {/* Quick Actions */}
+        <div className="mb-12">
+          <div className="flex items-center gap-2 text-[10px] font-extrabold tracking-[0.2em] text-white/70 uppercase mb-5">
+            <span
+              className="w-1.5 h-1.5 rounded-full"
+              style={{ backgroundColor: CYAN }}
+            />
+            Quick Actions
+          </div>
+          <div className="flex flex-wrap gap-4">
+            <ActionChip label="Add Expense" accent={VIOLET} href="/expenses" />
+            <ActionChip label="Add Income" accent={MINT} href="/income" />
+            <ActionChip
+              label="AI Mentor"
+              accent={CYAN}
+              href="/ai/financial-helper"
+            />
+          </div>
+        </div>
+
+        {/* AI Mentor Card */}
+        <div className="relative border bg-[#00d4ff]/5 border-[#00d4ff]/30 p-8 md:p-10 mb-16">
+          <Brackets color={CYAN} size="14px" thick="1.5px" />
+          <div
+            className="absolute top-0 inset-x-[15%] h-[1px] opacity-40"
+            style={{ backgroundColor: CYAN }}
+          />
+
+          <div className="flex flex-col md:flex-row gap-6 items-start">
+            <div
+              className="hidden md:block w-[2px] h-24 opacity-60"
+              style={{ backgroundColor: CYAN }}
+            />
+            <div className="flex-1">
+              <div
+                className="text-[10px] font-extrabold tracking-[0.2em] mb-3 uppercase"
+                style={{ color: CYAN }}
+              >
+                AI Financial Mentor
+              </div>
+              <h3 className="text-3xl font-extrabold text-white tracking-tight leading-[1.1] mb-4">
+                Ask Nummoria's
+                <br />
+                AI mentor
+              </h3>
+              <p className="text-[13px] text-white/60 mb-6 max-w-lg leading-relaxed">
+                "Can I afford this?", "How much should I invest?", or "What
+                happens if I move in 3 years?" — ask in plain language.
+              </p>
+              <a
+                href="/ai/financial-helper"
+                className="inline-flex items-center gap-3 px-5 py-3 transition-opacity hover:opacity-80"
+                style={{ backgroundColor: CYAN }}
+              >
+                <span
+                  className="text-[11px] font-extrabold tracking-[0.15em]"
+                  style={{ color: BG }}
+                >
+                  INITIATE CHAT
+                </span>
+                <span
+                  className="w-1.5 h-1.5 rounded-full"
+                  style={{ backgroundColor: BG }}
+                />
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
       {/* <Footer /> */}
     </div>
   );
 }
 
-/** Simple stat card (UI upgraded, same inputs/outputs) */
-function StatCard({ title, value, main, secondary, accent }) {
-  const accentMap = {
+/** * Sharp, terminal-style Stat Card matching your screenshot
+ */
+function StatCard({ title, value, accent }) {
+  const ACC = {
     expense: {
-      glow: "rgba(153,23,70,0.18)",
-      chip: "bg-[#991746]/15 border-[#991746]/30 text-white/80",
-      dot: "#991746",
+      color: VIOLET,
+      bg: "rgba(167,139,250,0.03)",
+      bd: "rgba(167,139,250,0.25)",
     },
     income: {
-      glow: "rgba(19,226,67,0.16)",
-      chip: "bg-[#13e243]/15 border-[#13e243]/30 text-white/80",
-      dot: "#13e243",
+      color: MINT,
+      bg: "rgba(0,255,135,0.03)",
+      bd: "rgba(0,255,135,0.25)",
     },
     invest: {
-      glow: "rgba(144,169,85,0.16)",
-      chip: "bg-white/5 border-white/10 text-white/80",
-      dot: secondary,
+      color: CYAN,
+      bg: "rgba(0,212,255,0.03)",
+      bd: "rgba(0,212,255,0.25)",
     },
   };
-  const a = accentMap[accent] || accentMap.invest;
+  const a = ACC[accent] || ACC.invest;
 
   return (
-    <div className="group relative rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-md p-5 md:p-6 overflow-hidden transition-transform duration-300 hover:-translate-y-0.5">
-      {/* ambient glow */}
-      <div
-        className="pointer-events-none absolute -top-10 -right-10 h-44 w-44 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-        style={{ background: a.glow }}
-      />
-      {/* top hairline */}
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-px"
-        style={{
-          background:
-            "linear-gradient(to right, transparent, rgba(255,255,255,0.18), transparent)",
-        }}
-      />
+    <div
+      className="relative border p-6 flex flex-col justify-between min-h-[140px]"
+      style={{ backgroundColor: a.bg, borderColor: a.bd }}
+    >
+      <Brackets color={a.color} size="8px" thick="1.5px" />
 
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-xs uppercase tracking-wider text-white/60">
-            {title}
-          </div>
-          <div className="mt-2 text-3xl md:text-[34px] font-semibold tracking-tight">
-            <span
-              className="bg-clip-text text-transparent"
-              style={{
-                backgroundImage: `linear-gradient(135deg, ${secondary}, ${main})`,
-              }}
-            >
-              {value}
-            </span>
-          </div>
-        </div>
-
+      <div>
+        {/* Pill Badge */}
         <div
-          className={`shrink-0 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] ${a.chip}`}
+          className="inline-flex items-center gap-2 border px-2 py-1 mb-4 bg-black/40"
+          style={{ borderColor: a.bd }}
         >
           <span
-            className="inline-block h-2 w-2 rounded-full"
-            style={{ background: a.dot }}
+            className="w-1 h-1 rounded-full"
+            style={{ backgroundColor: a.color }}
           />
-          THIS MONTH
+          <span
+            className="text-[8px] font-extrabold tracking-[0.2em] uppercase"
+            style={{ color: a.color }}
+          >
+            This Month
+          </span>
+        </div>
+
+        {/* Title */}
+        <div className="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-1">
+          {title}
+        </div>
+
+        {/* Value */}
+        <div
+          className="text-4xl font-extrabold tracking-tighter"
+          style={{ color: a.color }}
+        >
+          {value}
         </div>
       </div>
 
-      <div className="mt-5 flex items-center justify-between text-xs text-white/55">
-        <div className="inline-flex items-center gap-2">
-          <span className="inline-block h-1 w-1 rounded-full bg-white/40" />
+      <div className="mt-8">
+        <ScanLine color={a.color} className="mb-2" />
+        <div className="text-[10px] text-white/30 tracking-wide">
           Updated from transactions
-        </div>
-        <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-          Hovered
         </div>
       </div>
     </div>
   );
-}
-
-/** currency helper */
-function formatCurrency(n, currency = "USD") {
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 0,
-    }).format(n);
-  } catch {
-    return `$${Number(n || 0).toLocaleString()}`;
-  }
 }
