@@ -241,7 +241,7 @@ const Chip = React.memo(({ label, selected, onClick, accent = CYAN }) => (
     className={`inline-flex items-center gap-2 border px-3 py-1 transition-colors flex-shrink-0 ${
       selected
         ? "bg-black/40 text-white"
-        : "bg-white/[0.02] border-white/10 text-white/50 hover:bg-white/[0.05] hover:text-white"
+        : "bg-white/[0.02] border-white/10 text-white/70 hover:bg-white/[0.05] hover:text-white"
     }`}
     style={{ borderColor: selected ? `${accent}88` : undefined }}
   >
@@ -251,15 +251,13 @@ const Chip = React.memo(({ label, selected, onClick, accent = CYAN }) => (
         style={{ backgroundColor: accent }}
       />
     )}
-    <span className="text-[10px] font-bold tracking-widest uppercase">
-      {label}
-    </span>
+    <span className="text-xs font-bold tracking-wider uppercase">{label}</span>
   </button>
 ));
 
 const Field = React.memo(({ label, children }) => (
   <div className="flex flex-col gap-1.5">
-    <label className="text-[10px] font-bold tracking-widest text-white/50 uppercase">
+    <label className="text-xs font-bold tracking-wider text-white/80 uppercase">
       {label}
     </label>
     {children}
@@ -304,12 +302,12 @@ const SectionCard = React.memo(
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
               {title && (
-                <h2 className="text-sm font-extrabold tracking-[0.1em] text-white uppercase">
+                <h2 className="text-base font-extrabold tracking-wider text-white uppercase">
                   {title}
                 </h2>
               )}
               {subtitle && (
-                <p className="mt-1 text-[10px] text-white/50 tracking-wider uppercase">
+                <p className="mt-1 text-xs text-white/80 tracking-wider uppercase">
                   {subtitle}
                 </p>
               )}
@@ -328,11 +326,11 @@ const MetricCard = React.memo(({ label, value, accent }) => {
   return (
     <div className="border border-white/10 bg-black/40 p-4 relative overflow-hidden h-full flex flex-col justify-center">
       <Brackets color={color} size="6px" thick="1px" />
-      <div className="text-[8px] font-bold uppercase tracking-widest text-white/40 mb-1">
+      <div className="text-[10px] font-bold uppercase tracking-wider text-white/70 mb-1">
         {label}
       </div>
       <div
-        className="text-lg md:text-xl font-extrabold tracking-tighter truncate"
+        className="text-lg md:text-xl font-extrabold tracking-tight truncate"
         style={{ color }}
         title={value}
       >
@@ -403,10 +401,10 @@ const BarChart = React.memo(({ data, currency }) => {
                 x={pad - 8}
                 y={y + 3}
                 textAnchor="end"
-                fontSize="9"
+                fontSize="11"
                 fontWeight="bold"
-                fill="rgba(167,139,250,0.5)"
-                className="tracking-widest font-mono"
+                fill="rgba(167,139,250,0.8)"
+                className="tracking-wider font-mono"
               >
                 {fmtMoney(val, currency)}
               </text>
@@ -507,10 +505,10 @@ const BarChart = React.memo(({ data, currency }) => {
                 x={x + w / 2}
                 y={height - pad}
                 textAnchor="middle"
-                fontSize="10"
+                fontSize="12"
                 fill={MINT}
                 fontWeight="bold"
-                className="tracking-widest font-mono"
+                className="tracking-wider font-mono"
                 opacity="0"
               >
                 <animate
@@ -539,10 +537,10 @@ const BarChart = React.memo(({ data, currency }) => {
                 x={x + w / 2}
                 y={height - pad + 18}
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="11"
                 fontWeight="bold"
-                fill="rgba(255,255,255,0.7)"
-                className="uppercase tracking-widest"
+                fill="rgba(255,255,255,0.9)"
+                className="uppercase tracking-wider"
               >
                 {d.name.length > 10 ? d.name.slice(0, 10) + "…" : d.name}
               </text>
@@ -562,6 +560,9 @@ const BarChart = React.memo(({ data, currency }) => {
 });
 
 const PieChart = React.memo(({ data, currency }) => {
+  const [hoveredIdx, setHoveredIdx] = useState(null);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+
   const size = 220,
     r = 80,
     hole = 50,
@@ -606,6 +607,31 @@ const PieChart = React.memo(({ data, currency }) => {
 
   return (
     <div className="flex flex-col lg:flex-row items-center gap-6 w-full h-full justify-center p-2">
+      {/* Tooltip Rendered at Mouse Position */}
+      {hoveredIdx !== null && mappedData[hoveredIdx] && (
+        <div
+          className="fixed z-50 pointer-events-none px-3 py-2 bg-[#030508] border shadow-2xl backdrop-blur-md transform -translate-x-1/2 -translate-y-[120%] transition-opacity duration-150"
+          style={{
+            left: mousePos.x,
+            top: mousePos.y,
+            borderColor: `${mappedData[hoveredIdx].color}88`,
+          }}
+        >
+          <div
+            className="text-xs font-extrabold uppercase tracking-wider mb-1"
+            style={{ color: mappedData[hoveredIdx].color }}
+          >
+            {mappedData[hoveredIdx].name}
+          </div>
+          <div className="text-sm font-mono font-bold text-white">
+            {fmtMoney(mappedData[hoveredIdx].minor, currency)}
+          </div>
+          <div className="text-[10px] font-mono text-white/70 mt-0.5">
+            {Math.round((mappedData[hoveredIdx].pct ?? 0) * 100)}% OF TOTAL
+          </div>
+        </div>
+      )}
+
       <div className="relative flex-shrink-0 flex items-center justify-center">
         <div
           className="absolute inset-0 rounded-full blur-2xl opacity-20"
@@ -620,14 +646,13 @@ const PieChart = React.memo(({ data, currency }) => {
               <feGaussianBlur stdDeviation="4" result="blur" />
               <feComposite in="SourceGraphic" in2="blur" operator="over" />
             </filter>
-            {/* Added a strong drop shadow filter for the center text to make it readable */}
             <filter id="textShadow">
               <feDropShadow
                 dx="0"
-                dy="2"
-                stdDeviation="2"
+                dy="1"
+                stdDeviation="1"
                 floodColor="#000"
-                floodOpacity="0.8"
+                floodOpacity="0.9"
               />
             </filter>
           </defs>
@@ -671,14 +696,29 @@ const PieChart = React.memo(({ data, currency }) => {
           />
 
           {segs.map((s, i) => (
-            <g key={i} filter="url(#pieGlow)">
+            <g
+              key={i}
+              filter="url(#pieGlow)"
+              style={{
+                opacity: hoveredIdx === null || hoveredIdx === i ? 1 : 0.3,
+                transition: "opacity 0.3s ease",
+              }}
+            >
               <path
                 d={s.path}
                 fill={s.color}
                 stroke={BG}
                 strokeWidth="4"
                 opacity="0"
-                className="transition-all duration-300 hover:brightness-125 hover:scale-[1.02] origin-center"
+                className="transition-all duration-300 hover:brightness-125 hover:scale-[1.02] origin-center cursor-crosshair"
+                onMouseEnter={(e) => {
+                  setHoveredIdx(i);
+                  setMousePos({ x: e.clientX, y: e.clientY });
+                }}
+                onMouseMove={(e) => {
+                  setMousePos({ x: e.clientX, y: e.clientY });
+                }}
+                onMouseLeave={() => setHoveredIdx(null)}
               >
                 <animate
                   attributeName="opacity"
@@ -692,16 +732,16 @@ const PieChart = React.memo(({ data, currency }) => {
             </g>
           ))}
 
-          {/* Upgraded Center Readout Text - Brighter with Drop Shadows */}
           <text
             x={cx}
             y={cy - 6}
             textAnchor="middle"
-            fontSize="10"
+            fontSize="12"
             fontWeight="bold"
             fill="#e2e8f0"
             filter="url(#textShadow)"
-            className="tracking-[0.2em] uppercase font-mono"
+            className="tracking-wider uppercase font-mono"
+            style={{ pointerEvents: "none" }}
           >
             TOTAL
           </text>
@@ -709,11 +749,12 @@ const PieChart = React.memo(({ data, currency }) => {
             x={cx}
             y={cy + 14}
             textAnchor="middle"
-            fontSize="14"
+            fontSize="16"
             fill="#ffffff"
             fontWeight="900"
             filter="url(#textShadow)"
-            className="tracking-widest font-mono"
+            className="tracking-wider font-mono"
+            style={{ pointerEvents: "none" }}
           >
             {fmtMoney(total, currency)}
           </text>
@@ -724,10 +765,16 @@ const PieChart = React.memo(({ data, currency }) => {
         {mappedData.map((s, i) => (
           <div
             key={i}
-            className="group flex items-center gap-3 border border-white/5 bg-white/[0.02] px-3 py-2 transition-all hover:bg-white/[0.05] hover:border-white/20 relative overflow-hidden"
+            onMouseEnter={() => setHoveredIdx(i)}
+            onMouseLeave={() => setHoveredIdx(null)}
+            className={`group flex items-center gap-3 border px-3 py-2 transition-all relative overflow-hidden cursor-default ${
+              hoveredIdx === i
+                ? "bg-white/[0.08] border-white/30"
+                : "bg-white/[0.02] border-white/5 hover:bg-white/[0.05] hover:border-white/20"
+            }`}
           >
             <div
-              className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity"
+              className={`absolute inset-0 transition-opacity ${hoveredIdx === i ? "opacity-15" : "opacity-0 group-hover:opacity-10"}`}
               style={{
                 background: `linear-gradient(90deg, ${s.color}, transparent)`,
               }}
@@ -738,20 +785,22 @@ const PieChart = React.memo(({ data, currency }) => {
               style={{ backgroundColor: s.color }}
             />
 
-            <div className="flex-1 min-w-0 pl-1">
+            <div className="flex-1 min-w-0 pl-1 relative z-10">
               <div
-                className="truncate text-[10px] font-extrabold uppercase tracking-widest text-white/90 group-hover:text-white transition-colors"
+                className={`truncate text-xs font-extrabold uppercase tracking-wider transition-colors ${hoveredIdx === i ? "text-white" : "text-white/90 group-hover:text-white"}`}
                 title={s.name}
               >
                 {s.name}
               </div>
-              <div className="text-[9px] font-bold text-white/40 font-mono mt-0.5">
+              <div className="text-[11px] font-bold text-white/70 font-mono mt-0.5">
                 {Math.round((s.pct ?? 0) * 100)}% SHARE
               </div>
             </div>
 
-            <div className="text-right">
-              <div className="font-mono text-[11px] font-bold text-white group-hover:text-[#00d4ff] transition-colors">
+            <div className="text-right relative z-10">
+              <div
+                className={`font-mono text-sm font-bold transition-colors ${hoveredIdx === i ? "text-[#00d4ff]" : "text-white group-hover:text-[#00d4ff]"}`}
+              >
                 {fmtMoney(s.minor, currency)}
               </div>
             </div>
@@ -906,7 +955,7 @@ const ExpenseModal = React.memo(
                   onChange={(e) => setForm({ ...form, amount: e.target.value })}
                   placeholder="0.00"
                   inputMode="decimal"
-                  className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white placeholder:text-white/30 outline-none focus:border-[#a78bfa]/50"
+                  className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white placeholder:text-white/50 outline-none focus:border-[#a78bfa]/50"
                 />
               </Field>
               <Field label="CCY">
@@ -959,7 +1008,7 @@ const ExpenseModal = React.memo(
                   setForm({ ...form, description: e.target.value })
                 }
                 placeholder="Optional memo"
-                className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white placeholder:text-white/30 outline-none focus:border-[#a78bfa]/50"
+                className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white placeholder:text-white/50 outline-none focus:border-[#a78bfa]/50"
               />
             </Field>
             <Field label="Tags (csv)">
@@ -967,21 +1016,21 @@ const ExpenseModal = React.memo(
                 value={form.tagsCsv}
                 onChange={(e) => setForm({ ...form, tagsCsv: e.target.value })}
                 placeholder="groceries, dinner"
-                className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white placeholder:text-white/30 outline-none focus:border-[#a78bfa]/50"
+                className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white placeholder:text-white/50 outline-none focus:border-[#a78bfa]/50"
               />
             </Field>
             <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
               <button
                 type="button"
                 onClick={onClose}
-                className="border border-white/10 bg-white/[0.04] px-4 py-2 text-[10px] font-extrabold tracking-widest text-white/70 uppercase hover:bg-white/[0.08]"
+                className="border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-extrabold tracking-wider text-white/90 uppercase hover:bg-white/[0.08]"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleSubmit}
-                className="px-4 py-2 text-[10px] font-extrabold tracking-widest text-[#030508] uppercase hover:opacity-80"
+                className="px-4 py-2 text-xs font-extrabold tracking-wider text-[#030508] uppercase hover:opacity-80"
                 style={{ backgroundColor: VIOLET }}
               >
                 {editing ? "Save" : "Add"}
@@ -1072,12 +1121,12 @@ const AutoQuickAddModal = React.memo(
                 >
                   Auto add expense
                 </div>
-                <div className="mt-1 text-xs text-white/50 tracking-wider uppercase">
+                <div className="mt-1 text-xs text-white/80 tracking-wider uppercase">
                   Parse a short sentence into a transaction.
                 </div>
               </div>
               <div
-                className="inline-flex items-center gap-2 border bg-black/40 px-3 py-1 text-[9px] font-bold tracking-widest text-white/70"
+                className="inline-flex items-center gap-2 border bg-black/40 px-3 py-1 text-[11px] font-bold tracking-wider text-white/90"
                 style={{ borderColor: `${CYAN}44` }}
               >
                 <span
@@ -1088,7 +1137,7 @@ const AutoQuickAddModal = React.memo(
               </div>
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-white/50 tracking-widest uppercase">
+              <label className="text-xs font-bold text-white/80 tracking-wider uppercase">
                 Account
               </label>
               <select
@@ -1108,7 +1157,7 @@ const AutoQuickAddModal = React.memo(
               </select>
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-white/50 tracking-widest uppercase">
+              <label className="text-xs font-bold text-white/80 tracking-wider uppercase">
                 Text
               </label>
               <input
@@ -1119,13 +1168,13 @@ const AutoQuickAddModal = React.memo(
                   setNotice("");
                 }}
                 placeholder="e.g. paid 280 TRY coffee"
-                className="w-full border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm text-white placeholder:text-white/30 outline-none transition focus:border-[#00d4ff]/50"
+                className="w-full border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm text-white placeholder:text-white/50 outline-none transition focus:border-[#00d4ff]/50"
                 disabled={busy}
               />
-              <div className="text-[10px] text-white/40 tracking-wide">
+              <div className="text-xs text-white/70 tracking-wide">
                 Examples:{" "}
-                <span className="text-white/70">paid 280 TRY coffee</span>,{" "}
-                <span className="text-white/70">uber 180</span>
+                <span className="text-white/90">paid 280 TRY coffee</span>,{" "}
+                <span className="text-white/90">uber 180</span>
               </div>
             </div>
             {notice && (
@@ -1139,7 +1188,7 @@ const AutoQuickAddModal = React.memo(
                 type="button"
                 onClick={onClose}
                 disabled={busy}
-                className="border border-white/10 bg-white/[0.04] px-5 py-2 text-[10px] font-extrabold tracking-widest text-white/70 transition hover:bg-white/[0.08] uppercase"
+                className="border border-white/10 bg-white/[0.04] px-5 py-2 text-xs font-extrabold tracking-wider text-white/90 transition hover:bg-white/[0.08] uppercase"
               >
                 Cancel
               </button>
@@ -1148,7 +1197,7 @@ const AutoQuickAddModal = React.memo(
                 onClick={handleCreate}
                 disabled={busy}
                 title="Ctrl/⌘ + Enter"
-                className="px-5 py-2 text-[10px] font-extrabold tracking-widest text-[#030508] transition hover:opacity-80 disabled:opacity-50 uppercase"
+                className="px-5 py-2 text-xs font-extrabold tracking-wider text-[#030508] transition hover:opacity-80 disabled:opacity-50 uppercase"
                 style={{ backgroundColor: CYAN }}
               >
                 {busy ? "Parsing..." : "Create"}
@@ -1185,27 +1234,27 @@ const Row = React.memo(
                   style={{ backgroundColor: VIOLET }}
                 />
                 <span
-                  className="text-[9px] font-extrabold tracking-widest uppercase"
+                  className="text-[11px] font-extrabold tracking-wider uppercase"
                   style={{ color: VIOLET }}
                 >
                   {catName}
                 </span>
               </div>
               {isFuture && (
-                <span className="border border-[#a78bfa]/30 bg-[#a78bfa]/10 px-2 py-0.5 text-[8px] font-bold tracking-widest text-[#a78bfa] uppercase">
+                <span className="border border-[#a78bfa]/30 bg-[#a78bfa]/10 px-2 py-0.5 text-[10px] font-bold tracking-wider text-[#a78bfa] uppercase">
                   UPCOMING
                 </span>
               )}
             </div>
             <div className="inline-block border border-white/10 bg-black/40 px-2 py-0.5 mb-2">
-              <span className="text-[8px] tracking-widest text-white/50 uppercase">
+              <span className="text-[10px] tracking-wider text-white/80 uppercase">
                 {accName}
               </span>
             </div>
-            <div className="text-[12px] text-white/70 mb-2 leading-relaxed">
+            <div className="text-sm text-white/90 mb-2 leading-relaxed">
               {item.description || "No description"}
             </div>
-            <div className="text-[9px] text-white/40 tracking-widest uppercase mb-2">
+            <div className="text-[11px] text-white/70 tracking-wider uppercase mb-2">
               {fmtDateUTC(item.date)}
             </div>
             {item.tags?.length > 0 && (
@@ -1213,7 +1262,7 @@ const Row = React.memo(
                 {item.tags.map((tag) => (
                   <span
                     key={tag}
-                    className="text-[9px] font-bold tracking-widest uppercase"
+                    className="text-[11px] font-bold tracking-wider uppercase"
                     style={{ color: MINT }}
                   >
                     #{tag}
@@ -1224,24 +1273,24 @@ const Row = React.memo(
           </div>
           <div className="text-left lg:text-right">
             <div
-              className="text-xl font-extrabold tracking-tighter mb-3"
+              className="text-xl font-extrabold tracking-tight mb-3"
               style={{ color: VIOLET }}
             >
               -{minorToMajor(item.amountMinor, item.currency)}{" "}
-              <span className="text-[10px] font-bold opacity-60">
+              <span className="text-xs font-bold opacity-80">
                 {item.currency}
               </span>
             </div>
             <div className="flex gap-2 lg:justify-end">
               <button
                 onClick={() => onEdit(item)}
-                className="border border-[#00d4ff]/30 bg-[#00d4ff]/10 px-3 py-1 text-[8px] font-bold tracking-widest text-[#00d4ff] uppercase hover:bg-[#00d4ff]/20"
+                className="border border-[#00d4ff]/30 bg-[#00d4ff]/10 px-3 py-1 text-[10px] font-bold tracking-wider text-[#00d4ff] uppercase hover:bg-[#00d4ff]/20"
               >
                 EDIT
               </button>
               <button
                 onClick={() => onDelete(item)}
-                className="border border-[#a78bfa]/30 bg-[#a78bfa]/10 px-3 py-1 text-[8px] font-bold tracking-widest text-[#a78bfa] uppercase hover:bg-[#a78bfa]/20"
+                className="border border-[#a78bfa]/30 bg-[#a78bfa]/10 px-3 py-1 text-[10px] font-bold tracking-wider text-[#a78bfa] uppercase hover:bg-[#a78bfa]/20"
               >
                 DELETE
               </button>
@@ -1274,9 +1323,10 @@ export default function ExpensesScreen({ accountId }) {
   const [showFilters, setShowFilters] = useState(false);
   const [sortKey, setSortKey] = useState("date_desc");
 
-  // New state for creating categories
-  const [newCatName, setNewCatName] = useState("");
+  // Local Distribution Graph State
+  const [distCurrency, setDistCurrency] = useState("");
 
+  const [newCatName, setNewCatName] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingData, setEditingData] = useState(null);
   const [autoModalOpen, setAutoModalOpen] = useState(false);
@@ -1289,6 +1339,8 @@ export default function ExpensesScreen({ accountId }) {
     () => new Map(accounts.map((a) => [a._id, a])),
     [accounts],
   );
+
+  // Global currencies for the main filter
   const currencies = useMemo(
     () => [
       "ALL",
@@ -1381,6 +1433,39 @@ export default function ExpensesScreen({ accountId }) {
     sortKey,
   ]);
 
+  // Compute what currencies are actually visible in the feed right now
+  const distCurrencies = useMemo(() => {
+    return [...new Set(rows.map((t) => t.currency || "USD"))];
+  }, [rows]);
+
+  // Determine the active selection for the Distribution Picker
+  const currentDistCurrency = distCurrencies.includes(distCurrency)
+    ? distCurrency
+    : distCurrencies[0] || "USD";
+
+  // Isolate Distribution Data generation based entirely on the local picker
+  const distributionData = useMemo(() => {
+    const curRows = rows.filter(
+      (r) => (r.currency || "USD") === currentDistCurrency,
+    );
+    const pieMap = new Map();
+    for (const t of curRows) {
+      pieMap.set(
+        t.categoryId || "—",
+        (pieMap.get(t.categoryId || "—") || 0) + Number(t.amountMinor || 0),
+      );
+    }
+    const total = Array.from(pieMap.values()).reduce((a, b) => a + b, 0) || 1;
+
+    return Array.from(pieMap.entries())
+      .map(([cid, minor]) => ({
+        name: categoriesById.get(cid)?.name || "—",
+        minor,
+        pct: minor / total,
+      }))
+      .sort((a, b) => b.minor - a.minor);
+  }, [rows, currentDistCurrency, categoriesById]);
+
   const totals = useMemo(() => {
     const byCur = {};
     for (const t of rows) {
@@ -1434,6 +1519,7 @@ export default function ExpensesScreen({ accountId }) {
     return arr;
   }, [transactions]);
 
+  // Insights strictly for KPIs & Bar Chart now
   const insights = useMemo(() => {
     const chosen =
       filters.fCurrency !== "ALL"
@@ -1467,20 +1553,12 @@ export default function ExpensesScreen({ accountId }) {
       yearMinor += minorSum(within(filteredByCur, s, e));
     }
 
-    const catMap = new Map(),
-      pieMap = new Map();
+    const catMap = new Map();
     for (const t of thisMonth)
       catMap.set(
         t.categoryId || "—",
         (catMap.get(t.categoryId || "—") || 0) + Number(t.amountMinor || 0),
       );
-    for (const t of filteredByCur)
-      pieMap.set(
-        t.categoryId || "—",
-        (pieMap.get(t.categoryId || "—") || 0) + Number(t.amountMinor || 0),
-      );
-
-    const total = Array.from(pieMap.values()).reduce((a, b) => a + b, 0) || 1;
 
     return {
       statsCurrency: chosen,
@@ -1493,13 +1571,6 @@ export default function ExpensesScreen({ accountId }) {
         .map(([cid, minor]) => ({
           name: categoriesById.get(cid)?.name || "—",
           minor,
-        }))
-        .sort((a, b) => b.minor - a.minor),
-      pieData: Array.from(pieMap.entries())
-        .map(([cid, minor]) => ({
-          name: categoriesById.get(cid)?.name || "—",
-          minor,
-          pct: minor / total,
         }))
         .sort((a, b) => b.minor - a.minor),
       noteMixedCurrency: filters.fCurrency === "ALL",
@@ -1574,7 +1645,7 @@ export default function ExpensesScreen({ accountId }) {
           <div className="w-16 h-16 border border-[#a78bfa]/30 flex items-center justify-center mb-4 bg-[#a78bfa]/10">
             <div className="w-8 h-8 rounded-full border-t-2 border-[#a78bfa] animate-spin" />
           </div>
-          <div className="text-[11px] font-extrabold tracking-[0.3em] text-white/70 uppercase">
+          <div className="text-[11px] font-extrabold tracking-[0.3em] text-white/90 uppercase">
             Initialising Module...
           </div>
         </div>
@@ -1589,8 +1660,8 @@ export default function ExpensesScreen({ accountId }) {
           __html: `
         .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.4); }
         
         @keyframes spin-slow { 100% { transform: rotate(360deg); } }
         @keyframes spin-slow-reverse { 100% { transform: rotate(-360deg); } }
@@ -1615,14 +1686,14 @@ export default function ExpensesScreen({ accountId }) {
                   className="w-1.5 h-1.5 rounded-full"
                   style={{ backgroundColor: MINT }}
                 />
-                <span className="text-[9px] font-extrabold tracking-[0.2em] text-white/60 uppercase">
+                <span className="text-[11px] font-extrabold tracking-wider text-white/80 uppercase">
                   Expense Ledger
                 </span>
               </div>
               <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-white leading-none">
                 Expense Control
               </h1>
-              <p className="mt-3 max-w-2xl text-[13px] text-white/50 leading-relaxed">
+              <p className="mt-3 max-w-2xl text-base text-white/80 leading-relaxed">
                 Review spending, spot patterns, and keep your outflow
                 decision-ready.
               </p>
@@ -1633,7 +1704,7 @@ export default function ExpensesScreen({ accountId }) {
                 onClick={() => setShowFilters((v) => !v)}
                 className="inline-flex items-center gap-2 border border-white/10 bg-black/40 px-4 py-2 hover:bg-white/5 transition-colors"
               >
-                <span className="text-[10px] font-bold tracking-widest text-white/80 uppercase">
+                <span className="text-xs font-bold tracking-wider text-white/90 uppercase">
                   Filters
                 </span>
               </button>
@@ -1645,7 +1716,7 @@ export default function ExpensesScreen({ accountId }) {
                   className="w-1.5 h-1.5 rounded-full"
                   style={{ backgroundColor: CYAN }}
                 />
-                <span className="text-[10px] font-bold tracking-widest text-[#00d4ff] uppercase">
+                <span className="text-xs font-bold tracking-wider text-[#00d4ff] uppercase">
                   Auto Add
                 </span>
               </button>
@@ -1654,7 +1725,7 @@ export default function ExpensesScreen({ accountId }) {
                 className="inline-flex items-center px-4 py-2 hover:opacity-80 transition-opacity"
                 style={{ backgroundColor: MINT }}
               >
-                <span className="text-[10px] font-extrabold tracking-widest text-[#030508] uppercase">
+                <span className="text-xs font-extrabold tracking-wider text-[#030508] uppercase">
                   + New Expense
                 </span>
               </button>
@@ -1662,7 +1733,7 @@ export default function ExpensesScreen({ accountId }) {
                 onClick={refetch}
                 className="inline-flex items-center border border-white/10 bg-black/40 px-3 py-2 hover:bg-white/5 transition-colors"
               >
-                <span className="text-[10px] font-bold tracking-widest text-white/50 uppercase">
+                <span className="text-xs font-bold tracking-wider text-white/80 uppercase">
                   Refresh
                 </span>
               </button>
@@ -1679,17 +1750,17 @@ export default function ExpensesScreen({ accountId }) {
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="SEARCH DESCRIPTION, ACCOUNT, CATEGORY OR #TAGS"
-                className="w-full bg-transparent text-[11px] font-bold tracking-widest text-white placeholder:text-white/20 outline-none uppercase"
+                className="w-full bg-transparent text-xs font-bold tracking-wider text-white placeholder:text-white/50 outline-none uppercase"
               />
             </div>
             <div className="flex items-center gap-3 border border-white/10 bg-black/40 px-4 py-2">
-              <span className="text-[10px] font-bold tracking-widest text-white/40 uppercase">
+              <span className="text-xs font-bold tracking-wider text-white/70 uppercase">
                 Sort
               </span>
               <select
                 value={sortKey}
                 onChange={(e) => setSortKey(e.target.value)}
-                className="bg-transparent text-[11px] font-bold tracking-widest text-white outline-none uppercase"
+                className="bg-transparent text-xs font-bold tracking-wider text-white outline-none uppercase"
               >
                 <option value="date_desc" className="text-black">
                   Newest
@@ -1735,7 +1806,7 @@ export default function ExpensesScreen({ accountId }) {
                   onChange={(e) =>
                     setFilters((f) => ({ ...f, fAccountId: e.target.value }))
                   }
-                  className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] font-bold tracking-widest text-white outline-none uppercase"
+                  className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-bold tracking-wider text-white outline-none uppercase"
                 >
                   <option value="ALL" className="text-black">
                     All accounts
@@ -1753,7 +1824,7 @@ export default function ExpensesScreen({ accountId }) {
                   onChange={(e) =>
                     setFilters((f) => ({ ...f, fCurrency: e.target.value }))
                   }
-                  className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] font-bold tracking-widest text-white outline-none uppercase"
+                  className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-bold tracking-wider text-white outline-none uppercase"
                 >
                   {currencies.map((c) => (
                     <option key={c} value={c} className="text-black">
@@ -1769,7 +1840,7 @@ export default function ExpensesScreen({ accountId }) {
                   onChange={(e) =>
                     setFilters((f) => ({ ...f, fStartISO: e.target.value }))
                   }
-                  className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] font-bold tracking-widest text-white outline-none uppercase"
+                  className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-bold tracking-wider text-white outline-none uppercase"
                 />
               </Field>
               <Field label="To Date">
@@ -1779,7 +1850,7 @@ export default function ExpensesScreen({ accountId }) {
                   onChange={(e) =>
                     setFilters((f) => ({ ...f, fEndISO: e.target.value }))
                   }
-                  className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] font-bold tracking-widest text-white outline-none uppercase"
+                  className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-bold tracking-wider text-white outline-none uppercase"
                 />
               </Field>
               <Field label="Min Amount">
@@ -1790,7 +1861,7 @@ export default function ExpensesScreen({ accountId }) {
                     setFilters((f) => ({ ...f, fMin: e.target.value }))
                   }
                   placeholder="0.00"
-                  className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] font-bold tracking-widest text-white placeholder:text-white/20 outline-none uppercase"
+                  className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-bold tracking-wider text-white placeholder:text-white/50 outline-none uppercase"
                 />
               </Field>
               <Field label="Max Amount">
@@ -1801,7 +1872,7 @@ export default function ExpensesScreen({ accountId }) {
                     setFilters((f) => ({ ...f, fMax: e.target.value }))
                   }
                   placeholder="9999.00"
-                  className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] font-bold tracking-widest text-white placeholder:text-white/20 outline-none uppercase"
+                  className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-bold tracking-wider text-white placeholder:text-white/50 outline-none uppercase"
                 />
               </Field>
               <div className="col-span-full flex justify-end gap-3 pt-2">
@@ -1818,14 +1889,14 @@ export default function ExpensesScreen({ accountId }) {
                       fMax: "",
                     })
                   }
-                  className="border border-white/10 bg-white/[0.03] px-4 py-2 text-[10px] font-bold tracking-widest text-white/60 hover:bg-white/5 uppercase"
+                  className="border border-white/10 bg-white/[0.03] px-4 py-2 text-[11px] font-bold tracking-wider text-white/80 hover:bg-white/5 uppercase"
                 >
                   CLEAR
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowFilters(false)}
-                  className="px-4 py-2 text-[10px] font-extrabold tracking-widest text-black uppercase"
+                  className="px-4 py-2 text-[11px] font-extrabold tracking-wider text-black uppercase"
                   style={{ backgroundColor: MINT }}
                 >
                   APPLY
@@ -1838,7 +1909,7 @@ export default function ExpensesScreen({ accountId }) {
         {error && (
           <div className="flex gap-3 border border-[#a78bfa]/30 bg-[#a78bfa]/10 p-4">
             <div className="font-bold text-[#a78bfa]">[!]</div>
-            <div className="text-sm text-white/80">{error}</div>
+            <div className="text-sm text-white/90">{error}</div>
           </div>
         )}
 
@@ -1849,7 +1920,7 @@ export default function ExpensesScreen({ accountId }) {
             accent="cyan"
             className="lg:col-span-3 xl:col-span-3"
             right={
-              <span className="border border-[#00d4ff]/30 bg-[#00d4ff]/10 px-1.5 py-0.5 text-[8px] font-bold tracking-widest text-[#00d4ff] uppercase">
+              <span className="border border-[#00d4ff]/30 bg-[#00d4ff]/10 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-[#00d4ff] uppercase">
                 {(filters.fCurrency !== "ALL"
                   ? filters.fCurrency
                   : rows[0]?.currency) || "—"}
@@ -1857,7 +1928,7 @@ export default function ExpensesScreen({ accountId }) {
             }
           >
             {insights.noteMixedCurrency && (
-              <div className="mb-3 text-[9px] tracking-widest text-white/50 uppercase">
+              <div className="mb-3 text-[11px] tracking-wider text-white/80 uppercase">
                 Mixed currency mode. Select one for accuracy.
               </div>
             )}
@@ -1894,7 +1965,7 @@ export default function ExpensesScreen({ accountId }) {
                 currency={insights.statsCurrency}
               />
             ) : (
-              <div className="text-[10px] tracking-widest text-white/40 uppercase flex h-full items-center justify-center">
+              <div className="text-xs tracking-wider text-white/70 uppercase flex h-full items-center justify-center">
                 No Data
               </div>
             )}
@@ -1903,14 +1974,33 @@ export default function ExpensesScreen({ accountId }) {
             title="Distribution"
             accent="mint"
             className="lg:col-span-3 xl:col-span-3 min-w-0"
+            right={
+              distCurrencies.length > 1 ? (
+                <select
+                  value={currentDistCurrency}
+                  onChange={(e) => setDistCurrency(e.target.value)}
+                  className="bg-black/40 border border-[#00ff87]/30 text-[#00ff87] px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase outline-none cursor-pointer"
+                >
+                  {distCurrencies.map((c) => (
+                    <option key={c} value={c} className="text-black">
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              ) : distCurrencies.length === 1 ? (
+                <span className="border border-[#00ff87]/30 bg-[#00ff87]/10 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-[#00ff87] uppercase">
+                  {distCurrencies[0]}
+                </span>
+              ) : null
+            }
           >
-            {insights.pieData.length ? (
+            {distributionData.length ? (
               <PieChart
-                data={insights.pieData}
-                currency={insights.statsCurrency}
+                data={distributionData}
+                currency={currentDistCurrency}
               />
             ) : (
-              <div className="text-[10px] tracking-widest text-white/40 uppercase flex h-full items-center justify-center">
+              <div className="text-xs tracking-wider text-white/70 uppercase flex h-full items-center justify-center">
                 No Data
               </div>
             )}
@@ -1931,7 +2021,7 @@ export default function ExpensesScreen({ accountId }) {
                       className="w-1.5 h-1.5 rounded-full"
                       style={{ backgroundColor: CYAN }}
                     />
-                    <span className="text-[9px] font-bold tracking-widest text-[#00d4ff] uppercase">
+                    <span className="text-[11px] font-bold tracking-wider text-[#00d4ff] uppercase">
                       Total {cur}: <span className="text-white">{major}</span>
                     </span>
                   </div>
@@ -1945,7 +2035,7 @@ export default function ExpensesScreen({ accountId }) {
               className="min-w-0"
             >
               {rows.length === 0 ? (
-                <div className="py-12 text-center text-[10px] tracking-widest text-white/40 uppercase">
+                <div className="py-12 text-center text-xs tracking-wider text-white/70 uppercase">
                   No expenses found matching filters.
                 </div>
               ) : (
@@ -1972,7 +2062,7 @@ export default function ExpensesScreen({ accountId }) {
               accent="violet"
             >
               {upcoming.length === 0 ? (
-                <div className="text-[10px] tracking-widest text-white/40 uppercase py-2">
+                <div className="text-xs tracking-wider text-white/70 uppercase py-2">
                   Nothing upcoming.
                 </div>
               ) : (
@@ -2008,13 +2098,13 @@ export default function ExpensesScreen({ accountId }) {
                           <div className="pl-1.5 relative z-10">
                             <div className="flex items-start justify-between gap-2 mb-1.5">
                               <span
-                                className="text-[10px] font-extrabold tracking-widest uppercase transition-colors"
+                                className="text-xs font-extrabold tracking-wider uppercase transition-colors"
                                 style={{ color: ac }}
                               >
                                 {categoriesById.get(u.categoryId)?.name || "—"}
                               </span>
                               <span
-                                className="border px-1.5 py-0.5 text-[7px] font-bold tracking-widest uppercase backdrop-blur-sm flex-shrink-0"
+                                className="border px-1.5 py-0.5 text-[10px] font-bold tracking-wider uppercase backdrop-blur-sm flex-shrink-0"
                                 style={{
                                   borderColor: `${ac}33`,
                                   backgroundColor: `${ac}11`,
@@ -2024,20 +2114,20 @@ export default function ExpensesScreen({ accountId }) {
                                 {isVirtual ? "PLANNED" : "IN DB"}
                               </span>
                             </div>
-                            <div className="text-[11px] text-white/60 group-hover:text-white/80 transition-colors line-clamp-2 mb-2 leading-relaxed">
+                            <div className="text-sm text-white/80 group-hover:text-white transition-colors line-clamp-2 mb-2 leading-relaxed">
                               {u.description || "No description"}
                             </div>
                             <div className="flex justify-between items-end mt-1 pt-2 border-t border-white/5">
-                              <div className="text-[8px] text-white/30 font-mono tracking-widest uppercase flex items-center gap-1">
+                              <div className="text-[10px] text-white/70 font-mono tracking-wider uppercase flex items-center gap-1">
                                 <span
                                   className="w-1 h-1 rounded-full opacity-50"
                                   style={{ backgroundColor: ac }}
                                 />
                                 {fmtDateUTC(u.date)}
                               </div>
-                              <div className="text-sm font-extrabold tracking-tighter text-white drop-shadow-md">
+                              <div className="text-sm font-extrabold tracking-tight text-white drop-shadow-md">
                                 -{minorToMajor(u.amountMinor, u.currency)}{" "}
-                                <span className="text-[8px] text-white/40 ml-0.5 font-normal tracking-widest uppercase">
+                                <span className="text-[10px] text-white/80 ml-0.5 font-normal tracking-wider uppercase">
                                   {u.currency}
                                 </span>
                               </div>
@@ -2061,11 +2151,11 @@ export default function ExpensesScreen({ accountId }) {
                   value={newCatName}
                   onChange={(e) => setNewCatName(e.target.value)}
                   placeholder="NEW CATEGORY NAME"
-                  className="flex-1 border border-white/10 bg-black/40 px-3 py-1.5 text-[10px] font-bold tracking-widest text-white outline-none uppercase placeholder:text-white/30"
+                  className="flex-1 border border-white/10 bg-black/40 px-3 py-1.5 text-[11px] font-bold tracking-wider text-white outline-none uppercase placeholder:text-white/50"
                 />
                 <button
                   type="submit"
-                  className="border border-[#00d4ff]/30 bg-[#00d4ff]/10 px-3 py-1.5 text-[10px] font-bold tracking-widest text-[#00d4ff] uppercase hover:bg-[#00d4ff]/20"
+                  className="border border-[#00d4ff]/30 bg-[#00d4ff]/10 px-3 py-1.5 text-[11px] font-bold tracking-wider text-[#00d4ff] uppercase hover:bg-[#00d4ff]/20"
                 >
                   ADD
                 </button>
@@ -2074,16 +2164,16 @@ export default function ExpensesScreen({ accountId }) {
               <div className="flex flex-col gap-2">
                 <button
                   onClick={handleSeedCategories}
-                  className="w-full border border-white/10 bg-black/40 px-4 py-2 text-[9px] font-bold tracking-widest text-white/60 uppercase hover:bg-white/5 disabled:opacity-50"
+                  className="w-full border border-white/10 bg-black/40 px-4 py-2 text-[11px] font-bold tracking-wider text-white/80 uppercase hover:bg-white/5 disabled:opacity-50"
                 >
                   Seed Missing Standard Categories
                 </button>
 
-                <div className="mt-2 text-[9px] tracking-widest text-white/40 uppercase">
+                <div className="mt-2 text-[11px] tracking-wider text-white/70 uppercase">
                   Existing Categories:
                 </div>
                 {categories.length === 0 ? (
-                  <div className="text-[9px] tracking-widest text-white/40 uppercase">
+                  <div className="text-[11px] tracking-wider text-white/70 uppercase">
                     NONE
                   </div>
                 ) : (
@@ -2091,7 +2181,7 @@ export default function ExpensesScreen({ accountId }) {
                     {categories.map((c) => (
                       <span
                         key={c._id}
-                        className="border border-white/10 bg-white/5 px-2 py-0.5 text-[8px] font-bold tracking-widest text-white/70 uppercase"
+                        className="border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-bold tracking-wider text-white/90 uppercase"
                       >
                         {c.name}
                       </span>
