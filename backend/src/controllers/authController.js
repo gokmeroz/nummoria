@@ -1,4 +1,3 @@
-// backend/src/controllers/authController.js
 import "../config/env.js"; // <- MUST be first
 
 import bcrypt from "bcrypt";
@@ -19,39 +18,32 @@ import { SignJWT, importPKCS8, createRemoteJWKSet, jwtVerify } from "jose";
 const FRONTEND_URL_RAW = process.env.FRONTEND_URL || "http://localhost:5173";
 const FRONTEND_URL = FRONTEND_URL_RAW.replace(/\/+$/, "");
 
-const IS_DEV = process.env.NODE_ENV !== "production"; // define FIRST
+const IS_DEV = process.env.NODE_ENV !== "production";
 const IS_PROD = !IS_DEV;
 
 const JWT_SECRET = requireEnv("JWT_SECRET");
 
 // Feature flags / dev helpers
 const SKIP_EMAIL_VERIFICATION =
-  String(process.env.AUTH_SKIP_EMAIL_VERIFICATION || "false") === "true"; // allow login without verifying (DEV only)
-const DEV_VERIFICATION_CODE = process.env.DEV_VERIFICATION_CODE || "000000"; // universal code in DEV if you want
+  String(process.env.AUTH_SKIP_EMAIL_VERIFICATION || "false") === "true";
+const DEV_VERIFICATION_CODE = process.env.DEV_VERIFICATION_CODE || "000000";
 const FORCE_EMAIL_SEND =
-  String(process.env.FORCE_EMAIL_SEND || "false") === "true"; // actually send SMTP in dev
-const DEBUG_VERIFY = String(process.env.DEBUG_VERIFY || "false") === "true"; // include devVerificationCode in responses
+  String(process.env.FORCE_EMAIL_SEND || "false") === "true";
+const DEBUG_VERIFY = String(process.env.DEBUG_VERIFY || "false") === "true";
 
 // OAuth env
 const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI } =
   process.env;
-const {
-  TWITTER_CLIENT_ID,
-  TWITTER_CLIENT_SECRET,
-  TWITTER_REDIRECT_URI,
-  TWITTER_CLIENT_TYPE,
-} = process.env;
-const { GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GITHUB_REDIRECT_URI } =
-  process.env;
 
 // Apple OAuth env
 const {
-  APPLE_CLIENT_ID,
+  APPLE_CLIENT_ID, // WEB Service ID
+  APPLE_IOS_BUNDLE_ID, // iOS bundle id
   APPLE_REDIRECT_URI,
   APPLE_TEAM_ID,
   APPLE_KEY_ID,
   APPLE_PRIVATE_KEY,
-  APPLE_ALLOWED_AUDIENCES, // ✅ NEW: comma-separated allowed audiences for mobile/dev
+  APPLE_ALLOWED_AUDIENCES,
 } = process.env;
 
 /* ─────────────────────────── Small utils ────────────────────────────── */
@@ -62,10 +54,6 @@ function base64url(buf) {
     .replace(/=/g, "")
     .replace(/\+/g, "-")
     .replace(/\//g, "_");
-}
-function sha256ToBase64url(verifier) {
-  const hash = crypto.createHash("sha256").update(verifier).digest();
-  return base64url(hash);
 }
 
 function sanitizeNext(nextRaw) {
@@ -91,10 +79,6 @@ function maskEmail(email = "") {
   }@${d}`;
 }
 
-/**
- * ✅ FIX: Some flows were passing state already URL-encoded and then encoding again.
- * This helper makes decoding safe/idempotent.
- */
 function safeDecodeURIComponentMaybe(s) {
   if (!s || typeof s !== "string") return "";
   try {
@@ -104,17 +88,13 @@ function safeDecodeURIComponentMaybe(s) {
   }
 }
 
-/**
- * ✅ FIX: Your frontend oauth-callback currently requires token.
- * Ensure provider callbacks always include token in redirect query.
- */
 function buildOauthRedirectUrl({ provider, token, next }) {
   const qs = new URLSearchParams({ provider });
 
   const safeNext = sanitizeNext(next || "/");
   if (safeNext) qs.set("next", safeNext);
 
-  if (token) qs.set("token", token); // ✅ critical for "Missing token" issue
+  if (token) qs.set("token", token);
 
   return `${FRONTEND_URL}/oauth-callback?${qs.toString()}`;
 }
@@ -122,17 +102,14 @@ function buildOauthRedirectUrl({ provider, token, next }) {
 /* ───────────────────────── Apple helpers ───────────────────────── */
 
 function normalizeApplePrivateKey(k = "") {
-  // supports env var with \n
   return String(k).replace(/\\n/g, "\n");
 }
 
-// ✅ Debug helper: decode payload to see aud/iss quickly (NOT a verification)
 function decodeJwtPayloadUnsafe(token) {
   try {
     const parts = String(token).split(".");
     if (parts.length < 2) return null;
 
-    // base64url -> base64
     const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
     const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
     const json = Buffer.from(padded, "base64").toString("utf8");
@@ -142,23 +119,23 @@ function decodeJwtPayloadUnsafe(token) {
   }
 }
 
-// ✅ Allow multiple audiences for Apple mobile tokens (Expo Go/dev client/testflight differences)
 function getAppleAudiences() {
   const list = String(APPLE_ALLOWED_AUDIENCES || "")
     .split(",")
     .map((x) => x.trim())
     .filter(Boolean);
 
-  // Always include APPLE_CLIENT_ID at front if set
   if (APPLE_CLIENT_ID && !list.includes(APPLE_CLIENT_ID)) {
-    list.unshift(APPLE_CLIENT_ID);
+    list.push(APPLE_CLIENT_ID);
   }
 
-  if (!list.length && APPLE_CLIENT_ID) return [APPLE_CLIENT_ID];
+  if (APPLE_IOS_BUNDLE_ID && !list.includes(APPLE_IOS_BUNDLE_ID)) {
+    list.push(APPLE_IOS_BUNDLE_ID);
+  }
+
   return list;
 }
 
-// Apple client_secret generation (ES256 JWT) for web OAuth exchange
 async function createAppleClientSecret() {
   if (
     !APPLE_TEAM_ID ||
@@ -181,8 +158,8 @@ async function createAppleClientSecret() {
 
   return new SignJWT({})
     .setProtectedHeader({ alg: "ES256", kid: APPLE_KEY_ID })
-    .setIssuer(APPLE_TEAM_ID) // iss = Team ID
-    .setSubject(APPLE_CLIENT_ID) // sub = client_id
+    .setIssuer(APPLE_TEAM_ID)
+    .setSubject(APPLE_CLIENT_ID) // WEB Service ID
     .setAudience("https://appleid.apple.com")
     .setIssuedAt(now)
     .setExpirationTime(exp)
@@ -193,18 +170,17 @@ const APPLE_JWKS = createRemoteJWKSet(
   new URL("https://appleid.apple.com/auth/keys"),
 );
 
-// ✅ Verify Apple id_token / identityToken
 async function verifyAppleIdToken(idToken) {
   const audiences = getAppleAudiences();
   if (!audiences.length) {
     throw new Error(
-      "Apple audiences not configured. Set APPLE_CLIENT_ID and/or APPLE_ALLOWED_AUDIENCES.",
+      "Apple audiences not configured. Set APPLE_CLIENT_ID / APPLE_IOS_BUNDLE_ID / APPLE_ALLOWED_AUDIENCES.",
     );
   }
 
   const { payload } = await jwtVerify(idToken, APPLE_JWKS, {
     issuer: "https://appleid.apple.com",
-    audience: audiences, // ✅ string[] supported
+    audience: audiences,
   });
 
   return payload;
@@ -222,7 +198,6 @@ const transporter = (() => {
     : undefined;
   const secure = String(process.env.SMTP_SECURE || "false") === "true";
 
-  // If SMTP configured explicitly, use it.
   if (url || host) {
     return nodemailer.createTransport(
       url
@@ -236,14 +211,12 @@ const transporter = (() => {
     );
   }
 
-  // In production we require SMTP
   if (IS_PROD) {
     throw new Error(
       "SMTP is required in production. Set SMTP_URL or SMTP_HOST/SMTP_USER/SMTP_PASS.",
     );
   }
 
-  // Dev-only console fallback (no actual emails)
   return {
     sendMail: async (opts) => {
       console.log("[MAIL:DEV-FALLBACK] Not sending real email.", {
@@ -267,14 +240,6 @@ async function sendMail({ to, subject, text, html }) {
 function makeVerificationCode() {
   const n = Math.floor(Math.random() * 1_000_000);
   return String(n).padStart(6, "0");
-}
-
-async function setNewEmailCode(user) {
-  const code = makeVerificationCode();
-  user.emailVerificationCodeHash = await bcrypt.hash(code, 10);
-  user.emailVerificationExpiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 min
-  await user.save();
-  return code;
 }
 
 function buildVerifyEmailMessage({ email, code }) {
@@ -317,12 +282,11 @@ export async function register(req, res) {
       });
     }
 
-    // Prepare signup payload for deferred user creation
     const passwordHash = await bcrypt.hash(password, 10);
 
     const code = makeVerificationCode();
     const codeHash = await bcrypt.hash(code, 10);
-    const expiresAt = Date.now() + 15 * 60 * 1000; // 15 minutes
+    const expiresAt = Date.now() + 15 * 60 * 1000;
 
     const regToken = createRegToken({
       email: normalizedEmail,
@@ -383,14 +347,13 @@ export async function login(req, res) {
     if (!user.passwordHash) {
       return res.status(401).json({
         error:
-          "This account was created via social login. Please sign in with Google/Twitter or set a password.",
+          "This account was created via social login. Please sign in with Google or Apple, or set a password.",
       });
     }
 
     const match = await bcrypt.compare(password, user.passwordHash);
     if (!match) return res.status(401).json({ error: "Invalid credentials" });
 
-    // Block login if email not verified (unless DEV bypass is enabled)
     if (!user.isEmailVerified) {
       if (IS_DEV && SKIP_EMAIL_VERIFICATION) {
         user.isEmailVerified = true;
@@ -420,7 +383,7 @@ export async function login(req, res) {
 
     return res.json({
       ok: true,
-      token, // ✅ add this for mobile
+      token,
       user: {
         id: user._id,
         email: user.email,
@@ -465,14 +428,12 @@ export async function verifyEmail(req, res) {
       return res.status(400).json({ error: "Invalid or expired code" });
     }
 
-    // DEV universal code bypass (optional)
     if (!(IS_DEV && code === DEV_VERIFICATION_CODE)) {
       const ok = await bcrypt.compare(code, data.codeHash);
       if (!ok)
         return res.status(400).json({ error: "Invalid or expired code" });
     }
 
-    // If already created, treat as idempotent success
     const existing = await User.findOne({ email: data.email });
     if (existing) {
       return res.status(200).json({ message: "Email already verified." });
@@ -491,6 +452,7 @@ export async function verifyEmail(req, res) {
       emailVerifiedAt: new Date(),
     });
     await seedDefaultCategoriesForUser(user._id);
+
     return res.status(201).json({
       message: "Email verified. Account created.",
       user: {
@@ -506,7 +468,6 @@ export async function verifyEmail(req, res) {
   }
 }
 
-// Verify email for an EXISTING user (admin-resend flow)
 export async function verifyExistingEmail(req, res) {
   try {
     const { email, code } = req.body;
@@ -519,8 +480,10 @@ export async function verifyExistingEmail(req, res) {
     }).select(
       "+emailVerificationCodeHash +emailVerificationExpiresAt isEmailVerified",
     );
-    if (!user)
+
+    if (!user) {
       return res.status(400).json({ error: "Invalid or expired code" });
+    }
 
     if (user.isEmailVerified) {
       return res.status(200).json({ message: "Email already verified." });
@@ -535,7 +498,9 @@ export async function verifyExistingEmail(req, res) {
     }
 
     const ok = await bcrypt.compare(code, user.emailVerificationCodeHash);
-    if (!ok) return res.status(400).json({ error: "Invalid or expired code" });
+    if (!ok) {
+      return res.status(400).json({ error: "Invalid or expired code" });
+    }
 
     user.isEmailVerified = true;
     user.emailVerifiedAt = new Date();
@@ -552,12 +517,12 @@ export async function verifyExistingEmail(req, res) {
 export async function resendCode(req, res) {
   try {
     const { regToken } = req.body;
-    if (!regToken)
+    if (!regToken) {
       return res.status(400).json({ error: "regToken is required" });
+    }
 
     const data = readRegToken(regToken);
     if (!data || !data.email || !data.passwordHash) {
-      // avoid leaking anything
       return res.json({ message: "If the email exists, a new code was sent." });
     }
 
@@ -617,7 +582,7 @@ export async function forgotPassword(req, res) {
 
     const rawToken = crypto.randomBytes(32).toString("hex");
     const tokenHash = await bcrypt.hash(rawToken, 10);
-    const expires = new Date(Date.now() + 30 * 60 * 1000); // 30 mins
+    const expires = new Date(Date.now() + 30 * 60 * 1000);
 
     user.resetPasswordTokenHash = tokenHash;
     user.resetPasswordExpiresAt = expires;
@@ -650,7 +615,6 @@ export async function resetPassword(req, res) {
       });
     }
 
-    // allow lookup by userId OR email (backward compatible)
     const query = userId
       ? { _id: userId }
       : { email: String(email).toLowerCase() };
@@ -671,8 +635,6 @@ export async function resetPassword(req, res) {
     user.passwordHash = await bcrypt.hash(newPassword, 10);
     user.resetPasswordTokenHash = null;
     user.resetPasswordExpiresAt = null;
-
-    // recommended — reset should also kill existing sessions
     user.authInvalidBefore = new Date();
 
     await user.save();
@@ -690,9 +652,13 @@ export async function appleStart(req, res) {
     if (!APPLE_CLIENT_ID || !APPLE_REDIRECT_URI) {
       return res.status(500).json({
         error:
-          "Apple OAuth not configured. Set APPLE_CLIENT_ID and APPLE_REDIRECT_URI.",
+          "Apple OAuth not configured. Missing APPLE_CLIENT_ID or APPLE_REDIRECT_URI.",
       });
     }
+
+    console.log("[APPLE START]");
+    console.log("CLIENT_ID:", APPLE_CLIENT_ID);
+    console.log("REDIRECT_URI:", APPLE_REDIRECT_URI);
 
     const state = encodeURIComponent(sanitizeNext(req.query.next || "/"));
 
@@ -718,6 +684,10 @@ export async function appleCallback(req, res) {
     const state = req.body?.state || req.query?.state;
 
     if (!code) return res.status(400).json({ error: "Missing code" });
+
+    console.log("[APPLE CALLBACK]");
+    console.log("REDIRECT_URI USED:", APPLE_REDIRECT_URI);
+    console.log("CLIENT_ID USED:", APPLE_CLIENT_ID);
 
     const client_secret = await createAppleClientSecret();
 
@@ -771,19 +741,23 @@ export async function appleCallback(req, res) {
       }
     }
 
-    if (!appleId)
+    if (!appleId) {
       return res.status(400).json({ error: "Apple token missing sub" });
+    }
 
     let user = await User.findOne({
       $or: [{ appleId }, ...(email ? [{ email }] : [])],
-    });
+    }).select("+passwordHash");
 
     if (!user) {
       const safeEmail = (email || `apple_${appleId}@apple.local`).toLowerCase();
+      const randomPw = crypto.randomBytes(32).toString("hex");
+      const passwordHash = await bcrypt.hash(randomPw, 10);
 
       user = await User.create({
         email: safeEmail,
-        name: displayName || "",
+        name: displayName || "Apple User",
+        passwordHash,
         appleId,
         lastLogin: new Date(),
         isActive: true,
@@ -817,6 +791,12 @@ export async function appleCallback(req, res) {
         changed = true;
       }
 
+      if (!user.passwordHash) {
+        const randomPw = crypto.randomBytes(32).toString("hex");
+        user.passwordHash = await bcrypt.hash(randomPw, 10);
+        changed = true;
+      }
+
       if (changed) await user.save();
     }
 
@@ -838,9 +818,11 @@ export async function appleCallback(req, res) {
 
     return res.redirect(redirectTo);
   } catch (err) {
+    console.log("[APPLE CALLBACK ERROR]", err?.message || err);
     return res.status(500).json({ error: err.message });
   }
 }
+
 /* ───────────────────────────── Google OAuth ───────────────────────────── */
 
 export async function googleStart(req, res) {
@@ -890,6 +872,7 @@ export async function googleCallback(req, res) {
         .status(400)
         .json({ error: "Token exchange failed", details: t });
     }
+
     const tokens = await tokenResp.json();
     const { access_token } = tokens;
 
@@ -905,11 +888,14 @@ export async function googleCallback(req, res) {
         .status(400)
         .json({ error: "Userinfo fetch failed", details: t });
     }
+
     const profile = await userResp.json();
     const googleId = profile.sub;
     const email = (profile.email || "").toLowerCase();
-    if (!email)
+
+    if (!email) {
       return res.status(400).json({ error: "Google account has no email" });
+    }
 
     let user = await User.findOne({ $or: [{ email }, { googleId }] });
 
@@ -926,25 +912,31 @@ export async function googleCallback(req, res) {
       });
     } else {
       let changed = false;
+
       if (!user.googleId) {
         user.googleId = googleId;
         changed = true;
       }
+
       if (profile.name && profile.name !== user.name) {
         user.name = profile.name;
         changed = true;
       }
+
       if (profile.picture && profile.picture !== user.avatarUrl) {
         user.avatarUrl = profile.picture;
         changed = true;
       }
+
       user.lastLogin = new Date();
       changed = true;
+
       if (!user.isEmailVerified) {
         user.isEmailVerified = true;
         user.emailVerifiedAt = new Date();
         changed = true;
       }
+
       if (changed) await user.save();
     }
 
@@ -970,11 +962,8 @@ export async function googleCallback(req, res) {
   }
 }
 
-// ───────────────────────── Apple (MOBILE / Expo) ─────────────────────────
-//
-// Mobile flow: Expo gets identityToken from Apple native prompt,
-// then mobile sends identityToken (+ optional fullName) here.
-// No redirect_uri, no client_secret needed.
+/* ───────────────────────── Apple (MOBILE / Expo) ───────────────────────── */
+
 export async function appleMobile(req, res) {
   try {
     const { identityToken, fullName } = req.body || {};
@@ -983,14 +972,23 @@ export async function appleMobile(req, res) {
       return res.status(400).json({ error: "identityToken is required" });
     }
 
-    if (!APPLE_CLIENT_ID) {
+    if (!APPLE_IOS_BUNDLE_ID && !APPLE_ALLOWED_AUDIENCES) {
       return res.status(500).json({
         error:
-          "APPLE_CLIENT_ID is missing in env (set it to your iOS bundle id).",
+          "Apple mobile is not configured. Set APPLE_IOS_BUNDLE_ID and/or APPLE_ALLOWED_AUDIENCES.",
       });
     }
 
-    // Verify token signature + claims (issuer/audience)
+    const unsafe = decodeJwtPayloadUnsafe(identityToken);
+    if (unsafe) {
+      console.log("[APPLE MOBILE PAYLOAD UNSAFE]", {
+        iss: unsafe.iss,
+        aud: unsafe.aud,
+        sub: unsafe.sub,
+        email: unsafe.email,
+      });
+    }
+
     const payload = await verifyAppleIdToken(identityToken);
 
     const appleId = String(payload.sub || "");
@@ -998,37 +996,30 @@ export async function appleMobile(req, res) {
       return res.status(400).json({ error: "Apple token missing sub" });
     }
 
-    // Apple may provide email only on first authorization, sometimes null later
     const email = (payload.email || "").toLowerCase();
     const emailVerified =
       String(payload.email_verified || payload.email_verified === true) ===
       "true";
 
-    // optional display name (first time only from mobile)
     const displayName =
       (fullName && typeof fullName === "string" ? fullName.trim() : "") || "";
 
-    // Find by appleId OR email (if email exists)
     let user = await User.findOne({
       $or: [{ appleId }, ...(email ? [{ email }] : [])],
-    }).select("+passwordHash"); // ✅ in case your schema hides it
+    }).select("+passwordHash");
 
     if (!user) {
       const safeEmail = (email || `apple_${appleId}@apple.local`).toLowerCase();
-
-      // ✅ FIX: your User schema requires name + passwordHash
-      // Generate a random passwordHash (user will never use it for login)
       const randomPw = crypto.randomBytes(32).toString("hex");
       const passwordHash = await bcrypt.hash(randomPw, 10);
 
       user = await User.create({
         email: safeEmail,
-        name: displayName || "Apple User", // ✅ FIX: name required
-        passwordHash, // ✅ FIX: passwordHash required by your schema
+        name: displayName || "Apple User",
+        passwordHash,
         appleId,
         lastLogin: new Date(),
         isActive: true,
-        // if email missing, treat as verified (no email verification needed for Apple)
         isEmailVerified: email ? !!emailVerified : true,
         emailVerifiedAt: new Date(),
       });
@@ -1040,13 +1031,11 @@ export async function appleMobile(req, res) {
         changed = true;
       }
 
-      // Upgrade placeholder email if Apple gives real email later
       if (email && user.email?.endsWith("@apple.local")) {
         user.email = email;
         changed = true;
       }
 
-      // Set name only if empty
       if (displayName && !user.name) {
         user.name = displayName;
         changed = true;
@@ -1061,7 +1050,6 @@ export async function appleMobile(req, res) {
         changed = true;
       }
 
-      // ✅ If your schema requires passwordHash and you have old users without it:
       if (!user.passwordHash) {
         const randomPw = crypto.randomBytes(32).toString("hex");
         user.passwordHash = await bcrypt.hash(randomPw, 10);
@@ -1071,7 +1059,6 @@ export async function appleMobile(req, res) {
       if (changed) await user.save();
     }
 
-    // Issue your normal JWT for mobile
     const token = jwt.sign(
       { id: user._id, email: user.email, role: user.role || "user" },
       JWT_SECRET,
@@ -1102,329 +1089,5 @@ export async function appleMobile(req, res) {
       error: "Apple sign-in failed",
       details: String(err?.message || err),
     });
-  }
-}
-
-/* ───────────────────────────── Twitter OAuth ──────────────────────────── */
-
-export async function twitterStart(req, res) {
-  try {
-    const state = encodeURIComponent(sanitizeNext(req.query.next || "/"));
-
-    const code_verifier = base64url(crypto.randomBytes(64));
-    const code_challenge = sha256ToBase64url(code_verifier);
-
-    res.cookie("tw_cv", code_verifier, {
-      httpOnly: true,
-      secure: !IS_DEV,
-      sameSite: "lax",
-      maxAge: 10 * 60 * 1000,
-      path: "/",
-    });
-
-    const scope = ["users.read", "tweet.read", "offline.access"].join(" ");
-
-    const params = new URLSearchParams({
-      response_type: "code",
-      client_id: TWITTER_CLIENT_ID,
-      redirect_uri: TWITTER_REDIRECT_URI,
-      scope,
-      state,
-      code_challenge,
-      code_challenge_method: "S256",
-    });
-
-    const authUrl = `https://twitter.com/i/oauth2/authorize?${params.toString()}`;
-    return res.redirect(authUrl);
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
-}
-
-export async function twitterCallback(req, res) {
-  try {
-    const { code, state } = req.query;
-    if (!code) return res.status(400).json({ error: "Missing code" });
-
-    const code_verifier = req.cookies?.tw_cv;
-    if (!code_verifier) {
-      return res
-        .status(400)
-        .json({ error: "Missing PKCE verifier (cookie expired)" });
-    }
-
-    const isConfidential =
-      (TWITTER_CLIENT_TYPE || "").toLowerCase() === "confidential";
-
-    const tokenParams = new URLSearchParams({
-      grant_type: "authorization_code",
-      client_id: TWITTER_CLIENT_ID,
-      code,
-      redirect_uri: TWITTER_REDIRECT_URI,
-      code_verifier,
-    });
-
-    const headers = { "Content-Type": "application/x-www-form-urlencoded" };
-    if (isConfidential) {
-      const basic = Buffer.from(
-        `${TWITTER_CLIENT_ID}:${TWITTER_CLIENT_SECRET}`,
-      ).toString("base64");
-      headers.Authorization = `Basic ${basic}`;
-    }
-
-    const tokenResp = await fetch("https://api.twitter.com/2/oauth2/token", {
-      method: "POST",
-      headers,
-      body: tokenParams.toString(),
-    });
-    if (!tokenResp.ok) {
-      const t = await tokenResp.text();
-      return res
-        .status(400)
-        .json({ error: "Twitter token exchange failed", details: t });
-    }
-
-    const tokens = await tokenResp.json();
-    const { access_token } = tokens;
-
-    const userResp = await fetch(
-      "https://api.twitter.com/2/users/me?user.fields=profile_image_url,name,username,verified,created_at",
-      { headers: { Authorization: `Bearer ${access_token}` } },
-    );
-    if (!userResp.ok) {
-      const t = await userResp.text();
-      return res
-        .status(400)
-        .json({ error: "Twitter user fetch failed", details: t });
-    }
-
-    const tw = (await userResp.json())?.data;
-    if (!tw?.id)
-      return res.status(400).json({ error: "Twitter profile missing id" });
-
-    const twitterId = tw.id;
-    const username = tw.username || "";
-    const displayName = tw.name || username || "";
-    let avatarUrl = tw.profile_image_url || null;
-    if (avatarUrl) avatarUrl = avatarUrl.replace("_normal", "_400x400");
-
-    const safeEmail = `${
-      (username || "xuser") + "+" + twitterId
-    }@x.local`.toLowerCase();
-
-    let user = await User.findOne({
-      $or: [{ email: safeEmail }, { twitterId }],
-    });
-
-    if (!user) {
-      user = await User.create({
-        email: safeEmail,
-        name: displayName,
-        twitterId,
-        avatarUrl,
-        lastLogin: new Date(),
-        isActive: true,
-        isEmailVerified: true,
-        emailVerifiedAt: new Date(),
-      });
-    } else {
-      let changed = false;
-      if (!user.twitterId) {
-        user.twitterId = twitterId;
-        changed = true;
-      }
-      if (displayName && displayName !== user.name) {
-        user.name = displayName;
-        changed = true;
-      }
-      if (avatarUrl && avatarUrl !== user.avatarUrl) {
-        user.avatarUrl = avatarUrl;
-        changed = true;
-      }
-      user.lastLogin = new Date();
-      changed = true;
-      if (!user.isEmailVerified) {
-        user.isEmailVerified = true;
-        user.emailVerifiedAt = new Date();
-        changed = true;
-      }
-      if (changed) await user.save();
-    }
-
-    const token = jwt.sign(
-      { id: user._id, email: user.email, role: user.role || "user" },
-      JWT_SECRET,
-      { expiresIn: "8h" },
-    );
-
-    res.clearCookie("tw_cv", { path: "/" });
-
-    setAuthCookie(res, token);
-
-    const next = sanitizeNext(state ? safeDecodeURIComponentMaybe(state) : "/");
-
-    const redirectTo = buildOauthRedirectUrl({
-      provider: "twitter",
-      token,
-      next,
-    });
-
-    return res.redirect(redirectTo);
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
-}
-
-/* ───────────────────────────── GitHub OAuth ──────────────────────────── */
-
-export async function githubStart(req, res) {
-  try {
-    const state = encodeURIComponent(sanitizeNext(req.query.next || "/"));
-    const scope = ["read:user", "user:email"].join(" ");
-
-    const params = new URLSearchParams({
-      client_id: process.env.GITHUB_CLIENT_ID,
-      redirect_uri: process.env.GITHUB_REDIRECT_URI,
-      scope,
-      state,
-      allow_signup: "true",
-    });
-
-    const authUrl = `https://github.com/login/oauth/authorize?${params.toString()}`;
-    console.log("[GitHub] authorize URL =>", authUrl);
-    return res.redirect(authUrl);
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
-}
-
-export async function githubCallback(req, res) {
-  try {
-    const { code, state } = req.query;
-    if (!code) return res.status(400).json({ error: "Missing code" });
-
-    const tokenParams = new URLSearchParams({
-      client_id: GITHUB_CLIENT_ID,
-      client_secret: GITHUB_CLIENT_SECRET,
-      code,
-      redirect_uri: GITHUB_REDIRECT_URI,
-    });
-
-    const tokenResp = await fetch(
-      "https://github.com/login/oauth/access_token",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          Accept: "application/json",
-        },
-        body: tokenParams.toString(),
-      },
-    );
-    if (!tokenResp.ok) {
-      const t = await tokenResp.text();
-      return res
-        .status(400)
-        .json({ error: "GitHub token exchange failed", details: t });
-    }
-
-    const { access_token } = await tokenResp.json();
-    if (!access_token)
-      return res.status(400).json({ error: "No access_token from GitHub" });
-
-    const ghUserResp = await fetch("https://api.github.com/user", {
-      headers: {
-        Authorization: `Bearer ${access_token}`,
-        Accept: "application/vnd.github+json",
-      },
-    });
-    if (!ghUserResp.ok) {
-      const t = await ghUserResp.text();
-      return res
-        .status(400)
-        .json({ error: "GitHub user fetch failed", details: t });
-    }
-    const ghUser = await ghUserResp.json();
-
-    const ghEmailResp = await fetch("https://api.github.com/user/emails", {
-      headers: {
-        Authorization: `Bearer ${access_token}`,
-        Accept: "application/vnd.github+json",
-      },
-    });
-
-    let email = null;
-    if (ghEmailResp.ok) {
-      const emails = await ghEmailResp.json();
-      const primary = emails?.find((e) => e.primary && e.verified)?.email;
-      email = (primary || emails?.[0]?.email || "").toLowerCase();
-    }
-
-    const githubId = String(ghUser.id);
-    const displayName = ghUser.name || ghUser.login || "";
-    const avatarUrl = ghUser.avatar_url || null;
-
-    const safeEmail = (
-      email || `ghuser_${githubId}@github.local`
-    ).toLowerCase();
-
-    let user = await User.findOne({
-      $or: [{ email: safeEmail }, { githubId }],
-    });
-
-    if (!user) {
-      user = await User.create({
-        email: safeEmail,
-        name: displayName,
-        githubId,
-        avatarUrl,
-        lastLogin: new Date(),
-        isActive: true,
-        isEmailVerified: true,
-        emailVerifiedAt: new Date(),
-      });
-    } else {
-      let changed = false;
-      if (!user.githubId) {
-        user.githubId = githubId;
-        changed = true;
-      }
-      if (displayName && displayName !== user.name) {
-        user.name = displayName;
-        changed = true;
-      }
-      if (avatarUrl && avatarUrl !== user.avatarUrl) {
-        user.avatarUrl = avatarUrl;
-        changed = true;
-      }
-      user.lastLogin = new Date();
-      changed = true;
-      if (!user.isEmailVerified) {
-        user.isEmailVerified = true;
-        user.emailVerifiedAt = new Date();
-        changed = true;
-      }
-      if (changed) await user.save();
-    }
-
-    const token = jwt.sign(
-      { id: user._id, email: user.email, role: user.role || "user" },
-      JWT_SECRET,
-      { expiresIn: "8h" },
-    );
-
-    setAuthCookie(res, token);
-
-    const next = sanitizeNext(state ? safeDecodeURIComponentMaybe(state) : "/");
-
-    const redirectTo = buildOauthRedirectUrl({
-      provider: "github",
-      token,
-      next,
-    });
-
-    return res.redirect(redirectTo);
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
   }
 }

@@ -10,10 +10,6 @@ import {
   resendCode,
   googleStart,
   googleCallback,
-  twitterCallback,
-  twitterStart,
-  githubStart,
-  githubCallback,
   appleStart,
   appleCallback,
   appleMobile,
@@ -21,31 +17,30 @@ import {
 
 const router = express.Router();
 
+// Local auth
 router.post("/register", register);
 router.post("/login", login);
 router.post("/logout", logout);
+
+// Password
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
 
-//Email Verification
+// Email Verification
 router.post("/verify-email", verifyEmail);
 router.post("/verify-existing-email", verifyExistingEmail);
 router.post("/resend-code", resendCode);
+
 // Google OAuth
 router.get("/google", googleStart);
 router.get("/google/callback", googleCallback);
 
-// Twitter OAuth
-router.get("/twitter", twitterStart);
-router.get("/twitter/callback", twitterCallback);
-
-// Github OAuth
-router.get("/github", githubStart);
-router.get("/github/callback", githubCallback);
-// Apple OAuth
+// Apple OAuth (WEB)
 router.get("/apple", appleStart);
 router.post("/apple/callback", appleCallback); // form_post
-router.get("/apple/callback", appleCallback); // fallback if query-mode ever used
+router.get("/apple/callback", appleCallback); // fallback
+
+// Apple OAuth (MOBILE)
 router.post("/apple/mobile", appleMobile);
 
 export default router;
