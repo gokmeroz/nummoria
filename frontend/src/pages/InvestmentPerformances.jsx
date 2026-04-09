@@ -1,15 +1,23 @@
 /* eslint-disable no-empty */
 /* eslint-disable no-unused-vars */
 // frontend/src/pages/InvestmentPerformance.jsx
-import { useEffect, useMemo, useState } from "react";
+
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../lib/api";
-import logoUrl from "../assets/nummoria_logo.png";
 
-const main = "#4f772d";
-const secondary = "#90a955";
+/* ─────────────────────────────────────────────────────────────
+   CONSTANTS & THEME
+───────────────────────────────────────────────────────────── */
+const BG = "#030508";
+const MINT = "#00ff87";
+const CYAN = "#00d4ff";
+const VIOLET = "#a78bfa";
+const DATE_LANG = "en-US";
 
-/** Match backend's minor-unit handling */
+/* ─────────────────────────────────────────────────────────────
+   HELPERS
+───────────────────────────────────────────────────────────── */
 function decimalsForCurrency(code) {
   const zero = new Set(["JPY", "KRW", "CLP", "VND"]);
   const three = new Set(["BHD", "IQD", "JOD", "KWD", "OMR", "TND"]);
@@ -22,8 +30,9 @@ function formatMoneyMinor(amountMinor, currency) {
   if (amountMinor === null || amountMinor === undefined) return "—";
   const dec = decimalsForCurrency(currency);
   const major = amountMinor / Math.pow(10, dec);
+
   try {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat(DATE_LANG, {
       style: "currency",
       currency,
       minimumFractionDigits: dec,
@@ -34,20 +43,29 @@ function formatMoneyMinor(amountMinor, currency) {
   }
 }
 
-function formatNumber(n, digits = 2) {
-  if (n === null || n === undefined) return "—";
-  return new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  }).format(n);
+function formatPrice(value, currency) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return "—";
+  }
+
+  try {
+    return new Intl.NumberFormat(DATE_LANG, {
+      style: "currency",
+      currency: currency || "USD",
+      minimumFractionDigits: decimalsForCurrency(currency || "USD"),
+      maximumFractionDigits: decimalsForCurrency(currency || "USD"),
+    }).format(Number(value));
+  } catch {
+    return `${Number(value).toFixed(decimalsForCurrency(currency || "USD"))} ${currency || "USD"}`;
+  }
 }
 
-/** ---------- helper to exclude INV ---------- **/
-function isInvSymbol(sym) {
-  const s = String(sym || "")
-    .trim()
-    .toUpperCase();
-  return /^INV(\b|[-_])/i.test(s) || s === "INV";
+function formatNumber(n, digits = 2) {
+  if (n === null || n === undefined || Number.isNaN(Number(n))) return "—";
+  return new Intl.NumberFormat(DATE_LANG, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(Number(n));
 }
 
 function abbreviateNumber(n) {
@@ -63,77 +81,195 @@ function abbreviateNumber(n) {
   return `${num.toFixed(num >= 100 ? 0 : num >= 10 ? 1 : 2)}${units[i]}`;
 }
 
-function SectionCard({ title, subtitle, right, children, className = "" }) {
-  return (
+function isInvSymbol(sym) {
+  const s = String(sym || "")
+    .trim()
+    .toUpperCase();
+  return /^INV(\b|[-_])/i.test(s) || s === "INV";
+}
+
+/* ─────────────────────────────────────────────────────────────
+   UI PRIMITIVES
+───────────────────────────────────────────────────────────── */
+const Brackets = React.memo(
+  ({ color = MINT, size = "10px", thick = "1.5px" }) => (
+    <>
+      <div
+        className="absolute top-0 left-0"
+        style={{
+          width: size,
+          height: size,
+          borderTop: `${thick} solid ${color}`,
+          borderLeft: `${thick} solid ${color}`,
+        }}
+      />
+      <div
+        className="absolute top-0 right-0"
+        style={{
+          width: size,
+          height: size,
+          borderTop: `${thick} solid ${color}`,
+          borderRight: `${thick} solid ${color}`,
+        }}
+      />
+      <div
+        className="absolute bottom-0 left-0"
+        style={{
+          width: size,
+          height: size,
+          borderBottom: `${thick} solid ${color}`,
+          borderLeft: `${thick} solid ${color}`,
+        }}
+      />
+      <div
+        className="absolute bottom-0 right-0"
+        style={{
+          width: size,
+          height: size,
+          borderBottom: `${thick} solid ${color}`,
+          borderRight: `${thick} solid ${color}`,
+        }}
+      />
+    </>
+  ),
+);
+
+const ScanLine = React.memo(({ color = MINT, className = "" }) => (
+  <div className={`flex items-center gap-1.5 ${className}`}>
     <div
-      className={`relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-md ${className}`}
-    >
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(500px_180px_at_10%_0%,rgba(19,226,67,0.06),transparent_60%),radial-gradient(420px_180px_at_90%_10%,rgba(153,23,70,0.08),transparent_60%)]" />
-      <div className="relative p-5 md:p-6">
+      className="w-[3px] h-[3px] rounded-full opacity-60"
+      style={{ backgroundColor: color }}
+    />
+    <div
+      className="flex-1 h-[1px] opacity-20"
+      style={{ backgroundColor: color }}
+    />
+    <div
+      className="w-[3px] h-[3px] rounded-full opacity-60"
+      style={{ backgroundColor: color }}
+    />
+  </div>
+));
+
+const SectionCard = React.memo(
+  ({ title, subtitle, right, children, className = "", accent = "violet" }) => {
+    const AC = {
+      violet: {
+        col: VIOLET,
+        bg: "rgba(167,139,250,0.02)",
+        bd: "rgba(167,139,250,0.2)",
+      },
+      cyan: {
+        col: CYAN,
+        bg: "rgba(0,212,255,0.02)",
+        bd: "rgba(0,212,255,0.2)",
+      },
+      mint: {
+        col: MINT,
+        bg: "rgba(0,255,135,0.02)",
+        bd: "rgba(0,255,135,0.2)",
+      },
+    }[accent] || {
+      col: VIOLET,
+      bg: "rgba(167,139,250,0.02)",
+      bd: "rgba(167,139,250,0.2)",
+    };
+
+    return (
+      <div
+        className={`relative border p-4 md:p-5 flex flex-col h-full ${className}`}
+        style={{ backgroundColor: AC.bg, borderColor: AC.bd }}
+      >
+        <Brackets color={AC.col} size="10px" thick="1.5px" />
+        <div
+          className="absolute top-0 inset-x-[15%] h-[1px] opacity-40"
+          style={{ backgroundColor: AC.col }}
+        />
         {(title || right) && (
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
-              {title ? (
-                <h2 className="text-lg font-semibold tracking-tight text-white">
+              {title && (
+                <h2 className="text-base font-extrabold tracking-wider text-white uppercase">
                   {title}
                 </h2>
-              ) : null}
-              {subtitle ? (
-                <p className="mt-1 text-sm text-white/55">{subtitle}</p>
-              ) : null}
+              )}
+              {subtitle && (
+                <p className="mt-1 text-xs text-white/80 tracking-wider uppercase">
+                  {subtitle}
+                </p>
+              )}
             </div>
-            {right ? <div>{right}</div> : null}
+            {right && <div>{right}</div>}
           </div>
         )}
-        {children}
+        <div className="flex-1 min-h-0">{children}</div>
       </div>
-    </div>
-  );
-}
+    );
+  },
+);
 
-function MetricCard({ label, value, valueClassName = "" }) {
+const MetricCard = React.memo(({ label, value, accent, className = "" }) => {
+  const color = { violet: VIOLET, cyan: CYAN, mint: MINT }[accent] || CYAN;
+
   return (
-    <div className="rounded-2xl border border-white/8 bg-black/20 p-4">
-      <div className="text-xs uppercase tracking-[0.18em] text-white/40">
+    <div
+      className={`border border-white/10 bg-black/40 p-4 relative overflow-hidden h-full flex flex-col justify-center ${className}`}
+    >
+      <Brackets color={color} size="6px" thick="1px" />
+      <div className="text-[10px] font-bold uppercase tracking-wider text-white/70 mb-1">
         {label}
       </div>
       <div
-        className={`mt-2 text-2xl font-semibold tracking-tight text-white ${valueClassName}`}
+        className="text-lg md:text-xl font-extrabold tracking-tight truncate"
+        style={{ color }}
+        title={String(value)}
       >
         {value}
       </div>
     </div>
   );
-}
+});
 
-function MiniStat({ label, value, className = "" }) {
-  return (
-    <div className="rounded-2xl border border-white/8 bg-black/20 p-4">
-      <div className="text-xs uppercase tracking-[0.16em] text-white/40">
-        {label}
-      </div>
-      <div className={`mt-2 text-sm font-semibold text-white ${className}`}>
-        {String(value)}
-      </div>
-    </div>
-  );
-}
+const MiniStat = React.memo(
+  ({ label, value, accent = "cyan", className = "" }) => {
+    const color = { violet: VIOLET, cyan: CYAN, mint: MINT }[accent] || CYAN;
 
-/** ---------- Market Search widget ---------- **/
+    return (
+      <div
+        className={`border border-white/10 bg-black/40 p-4 relative ${className}`}
+      >
+        <Brackets color={color} size="6px" thick="1px" />
+        <div className="text-[10px] font-bold uppercase tracking-wider text-white/60 mb-1">
+          {label}
+        </div>
+        <div className="text-sm font-extrabold tracking-wide text-white break-words">
+          {value}
+        </div>
+      </div>
+    );
+  },
+);
+
+/* ─────────────────────────────────────────────────────────────
+   MARKET SEARCH
+───────────────────────────────────────────────────────────── */
 function MarketSearch() {
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [data, setData] = useState(null);
 
-  async function search(sym) {
+  const search = async (sym) => {
     const symbol = String(sym || q)
       .trim()
       .toUpperCase();
+
     if (!symbol) return;
+
     setBusy(true);
     setErr("");
     setData(null);
+
     try {
       const { data } = await api.get("/investments/quote", {
         params: { symbol },
@@ -144,20 +280,22 @@ function MarketSearch() {
     } finally {
       setBusy(false);
     }
-  }
+  };
 
-  function onKeyDown(e) {
+  const onKeyDown = (e) => {
     if (e.key === "Enter") search();
-  }
+  };
 
   const price =
     typeof data?.regularMarketPrice === "number"
       ? data.regularMarketPrice
       : null;
+
   const prev =
     typeof data?.regularMarketPreviousClose === "number"
       ? data.regularMarketPreviousClose
       : null;
+
   const chg = price != null && prev != null ? price - prev : null;
   const chgPct = price != null && prev ? (chg / prev) * 100 : null;
   const priceCur = data?.currency || data?.financialCurrency || "USD";
@@ -165,57 +303,54 @@ function MarketSearch() {
   return (
     <SectionCard
       title="Market Search"
-      subtitle="Look up live market data for stocks, ETFs, forex, crypto, and metals."
-      className="mb-6"
+      subtitle="LIVE LOOKUP FOR STOCKS, ETFS, FOREX, CRYPTO, AND METALS"
+      accent="cyan"
+      className="mb-5"
     >
       <div className="flex flex-col gap-4">
         <div className="flex flex-col xl:flex-row xl:items-end gap-3">
           <div className="w-full xl:max-w-xl">
-            <label className="mb-1 block text-sm text-white/60">Symbol</label>
+            <label className="mb-1 block text-xs font-bold tracking-wider text-white/70 uppercase">
+              Symbol
+            </label>
             <div className="flex gap-2">
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 onKeyDown={onKeyDown}
-                placeholder="Try AAPL, MSFT, BTC-USD, VOO, USDTRY=X…"
-                className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white placeholder:text-white/30 outline-none transition focus:border-white/20"
+                placeholder="AAPL, MSFT, BTC-USD, VOO, USDTRY=X..."
+                className="w-full border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white placeholder:text-white/40 outline-none focus:border-[#00d4ff]/50"
               />
               <button
                 onClick={() => search()}
                 disabled={busy}
-                className="rounded-2xl px-4 py-3 text-sm font-semibold text-white transition disabled:opacity-60"
-                style={{
-                  background: "linear-gradient(135deg, #90a955, #4f772d)",
-                }}
+                className="px-4 py-3 text-xs font-extrabold tracking-wider text-[#030508] uppercase disabled:opacity-50"
+                style={{ backgroundColor: CYAN }}
               >
-                {busy ? "Searching…" : "Search"}
+                {busy ? "Searching..." : "Search"}
               </button>
             </div>
-            <p className="mt-2 text-xs text-white/40">
-              Tips: US stocks (AAPL), ETFs (VOO), forex (USDTRY=X), crypto
-              (BTC-USD), metals (XAUUSD=X)
+            <p className="mt-2 text-[11px] tracking-wide text-white/45">
+              Tips: AAPL, VOO, BTC-USD, USDTRY=X, XAUUSD=X
             </p>
           </div>
 
           {data ? (
             <div className="w-full xl:flex-1 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
-              <MiniStat label="Symbol" value={data.symbol || "—"} />
+              <MiniStat
+                label="Symbol"
+                value={data.symbol || "—"}
+                accent="mint"
+              />
               <MiniStat
                 label="Name"
                 value={data.shortName || data.longName || "—"}
+                accent="violet"
               />
               <MiniStat
                 label="Price"
-                value={
-                  typeof price === "number"
-                    ? new Intl.NumberFormat("en-US", {
-                        style: "currency",
-                        currency: priceCur,
-                        minimumFractionDigits: decimalsForCurrency(priceCur),
-                        maximumFractionDigits: decimalsForCurrency(priceCur),
-                      }).format(price)
-                    : "—"
-                }
+                value={formatPrice(price, priceCur)}
+                accent="cyan"
               />
               <MiniStat
                 label="Change"
@@ -224,6 +359,7 @@ function MarketSearch() {
                     ? `${chg.toFixed(2)} (${chgPct?.toFixed(2)}%)`
                     : "—"
                 }
+                accent={chg == null ? "cyan" : chg > 0 ? "mint" : "violet"}
                 className={
                   chg == null
                     ? ""
@@ -240,9 +376,17 @@ function MarketSearch() {
 
         {data ? (
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
-            <MiniStat label="Currency" value={priceCur} />
-            <MiniStat label="Previous Close" value={prev ?? "—"} />
-            <MiniStat label="Open" value={data?.regularMarketOpen ?? "—"} />
+            <MiniStat label="Currency" value={priceCur} accent="cyan" />
+            <MiniStat
+              label="Previous Close"
+              value={String(prev ?? "—")}
+              accent="violet"
+            />
+            <MiniStat
+              label="Open"
+              value={String(data?.regularMarketOpen ?? "—")}
+              accent="mint"
+            />
             <MiniStat
               label="Day Range"
               value={
@@ -251,6 +395,7 @@ function MarketSearch() {
                   ? `${data.regularMarketDayLow} – ${data.regularMarketDayHigh}`
                   : "—"
               }
+              accent="cyan"
             />
             <MiniStat
               label="52W Range"
@@ -259,6 +404,7 @@ function MarketSearch() {
                   ? `${data.fiftyTwoWeekLow} – ${data.fiftyTwoWeekHigh}`
                   : "—"
               }
+              accent="violet"
             />
             <MiniStat
               label="Volume"
@@ -267,31 +413,36 @@ function MarketSearch() {
                   ? data.regularMarketVolume.toLocaleString()
                   : "—"
               }
+              accent="mint"
             />
             <MiniStat
               label="Market Cap"
               value={
                 data?.marketCap != null ? abbreviateNumber(data.marketCap) : "—"
               }
+              accent="cyan"
             />
             <MiniStat
               label="Exchange"
               value={data?.fullExchangeName || data?.exchange || "—"}
+              accent="violet"
             />
           </div>
         ) : null}
 
-        {err ? (
-          <div className="rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-100">
+        {err && (
+          <div className="border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-200">
             {err}
           </div>
-        ) : null}
+        )}
       </div>
     </SectionCard>
   );
 }
 
-/** ---------- Page ---------- **/
+/* ─────────────────────────────────────────────────────────────
+   PAGE
+───────────────────────────────────────────────────────────── */
 export default function InvestmentPerformance() {
   const [data, setData] = useState({ holdings: [], totals: {} });
   const [loading, setLoading] = useState(true);
@@ -325,6 +476,7 @@ export default function InvestmentPerformance() {
       "nummoriaFavorites",
       "nummoria_investment_favorites",
       "NummoriaFavorites",
+      "nummoria:favInvestments:v1",
     ];
 
     for (const k of tryKeys) {
@@ -350,7 +502,7 @@ export default function InvestmentPerformance() {
     return [];
   }, [location.search]);
 
-  async function fetchPerf() {
+  const fetchPerf = useCallback(async () => {
     setLoading(true);
     setErr("");
     try {
@@ -358,29 +510,26 @@ export default function InvestmentPerformance() {
       setData(data || { holdings: [], totals: {} });
       setLastRefreshed(new Date());
     } catch (e) {
-      setErr(e.response?.data?.error || e.message || "Failed to load.");
+      setErr(e?.response?.data?.error || e.message || "Failed to load.");
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     fetchPerf();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchPerf]);
 
   useEffect(() => {
     const sp = new URLSearchParams(location.search);
     const hasFav = Boolean(sp.get("favorites"));
     setListMode(hasFav ? "FAVORITES" : "HOLDINGS");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
 
-  function setMode(mode) {
+  const setMode = (mode) => {
     setListMode(mode);
 
     const sp = new URLSearchParams(location.search);
-
     if (mode === "FAVORITES") {
       if (favorites.length) sp.set("favorites", favorites.join(","));
     } else {
@@ -391,10 +540,11 @@ export default function InvestmentPerformance() {
       { search: sp.toString() ? `?${sp.toString()}` : "" },
       { replace: true },
     );
-  }
+  };
 
   const holdingsSorted = useMemo(() => {
     const rows = [...(data?.holdings || [])];
+
     rows.sort((a, b) => {
       const dir = sort.dir === "asc" ? 1 : -1;
       const ak = a[sort.key];
@@ -405,16 +555,16 @@ export default function InvestmentPerformance() {
         const bv = bk ?? -Infinity;
         return (av - bv) * dir;
       }
+
       if (["price", "avgCostPerUnit", "units"].includes(sort.key)) {
         const av = ak ?? -Infinity;
         const bv = bk ?? -Infinity;
         return av > bv ? dir : av < bv ? -dir : 0;
       }
 
-      const as = String(ak ?? "");
-      const bs = String(bk ?? "");
-      return as.localeCompare(bs) * dir;
+      return String(ak ?? "").localeCompare(String(bk ?? "")) * dir;
     });
+
     return rows;
   }, [data, sort]);
 
@@ -445,10 +595,14 @@ export default function InvestmentPerformance() {
 
   const totalsFiltered = useMemo(() => {
     const totals = {};
+
     for (const h of rowsToRender) {
       const cur = h.currency || "USD";
-      if (!totals[cur])
+
+      if (!totals[cur]) {
         totals[cur] = { costMinor: 0, valueMinor: 0, plMinor: 0 };
+      }
+
       totals[cur].costMinor += h.costMinor ?? 0;
 
       if (typeof h.valueMinor === "number") {
@@ -463,25 +617,27 @@ export default function InvestmentPerformance() {
         totals[cur].plMinor = totals[cur].plMinor || null;
       }
     }
+
     return totals;
   }, [rowsToRender]);
 
-  function setSortKey(key) {
+  const setSortKey = (key) => {
     setSort((s) =>
       s.key === key
         ? { key, dir: s.dir === "asc" ? "desc" : "asc" }
         : { key, dir: "asc" },
     );
-  }
+  };
 
-  function SortBtn({ k, children, className = "" }) {
+  const SortBtn = ({ k, children, className = "" }) => {
     const active = sort.key === k;
+
     return (
       <button
         type="button"
         onClick={() => setSortKey(k)}
         className={`inline-flex items-center gap-1 ${
-          active ? "font-semibold text-white" : "font-normal text-white/65"
+          active ? "font-bold text-white" : "font-normal text-white/65"
         } ${className}`}
         title="Sort"
       >
@@ -491,42 +647,18 @@ export default function InvestmentPerformance() {
         </span>
       </button>
     );
-  }
+  };
 
   if (loading) {
     return (
-      <div className="min-h-[60vh] grid place-items-center bg-[#070A07] px-4">
-        <div className="relative w-full max-w-sm">
-          <div className="pointer-events-none absolute -inset-10 opacity-40">
-            <div className="absolute left-4 top-6 h-40 w-40 rounded-full blur-3xl bg-[#13e243]/20" />
-            <div className="absolute right-6 top-10 h-40 w-40 rounded-full blur-3xl bg-[#991746]/20" />
+      <div className="min-h-dvh grid place-items-center bg-[#030508] px-4">
+        <div className="flex flex-col items-center">
+          <Brackets color={VIOLET} size="20px" thick="2px" />
+          <div className="w-16 h-16 border border-[#a78bfa]/30 flex items-center justify-center mb-4 bg-[#a78bfa]/10">
+            <div className="w-8 h-8 rounded-full border-t-2 border-[#a78bfa] animate-spin" />
           </div>
-
-          <div className="relative rounded-3xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-md">
-            <div className="flex items-center gap-3">
-              <img
-                src={logoUrl}
-                alt="Nummoria logo"
-                className="h-9 w-9 rounded-xl"
-              />
-              <div>
-                <div className="text-lg font-semibold text-white">Nummoria</div>
-                <div className="text-sm text-white/50">
-                  Loading investment performance…
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-5 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-              <div className="h-full w-1/3 animate-[perflogload_1.2s_ease-in-out_infinite] bg-white/30" />
-            </div>
-
-            <style>{`
-              @keyframes perflogload {
-                0% { transform: translateX(-120%); }
-                100% { transform: translateX(320%); }
-              }
-            `}</style>
+          <div className="text-[11px] font-extrabold tracking-[0.3em] text-white/90 uppercase">
+            Loading Performance...
           </div>
         </div>
       </div>
@@ -534,63 +666,58 @@ export default function InvestmentPerformance() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-[#070A07] text-white">
-      <div className="pointer-events-none fixed inset-0 -z-10">
-        <div className="absolute inset-0 bg-[#070A07]" />
-        <div className="absolute inset-0 bg-[radial-gradient(1200px_800px_at_15%_0%,rgba(19,226,67,0.10),transparent_55%),radial-gradient(1000px_700px_at_85%_10%,rgba(153,23,70,0.10),transparent_55%),radial-gradient(900px_700px_at_50%_100%,rgba(255,255,255,0.04),transparent_60%)]" />
-        <div className="absolute inset-0 opacity-[0.10] mix-blend-overlay bg-[linear-gradient(to_right,rgba(255,255,255,0.10)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.10)_1px,transparent_1px)] bg-[size:56px_56px]" />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/35 to-black/70" />
-      </div>
+    <div className="min-h-dvh bg-[#030508] text-[#e2e8f0] font-sans selection:bg-[#a78bfa]/30">
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+            .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+            .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
+            .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+            .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.4); }
+          `,
+        }}
+      />
 
-      <header className="sticky top-0 z-30 border-b border-white/10 bg-[#070A07]/80 backdrop-blur">
-        <div className="mx-4 h-16 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <img
-              src={logoUrl}
-              alt="Nummoria Logo"
-              className="h-8 w-8 rounded-xl"
-            />
-            <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-white">
-              Investment Performance
-            </h1>
-          </div>
+      <div className="mx-auto max-w-screen-2xl w-full px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-5">
+        <div className="relative border border-[#a78bfa]/20 bg-[#a78bfa]/[0.03] p-5 md:p-6 overflow-hidden">
+          <Brackets color={VIOLET} size="12px" thick="1.5px" />
+          <div
+            className="absolute top-0 inset-x-[10%] h-[1px] opacity-40"
+            style={{ backgroundColor: VIOLET }}
+          />
 
-          <div className="flex items-center gap-3">
-            {lastRefreshed ? (
-              <div className="hidden sm:block text-xs text-white/45">
-                Refreshed:{" "}
-                {new Intl.DateTimeFormat("en-US", {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                }).format(lastRefreshed)}
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0">
+              <div className="inline-flex items-center gap-2 border border-white/10 bg-black/40 px-3 py-1 mb-4">
+                <span
+                  className="w-1.5 h-1.5 rounded-full"
+                  style={{ backgroundColor: MINT }}
+                />
+                <span className="text-[11px] font-extrabold tracking-wider text-white/80 uppercase">
+                  Performance Module
+                </span>
               </div>
-            ) : null}
-            <button
-              onClick={fetchPerf}
-              className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-white/75 transition hover:bg-white/[0.07] hover:text-white disabled:opacity-60"
-              disabled={loading}
-            >
-              {loading ? "Loading..." : "Refresh"}
-            </button>
-          </div>
-        </div>
-      </header>
 
-      <main className="mx-4 py-6">
-        <SectionCard
-          className="mb-6"
-          title="Performance dashboard"
-          subtitle="Review live pricing, track unrealized profit and loss, and compare current value against invested cost."
-        >
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-            <div className="flex flex-wrap items-center gap-3 text-sm">
+              <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-white leading-none">
+                Investment Performance
+              </h1>
+
+              <p className="mt-3 max-w-2xl text-base text-white/80 leading-relaxed">
+                Review live pricing, track unrealized P/L, and compare current
+                value against invested cost.
+              </p>
+
+              <ScanLine color={VIOLET} className="mt-6 w-full max-w-md" />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 lg:justify-end">
               <button
                 type="button"
                 onClick={() => setMode("HOLDINGS")}
-                className={`rounded-2xl border px-4 py-2.5 font-semibold transition ${
+                className={`border px-4 py-2 text-xs font-bold tracking-wider uppercase transition-colors ${
                   listMode === "HOLDINGS"
-                    ? "border-white/15 bg-white/[0.08] text-white"
-                    : "border-white/10 bg-white/[0.03] text-white/55 hover:bg-white/[0.05] hover:text-white"
+                    ? "border-[#00ff87]/40 bg-[#00ff87]/10 text-[#00ff87]"
+                    : "border-white/10 bg-black/40 text-white/80 hover:bg-white/5"
                 }`}
               >
                 Holdings ({holdingsFiltered.length})
@@ -599,56 +726,69 @@ export default function InvestmentPerformance() {
               <button
                 type="button"
                 onClick={() => setMode("FAVORITES")}
-                className={`rounded-2xl border px-4 py-2.5 font-semibold transition ${
+                className={`border px-4 py-2 text-xs font-bold tracking-wider uppercase transition-colors ${
                   listMode === "FAVORITES"
-                    ? "border-white/15 bg-white/[0.08] text-white"
-                    : "border-white/10 bg-white/[0.03] text-white/55 hover:bg-white/[0.05] hover:text-white"
+                    ? "border-[#00d4ff]/40 bg-[#00d4ff]/10 text-[#00d4ff]"
+                    : "border-white/10 bg-black/40 text-white/80 hover:bg-white/5"
                 }`}
               >
                 Favorites ({favoritesFiltered.length})
               </button>
-            </div>
 
-            {lastRefreshed ? (
-              <div className="sm:hidden text-xs text-white/45">
-                Refreshed:{" "}
-                {new Intl.DateTimeFormat("en-US", {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                }).format(lastRefreshed)}
-              </div>
-            ) : null}
+              <button
+                onClick={fetchPerf}
+                className="inline-flex items-center border border-white/10 bg-black/40 px-4 py-2 hover:bg-white/5 transition-colors"
+              >
+                <span className="text-xs font-bold tracking-wider text-white/80 uppercase">
+                  Refresh
+                </span>
+              </button>
+            </div>
           </div>
-        </SectionCard>
+
+          {lastRefreshed ? (
+            <div className="mt-4 text-[11px] tracking-wider text-white/55 uppercase">
+              Refreshed:{" "}
+              {new Intl.DateTimeFormat("en-US", {
+                dateStyle: "medium",
+                timeStyle: "short",
+              }).format(lastRefreshed)}
+            </div>
+          ) : null}
+        </div>
 
         <MarketSearch />
 
-        {err ? (
-          <div className="mb-6 rounded-2xl border border-red-400/20 bg-red-400/10 p-4 text-red-100">
-            {err}
+        {err && (
+          <div className="flex gap-3 border border-red-400/30 bg-red-400/10 p-4">
+            <div className="font-bold text-red-300">[!]</div>
+            <div className="text-sm text-red-100">{err}</div>
           </div>
-        ) : null}
+        )}
 
-        {!err && !loading && !anyQuotes && holdingsFiltered.length > 0 ? (
-          <div className="mb-6 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4 text-amber-100">
-            Live quotes are disabled or unavailable. Value and P/L are shown as
-            “—”.
+        {!err && !loading && !anyQuotes && holdingsFiltered.length > 0 && (
+          <div className="flex gap-3 border border-amber-400/30 bg-amber-400/10 p-4">
+            <div className="font-bold text-amber-300">[!]</div>
+            <div className="text-sm text-amber-100">
+              Live quotes are disabled or unavailable. Value and P/L are shown
+              as “—”.
+            </div>
           </div>
-        ) : null}
+        )}
 
-        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {Object.entries(totalsFiltered).map(([cur, t]) => {
             const hasVal = t.valueMinor !== null && t.valueMinor !== undefined;
             const hasPL = t.plMinor !== null && t.plMinor !== undefined;
-            const plPositive = (t.plMinor ?? 0) > 0;
-            const plNegative = (t.plMinor ?? 0) < 0;
 
             return (
               <SectionCard
                 key={cur}
                 title="Totals"
+                subtitle="AGGREGATED BY CURRENCY"
+                accent="cyan"
                 right={
-                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/60">
+                  <span className="border border-[#00d4ff]/30 bg-[#00d4ff]/10 px-2 py-0.5 text-[10px] font-bold tracking-wider text-[#00d4ff] uppercase">
                     {cur}
                   </span>
                 }
@@ -657,22 +797,25 @@ export default function InvestmentPerformance() {
                   <MetricCard
                     label="Cost"
                     value={formatMoneyMinor(t.costMinor, cur)}
+                    accent="cyan"
                   />
                   <MetricCard
                     label="Current Value"
                     value={hasVal ? formatMoneyMinor(t.valueMinor, cur) : "—"}
+                    accent="violet"
                   />
                   <MetricCard
                     label="P/L"
                     value={hasPL ? formatMoneyMinor(t.plMinor, cur) : "—"}
-                    valueClassName={
+                    accent="mint"
+                    className={
                       hasPL
-                        ? plPositive
+                        ? (t.plMinor ?? 0) > 0
                           ? "text-emerald-400"
-                          : plNegative
+                          : (t.plMinor ?? 0) < 0
                             ? "text-red-400"
-                            : "text-white"
-                        : "text-white"
+                            : ""
+                        : ""
                     }
                   />
                 </div>
@@ -680,27 +823,28 @@ export default function InvestmentPerformance() {
             );
           })}
 
-          {Object.keys(totalsFiltered).length === 0 && !loading ? (
-            <SectionCard title="Totals">
+          {Object.keys(totalsFiltered).length === 0 && !loading && (
+            <SectionCard title="Totals" accent="cyan">
               <div className="text-sm text-white/50">
                 No totals yet — add investment transactions.
               </div>
             </SectionCard>
-          ) : null}
-        </section>
+          )}
+        </div>
 
         <SectionCard
-          title={listMode === "FAVORITES" ? "Favorite holdings" : "Holdings"}
+          title={listMode === "FAVORITES" ? "Favorite Holdings" : "Holdings"}
           subtitle={
             listMode === "FAVORITES"
-              ? "Tracked positions limited to your saved favorites."
-              : "All current holdings with live quote comparison where available."
+              ? "Tracked positions limited to saved favorites"
+              : "All current holdings with live quote comparison where available"
           }
+          accent="mint"
           className="min-w-0"
         >
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto custom-scrollbar border border-white/10 bg-black/20">
             <table className="min-w-full text-sm">
-              <thead className="border-b border-white/8 text-white/65">
+              <thead className="border-b border-white/8 text-white/65 bg-white/[0.02]">
                 <tr>
                   <th className="px-4 py-3 text-left whitespace-nowrap">
                     <SortBtn k="symbol">Symbol</SortBtn>
@@ -730,14 +874,6 @@ export default function InvestmentPerformance() {
               </thead>
 
               <tbody className="divide-y divide-white/8">
-                {loading ? (
-                  <tr>
-                    <td className="px-4 py-5 text-white/50" colSpan={8}>
-                      Loading...
-                    </td>
-                  </tr>
-                ) : null}
-
                 {!loading && rowsToRender.length === 0 ? (
                   <tr>
                     <td className="px-4 py-8 text-white/50" colSpan={8}>
@@ -775,7 +911,7 @@ export default function InvestmentPerformance() {
                         key={`${h.symbol}-${idx}`}
                         className="hover:bg-white/[0.03] transition"
                       >
-                        <td className="px-4 py-4 font-medium text-white whitespace-nowrap">
+                        <td className="px-4 py-4 font-extrabold tracking-wider text-white whitespace-nowrap uppercase">
                           {h.symbol}
                         </td>
 
@@ -784,7 +920,7 @@ export default function InvestmentPerformance() {
                             {h.currency}
                             {priceCurMismatch ? (
                               <span
-                                className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-0.5 text-[10px] text-amber-200"
+                                className="border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-bold tracking-wider text-amber-200 uppercase"
                                 title={`Quote currency (${h.priceCurrency}) differs from holding currency (${h.currency}). Value/P&L not computed.`}
                               >
                                 FX mismatch
@@ -793,15 +929,15 @@ export default function InvestmentPerformance() {
                           </span>
                         </td>
 
-                        <td className="px-4 py-4 text-right whitespace-nowrap text-white/75">
+                        <td className="px-4 py-4 text-right whitespace-nowrap text-white/75 font-mono">
                           {formatNumber(h.units, 4)}
                         </td>
 
-                        <td className="px-4 py-4 text-right whitespace-nowrap text-white">
+                        <td className="px-4 py-4 text-right whitespace-nowrap text-white font-mono">
                           {formatMoneyMinor(h.costMinor, h.currency)}
                         </td>
 
-                        <td className="px-4 py-4 text-right whitespace-nowrap text-white/75">
+                        <td className="px-4 py-4 text-right whitespace-nowrap text-white/75 font-mono">
                           {h.avgCostPerUnit == null
                             ? "—"
                             : new Intl.NumberFormat("en-US", {
@@ -812,16 +948,16 @@ export default function InvestmentPerformance() {
                               }).format(h.avgCostPerUnit)}
                         </td>
 
-                        <td className="px-4 py-4 text-right whitespace-nowrap text-white/75">
+                        <td className="px-4 py-4 text-right whitespace-nowrap text-white/75 font-mono">
                           {priceStr}
                         </td>
 
-                        <td className="px-4 py-4 text-right whitespace-nowrap text-white">
+                        <td className="px-4 py-4 text-right whitespace-nowrap text-white font-mono">
                           {formatMoneyMinor(h.valueMinor, h.currency)}
                         </td>
 
                         <td
-                          className={`px-4 py-4 text-right whitespace-nowrap ${
+                          className={`px-4 py-4 text-right whitespace-nowrap font-mono ${
                             (h.plMinor ?? 0) > 0
                               ? "text-emerald-400"
                               : (h.plMinor ?? 0) < 0
@@ -838,7 +974,7 @@ export default function InvestmentPerformance() {
             </table>
           </div>
         </SectionCard>
-      </main>
+      </div>
     </div>
   );
 }

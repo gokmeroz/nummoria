@@ -59,7 +59,7 @@ export default function App() {
         <Route path="/contact" element={<Contact />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />
-        <Route path="/status" element={<Status />} />
+        {/* <Route path="/status" element={<Status />} /> */}
 
         {/* OAuth callback can be public */}
         <Route path="/oauth-callback" element={<OAuthCallback />} />
@@ -97,7 +97,7 @@ export default function App() {
             <Route path="/ai/financial-helper" element={<FinancialHelper />} />
             <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/subscriptions" element={<SubscriptionManager />} />
-            <Route path="/subscriptions/purchase" element={<PurchasePage />} />
+            {/* <Route path="/subscriptions/purchase" element={<PurchasePage />} /> */}
           </Route>
         </Route>
 

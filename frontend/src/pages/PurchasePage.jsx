@@ -301,7 +301,7 @@ export default function PurchasePage({ initialPlan }) {
                 style={{
                   background: `linear-gradient(180deg, ${accent}, ${shade(
                     accent,
-                    -10
+                    -10,
                   )})`,
                   boxShadow: `0 10px 22px -10px ${hexToRGBA(accent, 0.25)}`,
                 }}

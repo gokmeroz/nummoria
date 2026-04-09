@@ -15,6 +15,7 @@ import React, {
 import api from "../lib/api";
 import "../assets/nummoria_logo.png";
 import { autoCreateFromText } from "../lib/autoTransactionsApi";
+import * as d3 from "d3";
 
 /**
  * ============================================================================
@@ -341,24 +342,168 @@ const MetricCard = React.memo(({ label, value, accent }) => {
 });
 
 /* ─────────────────────────────────────────────────────────────
-   CHARTS (Would live in /components/charts/)
+   CHARTS (D3 Integrated)
 ───────────────────────────────────────────────────────────── */
 const BarChart = React.memo(({ data, currency }) => {
-  const pad = 40,
-    perBar = 60,
-    height = 220;
-  const width = Math.max(480, pad * 2 + data.length * perBar);
-  const max = Math.max(1, ...data.map((d) => d.minor));
-  const bw = (width - pad * 2) / Math.max(1, data.length);
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => Math.round(t * max));
+  const contentRef = useRef(null);
+  const [tooltip, setTooltip] = useState({
+    show: false,
+    x: 0,
+    y: 0,
+    data: null,
+  });
+
+  useEffect(() => {
+    if (!contentRef.current || !data || data.length === 0) return;
+
+    const pad = 40;
+    const perBar = 60;
+    const height = 220;
+    const width = Math.max(480, pad * 2 + data.length * perBar);
+
+    const content = d3.select(contentRef.current);
+    // Clear previous render to prepare for D3 redraw
+    content.selectAll("*").remove();
+
+    // Scales
+    const x = d3
+      .scaleBand()
+      .domain(data.map((d) => d.name))
+      .range([pad, width - pad])
+      .padding(0.3);
+
+    const y = d3
+      .scaleLinear()
+      .domain([0, d3.max(data, (d) => d.minor) || 1])
+      .nice()
+      .range([height - pad, pad]);
+
+    // Y Axis Grid & Labels
+    const yAxis = content
+      .append("g")
+      .attr("transform", `translate(${pad},0)`)
+      .call(
+        d3
+          .axisLeft(y)
+          .ticks(5)
+          .tickSize(-(width - pad * 2)),
+      )
+      .call((g) => g.select(".domain").remove());
+
+    yAxis
+      .selectAll("line")
+      .attr("stroke", "rgba(167,139,250,0.15)")
+      .attr("stroke-dasharray", "2 4");
+
+    yAxis
+      .selectAll("text")
+      .attr("fill", "rgba(167,139,250,0.8)")
+      .style("font-size", "11px")
+      .style("font-weight", "bold")
+      .style("font-family", "monospace")
+      .text((d) => fmtMoney(d, currency));
+
+    // X Axis Labels
+    content
+      .append("g")
+      .attr("transform", `translate(0,${height - pad})`)
+      .call(d3.axisBottom(x).tickSize(0))
+      .call((g) => g.select(".domain").attr("stroke", "rgba(167,139,250,0.5)"))
+      .selectAll("text")
+      .attr("y", 12)
+      .attr("fill", "rgba(255,255,255,0.9)")
+      .style("font-size", "11px")
+      .style("font-weight", "bold")
+      .style("text-transform", "uppercase")
+      .text((d) => (d.length > 10 ? d.slice(0, 10) + "…" : d));
+
+    // Render Bars
+    const bars = content
+      .selectAll(".bar-group")
+      .data(data, (d) => d.name)
+      .join("g")
+      .attr("class", "bar-group");
+
+    // Track Backgrounds
+    bars
+      .append("rect")
+      .attr("x", (d) => x(d.name))
+      .attr("y", pad)
+      .attr("width", x.bandwidth())
+      .attr("height", height - pad * 2)
+      .attr("fill", "rgba(167,139,250,0.03)")
+      .attr("rx", 2);
+
+    // Data Bars (Static, no animations)
+    bars
+      .append("rect")
+      .attr("x", (d) => x(d.name))
+      .attr("y", (d) => y(d.minor))
+      .attr("width", x.bandwidth())
+      .attr("height", (d) => height - pad - y(d.minor))
+      .attr("fill", "url(#barGrad)")
+      .attr("rx", 2);
+
+    // Interactive Overlay (Captures hover events)
+    bars
+      .append("rect")
+      .attr("x", (d) => x(d.name))
+      .attr("y", pad)
+      .attr("width", x.bandwidth())
+      .attr("height", height - pad * 2)
+      .attr("fill", "transparent")
+      .style("cursor", "crosshair")
+      .on("mouseenter", function (event, d) {
+        // Highlight current bar
+        d3.select(this.parentNode)
+          .select("rect:nth-child(2)")
+          .attr("fill", "#a78bfa")
+          .attr("filter", "brightness(1.2)");
+
+        setTooltip({ show: true, x: event.clientX, y: event.clientY, data: d });
+      })
+      .on("mousemove", (event) => {
+        setTooltip((prev) => ({ ...prev, x: event.clientX, y: event.clientY }));
+      })
+      .on("mouseleave", function () {
+        // Revert bar style
+        d3.select(this.parentNode)
+          .select("rect:nth-child(2)")
+          .attr("fill", "url(#barGrad)")
+          .attr("filter", null);
+
+        setTooltip({ show: false, x: 0, y: 0, data: null });
+      });
+  }, [data, currency]);
+
+  // Calculate dynamic width for React SVG wrapper
+  const pad = 40;
+  const perBar = 60;
+  const width = Math.max(480, pad * 2 + (data?.length || 0) * perBar);
 
   return (
     <div className="overflow-x-auto border border-[#a78bfa]/20 bg-[#030508] h-full flex items-center custom-scrollbar relative shadow-[inset_0_0_20px_rgba(167,139,250,0.05)]">
-      <svg width={width} height={height} className="block w-full">
+      {/* Portal-like Tooltip Rendered at Mouse Coordinates */}
+      {tooltip.show && tooltip.data && (
+        <div
+          className="fixed z-50 pointer-events-none px-3 py-2 bg-[#030508] border shadow-2xl backdrop-blur-md transform -translate-x-1/2 -translate-y-[120%] transition-opacity duration-150"
+          style={{ left: tooltip.x, top: tooltip.y, borderColor: "#a78bfa88" }}
+        >
+          <div className="text-xs font-extrabold uppercase tracking-wider mb-1 text-[#a78bfa]">
+            {tooltip.data.name}
+          </div>
+          <div className="text-sm font-mono font-bold text-white">
+            {fmtMoney(tooltip.data.minor, currency)}
+          </div>
+        </div>
+      )}
+
+      {/* SVG Shell */}
+      <svg width={width} height={220} className="block min-w-full">
         <defs>
           <linearGradient id="barGrad" x1="0" y1="1" x2="0" y2="0">
-            <stop offset="0%" stopColor={VIOLET} stopOpacity="0.2" />
-            <stop offset="100%" stopColor={VIOLET} stopOpacity="1" />
+            <stop offset="0%" stopColor="#a78bfa" stopOpacity="0.2" />
+            <stop offset="100%" stopColor="#a78bfa" stopOpacity="1" />
           </linearGradient>
           <pattern
             id="grid"
@@ -382,171 +527,10 @@ const BarChart = React.memo(({ data, currency }) => {
             <rect width="4" height="2" fill="rgba(0,0,0,0.2)" />
           </pattern>
         </defs>
-
         <rect width="100%" height="100%" fill="url(#grid)" />
 
-        {ticks.map((val, i) => {
-          const y = height - pad - (val / max) * (height - pad * 2);
-          return (
-            <g key={`tick-${i}`}>
-              <line
-                x1={pad}
-                y1={y}
-                x2={width - pad}
-                y2={y}
-                stroke="rgba(167,139,250,0.15)"
-                strokeDasharray="2 4"
-              />
-              <text
-                x={pad - 8}
-                y={y + 3}
-                textAnchor="end"
-                fontSize="11"
-                fontWeight="bold"
-                fill="rgba(167,139,250,0.8)"
-                className="tracking-wider font-mono"
-              >
-                {fmtMoney(val, currency)}
-              </text>
-            </g>
-          );
-        })}
-
-        <line
-          x1={pad}
-          y1={height - pad}
-          x2={width - pad}
-          y2={height - pad}
-          stroke={VIOLET}
-          opacity={0.5}
-          strokeWidth="2"
-        />
-
-        {data.map((d, i) => {
-          const h = (d.minor / max) * (height - pad * 2);
-          const x = pad + i * bw + bw * 0.15;
-          const y = height - pad - h;
-          const w = bw * 0.7;
-
-          return (
-            <g key={`bar-${i}`}>
-              <rect
-                x={x}
-                y={pad}
-                width={w}
-                height={height - pad * 2}
-                fill="rgba(167,139,250,0.03)"
-                rx="2"
-                ry="2"
-              />
-              <rect
-                x={x}
-                y={height - pad}
-                width={w}
-                height={0}
-                fill="url(#barGrad)"
-                rx="2"
-                ry="2"
-              >
-                <animate
-                  attributeName="y"
-                  from={height - pad}
-                  to={y}
-                  dur="0.8s"
-                  begin={`${i * 0.08}s`}
-                  fill="freeze"
-                  calcMode="spline"
-                  keyTimes="0;1"
-                  keySplines="0.16 1 0.3 1"
-                />
-                <animate
-                  attributeName="height"
-                  from="0"
-                  to={h}
-                  dur="0.8s"
-                  begin={`${i * 0.08}s`}
-                  fill="freeze"
-                  calcMode="spline"
-                  keyTimes="0;1"
-                  keySplines="0.16 1 0.3 1"
-                />
-              </rect>
-
-              <rect
-                x={x}
-                y={height - pad}
-                width={w}
-                height={2}
-                fill={MINT}
-                opacity="0"
-              >
-                <animate
-                  attributeName="y"
-                  from={height - pad}
-                  to={y - 2}
-                  dur="0.8s"
-                  begin={`${i * 0.08}s`}
-                  fill="freeze"
-                  calcMode="spline"
-                  keyTimes="0;1"
-                  keySplines="0.16 1 0.3 1"
-                />
-                <animate
-                  attributeName="opacity"
-                  from="0"
-                  to="1"
-                  dur="0.8s"
-                  begin={`${i * 0.08}s`}
-                  fill="freeze"
-                />
-              </rect>
-
-              <text
-                x={x + w / 2}
-                y={height - pad}
-                textAnchor="middle"
-                fontSize="12"
-                fill={MINT}
-                fontWeight="bold"
-                className="tracking-wider font-mono"
-                opacity="0"
-              >
-                <animate
-                  attributeName="y"
-                  from={height - pad}
-                  to={y - 8}
-                  dur="0.8s"
-                  begin={`${i * 0.08}s`}
-                  fill="freeze"
-                  calcMode="spline"
-                  keyTimes="0;1"
-                  keySplines="0.16 1 0.3 1"
-                />
-                <animate
-                  attributeName="opacity"
-                  from="0"
-                  to="1"
-                  dur="0.8s"
-                  begin={`${i * 0.08}s`}
-                  fill="freeze"
-                />
-                {fmtMoney(d.minor, currency)}
-              </text>
-
-              <text
-                x={x + w / 2}
-                y={height - pad + 18}
-                textAnchor="middle"
-                fontSize="11"
-                fontWeight="bold"
-                fill="rgba(255,255,255,0.9)"
-                className="uppercase tracking-wider"
-              >
-                {d.name.length > 10 ? d.name.slice(0, 10) + "…" : d.name}
-              </text>
-            </g>
-          );
-        })}
+        {/* D3 Injects Content Here */}
+        <g ref={contentRef} />
 
         <rect
           width="100%"
@@ -709,7 +693,7 @@ const PieChart = React.memo(({ data, currency }) => {
                 fill={s.color}
                 stroke={BG}
                 strokeWidth="4"
-                opacity="0"
+                opacity="1"
                 className="transition-all duration-300 hover:brightness-125 hover:scale-[1.02] origin-center cursor-crosshair"
                 onMouseEnter={(e) => {
                   setHoveredIdx(i);
@@ -719,16 +703,7 @@ const PieChart = React.memo(({ data, currency }) => {
                   setMousePos({ x: e.clientX, y: e.clientY });
                 }}
                 onMouseLeave={() => setHoveredIdx(null)}
-              >
-                <animate
-                  attributeName="opacity"
-                  from="0"
-                  to="1"
-                  dur="0.6s"
-                  begin={`${i * 0.1}s`}
-                  fill="freeze"
-                />
-              </path>
+              />
             </g>
           ))}
 
@@ -767,7 +742,7 @@ const PieChart = React.memo(({ data, currency }) => {
             key={i}
             onMouseEnter={() => setHoveredIdx(i)}
             onMouseLeave={() => setHoveredIdx(null)}
-            className={`group flex items-center gap-3 border px-3 py-2 transition-all relative overflow-hidden cursor-default ${
+            className={`group flex items-center border px-3 py-2 transition-all relative overflow-hidden cursor-default ${
               hoveredIdx === i
                 ? "bg-white/[0.08] border-white/30"
                 : "bg-white/[0.02] border-white/5 hover:bg-white/[0.05] hover:border-white/20"
@@ -785,21 +760,22 @@ const PieChart = React.memo(({ data, currency }) => {
               style={{ backgroundColor: s.color }}
             />
 
-            <div className="flex-1 min-w-0 pl-1 relative z-10">
+            {/* NEW LAYOUT: CSS Grid for perfect column alignment */}
+            <div className="flex-1 min-w-0 pl-2 relative z-10 grid grid-cols-[minmax(0,1fr)_45px_minmax(80px,auto)] items-center gap-2">
               <div
-                className={`truncate text-xs font-extrabold uppercase tracking-wider transition-colors ${hoveredIdx === i ? "text-white" : "text-white/90 group-hover:text-white"}`}
+                className={`truncate text-[11px] font-extrabold uppercase tracking-wider transition-colors ${hoveredIdx === i ? "text-white" : "text-white/90 group-hover:text-white"}`}
                 title={s.name}
               >
                 {s.name}
               </div>
-              <div className="text-[11px] font-bold text-white/70 font-mono mt-0.5">
-                {Math.round((s.pct ?? 0) * 100)}% SHARE
-              </div>
-            </div>
 
-            <div className="text-right relative z-10">
+              <div className="text-[10px] font-bold text-white/50 font-mono text-right whitespace-nowrap">
+                {Math.round((s.pct ?? 0) * 100)}%
+              </div>
+
               <div
-                className={`font-mono text-sm font-bold transition-colors ${hoveredIdx === i ? "text-[#00d4ff]" : "text-white group-hover:text-[#00d4ff]"}`}
+                className={`font-mono text-xs font-bold text-right truncate transition-colors ${hoveredIdx === i ? "text-[#00d4ff]" : "text-white group-hover:text-[#00d4ff]"}`}
+                title={fmtMoney(s.minor, currency)}
               >
                 {fmtMoney(s.minor, currency)}
               </div>
@@ -1326,6 +1302,12 @@ export default function ExpensesScreen({ accountId }) {
   // Local Distribution Graph State
   const [distCurrency, setDistCurrency] = useState("");
 
+  // --- ADDED BAR CHART CURRENCY STATE ---
+  const [barCurrency, setBarCurrency] = useState("");
+
+  // --- ADDED KPI CURRENCY STATE ---
+  const [kpiCurrency, setKpiCurrency] = useState("");
+
   const [newCatName, setNewCatName] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingData, setEditingData] = useState(null);
@@ -1466,6 +1448,40 @@ export default function ExpensesScreen({ accountId }) {
       .sort((a, b) => b.minor - a.minor);
   }, [rows, currentDistCurrency, categoriesById]);
 
+  // --- ADDED BAR CHART DATA GENERATION ---
+  const currentBarCurrency = distCurrencies.includes(barCurrency)
+    ? barCurrency
+    : distCurrencies[0] || "USD";
+
+  const barChartData = useMemo(() => {
+    const now = new Date();
+    const thisStart = startOfMonthUTC(now);
+    const thisEnd = endOfMonthUTC(now);
+
+    // Filter for current month AND the selected bar currency
+    const curRows = rows.filter(
+      (r) =>
+        (r.currency || "USD") === currentBarCurrency &&
+        new Date(r.date) >= thisStart &&
+        new Date(r.date) <= thisEnd,
+    );
+
+    const catMap = new Map();
+    for (const t of curRows) {
+      catMap.set(
+        t.categoryId || "—",
+        (catMap.get(t.categoryId || "—") || 0) + Number(t.amountMinor || 0),
+      );
+    }
+
+    return Array.from(catMap.entries())
+      .map(([cid, minor]) => ({
+        name: categoriesById.get(cid)?.name || "—",
+        minor,
+      }))
+      .sort((a, b) => b.minor - a.minor);
+  }, [rows, currentBarCurrency, categoriesById]);
+
   const totals = useMemo(() => {
     const byCur = {};
     for (const t of rows) {
@@ -1519,12 +1535,19 @@ export default function ExpensesScreen({ accountId }) {
     return arr;
   }, [transactions]);
 
-  // Insights strictly for KPIs & Bar Chart now
+  // --- UPDATED KPI INSIGHTS LOGIC ---
+  const currentKpiCurrency = useMemo(() => {
+    if (distCurrencies.includes(kpiCurrency)) return kpiCurrency;
+    if (
+      filters.fCurrency !== "ALL" &&
+      distCurrencies.includes(filters.fCurrency)
+    )
+      return filters.fCurrency;
+    return distCurrencies[0] || "USD";
+  }, [distCurrencies, kpiCurrency, filters.fCurrency]);
+
   const insights = useMemo(() => {
-    const chosen =
-      filters.fCurrency !== "ALL"
-        ? filters.fCurrency
-        : rows[0]?.currency || "USD";
+    const chosen = currentKpiCurrency;
     const filteredByCur = rows.filter((r) =>
       chosen ? r.currency === chosen : true,
     );
@@ -1553,13 +1576,6 @@ export default function ExpensesScreen({ accountId }) {
       yearMinor += minorSum(within(filteredByCur, s, e));
     }
 
-    const catMap = new Map();
-    for (const t of thisMonth)
-      catMap.set(
-        t.categoryId || "—",
-        (catMap.get(t.categoryId || "—") || 0) + Number(t.amountMinor || 0),
-      );
-
     return {
       statsCurrency: chosen,
       kpis: {
@@ -1567,15 +1583,9 @@ export default function ExpensesScreen({ accountId }) {
         this: minorSum(thisMonth),
         yearlyAvg: monthsPassed ? Math.round(yearMinor / monthsPassed) : 0,
       },
-      monthCats: Array.from(catMap.entries())
-        .map(([cid, minor]) => ({
-          name: categoriesById.get(cid)?.name || "—",
-          minor,
-        }))
-        .sort((a, b) => b.minor - a.minor),
       noteMixedCurrency: filters.fCurrency === "ALL",
     };
-  }, [rows, filters.fCurrency, categoriesById]);
+  }, [rows, currentKpiCurrency, filters.fCurrency]);
 
   /* Actions */
   const handleOpenCreate = useCallback(() => {
@@ -1671,7 +1681,7 @@ export default function ExpensesScreen({ accountId }) {
         }}
       />
 
-      <div className="mx-auto max-w-[1600px] w-full px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-5">
+      <div className="mx-auto max-w-screen-2xl w-full px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-5">
         {/* HEADER AREA */}
         <div className="relative border border-[#a78bfa]/20 bg-[#a78bfa]/[0.03] p-5 md:p-6 overflow-hidden">
           <Brackets color={VIOLET} size="12px" thick="1.5px" />
@@ -1918,39 +1928,53 @@ export default function ExpensesScreen({ accountId }) {
           <SectionCard
             title="KPIs"
             accent="cyan"
-            className="lg:col-span-3 xl:col-span-3"
+            className="lg:col-span-3 xl:col-span-3 overflow-hidden"
             right={
-              <span className="border border-[#00d4ff]/30 bg-[#00d4ff]/10 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-[#00d4ff] uppercase">
-                {(filters.fCurrency !== "ALL"
-                  ? filters.fCurrency
-                  : rows[0]?.currency) || "—"}
-              </span>
+              distCurrencies.length > 1 ? (
+                <select
+                  value={currentKpiCurrency}
+                  onChange={(e) => setKpiCurrency(e.target.value)}
+                  className="bg-black/40 border border-[#00d4ff]/30 text-[#00d4ff] px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase outline-none cursor-pointer"
+                >
+                  {distCurrencies.map((c) => (
+                    <option key={c} value={c} className="text-black">
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="border border-[#00d4ff]/30 bg-[#00d4ff]/10 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-[#00d4ff] uppercase">
+                  {currentKpiCurrency}
+                </span>
+              )
             }
           >
-            {insights.noteMixedCurrency && (
-              <div className="mb-3 text-[11px] tracking-wider text-white/80 uppercase">
-                Mixed currency mode. Select one for accuracy.
+            <div className="flex flex-col h-full">
+              {insights.noteMixedCurrency && (
+                <div className="mb-2 text-[10px] leading-tight tracking-wider text-white/60 uppercase">
+                  Mixed currency mode.
+                </div>
+              )}
+              <div className="flex-1 flex flex-col gap-2 min-h-0 justify-around">
+                <MetricCard
+                  label="Last Month"
+                  value={fmtMoney(insights.kpis.last, insights.statsCurrency)}
+                  accent="cyan"
+                />
+                <MetricCard
+                  label="This Month"
+                  value={fmtMoney(insights.kpis.this, insights.statsCurrency)}
+                  accent="violet"
+                />
+                <MetricCard
+                  label="Yearly Avg"
+                  value={fmtMoney(
+                    insights.kpis.yearlyAvg,
+                    insights.statsCurrency,
+                  )}
+                  accent="mint"
+                />
               </div>
-            )}
-            <div className="flex flex-col gap-3 h-full justify-center">
-              <MetricCard
-                label="Last Month"
-                value={fmtMoney(insights.kpis.last, insights.statsCurrency)}
-                accent="cyan"
-              />
-              <MetricCard
-                label="This Month"
-                value={fmtMoney(insights.kpis.this, insights.statsCurrency)}
-                accent="violet"
-              />
-              <MetricCard
-                label="Yearly Avg"
-                value={fmtMoney(
-                  insights.kpis.yearlyAvg,
-                  insights.statsCurrency,
-                )}
-                accent="mint"
-              />
             </div>
           </SectionCard>
           <SectionCard
@@ -1958,12 +1982,28 @@ export default function ExpensesScreen({ accountId }) {
             subtitle="Current Month"
             accent="violet"
             className="lg:col-span-6 xl:col-span-6 min-w-0"
+            right={
+              distCurrencies.length > 1 ? (
+                <select
+                  value={currentBarCurrency}
+                  onChange={(e) => setBarCurrency(e.target.value)}
+                  className="bg-black/40 border border-[#a78bfa]/30 text-[#a78bfa] px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase outline-none cursor-pointer"
+                >
+                  {distCurrencies.map((c) => (
+                    <option key={c} value={c} className="text-black">
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              ) : distCurrencies.length === 1 ? (
+                <span className="border border-[#a78bfa]/30 bg-[#a78bfa]/10 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-[#a78bfa] uppercase">
+                  {distCurrencies[0]}
+                </span>
+              ) : null
+            }
           >
-            {insights.monthCats.length ? (
-              <BarChart
-                data={insights.monthCats}
-                currency={insights.statsCurrency}
-              />
+            {barChartData.length ? (
+              <BarChart data={barChartData} currency={currentBarCurrency} />
             ) : (
               <div className="text-xs tracking-wider text-white/70 uppercase flex h-full items-center justify-center">
                 No Data

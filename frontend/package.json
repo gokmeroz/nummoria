@@ -12,6 +12,7 @@
   "dependencies": {
     "@nivo/sankey": "^0.99.0",
     "axios": "^1.12.2",
+    "d3": "^7.9.0",
     "date-fns": "^4.1.0",
     "framer-motion": "^12.34.3",
     "html-to-image": "^1.11.13",

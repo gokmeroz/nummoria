@@ -1,6 +1,72 @@
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import api from "../lib/api";
+import logo from "../assets/nummoria_logo.png";
+
+const BG = "#030508";
+const MINT = "#00ff87";
+const CYAN = "#00d4ff";
+const VIOLET = "#a78bfa";
+const ROSE = "#ff4d8d";
+const AMBER = "#facc15";
+
+const Brackets = ({ color = MINT, size = "10px", thick = "1.5px" }) => (
+  <>
+    <div
+      className="absolute top-0 left-0"
+      style={{
+        width: size,
+        height: size,
+        borderTop: `${thick} solid ${color}`,
+        borderLeft: `${thick} solid ${color}`,
+      }}
+    />
+    <div
+      className="absolute top-0 right-0"
+      style={{
+        width: size,
+        height: size,
+        borderTop: `${thick} solid ${color}`,
+        borderRight: `${thick} solid ${color}`,
+      }}
+    />
+    <div
+      className="absolute bottom-0 left-0"
+      style={{
+        width: size,
+        height: size,
+        borderBottom: `${thick} solid ${color}`,
+        borderLeft: `${thick} solid ${color}`,
+      }}
+    />
+    <div
+      className="absolute bottom-0 right-0"
+      style={{
+        width: size,
+        height: size,
+        borderBottom: `${thick} solid ${color}`,
+        borderRight: `${thick} solid ${color}`,
+      }}
+    />
+  </>
+);
+
+const ScanLine = ({ color = MINT, className = "" }) => (
+  <div className={`flex items-center gap-1.5 ${className}`}>
+    <div
+      className="w-[3px] h-[3px] rounded-full opacity-60"
+      style={{ backgroundColor: color }}
+    />
+    <div
+      className="flex-1 h-[1px] opacity-20"
+      style={{ backgroundColor: color }}
+    />
+    <div
+      className="w-[3px] h-[3px] rounded-full opacity-60"
+      style={{ backgroundColor: color }}
+    />
+  </div>
+);
 
 export default function ResetPassword() {
   const [sp] = useSearchParams();
@@ -10,29 +76,14 @@ export default function ResetPassword() {
   const token = sp.get("token") || "";
 
   const [pwd, setPwd] = useState("");
-  const [confirmPwd, setConfirmPwd] = useState("");
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
-
-  const passwordsMatch = pwd === confirmPwd;
-  const canSubmit = pwd.length >= 8 && confirmPwd.length >= 8 && passwordsMatch;
 
   async function submit(e) {
     e.preventDefault();
     setErr("");
     setMsg("");
-
-    if (!token) {
-      setErr("Missing reset token. Open this page from your email link.");
-      return;
-    }
-
-    if (!passwordsMatch) {
-      setErr("Passwords do not match.");
-      return;
-    }
-
     setLoading(true);
 
     try {
@@ -43,7 +94,7 @@ export default function ResetPassword() {
       });
 
       setMsg(data.message || "Password updated. Redirecting to login…");
-      setTimeout(() => navigate("/login", { replace: true }), 1200);
+      setTimeout(() => navigate("/login", { replace: true }), 1000);
     } catch (e) {
       setErr(e.response?.data?.error || "Failed to reset password");
     } finally {
@@ -52,117 +103,177 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-[#070A07] text-white relative overflow-hidden">
-      <div className="pointer-events-none fixed inset-0 -z-10">
-        <div className="absolute inset-0 bg-[#070A07]" />
-        <div className="absolute inset-0 bg-[radial-gradient(1200px_800px_at_15%_0%,rgba(19,226,67,0.10),transparent_55%),radial-gradient(1000px_700px_at_85%_10%,rgba(153,23,70,0.10),transparent_55%),radial-gradient(900px_700px_at_50%_100%,rgba(255,255,255,0.04),transparent_60%)]" />
-        <div className="absolute inset-0 opacity-[0.10] mix-blend-overlay bg-[linear-gradient(to_right,rgba(255,255,255,0.10)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.10)_1px,transparent_1px)] bg-[size:56px_56px]" />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/35 to-black/70" />
-      </div>
+    <div className="relative min-h-dvh overflow-hidden bg-[#030508] text-white">
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+            @keyframes resetFloat {
+              0%, 100% { transform: translateY(0px); }
+              50% { transform: translateY(-4px); }
+            }
 
-      <div className="min-h-[100dvh] grid place-items-center px-4 py-8">
-        <form
-          onSubmit={submit}
-          className="w-full max-w-md rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-md shadow-2xl overflow-hidden"
-        >
-          <div className="relative p-6 sm:p-7">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-white/60">
-              <span className="h-2 w-2 rounded-full bg-[#13e243]" />
-              password reset
-            </div>
+            @keyframes resetPulse {
+              0%, 100% { opacity: .16; transform: scale(1); }
+              50% { opacity: .3; transform: scale(1.06); }
+            }
 
-            <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white">
-              Reset password
-            </h1>
+            .reset-float {
+              animation: resetFloat 5.5s ease-in-out infinite;
+            }
 
-            <p className="mt-2 text-sm text-white/60">
-              Choose a new password for your account.
-            </p>
+            .reset-pulse {
+              animation: resetPulse 3.6s ease-in-out infinite;
+            }
+          `,
+        }}
+      />
 
-            {email && (
-              <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs text-white/55">
-                For: <span className="text-white/75">{email}</span>
-              </div>
-            )}
+      <div className="absolute inset-0 bg-[#030508]" />
+      <div className="absolute inset-0 bg-[radial-gradient(900px_500px_at_10%_0%,rgba(0,255,135,0.08),transparent_58%),radial-gradient(900px_500px_at_85%_0%,rgba(167,139,250,0.12),transparent_58%),radial-gradient(1000px_700px_at_50%_100%,rgba(0,212,255,0.08),transparent_60%)]" />
+      <div className="absolute inset-0 opacity-[0.08] bg-[linear-gradient(to_right,rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.08)_1px,transparent_1px)] bg-[size:42px_42px]" />
 
-            {!token && (
-              <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">
-                Missing reset token. Open this page from your reset email link.
-              </div>
-            )}
+      <div className="relative z-10 min-h-dvh px-6 py-10 flex items-center justify-center">
+        <div className="w-full max-w-xl">
+          <div
+            className="relative overflow-hidden border bg-black/45 p-6 md:p-8 backdrop-blur-sm"
+            style={{ borderColor: "rgba(167,139,250,0.28)" }}
+          >
+            <Brackets color={VIOLET} size="12px" thick="1.5px" />
+            <div
+              className="absolute top-0 inset-x-[12%] h-[1px] opacity-40"
+              style={{ backgroundColor: VIOLET }}
+            />
+            <div
+              className="absolute -right-10 -top-10 h-32 w-32 rounded-full blur-3xl reset-pulse"
+              style={{ backgroundColor: "rgba(167,139,250,0.20)" }}
+            />
+            <div
+              className="absolute -left-8 bottom-0 h-28 w-28 rounded-full blur-3xl reset-pulse"
+              style={{
+                backgroundColor: "rgba(0,255,135,0.16)",
+                animationDelay: "1s",
+              }}
+            />
 
-            {msg && (
-              <div className="mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
-                {msg}
-              </div>
-            )}
-
-            {err && (
-              <div className="mt-4 rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-100">
-                {err}
-              </div>
-            )}
-
-            <div className="mt-5 space-y-4">
-              <div>
-                <label className="mb-1 block text-sm text-white/75">
-                  New password
-                </label>
-                <input
-                  type="password"
-                  minLength={8}
-                  required
-                  className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white placeholder:text-white/30 outline-none transition focus:border-white/20"
-                  value={pwd}
-                  onChange={(e) => setPwd(e.target.value)}
-                  placeholder="At least 8 characters"
+            <div className="relative z-10">
+              <div className="inline-flex items-center gap-2 border border-white/10 bg-black/40 px-3 py-1">
+                <span
+                  className="w-1.5 h-1.5 rounded-full"
+                  style={{ backgroundColor: CYAN }}
                 />
+                <span className="text-[11px] font-extrabold tracking-wider uppercase text-white/80">
+                  auth recovery
+                </span>
               </div>
 
-              <div>
-                <label className="mb-1 block text-sm text-white/75">
-                  Confirm new password
-                </label>
-                <input
-                  type="password"
-                  minLength={8}
-                  required
-                  className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white placeholder:text-white/30 outline-none transition focus:border-white/20"
-                  value={confirmPwd}
-                  onChange={(e) => setConfirmPwd(e.target.value)}
-                  placeholder="Repeat your new password"
-                />
-              </div>
-
-              {!passwordsMatch && confirmPwd.length > 0 && (
-                <div className="text-xs text-red-300">
-                  Passwords do not match.
+              <div className="mt-6 flex items-center gap-4">
+                <div className="relative reset-float">
+                  <div
+                    className="absolute inset-0 rounded-full blur-2xl opacity-20"
+                    style={{ backgroundColor: "rgba(0,212,255,0.22)" }}
+                  />
+                  <div className="relative h-14 w-14 border border-white/10 bg-white/[0.04] p-2 flex items-center justify-center">
+                    <img
+                      src={logo}
+                      alt="Nummoria"
+                      className="h-full w-full object-contain"
+                    />
+                  </div>
                 </div>
-              )}
 
-              <button
-                type="submit"
-                disabled={loading || !canSubmit || !token}
-                className="w-full rounded-2xl py-3 text-sm font-semibold text-white transition disabled:opacity-60 hover:opacity-95"
-                style={{
-                  background: "linear-gradient(135deg, #90a955, #4f772d)",
-                }}
-              >
-                {loading ? "Updating…" : "Update password"}
-              </button>
-
-              <div className="text-center text-sm text-white/55">
-                Back to{" "}
-                <a
-                  href="/login"
-                  className="text-white underline underline-offset-4"
-                >
-                  login
-                </a>
+                <div>
+                  <div className="text-xs uppercase tracking-[0.22em] text-white/40">
+                    Nummoria
+                  </div>
+                  <h1 className="mt-1 text-3xl md:text-4xl font-extrabold tracking-tight text-white leading-none">
+                    Reset password
+                  </h1>
+                </div>
               </div>
+
+              <p className="mt-4 text-sm md:text-base leading-relaxed text-white/65 max-w-xl">
+                Set a new password for your account and get back into your
+                workspace.
+              </p>
+
+              <ScanLine color={VIOLET} className="mt-5 max-w-md" />
+
+              <form onSubmit={submit} className="mt-8 space-y-5">
+                {email ? (
+                  <div className="border border-white/10 bg-black/25 px-4 py-3 text-sm text-white/68">
+                    Resetting password for{" "}
+                    <span className="font-semibold text-white">{email}</span>
+                  </div>
+                ) : null}
+
+                {!token ? (
+                  <div className="border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+                    Tip: open this page from your password reset link so the
+                    token is included.
+                  </div>
+                ) : null}
+
+                {msg ? (
+                  <div className="border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
+                    {msg}
+                  </div>
+                ) : null}
+
+                {err ? (
+                  <div className="border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-100">
+                    {err}
+                  </div>
+                ) : null}
+
+                <div>
+                  <label className="block text-xs font-bold tracking-wider uppercase text-white/75 mb-2">
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={pwd}
+                    onChange={(e) => setPwd(e.target.value)}
+                    minLength={8}
+                    required
+                    placeholder="Minimum 8 characters"
+                    className="w-full border border-white/10 bg-white/[0.03] px-4 py-3 text-white placeholder:text-white/30 outline-none transition focus:border-white/20"
+                  />
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className={`inline-flex h-12 items-center justify-center px-5 text-sm font-extrabold tracking-wider uppercase transition ${
+                      loading
+                        ? "cursor-not-allowed opacity-60"
+                        : "hover:opacity-95"
+                    }`}
+                    style={{
+                      background: `linear-gradient(180deg, ${MINT}, #19d96f)`,
+                      color: "#02140a",
+                      boxShadow: "0 0 28px rgba(0,255,135,0.18)",
+                    }}
+                  >
+                    {loading ? "Updating..." : "Update Password"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => navigate("/login")}
+                    className="inline-flex h-12 items-center justify-center border border-white/10 bg-white/[0.05] px-5 text-sm font-bold tracking-wider uppercase text-white/80 transition hover:bg-white/[0.08] hover:text-white"
+                  >
+                    Back to Login
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
-        </form>
+
+          <div className="mt-4 text-center text-xs tracking-wide text-white/40">
+            Use the reset link from your email for the smoothest recovery flow.
+          </div>
+        </div>
       </div>
     </div>
   );

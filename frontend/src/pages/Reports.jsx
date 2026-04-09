@@ -10,13 +10,17 @@ import React, {
 } from "react";
 import { ResponsiveSankey } from "@nivo/sankey";
 import api from "../lib/api";
-import logoUrl from "../assets/nummoria_logo.png";
+
+/* ─────────────────────────────────────────────────────────────
+   CONSTANTS & THEME
+───────────────────────────────────────────────────────────── */
+const BG = "#030508";
+const MINT = "#00ff87";
+const CYAN = "#00d4ff";
+const VIOLET = "#a78bfa";
+const DATE_LANG = "en-US";
 
 /* =========================== Money helpers =========================== */
-
-const DATE_LANG = "en-US";
-const main = "#4f772d";
-const secondary = "#90a955";
 
 function decimalsForCurrency(code) {
   const zero = new Set(["JPY", "KRW", "CLP", "VND"]);
@@ -32,9 +36,10 @@ function minorToMajor(minor, currency = "USD") {
 }
 
 const fmtMoneyUI = (minor, cur = "USD") =>
-  new Intl.NumberFormat(undefined, {
+  new Intl.NumberFormat(DATE_LANG, {
     style: "currency",
     currency: cur || "USD",
+    maximumFractionDigits: decimalsForCurrency(cur || "USD"),
   }).format(minorToMajor(minor, cur));
 
 function fmtDate(dateLike) {
@@ -80,74 +85,181 @@ function addMonthsUTC(dateLike, n) {
 
 /* =========================== Shared UI =========================== */
 
+const Brackets = React.memo(
+  ({ color = MINT, size = "10px", thick = "1.5px" }) => (
+    <>
+      <div
+        className="absolute top-0 left-0"
+        style={{
+          width: size,
+          height: size,
+          borderTop: `${thick} solid ${color}`,
+          borderLeft: `${thick} solid ${color}`,
+        }}
+      />
+      <div
+        className="absolute top-0 right-0"
+        style={{
+          width: size,
+          height: size,
+          borderTop: `${thick} solid ${color}`,
+          borderRight: `${thick} solid ${color}`,
+        }}
+      />
+      <div
+        className="absolute bottom-0 left-0"
+        style={{
+          width: size,
+          height: size,
+          borderBottom: `${thick} solid ${color}`,
+          borderLeft: `${thick} solid ${color}`,
+        }}
+      />
+      <div
+        className="absolute bottom-0 right-0"
+        style={{
+          width: size,
+          height: size,
+          borderBottom: `${thick} solid ${color}`,
+          borderRight: `${thick} solid ${color}`,
+        }}
+      />
+    </>
+  ),
+);
+
+const ScanLine = React.memo(({ color = MINT, className = "" }) => (
+  <div className={`flex items-center gap-1.5 ${className}`}>
+    <div
+      className="w-[3px] h-[3px] rounded-full opacity-60"
+      style={{ backgroundColor: color }}
+    />
+    <div
+      className="flex-1 h-[1px] opacity-20"
+      style={{ backgroundColor: color }}
+    />
+    <div
+      className="w-[3px] h-[3px] rounded-full opacity-60"
+      style={{ backgroundColor: color }}
+    />
+  </div>
+));
+
 function Field({ label, children }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-sm font-medium text-white/75">{label}</label>
+      <label className="text-xs font-bold tracking-wider text-white/80 uppercase">
+        {label}
+      </label>
       {children}
     </div>
   );
 }
 
-function Chip({ label, selected, onClick }) {
+function Chip({ label, selected, onClick, accent = CYAN }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-full border px-3.5 py-2 text-sm transition ${
+      className={`inline-flex items-center gap-2 border px-3 py-1 transition-colors flex-shrink-0 ${
         selected
-          ? "border-white/15 bg-white/[0.08] text-white"
-          : "border-white/10 bg-white/[0.03] text-white/65 hover:bg-white/[0.05] hover:text-white"
+          ? "bg-black/40 text-white"
+          : "bg-white/[0.02] border-white/10 text-white/70 hover:bg-white/[0.05] hover:text-white"
       }`}
+      style={{ borderColor: selected ? `${accent}88` : undefined }}
     >
-      {label}
+      {selected && (
+        <span
+          className="w-1.5 h-1.5 rounded-full"
+          style={{ backgroundColor: accent }}
+        />
+      )}
+      <span className="text-xs font-bold tracking-wider uppercase">
+        {label}
+      </span>
     </button>
   );
 }
 
-function SectionCard({ title, subtitle, right, children, className = "" }) {
+function SectionCard({
+  title,
+  subtitle,
+  right,
+  children,
+  className = "",
+  accent = "violet",
+}) {
+  const AC = {
+    violet: {
+      col: VIOLET,
+      bg: "rgba(167,139,250,0.02)",
+      bd: "rgba(167,139,250,0.2)",
+    },
+    cyan: {
+      col: CYAN,
+      bg: "rgba(0,212,255,0.02)",
+      bd: "rgba(0,212,255,0.2)",
+    },
+    mint: {
+      col: MINT,
+      bg: "rgba(0,255,135,0.02)",
+      bd: "rgba(0,255,135,0.2)",
+    },
+  }[accent] || {
+    col: VIOLET,
+    bg: "rgba(167,139,250,0.02)",
+    bd: "rgba(167,139,250,0.2)",
+  };
+
   return (
     <div
-      className={`relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-md ${className}`}
+      className={`relative border p-4 md:p-5 flex flex-col h-full ${className}`}
+      style={{ backgroundColor: AC.bg, borderColor: AC.bd }}
     >
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(500px_180px_at_10%_0%,rgba(19,226,67,0.06),transparent_60%),radial-gradient(420px_180px_at_90%_10%,rgba(153,23,70,0.08),transparent_60%)]" />
-      <div className="relative p-5 md:p-6">
-        {(title || right) && (
-          <div className="mb-4 flex items-start justify-between gap-4">
-            <div>
-              {title ? (
-                <h2 className="text-lg font-semibold tracking-tight text-white">
-                  {title}
-                </h2>
-              ) : null}
-              {subtitle ? (
-                <p className="mt-1 text-sm text-white/55">{subtitle}</p>
-              ) : null}
-            </div>
-            {right ? <div>{right}</div> : null}
+      <Brackets color={AC.col} size="10px" thick="1.5px" />
+      <div
+        className="absolute top-0 inset-x-[15%] h-[1px] opacity-40"
+        style={{ backgroundColor: AC.col }}
+      />
+      {(title || right) && (
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            {title && (
+              <h2 className="text-base font-extrabold tracking-wider text-white uppercase">
+                {title}
+              </h2>
+            )}
+            {subtitle && (
+              <p className="mt-1 text-xs text-white/80 tracking-wider uppercase">
+                {subtitle}
+              </p>
+            )}
           </div>
-        )}
-        {children}
-      </div>
+          {right && <div>{right}</div>}
+        </div>
+      )}
+      <div className="flex-1 min-h-0">{children}</div>
     </div>
   );
 }
 
-function MetricCard({ label, value, tone = "neutral" }) {
-  const toneClass =
-    tone === "positive"
-      ? "text-[#dce8bf]"
-      : tone === "negative"
-        ? "text-red-200"
-        : "text-white";
+function MetricCard({ label, value, tone = "neutral", accent = "cyan" }) {
+  const color = {
+    positive: MINT,
+    negative: "#f87171",
+    neutral: { violet: VIOLET, cyan: CYAN, mint: MINT }[accent] || CYAN,
+  }[tone];
 
   return (
-    <div className="rounded-2xl border border-white/8 bg-black/20 p-4">
-      <div className="text-xs uppercase tracking-[0.18em] text-white/40">
+    <div className="border border-white/10 bg-black/40 p-4 relative overflow-hidden h-full flex flex-col justify-center">
+      <Brackets color={color} size="6px" thick="1px" />
+      <div className="text-[10px] font-bold uppercase tracking-wider text-white/70 mb-1">
         {label}
       </div>
       <div
-        className={`mt-2 text-2xl font-semibold tracking-tight ${toneClass}`}
+        className="text-lg md:text-xl font-extrabold tracking-tight truncate"
+        style={{ color }}
+        title={value}
       >
         {value}
       </div>
@@ -159,11 +271,12 @@ function TotalsCard({ totals }) {
   return (
     <SectionCard
       title="Totals / Money Flow"
-      subtitle="Summarized from the currently filtered transaction set."
-      className="mb-6"
+      subtitle="Summarized from the currently filtered transaction set"
+      accent="cyan"
+      className="mb-5"
     >
       {totals.length === 0 ? (
-        <div className="rounded-2xl border border-white/8 bg-black/20 p-6 text-sm text-white/55">
+        <div className="border border-white/10 bg-black/20 p-6 text-sm text-white/55">
           No transactions match these filters.
         </div>
       ) : (
@@ -173,13 +286,19 @@ function TotalsCard({ totals }) {
             return (
               <div
                 key={t.currency}
-                className="rounded-2xl border border-white/8 bg-black/20 p-4"
+                className="border border-white/10 bg-black/20 p-4 relative"
               >
+                <Brackets
+                  color={netUp ? MINT : "#f87171"}
+                  size="6px"
+                  thick="1px"
+                />
+
                 <div className="mb-3 flex items-center justify-between">
-                  <div className="text-sm font-semibold text-white">
+                  <div className="text-sm font-extrabold tracking-wider text-white uppercase">
                     {t.currency}
                   </div>
-                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/60">
+                  <span className="border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-white/60 uppercase tracking-wider">
                     Currency
                   </span>
                 </div>
@@ -187,24 +306,26 @@ function TotalsCard({ totals }) {
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center justify-between gap-3 text-white/65">
                     <span>Income</span>
-                    <span className="font-medium text-white">
+                    <span className="font-mono font-bold text-white">
                       {fmtMoneyUI(t.incomeMinor, t.currency)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-3 text-white/65">
                     <span>Outflow</span>
-                    <span className="font-medium text-white">
+                    <span className="font-mono font-bold text-white">
                       {fmtMoneyUI(t.outMinor, t.currency)}
                     </span>
                   </div>
                   <div className="h-px bg-white/8" />
                   <div
-                    className={`flex items-center justify-between gap-3 font-semibold ${
-                      netUp ? "text-[#dce8bf]" : "text-red-200"
+                    className={`flex items-center justify-between gap-3 font-extrabold ${
+                      netUp ? "text-[#00ff87]" : "text-red-300"
                     }`}
                   >
                     <span>Net</span>
-                    <span>{fmtMoneyUI(t.netMinor, t.currency)}</span>
+                    <span className="font-mono">
+                      {fmtMoneyUI(t.netMinor, t.currency)}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -219,18 +340,15 @@ function TotalsCard({ totals }) {
 /* =========================== Page =========================== */
 
 export default function Reports() {
-  /* ---------- data ---------- */
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
   const [accounts, setAccounts] = useState([]);
 
-  /* ---------- UI state ---------- */
   const [loading, setLoading] = useState(true);
   const [initialDone, setInitialDone] = useState(false);
   const [err, setErr] = useState("");
   const [showFilters, setShowFilters] = useState(false);
 
-  /* filters */
   const [fStart, setFStart] = useState("");
   const [fEnd, setFEnd] = useState("");
   const [fType, setFType] = useState("ALL");
@@ -242,7 +360,6 @@ export default function Reports() {
 
   const sankeyRef = useRef(null);
 
-  /* ---------- load data ---------- */
   const loadAll = useCallback(async () => {
     try {
       setLoading(true);
@@ -271,7 +388,6 @@ export default function Reports() {
     loadAll();
   }, [loadAll]);
 
-  /* ---------- lookups ---------- */
   const categoriesById = useMemo(() => {
     const m = new Map();
     for (const c of categories) m.set(c._id, c);
@@ -300,7 +416,6 @@ export default function Reports() {
     return out;
   }, [transactions]);
 
-  /* ---------- filters ---------- */
   const resetFilters = () => {
     setFStart("");
     setFEnd("");
@@ -367,7 +482,6 @@ export default function Reports() {
     fMax,
   ]);
 
-  /* ---------- KPI summary ---------- */
   const reportKpis = useMemo(() => {
     const now = new Date();
     const thisStart = startOfMonthUTC(now);
@@ -409,7 +523,6 @@ export default function Reports() {
     };
   }, [rows, fCurrency]);
 
-  /* ---------- totals ---------- */
   const totalsByCurrency = useMemo(() => {
     const map = new Map();
     for (const t of rows) {
@@ -430,7 +543,6 @@ export default function Reports() {
     });
   }, [rows]);
 
-  /* ---------- sankey ---------- */
   const sankeyData = useMemo(() => {
     if (!fCurrency) return null;
     const cur = fCurrency;
@@ -440,6 +552,7 @@ export default function Reports() {
 
     for (const t of rows) {
       if ((t.currency || "USD") !== cur) continue;
+
       if (t.type === "income") {
         totalIncome += Number(t.amountMinor || 0);
       } else if (t.type === "expense") {
@@ -457,7 +570,6 @@ export default function Reports() {
 
     const nodes = [{ id: "Income" }];
     const links = [];
-
     let totalExpenses = 0;
 
     for (const [name, minor] of top) {
@@ -482,18 +594,16 @@ export default function Reports() {
 
     const net = totalIncome - totalExpenses;
     if (net > 0) {
-      nodes.push({ id: "Sparen / Savings" });
+      nodes.push({ id: "Savings" });
       links.push({
         source: "Income",
-        target: "Sparen / Savings",
+        target: "Savings",
         value: minorToMajor(net, cur),
       });
     }
 
     return { nodes, links };
   }, [rows, fCurrency, categoriesById]);
-
-  /* ---------- import / export ---------- */
 
   const handleImportCsv = async () => {
     try {
@@ -670,7 +780,7 @@ export default function Reports() {
           let val = minorToMajor(tx.amountMinor, tx.currency);
           if (!isIncome) val = -Math.abs(val);
 
-          const formattedAmount = new Intl.NumberFormat(undefined, {
+          const formattedAmount = new Intl.NumberFormat(DATE_LANG, {
             style: "currency",
             currency: tx.currency || "USD",
           }).format(val);
@@ -748,406 +858,415 @@ export default function Reports() {
     }
   };
 
-  /* ---------- loading ---------- */
   if (!initialDone && loading) {
     return (
-      <div className="min-h-[60vh] grid place-items-center bg-[#070A07] px-4">
-        <div className="relative w-full max-w-sm">
-          <div className="pointer-events-none absolute -inset-10 opacity-40">
-            <div className="absolute left-4 top-6 h-40 w-40 rounded-full blur-3xl bg-[#13e243]/20" />
-            <div className="absolute right-6 top-10 h-40 w-40 rounded-full blur-3xl bg-[#991746]/20" />
+      <div className="min-h-dvh grid place-items-center bg-[#030508] px-4">
+        <div className="flex flex-col items-center">
+          <Brackets color={VIOLET} size="20px" thick="2px" />
+          <div className="w-16 h-16 border border-[#a78bfa]/30 flex items-center justify-center mb-4 bg-[#a78bfa]/10">
+            <div className="w-8 h-8 rounded-full border-t-2 border-[#a78bfa] animate-spin" />
           </div>
-
-          <div className="relative rounded-3xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-md">
-            <div className="flex items-center gap-3">
-              <img
-                src={logoUrl}
-                alt="Nummoria logo"
-                className="h-9 w-9 rounded-xl"
-              />
-              <div>
-                <div className="text-lg font-semibold text-white">Nummoria</div>
-                <div className="text-sm text-white/50">
-                  Loading your reports…
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-5 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-              <div className="h-full w-1/3 animate-[reportsload_1.2s_ease-in-out_infinite] bg-white/30" />
-            </div>
-
-            <style>{`
-              @keyframes reportsload {
-                0% { transform: translateX(-120%); }
-                100% { transform: translateX(320%); }
-              }
-            `}</style>
+          <div className="text-[11px] font-extrabold tracking-[0.3em] text-white/90 uppercase">
+            Loading Reports...
           </div>
         </div>
       </div>
     );
   }
 
-  /* ============================= RENDER ============================= */
-
   return (
-    <div className="min-h-[100dvh] bg-[#070A07] text-white">
-      <div className="pointer-events-none fixed inset-0 -z-10">
-        <div className="absolute inset-0 bg-[#070A07]" />
-        <div className="absolute inset-0 bg-[radial-gradient(1200px_800px_at_15%_0%,rgba(19,226,67,0.10),transparent_55%),radial-gradient(1000px_700px_at_85%_10%,rgba(153,23,70,0.10),transparent_55%),radial-gradient(900px_700px_at_50%_100%,rgba(255,255,255,0.04),transparent_60%)]" />
-        <div className="absolute inset-0 opacity-[0.10] mix-blend-overlay bg-[linear-gradient(to_right,rgba(255,255,255,0.10)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.10)_1px,transparent_1px)] bg-[size:56px_56px]" />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/35 to-black/70" />
-      </div>
+    <div className="min-h-dvh bg-[#030508] text-[#e2e8f0] font-sans selection:bg-[#a78bfa]/30">
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.4); }
+      `,
+        }}
+      />
 
-      <div className="mx-4 px-4 py-6 sm:px-6 lg:px-8">
-        <section className="mb-6">
-          <SectionCard className="overflow-visible">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-              <div className="min-w-0">
-                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-white/60">
-                  <span className="h-2 w-2 rounded-full bg-[#13e243]" />
-                  reports center
-                </div>
+      <div className="mx-auto max-w-screen-2xl w-full px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-5">
+        <div className="relative border border-[#a78bfa]/20 bg-[#a78bfa]/[0.03] p-5 md:p-6 overflow-hidden">
+          <Brackets color={VIOLET} size="12px" thick="1.5px" />
+          <div
+            className="absolute top-0 inset-x-[10%] h-[1px] opacity-40"
+            style={{ backgroundColor: VIOLET }}
+          />
 
-                <div className="mt-4">
-                  <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-white">
-                    Reports
-                  </h1>
-                  <p className="mt-2 max-w-2xl text-sm md:text-base text-white/60">
-                    Analyze transactions, filter cash flow, export records, and
-                    visualize how income moves through spending categories.
-                  </p>
-                </div>
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0">
+              <div className="inline-flex items-center gap-2 border border-white/10 bg-black/40 px-3 py-1 mb-4">
+                <span
+                  className="w-1.5 h-1.5 rounded-full"
+                  style={{ backgroundColor: MINT }}
+                />
+                <span className="text-[11px] font-extrabold tracking-wider text-white/80 uppercase">
+                  Reports Center
+                </span>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                <button
-                  type="button"
-                  onClick={() => setShowFilters((v) => !v)}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-white/80 transition hover:bg-white/[0.07]"
-                  title="Show filters"
-                >
-                  <svg
-                    className="h-4 w-4"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <line x1="4" y1="21" x2="4" y2="14" />
-                    <line x1="4" y1="10" x2="4" y2="3" />
-                    <line x1="12" y1="21" x2="12" y2="12" />
-                    <line x1="12" y1="8" x2="12" y2="3" />
-                    <line x1="20" y1="21" x2="20" y2="16" />
-                    <line x1="20" y1="12" x2="20" y2="3" />
-                    <line x1="1" y1="14" x2="7" y2="14" />
-                    <line x1="9" y1="8" x2="15" y2="8" />
-                    <line x1="17" y1="16" x2="23" y2="16" />
-                  </svg>
-                  <span>Filters</span>
-                </button>
+              <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-white leading-none">
+                Reports
+              </h1>
 
-                <button
-                  type="button"
-                  onClick={loadAll}
-                  className="inline-flex items-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-white/70 transition hover:bg-white/[0.07] hover:text-white"
-                  title="Refresh"
-                >
+              <p className="mt-3 max-w-2xl text-base text-white/80 leading-relaxed">
+                Analyze transactions, filter cash flow, export records, and
+                visualize how income moves through spending categories.
+              </p>
+
+              <ScanLine color={VIOLET} className="mt-6 w-full max-w-md" />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 lg:justify-end">
+              <button
+                type="button"
+                onClick={() => setShowFilters((v) => !v)}
+                className="inline-flex items-center gap-2 border border-white/10 bg-black/40 px-4 py-2 hover:bg-white/5 transition-colors"
+              >
+                <span className="text-xs font-bold tracking-wider text-white/90 uppercase">
+                  Filters
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={loadAll}
+                className="inline-flex items-center border border-white/10 bg-black/40 px-4 py-2 hover:bg-white/5 transition-colors"
+              >
+                <span className="text-xs font-bold tracking-wider text-white/80 uppercase">
                   Refresh
-                </button>
+                </span>
+              </button>
 
-                <button
-                  type="button"
-                  onClick={handleImportCsv}
-                  className="inline-flex items-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white/80 transition hover:bg-white/[0.07]"
-                >
+              <button
+                type="button"
+                onClick={handleImportCsv}
+                className="inline-flex items-center gap-2 border border-[#00d4ff]/30 bg-black/40 px-4 py-2 hover:bg-white/5 transition-colors"
+              >
+                <span
+                  className="w-1.5 h-1.5 rounded-full"
+                  style={{ backgroundColor: CYAN }}
+                />
+                <span className="text-xs font-bold tracking-wider text-[#00d4ff] uppercase">
                   Import CSV
-                </button>
+                </span>
+              </button>
 
-                <button
-                  type="button"
-                  onClick={handleImportPdf}
-                  className="inline-flex items-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white/80 transition hover:bg-white/[0.07]"
-                >
+              <button
+                type="button"
+                onClick={handleImportPdf}
+                className="inline-flex items-center gap-2 border border-[#00d4ff]/30 bg-black/40 px-4 py-2 hover:bg-white/5 transition-colors"
+              >
+                <span
+                  className="w-1.5 h-1.5 rounded-full"
+                  style={{ backgroundColor: CYAN }}
+                />
+                <span className="text-xs font-bold tracking-wider text-[#00d4ff] uppercase">
                   Import PDF
-                </button>
+                </span>
+              </button>
 
-                <button
-                  type="button"
-                  onClick={handleDownloadCsv}
-                  className="inline-flex items-center rounded-2xl px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-95"
-                  style={{
-                    background: "linear-gradient(135deg, #90a955, #4f772d)",
-                  }}
-                >
+              <button
+                type="button"
+                onClick={handleDownloadCsv}
+                className="inline-flex items-center px-4 py-2 hover:opacity-80 transition-opacity"
+                style={{ backgroundColor: MINT }}
+              >
+                <span className="text-xs font-extrabold tracking-wider text-[#030508] uppercase">
                   Download CSV
-                </button>
+                </span>
+              </button>
 
+              <button
+                type="button"
+                onClick={handleDownloadPdf}
+                className="inline-flex items-center px-4 py-2 hover:opacity-80 transition-opacity"
+                style={{ backgroundColor: VIOLET }}
+              >
+                <span className="text-xs font-extrabold tracking-wider text-[#030508] uppercase">
+                  Download PDF
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Chip
+              label={`All (${transactions.length})`}
+              selected={fType === "ALL"}
+              onClick={() => setFType("ALL")}
+              accent={CYAN}
+            />
+            <Chip
+              label={`Income (${typeCounts.income})`}
+              selected={fType === "income"}
+              onClick={() => setFType("income")}
+              accent={MINT}
+            />
+            <Chip
+              label={`Expenses (${typeCounts.expense})`}
+              selected={fType === "expense"}
+              onClick={() => setFType("expense")}
+              accent={VIOLET}
+            />
+            <Chip
+              label={`Investments (${typeCounts.investment})`}
+              selected={fType === "investment"}
+              onClick={() => setFType("investment")}
+              accent={CYAN}
+            />
+          </div>
+
+          {showFilters && (
+            <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 border border-white/10 bg-black/40 p-5">
+              <Field label="From">
+                <input
+                  type="date"
+                  className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-bold tracking-wider text-white outline-none uppercase"
+                  value={fStart}
+                  onChange={(e) => setFStart(e.target.value)}
+                />
+              </Field>
+
+              <Field label="To">
+                <input
+                  type="date"
+                  className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-bold tracking-wider text-white outline-none uppercase"
+                  value={fEnd}
+                  onChange={(e) => setFEnd(e.target.value)}
+                />
+              </Field>
+
+              <Field label="Account">
+                <select
+                  className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-bold tracking-wider text-white outline-none uppercase"
+                  value={fAccountId}
+                  onChange={(e) => setFAccountId(e.target.value)}
+                >
+                  <option value="ALL" className="text-black">
+                    All accounts
+                  </option>
+                  {accounts.map((a) => (
+                    <option key={a._id} value={a._id} className="text-black">
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Category">
+                <select
+                  className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-bold tracking-wider text-white outline-none uppercase"
+                  value={fCategoryId}
+                  onChange={(e) => setFCategoryId(e.target.value)}
+                >
+                  <option value="ALL" className="text-black">
+                    All categories
+                  </option>
+                  {categories.map((c) => (
+                    <option key={c._id} value={c._id} className="text-black">
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Currency">
+                <select
+                  className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-bold tracking-wider text-white outline-none uppercase"
+                  value={fCurrency}
+                  onChange={(e) => setFCurrency(e.target.value)}
+                >
+                  {currencies.map((c) => (
+                    <option key={c} value={c} className="text-black">
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Min Amount">
+                <input
+                  type="number"
+                  placeholder="e.g. 50"
+                  className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-bold tracking-wider text-white placeholder:text-white/50 outline-none uppercase"
+                  value={fMin}
+                  onChange={(e) => setFMin(e.target.value)}
+                />
+              </Field>
+
+              <Field label="Max Amount">
+                <input
+                  type="number"
+                  placeholder="e.g. 1000"
+                  className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-bold tracking-wider text-white placeholder:text-white/50 outline-none uppercase"
+                  value={fMax}
+                  onChange={(e) => setFMax(e.target.value)}
+                />
+              </Field>
+
+              <div className="flex items-end">
                 <button
                   type="button"
-                  onClick={handleDownloadPdf}
-                  className="inline-flex items-center rounded-2xl px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-95"
-                  style={{
-                    background: "linear-gradient(135deg, #991746, #7d1238)",
-                  }}
+                  className="w-full border border-white/10 bg-white/[0.03] px-4 py-2 text-[11px] font-bold tracking-wider text-white/80 hover:bg-white/5 uppercase"
+                  onClick={resetFilters}
                 >
-                  Download PDF
+                  Reset filters
                 </button>
               </div>
             </div>
+          )}
 
-            <div className="mt-5 flex flex-wrap gap-2">
-              <Chip
-                label={`All (${transactions.length})`}
-                selected={fType === "ALL"}
-                onClick={() => setFType("ALL")}
-              />
-              <Chip
-                label={`Income (${typeCounts.income})`}
-                selected={fType === "income"}
-                onClick={() => setFType("income")}
-              />
-              <Chip
-                label={`Expenses (${typeCounts.expense})`}
-                selected={fType === "expense"}
-                onClick={() => setFType("expense")}
-              />
-              <Chip
-                label={`Investments (${typeCounts.investment})`}
-                selected={fType === "investment"}
-                onClick={() => setFType("investment")}
-              />
-            </div>
-
-            {showFilters && (
-              <div className="mt-5 grid grid-cols-1 gap-3 rounded-3xl border border-white/10 bg-black/20 p-4 md:grid-cols-2 xl:grid-cols-4">
-                <Field label="From">
-                  <input
-                    type="date"
-                    className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white outline-none"
-                    value={fStart}
-                    onChange={(e) => setFStart(e.target.value)}
-                  />
-                </Field>
-
-                <Field label="To">
-                  <input
-                    type="date"
-                    className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white outline-none"
-                    value={fEnd}
-                    onChange={(e) => setFEnd(e.target.value)}
-                  />
-                </Field>
-
-                <Field label="Account">
-                  <select
-                    className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white outline-none"
-                    value={fAccountId}
-                    onChange={(e) => setFAccountId(e.target.value)}
-                  >
-                    <option value="ALL" className="text-black">
-                      All accounts
-                    </option>
-                    {accounts.map((a) => (
-                      <option key={a._id} value={a._id} className="text-black">
-                        {a.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-
-                <Field label="Category">
-                  <select
-                    className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white outline-none"
-                    value={fCategoryId}
-                    onChange={(e) => setFCategoryId(e.target.value)}
-                  >
-                    <option value="ALL" className="text-black">
-                      All categories
-                    </option>
-                    {categories.map((c) => (
-                      <option key={c._id} value={c._id} className="text-black">
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-
-                <Field label="Currency">
-                  <select
-                    className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white outline-none"
-                    value={fCurrency}
-                    onChange={(e) => setFCurrency(e.target.value)}
-                  >
-                    {currencies.map((c) => (
-                      <option key={c} value={c} className="text-black">
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-
-                <Field label="Min amount">
-                  <input
-                    type="number"
-                    placeholder="e.g. 50"
-                    className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white placeholder:text-white/30 outline-none"
-                    value={fMin}
-                    onChange={(e) => setFMin(e.target.value)}
-                  />
-                </Field>
-
-                <Field label="Max amount">
-                  <input
-                    type="number"
-                    placeholder="e.g. 1000"
-                    className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white placeholder:text-white/30 outline-none"
-                    value={fMax}
-                    onChange={(e) => setFMax(e.target.value)}
-                  />
-                </Field>
-
-                <div className="flex items-end">
-                  <button
-                    type="button"
-                    className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/75 transition hover:bg-white/[0.07]"
-                    onClick={resetFilters}
-                  >
-                    Reset filters
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-              <MetricCard label="Visible Rows" value={String(rows.length)} />
-              <MetricCard
-                label="This Income"
-                value={fmtMoneyUI(reportKpis.thisIncome, fCurrency)}
-                tone="positive"
-              />
-              <MetricCard
-                label="This Expense"
-                value={fmtMoneyUI(reportKpis.thisExpense, fCurrency)}
-                tone="negative"
-              />
-              <MetricCard
-                label="This Investment"
-                value={fmtMoneyUI(reportKpis.thisInvestment, fCurrency)}
-              />
-              <MetricCard
-                label="This Net"
-                value={fmtMoneyUI(reportKpis.thisNet, fCurrency)}
-                tone={reportKpis.thisNet >= 0 ? "positive" : "negative"}
-              />
-            </div>
-          </SectionCard>
-        </section>
-
-        {err ? (
-          <div className="mb-6 rounded-2xl border border-red-400/20 bg-red-400/10 p-4 text-red-100">
-            {err}
+          <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <MetricCard
+              label="Visible Rows"
+              value={String(rows.length)}
+              accent="cyan"
+            />
+            <MetricCard
+              label="This Income"
+              value={fmtMoneyUI(reportKpis.thisIncome, fCurrency)}
+              tone="positive"
+            />
+            <MetricCard
+              label="This Expense"
+              value={fmtMoneyUI(reportKpis.thisExpense, fCurrency)}
+              tone="negative"
+            />
+            <MetricCard
+              label="This Investment"
+              value={fmtMoneyUI(reportKpis.thisInvestment, fCurrency)}
+              accent="violet"
+            />
+            <MetricCard
+              label="This Net"
+              value={fmtMoneyUI(reportKpis.thisNet, fCurrency)}
+              tone={reportKpis.thisNet >= 0 ? "positive" : "negative"}
+            />
           </div>
-        ) : null}
+        </div>
+
+        {err && (
+          <div className="flex gap-3 border border-red-400/30 bg-red-400/10 p-4">
+            <div className="font-bold text-red-300">[!]</div>
+            <div className="text-sm text-red-100">{err}</div>
+          </div>
+        )}
 
         <TotalsCard totals={totalsByCurrency} />
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
-          <div className="space-y-6 min-w-0">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px] gap-5 items-start">
+          <div className="space-y-5 min-w-0">
             <SectionCard
               title={`Cash-Flow (Sankey) · ${fCurrency}`}
-              subtitle="Visual breakdown of current filtered income into top expense categories."
+              subtitle="Visual breakdown of current filtered income into top expense categories"
+              accent="violet"
             >
-              <div ref={sankeyRef} className="h-[420px] min-w-0">
+              <div
+                ref={sankeyRef}
+                className="h-[520px] min-w-0 border border-white/10 bg-[#05070b] relative overflow-hidden"
+              >
+                <div className="absolute inset-0 opacity-[0.08] pointer-events-none bg-[linear-gradient(to_right,rgba(255,255,255,0.10)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.10)_1px,transparent_1px)] bg-[size:28px_28px]" />
                 {!sankeyData ? (
-                  <div className="flex h-full items-center justify-center rounded-2xl border border-white/8 bg-black/20 text-sm text-white/50">
+                  <div className="flex h-full items-center justify-center text-sm text-white/50 uppercase tracking-wider relative z-10">
                     Not enough data to display cash-flow for {fCurrency}.
                   </div>
                 ) : (
-                  <ResponsiveSankey
-                    data={sankeyData}
-                    margin={{ top: 20, right: 180, bottom: 20, left: 40 }}
-                    align="justify"
-                    colors={{ scheme: "paired" }}
-                    theme={{
-                      text: {
-                        fill: "rgba(255,255,255,0.72)",
-                        fontSize: 12,
-                      },
-                      tooltip: {
-                        container: {
-                          background: "#0b0f0b",
-                          color: "#ffffff",
-                          fontSize: 12,
-                          borderRadius: 12,
-                          border: "1px solid rgba(255,255,255,0.08)",
+                  <div className="absolute inset-0 z-10">
+                    <ResponsiveSankey
+                      data={sankeyData}
+                      margin={{ top: 30, right: 220, bottom: 30, left: 80 }}
+                      align="justify"
+                      colors={({ id }) => {
+                        if (id === "Income") return "#b9e6ff";
+                        if (id === "Savings") return "#fca5a5";
+                        if (id === "Rent") return "#38bdf8";
+                        if (id === "Travel") return "#a3e635";
+                        if (id === "Other") return "#c084fc";
+                        return "#22c55e";
+                      }}
+                      theme={{
+                        background: "transparent",
+                        text: {
+                          fill: "rgba(255,255,255,0.92)",
+                          fontSize: 14,
+                          fontWeight: 700,
                         },
-                      },
-                    }}
-                    nodeOpacity={1}
-                    nodeThickness={12}
-                    nodeInnerPadding={2}
-                    nodeSpacing={16}
-                    nodeBorderWidth={1}
-                    nodeBorderColor={{
-                      from: "color",
-                      modifiers: [["darker", 0.2]],
-                    }}
-                    nodeBorderRadius={0}
-                    linkOpacity={0.45}
-                    linkBlendMode="multiply"
-                    enableLinkGradient
-                    labelPosition="outside"
-                    labelOrientation="horizontal"
-                    labelPadding={8}
-                    labelTextColor={{
-                      from: "color",
-                      modifiers: [["darker", 1.2]],
-                    }}
-                    animate
-                    motionConfig="gentle"
-                  />
+                        tooltip: {
+                          container: {
+                            background: "#0b0f0b",
+                            color: "#ffffff",
+                            fontSize: 12,
+                            borderRadius: 12,
+                            border: "1px solid rgba(255,255,255,0.10)",
+                            boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
+                          },
+                        },
+                      }}
+                      nodeOpacity={1}
+                      nodeThickness={18}
+                      nodeInnerPadding={6}
+                      nodeSpacing={18}
+                      nodeBorderWidth={1}
+                      nodeBorderColor={{
+                        from: "color",
+                        modifiers: [["brighter", 0.3]],
+                      }}
+                      nodeBorderRadius={0}
+                      linkOpacity={0.85}
+                      linkHoverOpacity={0.95}
+                      linkContract={2}
+                      linkBlendMode="normal"
+                      enableLinkGradient
+                      labelPosition="outside"
+                      labelOrientation="horizontal"
+                      labelPadding={14}
+                      labelTextColor={{ from: "color", modifiers: [] }}
+                      animate
+                      motionConfig="gentle"
+                    />
+                  </div>
                 )}
               </div>
             </SectionCard>
 
             <SectionCard
               title="All Transactions"
-              subtitle={`${rows.length} visible transaction${rows.length === 1 ? "" : "s"} after current filters.`}
+              subtitle={`${rows.length} visible transaction${rows.length === 1 ? "" : "s"} after current filters`}
               right={
-                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/60">
+                <span className="border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/60 uppercase tracking-wider">
                   {fCurrency}
                 </span>
               }
+              accent="mint"
             >
               {rows.length === 0 ? (
-                <div className="rounded-2xl border border-white/8 bg-black/20 p-10 text-center text-white/55">
+                <div className="py-12 text-center text-xs tracking-wider text-white/70 uppercase">
                   No transactions found.
                 </div>
               ) : (
-                <div className="overflow-x-auto rounded-2xl border border-white/8 bg-black/20">
+                <div className="overflow-x-auto border border-white/10 bg-black/20 custom-scrollbar">
                   <table className="min-w-full border-collapse text-sm">
                     <thead>
                       <tr className="border-b border-white/8 bg-white/[0.03] text-left">
-                        <th className="px-4 py-3 font-medium text-white/70">
+                        <th className="px-4 py-3 text-[11px] font-bold tracking-wider text-white/70 uppercase">
                           Date
                         </th>
-                        <th className="px-4 py-3 font-medium text-white/70">
+                        <th className="px-4 py-3 text-[11px] font-bold tracking-wider text-white/70 uppercase">
                           Account
                         </th>
-                        <th className="px-4 py-3 font-medium text-white/70">
+                        <th className="px-4 py-3 text-[11px] font-bold tracking-wider text-white/70 uppercase">
                           Category
                         </th>
-                        <th className="px-4 py-3 font-medium text-white/70">
+                        <th className="px-4 py-3 text-[11px] font-bold tracking-wider text-white/70 uppercase">
                           Type
                         </th>
-                        <th className="px-4 py-3 font-medium text-white/70">
+                        <th className="px-4 py-3 text-[11px] font-bold tracking-wider text-white/70 uppercase">
                           Description
                         </th>
-                        <th className="px-4 py-3 text-right font-medium text-white/70">
+                        <th className="px-4 py-3 text-right text-[11px] font-bold tracking-wider text-white/70 uppercase">
                           Amount
                         </th>
                       </tr>
@@ -1171,7 +1290,7 @@ export default function Reports() {
                                 : "bg-transparent"
                             }`}
                           >
-                            <td className="px-4 py-3 text-white/78">
+                            <td className="px-4 py-3 text-white/78 font-mono">
                               {fmtDate(tx.date)}
                             </td>
                             <td className="px-4 py-3 text-white/72">
@@ -1181,7 +1300,7 @@ export default function Reports() {
                               {catName}
                             </td>
                             <td className="px-4 py-3">
-                              <span className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-white/65">
+                              <span className="inline-flex border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-white/65 uppercase tracking-wider">
                                 {tx.type}
                               </span>
                             </td>
@@ -1189,11 +1308,11 @@ export default function Reports() {
                               {tx.description || ""}
                             </td>
                             <td
-                              className={`px-4 py-3 text-right font-medium ${
-                                val >= 0 ? "text-[#dce8bf]" : "text-red-200"
+                              className={`px-4 py-3 text-right font-mono font-bold ${
+                                val >= 0 ? "text-[#00ff87]" : "text-red-300"
                               }`}
                             >
-                              {new Intl.NumberFormat(undefined, {
+                              {new Intl.NumberFormat(DATE_LANG, {
                                 style: "currency",
                                 currency: tx.currency || "USD",
                               }).format(val)}
@@ -1208,24 +1327,24 @@ export default function Reports() {
             </SectionCard>
           </div>
 
-          <aside className="space-y-6 lg:sticky lg:top-20 h-max min-w-0">
-            <SectionCard title="Export Notes">
+          <aside className="space-y-5 lg:sticky lg:top-6 h-max min-w-0">
+            <SectionCard title="Export Notes" accent="cyan">
               <div className="space-y-3 text-sm text-white/60">
-                <div className="rounded-2xl border border-white/8 bg-black/20 p-4">
+                <div className="border border-white/8 bg-black/20 p-4">
                   CSV export downloads the currently filtered transaction set.
                 </div>
-                <div className="rounded-2xl border border-white/8 bg-black/20 p-4">
+                <div className="border border-white/8 bg-black/20 p-4">
                   PDF export includes the visible table and the rendered sankey
                   chart when available.
                 </div>
-                <div className="rounded-2xl border border-white/8 bg-black/20 p-4">
+                <div className="border border-white/8 bg-black/20 p-4">
                   Imports will refresh the report view immediately after a
                   successful ingest.
                 </div>
               </div>
             </SectionCard>
 
-            <SectionCard title="Current Filter State">
+            <SectionCard title="Current Filter State" accent="violet">
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between gap-3 text-white/60">
                   <span>Type</span>
