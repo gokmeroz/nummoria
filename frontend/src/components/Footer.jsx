@@ -1,5 +1,4 @@
 // frontend/src/components/Footer.jsx
-import React from "react";
 import logo from "../assets/nummoria_logo.png";
 
 // helper: build full URL from a handle or accept a full URL as-is
@@ -11,10 +10,8 @@ function socialUrl(platform, value) {
       return `https://x.com/${value}`;
     case "github":
       return `https://github.com/${value}`;
-    case "linkedin":
-      return value.includes("/")
-        ? `https://www.linkedin.com/${value.replace(/^\/+/, "")}`
-        : `https://www.linkedin.com/in/${value}`;
+    case "instagram":
+      return `https://instagram.com/${value}`;
     default:
       return null;
   }
@@ -39,9 +36,9 @@ export default function Footer({
     ],
   },
   socials = {
-    x: "gokmeroz_dev",
-    github: "gokmeroz",
-    linkedin: "goktugmertozdogan",
+    x: "nummoria",
+    github: "gokmeroz/nummoria",
+    instagram: "nummoria",
   },
   className = "",
   fullBleed = false,
@@ -60,7 +57,7 @@ export default function Footer({
 
   const xUrl = socialUrl("x", socials.x);
   const ghUrl = socialUrl("github", socials.github);
-  const liUrl = socialUrl("linkedin", socials.linkedin);
+  const igUrl = socialUrl("instagram", socials.instagram);
 
   return (
     <footer className={`relative w-full ${className}`}>
@@ -205,18 +202,32 @@ export default function Footer({
               </SocialIconButton>
             )}
 
-            {liUrl && (
+            {igUrl && (
               <SocialIconButton
-                href={liUrl}
-                label="LinkedIn"
-                title="LinkedIn"
+                href={igUrl}
+                label="Instagram"
+                title="Instagram"
                 main={main}
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M6.94 7.5A1.94 1.94 0 1 1 6.94 3.6a1.94 1.94 0 0 1 0 3.88ZM4.99 9.06h3.9V20H4.98V9.06Zm6.1 0h3.74v1.5h.05c.52-.98 1.8-2.02 3.7-2.02 3.96 0 4.69 2.6 4.69 5.98V20h-3.9v-5.4c0-1.29-.02-2.95-1.8-2.95-1.8 0-2.08 1.4-2.08 2.85V20h-3.9V9.06Z"
-                    fill="currentColor"
+                  <rect
+                    x="2"
+                    y="2"
+                    width="20"
+                    height="20"
+                    rx="5"
+                    ry="5"
+                    stroke="currentColor"
+                    strokeWidth="2"
                   />
+                  <circle
+                    cx="12"
+                    cy="12"
+                    r="4"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  />
+                  <circle cx="17" cy="7" r="1" fill="currentColor" />
                 </svg>
               </SocialIconButton>
             )}
