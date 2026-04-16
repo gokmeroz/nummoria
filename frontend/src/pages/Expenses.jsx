@@ -805,7 +805,8 @@ const ExpenseModal = React.memo(
       amount: "",
       currency: "USD",
       date: new Date().toISOString().slice(0, 10),
-      nextDate: "",
+      frequency: "",
+      endDate: "",
       categoryId: "",
       description: "",
       tagsCsv: "",
@@ -819,8 +820,9 @@ const ExpenseModal = React.memo(
             amount: minorToMajor(initialData.amountMinor, initialData.currency),
             currency: initialData.currency,
             date: new Date(initialData.date).toISOString().slice(0, 10),
-            nextDate: initialData.nextDate
-              ? new Date(initialData.nextDate).toISOString().slice(0, 10)
+            frequency: initialData.frequency || "",
+            endDate: initialData.endDate
+              ? new Date(initialData.endDate).toISOString().slice(0, 10)
               : "",
             categoryId: initialData.categoryId || "",
             description: initialData.description || "",
@@ -834,7 +836,8 @@ const ExpenseModal = React.memo(
             amount: "",
             currency: defaultCur,
             date: new Date().toISOString().slice(0, 10),
-            nextDate: "",
+            frequency: "",
+            endDate: "",
             categoryId: categories[0]?._id || "",
             description: "",
             tagsCsv: "",
@@ -865,8 +868,12 @@ const ExpenseModal = React.memo(
           .map((s) => s.trim())
           .filter(Boolean),
       };
-      if (form.nextDate)
-        payload.nextDate = new Date(form.nextDate).toISOString();
+
+      if (form.frequency) {
+        payload.frequency = form.frequency;
+        if (form.endDate)
+          payload.endDate = new Date(form.endDate).toISOString();
+      }
 
       try {
         if (!editing) {
@@ -942,7 +949,7 @@ const ExpenseModal = React.memo(
                 />
               </Field>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Field label="Date">
                 <input
                   type="date"
@@ -951,14 +958,45 @@ const ExpenseModal = React.memo(
                   className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white outline-none focus:border-[#a78bfa]/50"
                 />
               </Field>
-              <Field label="Next Date (Opt)">
+              <Field label="Frequency (Opt)">
+                <select
+                  value={form.frequency}
+                  onChange={(e) => {
+                    const newFreq = e.target.value;
+                    setForm({
+                      ...form,
+                      frequency: newFreq,
+                      endDate: newFreq ? form.endDate : "",
+                    });
+                  }}
+                  className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white outline-none focus:border-[#a78bfa]/50"
+                >
+                  <option value="" className="text-black">
+                    None
+                  </option>
+                  <option value="daily" className="text-black">
+                    Daily
+                  </option>
+                  <option value="weekly" className="text-black">
+                    Weekly
+                  </option>
+                  <option value="monthly" className="text-black">
+                    Monthly
+                  </option>
+                  <option value="yearly" className="text-black">
+                    Yearly
+                  </option>
+                </select>
+              </Field>
+              <Field label="End Date (Opt)">
                 <input
                   type="date"
-                  value={form.nextDate}
+                  value={form.endDate}
                   onChange={(e) =>
-                    setForm({ ...form, nextDate: e.target.value })
+                    setForm({ ...form, endDate: e.target.value })
                   }
-                  className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white outline-none focus:border-[#a78bfa]/50"
+                  disabled={!form.frequency}
+                  className={`w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white outline-none focus:border-[#a78bfa]/50 ${!form.frequency ? "opacity-50 cursor-not-allowed" : ""}`}
                 />
               </Field>
             </div>
@@ -1498,41 +1536,77 @@ export default function ExpensesScreen({ accountId }) {
 
   const upcoming = useMemo(() => {
     const today = startOfUTC(new Date());
-    const keyOf = (t) =>
+    const horizon = addMonthsUTC(today, 12); // Look ahead a full 12 months!
+
+    const keyOf = (t, vDate) =>
       [
         t.accountId,
         t.categoryId,
         t.type,
         t.amountMinor,
         t.currency,
-        startOfUTC(t.date).toISOString(),
-        (t.description || "").trim(),
+        vDate.toISOString(),
       ].join("|");
+
     const map = new Map();
 
     for (const t of transactions) {
       if (t.type !== "expense") continue;
-      if (new Date(t.date) > today)
-        map.set(keyOf(t), { ...t, __kind: "actual" });
+
+      const txDate = new Date(t.date);
+
+      // 1. If the base transaction is in the future, it ALWAYS goes in as "IN DB"
+      if (txDate > today) {
+        map.set(keyOf(t, txDate), { ...t, __kind: "actual" });
+      }
+
+      // 2. Project virtual recurring transactions
+      if (t.frequency) {
+        let nextVDate = new Date(t.date);
+        const eDate = t.endDate ? new Date(t.endDate) : new Date("2099-01-01");
+
+        // Helper to advance the date by one cycle
+        const advanceDate = (d) => {
+          const newD = new Date(d);
+          if (t.frequency === "daily") newD.setUTCDate(newD.getUTCDate() + 1);
+          else if (t.frequency === "weekly")
+            newD.setUTCDate(newD.getUTCDate() + 7);
+          else if (t.frequency === "monthly")
+            newD.setUTCMonth(newD.getUTCMonth() + 1);
+          else if (t.frequency === "yearly")
+            newD.setUTCFullYear(newD.getUTCFullYear() + 1);
+          return newD;
+        };
+
+        // Advance by one cycle BEFORE starting the projection
+        // (so we don't duplicate the base transaction if it's already in the future)
+        nextVDate = advanceDate(nextVDate);
+
+        // Fast-forward until it's strictly in the future (if the base date was in the past)
+        while (nextVDate <= today) {
+          nextVDate = advanceDate(nextVDate);
+        }
+
+        // Generate instances up to our 1-year horizon OR the user's endDate
+        while (nextVDate <= horizon && nextVDate <= eDate) {
+          const v = {
+            ...t,
+            _id: `virtual-${t._id}-${nextVDate.getTime()}`,
+            date: nextVDate.toISOString(),
+            __kind: "virtual",
+            __parentId: t._id,
+          };
+          map.set(keyOf(v, nextVDate), v);
+
+          // Advance for the next loop iteration
+          nextVDate = advanceDate(nextVDate);
+        }
+      }
     }
-    for (const t of transactions) {
-      if (t.type !== "expense" || !t.nextDate) continue;
-      const nd = new Date(t.nextDate);
-      if (nd <= today) continue;
-      const v = {
-        ...t,
-        _id: `virtual-${t._id}`,
-        date: nd.toISOString(),
-        __kind: "virtual",
-        __parentId: t._id,
-      };
-      const k = keyOf(v);
-      if (!map.has(k)) map.set(k, v);
-    }
-    const arr = Array.from(map.values()).sort(
+
+    return Array.from(map.values()).sort(
       (a, b) => new Date(a.date) - new Date(b.date),
     );
-    return arr;
   }, [transactions]);
 
   // --- UPDATED KPI INSIGHTS LOGIC ---

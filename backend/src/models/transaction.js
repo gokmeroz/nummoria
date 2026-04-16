@@ -20,10 +20,19 @@ const transactionSchema = new mongoose.Schema(
     currency: { type: String, required: true },
     date: { type: Date, required: true, index: true }, // the booked/plan date
 
-    // NEW (optional): if provided on POST, the API will also create a *copy*
+    // NEW: The Recurring Engine Fields
+    frequency: {
+      type: String,
+      enum: ["daily", "weekly", "monthly", "yearly"],
+    },
+    endDate: { type: Date },
+    nextProcessedDate: { type: Date },
+
+    // LEGACY (optional): if provided on POST, the API will also create a *copy*
     // for this date (future planned occurrence). This field is stored, but
     // has no special behavior beyond creation-time convenience.
     nextDate: { type: Date, index: true },
+
     reminder: {
       enabled: { type: Boolean, default: false },
       offsetMinutes: { type: Number, default: 1440 }, // 1 day
@@ -41,7 +50,7 @@ const transactionSchema = new mongoose.Schema(
     // soft delete
     isDeleted: { type: Boolean, default: false, index: true },
   },
-  { timestamps: { createdAt: "createdAt", updatedAt: false } }
+  { timestamps: { createdAt: "createdAt", updatedAt: false } },
 );
 
 /* Helpful indexes */

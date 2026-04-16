@@ -135,6 +135,9 @@ export async function createTransactionCore({ userId, body }) {
     assetSymbol,
     units,
     reminder,
+    // --- NEW: Extract the recurring engine fields ---
+    frequency,
+    endDate,
   } = body || {};
 
   // Basic validation
@@ -171,7 +174,7 @@ export async function createTransactionCore({ userId, body }) {
       categoryDoc.kind !== type
     ) {
       throw new Error(
-        `Category kind (${categoryDoc.kind}) does not match transaction type (${type})`
+        `Category kind (${categoryDoc.kind}) does not match transaction type (${type})`,
       );
     }
   }
@@ -219,8 +222,19 @@ export async function createTransactionCore({ userId, body }) {
   const acctCur = normalizeCurrency(acct.currency || "");
   if (acctCur !== cur) {
     throw new Error(
-      `Currency mismatch: account is ${acctCur}, transaction is ${cur}. (FX not supported yet)`
+      `Currency mismatch: account is ${acctCur}, transaction is ${cur}. (FX not supported yet)`,
     );
+  }
+
+  // --- NEW: Calculate the first nextProcessedDate for the Cron Job ---
+  let calculatedNextProcessedDate = undefined;
+  if (frequency) {
+    const d = new Date(when);
+    if (frequency === "daily") d.setUTCDate(d.getUTCDate() + 1);
+    else if (frequency === "weekly") d.setUTCDate(d.getUTCDate() + 7);
+    else if (frequency === "monthly") d.setUTCMonth(d.getUTCMonth() + 1);
+    else if (frequency === "yearly") d.setUTCFullYear(d.getUTCFullYear() + 1);
+    calculatedNextProcessedDate = d;
   }
 
   const baseDoc = {
@@ -243,6 +257,11 @@ export async function createTransactionCore({ userId, body }) {
       typeof units === "number" && !Number.isNaN(units) ? Number(units) : null,
     reminder: reminderObj,
     isDeleted: false,
+
+    // --- NEW: Attach the recurring variables to the save object ---
+    frequency: frequency || undefined,
+    endDate: endDate ? new Date(endDate) : undefined,
+    nextProcessedDate: calculatedNextProcessedDate,
   };
 
   const created = [];
@@ -268,7 +287,7 @@ export async function createTransactionCore({ userId, body }) {
     throw e;
   }
 
-  // 2) Optional future copy
+  // 2) Optional future copy (Legacy Support)
   if (nextDate) {
     const plannedDate = startOfUTC(nextDate);
 
@@ -312,6 +331,10 @@ export async function createTransactionCore({ userId, body }) {
           date: plannedDate,
           nextDate: undefined, // do not chain
           reminder: copyReminder,
+          // Strip recurring parameters from the legacy future copy to prevent duplicates
+          frequency: undefined,
+          endDate: undefined,
+          nextProcessedDate: undefined,
         });
         created.push(copy.toObject());
         await applyReminderScheduling({ userId, tx: copy });
