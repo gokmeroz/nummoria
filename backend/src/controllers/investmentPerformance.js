@@ -1,9 +1,37 @@
-// NO hard import of yahoo-finance2 here.
-// import yahooFinance from "yahoo-finance2";
-import { Transaction } from "../models/transaction.js"; // or "../models/transactions.js" if that's your file
-import dotenv from "dotenv";
+import { Transaction } from "../models/transaction.js";
+import { getLiveQuotesBulk, quotesEnabled } from "../services/quoteService.js";
 
 console.log("[INVESTMENT/QUOTES] ENABLE_QUOTES =", process.env.ENABLE_QUOTES);
+
+/* ─────────────────────────────────────────────────────────────
+   PERFORMANCE CACHE (Step C)
+───────────────────────────────────────────────────────────── */
+
+const PERF_TTL_MS = 60 * 1000; // 60 seconds
+const performanceCache = new Map();
+
+function getPerfCache(userId) {
+  const entry = performanceCache.get(String(userId));
+  if (!entry) return null;
+
+  if (Date.now() > entry.expiresAt) {
+    performanceCache.delete(String(userId));
+    return null;
+  }
+
+  return entry.payload;
+}
+
+function setPerfCache(userId, payload) {
+  performanceCache.set(String(userId), {
+    payload,
+    expiresAt: Date.now() + PERF_TTL_MS,
+  });
+}
+
+/* ─────────────────────────────────────────────────────────────
+   HELPERS
+───────────────────────────────────────────────────────────── */
 
 function decimalsForCurrency(code) {
   const zero = new Set(["JPY", "KRW", "CLP", "VND"]);
@@ -13,41 +41,17 @@ function decimalsForCurrency(code) {
   return 2;
 }
 
-// Optional flag to (re)enable quotes later without changing code
-const ENABLE_QUOTES = process.env.ENABLE_QUOTES === "true";
-// Evaluate env at call time so load order doesn't matter
-const quotesEnabled = () =>
-  String(process.env.ENABLE_QUOTES || "").toLowerCase() === "true";
-
-// Lazy/dynamic import so the server still runs if the package isn't installed
-async function fetchQuote(symbol) {
-  if (!ENABLE_QUOTES) return null;
-  if (!quotesEnabled()) return false;
-  try {
-    const mod = await import("yahoo-finance2");
-    const yf = mod.default || mod;
-    const q = await yf.quote(symbol);
-    if (!q?.regularMarketPrice) {
-      console.warn("[INVESTMENT/QUOTES] No price for", symbol, q?.currency);
-    }
-    return q;
-  } catch (e) {
-    console.error(
-      "[INVESTMENT/QUOTES] import/quote failed for",
-      symbol,
-      e?.message
-    );
-    return null;
-  }
-}
-
 /**
  * GET /investments/performance
- * Aggregates investment transactions by (assetSymbol, currency).
- * If quotes are disabled/unavailable, price/value/PL are returned as null.
  */
 export async function getInvestmentPerformance(req, res) {
   try {
+    /* ───────── CACHE HIT ───────── */
+    const cached = getPerfCache(req.userId);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const txns = await Transaction.find({
       userId: req.userId,
       isDeleted: { $ne: true },
@@ -57,11 +61,13 @@ export async function getInvestmentPerformance(req, res) {
     }).lean();
 
     if (!txns.length) {
-      return res.json({ holdings: [], totals: {} });
+      const empty = { holdings: [], totals: {} };
+      setPerfCache(req.userId, empty);
+      return res.json(empty);
     }
 
-    // Aggregate by symbol|currency
     const map = new Map();
+
     for (const t of txns) {
       const symbol = String(t.assetSymbol || "")
         .toUpperCase()
@@ -69,6 +75,7 @@ export async function getInvestmentPerformance(req, res) {
       const currency = t.currency || "USD";
       const units = Number(t.units || 0);
       const amountMinor = Number(t.amountMinor || 0);
+
       if (!symbol || !units) continue;
 
       const key = `${symbol}|${currency}`;
@@ -78,43 +85,46 @@ export async function getInvestmentPerformance(req, res) {
         units: 0,
         costMinor: 0,
       };
+
       agg.units += units;
       agg.costMinor += amountMinor;
       map.set(key, agg);
     }
 
     const groups = Array.from(map.values()).filter((g) => g.units !== 0);
+
     if (!groups.length) {
-      return res.json({ holdings: [], totals: {} });
+      const empty = { holdings: [], totals: {} };
+      setPerfCache(req.userId, empty);
+      return res.json(empty);
     }
 
-    // Try to fetch quotes only if enabled; otherwise all nulls
     const symbols = [...new Set(groups.map((g) => g.symbol))];
-    const quotes = {};
-    await Promise.all(
-      symbols.map(async (sym) => {
-        quotes[sym] = await fetchQuote(sym); // may be null
-      })
-    );
+    let quotes = {};
+
+    /* ───────── SAFE QUOTE FETCH (BATCHED) ───────── */
+    if (quotesEnabled()) {
+      // One request for all symbols instead of an N+1 loop!
+      quotes = await getLiveQuotesBulk(symbols);
+    }
 
     const holdings = [];
     const totalsByCur = {};
 
     for (const g of groups) {
-      const q = quotes[g.symbol];
+      const q = quotes[g.symbol] || null;
       const cur = g.currency;
       const dec = decimalsForCurrency(cur);
 
-      // Keep both names to be frontend-compatible: quote/price & currentValueMinor/valueMinor
       const quote =
         typeof q?.regularMarketPrice === "number" ? q.regularMarketPrice : null;
-      const price = quote; // alias
-      const priceCurrency = q?.currency ?? null;
+
+      const price = quote;
+      const priceCurrency = q?.currency ?? q?.financialCurrency ?? null;
 
       let valueMinor = null;
       let plMinor = null;
 
-      // Only compute value/PL if we have a quote AND its currency matches
       if (
         typeof quote === "number" &&
         (!priceCurrency || priceCurrency === cur)
@@ -125,14 +135,15 @@ export async function getInvestmentPerformance(req, res) {
         if (!totalsByCur[cur]) {
           totalsByCur[cur] = { costMinor: 0, valueMinor: 0, plMinor: 0 };
         }
+
         totalsByCur[cur].costMinor += g.costMinor;
         totalsByCur[cur].valueMinor += valueMinor;
         totalsByCur[cur].plMinor += plMinor;
       } else {
-        // Totals at least include cost; value/PL stay null when we have no quote
         if (!totalsByCur[cur]) {
           totalsByCur[cur] = { costMinor: 0, valueMinor: null, plMinor: null };
         }
+
         totalsByCur[cur].costMinor += g.costMinor;
       }
 
@@ -140,7 +151,6 @@ export async function getInvestmentPerformance(req, res) {
         ? g.costMinor / g.units / Math.pow(10, dec)
         : null;
 
-      // Provide both property names to avoid breaking older frontend code
       holdings.push({
         symbol: g.symbol,
         currency: cur,
@@ -148,12 +158,10 @@ export async function getInvestmentPerformance(req, res) {
         costMinor: g.costMinor,
         avgCostPerUnit,
 
-        // aliases for compatibility
         quote,
         price,
         priceCurrency,
 
-        // both names for value
         valueMinor,
         currentValueMinor: valueMinor,
 
@@ -161,12 +169,20 @@ export async function getInvestmentPerformance(req, res) {
       });
     }
 
-    return res.json({ holdings, totals: totalsByCur });
+    const payload = { holdings, totals: totalsByCur };
+
+    /* ───────── CACHE SET ───────── */
+    setPerfCache(req.userId, payload);
+
+    return res.json(payload);
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    console.error("[INVESTMENT/PERFORMANCE] failed:", err);
+    return res.status(500).json({
+      error: "Failed to load investment performance.",
+    });
   }
 }
+
 console.log("[INVESTMENT/QUOTES] enabled?", quotesEnabled());
 
-// (Alias export keeps other imports working)
 export const getInvestmentsPerformance = getInvestmentPerformance;

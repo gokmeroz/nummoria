@@ -1,3 +1,9 @@
 {
-  "cSpell.words": ["Nummoria"]
+  "cSpell.words": ["Nummoria"],
+  "files.exclude": {
+    "**/node_modules": true
+  },
+  "search.exclude": {
+    "**/node_modules": true
+  }
 }

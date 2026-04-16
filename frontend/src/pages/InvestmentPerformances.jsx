@@ -259,28 +259,59 @@ function MarketSearch() {
   const [err, setErr] = useState("");
   const [data, setData] = useState(null);
 
-  const search = async (sym) => {
-    const symbol = String(sym || q)
-      .trim()
-      .toUpperCase();
+  const getReadableError = (e) => {
+    const apiError = e?.response?.data?.error;
+    const apiMessage = e?.response?.data?.message;
+    const rawMessage = e?.message;
 
-    if (!symbol) return;
+    const combined = [apiError, apiMessage, rawMessage]
+      .filter(Boolean)
+      .join(" | ");
 
-    setBusy(true);
-    setErr("");
-    setData(null);
+    const normalized = String(combined || "").toLowerCase();
 
-    try {
-      const { data } = await api.get("/investments/quote", {
-        params: { symbol },
-      });
-      setData(data || null);
-    } catch (e) {
-      setErr(e?.response?.data?.error || e.message || "Lookup failed");
-    } finally {
-      setBusy(false);
+    if (
+      e?.response?.status === 429 ||
+      normalized.includes("too many requests") ||
+      normalized.includes("not valid json") ||
+      normalized.includes("unexpected token")
+    ) {
+      return "Quote provider is rate-limited right now. Please wait a moment and try again.";
     }
+
+    if (e?.response?.status === 404) {
+      return "Symbol not found. Please check the ticker and try again.";
+    }
+
+    if (e?.response?.status >= 500) {
+      return "Quote service is temporarily unavailable. Please try again later.";
+    }
+
+    return apiError || apiMessage || rawMessage || "Lookup failed";
   };
+
+const search = async (sym) => {
+  const symbol = String(sym || q)
+    .trim()
+    .toUpperCase();
+
+  if (!symbol || busy) return;
+
+  setBusy(true);
+  setErr("");
+  setData(null);
+
+  try {
+    const res = await api.get("/investments/quote", {
+      params: { symbol },
+    });
+    setData(res?.data || null);
+  } catch (e) {
+    setErr(getReadableError(e));
+  } finally {
+    setBusy(false);
+  }
+};
 
   const onKeyDown = (e) => {
     if (e.key === "Enter") search();
@@ -379,12 +410,12 @@ function MarketSearch() {
             <MiniStat label="Currency" value={priceCur} accent="cyan" />
             <MiniStat
               label="Previous Close"
-              value={String(prev ?? "—")}
+              value={formatPrice(prev, priceCur)}
               accent="violet"
             />
             <MiniStat
               label="Open"
-              value={String(data?.regularMarketOpen ?? "—")}
+              value={formatPrice(data?.regularMarketOpen, priceCur)}
               accent="mint"
             />
             <MiniStat
@@ -392,7 +423,7 @@ function MarketSearch() {
               value={
                 data?.regularMarketDayLow != null &&
                 data?.regularMarketDayHigh != null
-                  ? `${data.regularMarketDayLow} – ${data.regularMarketDayHigh}`
+                  ? `${formatPrice(data.regularMarketDayLow, priceCur)} – ${formatPrice(data.regularMarketDayHigh, priceCur)}`
                   : "—"
               }
               accent="cyan"
@@ -401,7 +432,7 @@ function MarketSearch() {
               label="52W Range"
               value={
                 data?.fiftyTwoWeekLow != null && data?.fiftyTwoWeekHigh != null
-                  ? `${data.fiftyTwoWeekLow} – ${data.fiftyTwoWeekHigh}`
+                  ? `${formatPrice(data.fiftyTwoWeekLow, priceCur)} – ${formatPrice(data.fiftyTwoWeekHigh, priceCur)}`
                   : "—"
               }
               accent="violet"

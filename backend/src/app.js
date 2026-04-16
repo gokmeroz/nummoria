@@ -6,8 +6,7 @@ import morgan from "morgan";
 import path from "path";
 import cookieParser from "cookie-parser";
 import crypto from "crypto";
-import rateLimit from "express-rate-limit";
-
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import receiptRoutes from "./routes/receiptRoutes.js";
 import marketRouter from "./routes/marketRoutes.js";
 import authRoutes from "./routes/auth.js";
@@ -156,26 +155,55 @@ app.use(
 
 // ---- Rate limiting ----
 const windowMs = Number(process.env.RATE_WINDOW_MS || 60_000);
-const globalLimit = Number(process.env.RATE_MAX || 120);
+const globalLimit = Number(process.env.RATE_MAX || 300);
 const authLimit = Number(process.env.RATE_LOGIN_MAX || 10);
+const quoteLimit = Number(process.env.RATE_QUOTE_MAX || 60);
+const aiLimit = Number(process.env.RATE_AI_MAX || 30);
+const contactLimit = Number(process.env.RATE_CONTACT_MAX || 10);
 
-app.use(
+const buildLimiter = ({ limit, message }) =>
   rateLimit({
     windowMs,
-    limit: globalLimit,
+    limit,
     standardHeaders: "draft-7",
     legacyHeaders: false,
-    message: { message: "Too many requests" },
-  }),
-);
+    keyGenerator: (req) => req.userId || ipKeyGenerator(req.ip),
+    skip: (req) => req.method === "OPTIONS" || req.path === "/health",
+    message: { message },
+  });
 
-const authLimiter = rateLimit({
-  windowMs,
-  limit: authLimit,
-  standardHeaders: "draft-7",
-  legacyHeaders: false,
-  message: { message: "Too many login attempts" },
+// Broad protection, but not tight enough to hurt normal app navigation
+const globalLimiter = buildLimiter({
+  limit: globalLimit,
+  message: "Too many requests",
 });
+
+// Login brute-force protection
+const authLimiter = buildLimiter({
+  limit: authLimit,
+  message: "Too many login attempts",
+});
+
+// Quote endpoints need room for normal usage, but still need protection
+const quoteLimiter = buildLimiter({
+  limit: quoteLimit,
+  message: "Too many quote requests. Please slow down briefly.",
+});
+
+// AI endpoints are usually expensive; rate-limit separately
+const aiLimiter = buildLimiter({
+  limit: aiLimit,
+  message: "Too many AI requests. Please wait a moment.",
+});
+
+// Contact forms are abuse magnets
+const contactLimiter = buildLimiter({
+  limit: contactLimit,
+  message: "Too many contact requests. Please try again later.",
+});
+
+// Apply global limiter AFTER health and before most app routes
+app.use(globalLimiter);
 
 // ---- static files ----
 // ⚠️ Serving user uploads via static is convenient but riskier.
@@ -252,10 +280,10 @@ app.use("/accounts", accountRoutes);
 app.use("/categories", categoryRoutes);
 app.use("/transactions", transactionRoutes);
 app.use("/auto/transactions", autoTransactionRoutes);
-app.use("/investments", investmentPerformance, marketRouter);
-app.use("/ai/financial-helper", financialHelperRoutes);
+app.use("/investments", quoteLimiter, investmentPerformance, marketRouter);
+app.use("/ai/financial-helper", aiLimiter, financialHelperRoutes);
+app.use("/contact", contactLimiter, contactRoutes);
 app.use("/stats", statsRoutes);
-app.use("/contact", contactRoutes);
 app.use("/ingest", ingestRoutes);
 app.use("/receipt", receiptRoutes);
 

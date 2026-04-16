@@ -1,4 +1,3 @@
-// mobile/src/screens/UserScreen.js
 /* eslint-disable no-unused-vars */
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -40,7 +39,78 @@ const T_MID = "rgba(226,232,240,0.55)";
 const T_DIM = "rgba(226,232,240,0.32)";
 
 const ACCOUNT_TYPES = ["checking", "savings", "credit", "cash", "other"];
-const CURRENCIES = ["USD", "EUR", "TRY", "GBP"];
+const CURRENCIES = [
+  { code: "USD", name: "US Dollar", symbol: "$" },
+  { code: "EUR", name: "Euro", symbol: "€" },
+  { code: "TRY", name: "Turkish Lira", symbol: "₺" },
+  { code: "GBP", name: "British Pound Sterling", symbol: "£" },
+  { code: "JPY", name: "Japanese Yen", symbol: "¥" },
+  { code: "AUD", name: "Australian Dollar", symbol: "A$" },
+  { code: "CAD", name: "Canadian Dollar", symbol: "C$" },
+  { code: "CHF", name: "Swiss Franc", symbol: "CHF" },
+  { code: "CNY", name: "Chinese Yuan", symbol: "¥" },
+  { code: "HKD", name: "Hong Kong Dollar", symbol: "HK$" },
+  { code: "NZD", name: "New Zealand Dollar", symbol: "NZ$" },
+  { code: "SEK", name: "Swedish Krona", symbol: "kr" },
+  { code: "NOK", name: "Norwegian Krone", symbol: "kr" },
+  { code: "DKK", name: "Danish Krone", symbol: "kr" },
+  { code: "PLN", name: "Polish Złoty", symbol: "zł" },
+  { code: "CZK", name: "Czech Koruna", symbol: "Kč" },
+  { code: "HUF", name: "Hungarian Forint", symbol: "Ft" },
+  { code: "RON", name: "Romanian Leu", symbol: "lei" },
+  { code: "BGN", name: "Bulgarian Lev", symbol: "лв" },
+  { code: "HRK", name: "Croatian Kuna", symbol: "kn" },
+  { code: "RSD", name: "Serbian Dinar", symbol: "дин." },
+  { code: "RUB", name: "Russian Ruble", symbol: "₽" },
+  { code: "UAH", name: "Ukrainian Hryvnia", symbol: "₴" },
+  { code: "AED", name: "UAE Dirham", symbol: "د.إ" },
+  { code: "SAR", name: "Saudi Riyal", symbol: "﷼" },
+  { code: "QAR", name: "Qatari Riyal", symbol: "﷼" },
+  { code: "KWD", name: "Kuwaiti Dinar", symbol: "د.ك" },
+  { code: "BHD", name: "Bahraini Dinar", symbol: ".د.ب" },
+  { code: "OMR", name: "Omani Rial", symbol: "﷼" },
+  { code: "JOD", name: "Jordanian Dinar", symbol: "د.ا" },
+  { code: "ILS", name: "Israeli New Shekel", symbol: "₪" },
+  { code: "EGP", name: "Egyptian Pound", symbol: "E£" },
+  { code: "ZAR", name: "South African Rand", symbol: "R" },
+  { code: "NGN", name: "Nigerian Naira", symbol: "₦" },
+  { code: "KES", name: "Kenyan Shilling", symbol: "KSh" },
+  { code: "GHS", name: "Ghanaian Cedi", symbol: "₵" },
+  { code: "MAD", name: "Moroccan Dirham", symbol: "د.م." },
+  { code: "TND", name: "Tunisian Dinar", symbol: "د.ت" },
+  { code: "INR", name: "Indian Rupee", symbol: "₹" },
+  { code: "PKR", name: "Pakistani Rupee", symbol: "₨" },
+  { code: "BDT", name: "Bangladeshi Taka", symbol: "৳" },
+  { code: "LKR", name: "Sri Lankan Rupee", symbol: "₨" },
+  { code: "NPR", name: "Nepalese Rupee", symbol: "₨" },
+  { code: "KRW", name: "South Korean Won", symbol: "₩" },
+  { code: "SGD", name: "Singapore Dollar", symbol: "S$" },
+  { code: "MYR", name: "Malaysian Ringgit", symbol: "RM" },
+  { code: "THB", name: "Thai Baht", symbol: "฿" },
+  { code: "IDR", name: "Indonesian Rupiah", symbol: "Rp" },
+  { code: "PHP", name: "Philippine Peso", symbol: "₱" },
+  { code: "VND", name: "Vietnamese Dong", symbol: "₫" },
+  { code: "TWD", name: "New Taiwan Dollar", symbol: "NT$" },
+  { code: "MXN", name: "Mexican Peso", symbol: "$" },
+  { code: "BRL", name: "Brazilian Real", symbol: "R$" },
+  { code: "ARS", name: "Argentine Peso", symbol: "$" },
+  { code: "CLP", name: "Chilean Peso", symbol: "$" },
+  { code: "COP", name: "Colombian Peso", symbol: "$" },
+  { code: "PEN", name: "Peruvian Sol", symbol: "S/" },
+  { code: "UYU", name: "Uruguayan Peso", symbol: "$U" },
+  { code: "BOB", name: "Bolivian Boliviano", symbol: "Bs." },
+  { code: "CRC", name: "Costa Rican Colón", symbol: "₡" },
+  { code: "DOP", name: "Dominican Peso", symbol: "RD$" },
+  { code: "GTQ", name: "Guatemalan Quetzal", symbol: "Q" },
+  { code: "HNL", name: "Honduran Lempira", symbol: "L" },
+  { code: "JMD", name: "Jamaican Dollar", symbol: "J$" },
+  { code: "ISK", name: "Icelandic Króna", symbol: "kr" },
+  { code: "ALL", name: "Albanian Lek", symbol: "L" },
+  { code: "MKD", name: "Macedonian Denar", symbol: "ден" },
+  { code: "GEL", name: "Georgian Lari", symbol: "₾" },
+  { code: "AZN", name: "Azerbaijani Manat", symbol: "₼" },
+  { code: "KZT", name: "Kazakhstani Tenge", symbol: "₸" },
+];
 
 /* ──────────────────────────────────────────────────────────
    HELPERS
@@ -52,17 +122,20 @@ function decimalsForCurrency(code) {
   if (three.has(code)) return 3;
   return 2;
 }
+
 function majorToMinor(amountStr, cur) {
   const decimals = decimalsForCurrency(cur);
   const n = Number(String(amountStr).replace(",", "."));
   if (Number.isNaN(n)) return NaN;
   return Math.round(n * Math.pow(10, decimals));
 }
+
 function minorToMajorString(minor, cur) {
   const decimals = decimalsForCurrency(cur);
   const n = (minor || 0) / Math.pow(10, decimals);
   return String(n);
 }
+
 function fmtMoneyMinor(minor, cur = "USD") {
   try {
     return new Intl.NumberFormat(undefined, {
@@ -234,13 +307,14 @@ function GridBG() {
 /* ──────────────────────────────────────────────────────────
    REUSABLE UI
 ────────────────────────────────────────────────────────── */
-function Chip({ label, selected, onPress, accent = MINT, small }) {
+function Chip({ label, selected, onPress, accent = MINT, small, wide }) {
   return (
     <TouchableOpacity
       onPress={onPress}
       style={[
         s.chip,
         small && s.chipSmall,
+        wide && s.chipWide,
         selected && [s.chipSelected, { borderColor: `${accent}66` }],
       ]}
       activeOpacity={0.75}
@@ -307,6 +381,106 @@ function Labeled({ label, children }) {
   );
 }
 
+function CurrencyPickerModal({
+  visible,
+  onClose,
+  value,
+  onSelect,
+  title = "SELECT CURRENCY",
+}) {
+  const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    if (visible) setQuery("");
+  }, [visible]);
+
+  const filtered = CURRENCIES.filter((c) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      c.code.toLowerCase().includes(q) ||
+      c.name.toLowerCase().includes(q) ||
+      c.symbol.toLowerCase().includes(q)
+    );
+  });
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View style={s.modalOverlay}>
+        <View style={s.modalCard}>
+          <Brackets color={CYAN} size={10} thick={1.5} />
+          <View style={[s.modalHairline, { backgroundColor: CYAN }]} />
+
+          <Text style={s.modalTitle}>{title}</Text>
+
+          <TextInput
+            style={[s.input, { marginTop: 10, marginBottom: 12 }]}
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search currency..."
+            placeholderTextColor={T_DIM}
+          />
+
+          <ScrollView
+            style={{ maxHeight: 360 }}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={{ gap: 8 }}>
+              {filtered.map((c) => {
+                const selected = value === c.code;
+                return (
+                  <TouchableOpacity
+                    key={c.code}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      onSelect(c.code);
+                      onClose();
+                    }}
+                    style={[
+                      s.currencyOption,
+                      selected && s.currencyOptionSelected,
+                    ]}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={[
+                          s.currencyOptionCode,
+                          selected && { color: CYAN },
+                        ]}
+                      >
+                        {c.code} — {c.name}
+                      </Text>
+                      <Text style={s.currencyOptionMeta}>{c.symbol}</Text>
+                    </View>
+
+                    {selected ? (
+                      <Text style={{ color: CYAN, fontWeight: "800" }}>
+                        ACTIVE
+                      </Text>
+                    ) : null}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </ScrollView>
+
+          <View style={s.modalActions}>
+            <TouchableOpacity style={s.modalCancelBtn} onPress={onClose}>
+              <Text style={s.modalCancelText}>CLOSE</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 /* ══════════════════════════════════════════════════════════
    SCREEN
 ══════════════════════════════════════════════════════════ */
@@ -323,6 +497,7 @@ export default function UserScreen() {
   const [name, setName] = useState("");
   const [profession, setProfession] = useState("");
   const [baseCurrency, setBaseCurrency] = useState("USD");
+  const [currencyPickerVisible, setCurrencyPickerVisible] = useState(false);
   const [subscription, setSubscription] = useState("Standard");
   const [tz, setTz] = useState("UTC");
 
@@ -824,21 +999,22 @@ export default function UserScreen() {
         </Labeled>
 
         <Labeled label="BASE CURRENCY">
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ flexDirection: "row", gap: 8 }}
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={s.input}
+            onPress={() => setCurrencyPickerVisible(true)}
           >
-            {CURRENCIES.map((c) => (
-              <Chip
-                key={c}
-                label={c}
-                selected={baseCurrency === c}
-                onPress={() => setBaseCurrency(c)}
-                accent={CYAN}
-              />
-            ))}
-          </ScrollView>
+            <Text style={{ color: T_HI, fontSize: 13 }}>
+              {(() => {
+                const selected = CURRENCIES.find(
+                  (c) => c.code === baseCurrency,
+                );
+                return selected
+                  ? `${selected.code} — ${selected.name} (${selected.symbol})`
+                  : "Select currency";
+              })()}
+            </Text>
+          </TouchableOpacity>
         </Labeled>
 
         <ScanLine color={MINT} style={{ marginTop: 10, marginBottom: 12 }} />
@@ -991,7 +1167,6 @@ export default function UserScreen() {
         {AccountsPanel()}
       </ScrollView>
 
-      {/* Delete confirmation */}
       <Modal
         transparent
         visible={deleteConfirmVisible}
@@ -1032,6 +1207,14 @@ export default function UserScreen() {
         </View>
       </Modal>
 
+      <CurrencyPickerModal
+        visible={currencyPickerVisible}
+        onClose={() => setCurrencyPickerVisible(false)}
+        value={baseCurrency}
+        onSelect={setBaseCurrency}
+        title="SELECT BASE CURRENCY"
+      />
+
       <AccountModal
         visible={accModalVisible}
         onClose={() => setAccModalVisible(false)}
@@ -1048,6 +1231,8 @@ function AccountModal({ visible, onClose, initial, onSubmit, busy }) {
   const [name, setName] = useState(initial?.name || "");
   const [type, setType] = useState(initial?.type || "checking");
   const [currency, setCurrency] = useState(initial?.currency || "USD");
+  const [accountCurrencyPickerVisible, setAccountCurrencyPickerVisible] =
+    useState(false);
   const [balanceMajor, setBalanceMajor] = useState(
     initial
       ? minorToMajorString(initial.balance || 0, initial.currency || "USD")
@@ -1068,6 +1253,7 @@ function AccountModal({ visible, onClose, initial, onSubmit, busy }) {
       );
       setInstitution(initial?.institution || "");
       setLast4(initial?.last4 || "");
+      setAccountCurrencyPickerVisible(false);
     }
   }, [visible, initial]);
 
@@ -1094,131 +1280,142 @@ function AccountModal({ visible, onClose, initial, onSubmit, busy }) {
   }
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <KeyboardAvoidingView
-        style={s.modalOverlay}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+    <>
+      <Modal
+        visible={visible}
+        transparent
+        animationType="slide"
+        onRequestClose={onClose}
       >
-        <View style={s.modalCard}>
-          <Brackets color={ORANGE} size={10} thick={1.5} />
-          <View style={[s.modalHairline, { backgroundColor: ORANGE }]} />
+        <KeyboardAvoidingView
+          style={s.modalOverlay}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <View style={s.modalCard}>
+            <Brackets color={ORANGE} size={10} thick={1.5} />
+            <View style={[s.modalHairline, { backgroundColor: ORANGE }]} />
 
-          <Text style={s.modalTitle}>
-            {initial ? "EDIT ACCOUNT" : "ADD ACCOUNT"}
-          </Text>
+            <Text style={s.modalTitle}>
+              {initial ? "EDIT ACCOUNT" : "ADD ACCOUNT"}
+            </Text>
 
-          <ScrollView
-            style={{ maxHeight: 380, marginTop: 10 }}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-            <Labeled label="ACCOUNT NAME">
-              <TextInput
-                style={s.input}
-                value={name}
-                onChangeText={setName}
-                placeholder="e.g. Main Checking"
-                placeholderTextColor={T_DIM}
-              />
-            </Labeled>
-
-            <Labeled label="TYPE">
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ flexDirection: "row", gap: 8 }}
-              >
-                {ACCOUNT_TYPES.map((t) => (
-                  <Chip
-                    key={t}
-                    label={t}
-                    selected={type === t}
-                    onPress={() => setType(t)}
-                    accent={ORANGE}
-                  />
-                ))}
-              </ScrollView>
-            </Labeled>
-
-            <Labeled label="CURRENCY">
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ flexDirection: "row", gap: 8 }}
-              >
-                {CURRENCIES.map((c) => (
-                  <Chip
-                    key={c}
-                    label={c}
-                    selected={currency === c}
-                    onPress={() => setCurrency(c)}
-                    accent={CYAN}
-                  />
-                ))}
-              </ScrollView>
-            </Labeled>
-
-            <Labeled label="CURRENT BALANCE">
-              <TextInput
-                style={s.input}
-                value={balanceMajor}
-                onChangeText={setBalanceMajor}
-                inputMode="decimal"
-                placeholder="e.g. 1250.00"
-                placeholderTextColor={T_DIM}
-              />
-            </Labeled>
-
-            <Labeled label="INSTITUTION (OPTIONAL)">
-              <TextInput
-                style={s.input}
-                value={institution}
-                onChangeText={setInstitution}
-                placeholder="Your bank"
-                placeholderTextColor={T_DIM}
-              />
-            </Labeled>
-
-            <Labeled label="LAST 4 (OPTIONAL)">
-              <TextInput
-                style={s.input}
-                value={last4}
-                onChangeText={setLast4}
-                placeholder="1234"
-                placeholderTextColor={T_DIM}
-                maxLength={4}
-                keyboardType="number-pad"
-              />
-            </Labeled>
-          </ScrollView>
-
-          <View style={s.modalActions}>
-            <TouchableOpacity
-              style={s.modalCancelBtn}
-              onPress={onClose}
-              disabled={busy}
+            <ScrollView
+              style={{ maxHeight: 380, marginTop: 10 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
             >
-              <Text style={s.modalCancelText}>CANCEL</Text>
-            </TouchableOpacity>
+              <Labeled label="ACCOUNT NAME">
+                <TextInput
+                  style={s.input}
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="e.g. Main Checking"
+                  placeholderTextColor={T_DIM}
+                />
+              </Labeled>
 
-            <TouchableOpacity
-              style={s.modalPrimaryBtn}
-              onPress={handleSubmit}
-              disabled={busy}
-            >
-              <Text style={s.modalPrimaryText}>
-                {busy ? "SAVING…" : initial ? "SAVE" : "ADD"}
-              </Text>
-            </TouchableOpacity>
+              <Labeled label="TYPE">
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ flexDirection: "row", gap: 8 }}
+                >
+                  {ACCOUNT_TYPES.map((t) => (
+                    <Chip
+                      key={t}
+                      label={t}
+                      selected={type === t}
+                      onPress={() => setType(t)}
+                      accent={ORANGE}
+                    />
+                  ))}
+                </ScrollView>
+              </Labeled>
+
+              <Labeled label="CURRENCY">
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={s.input}
+                  onPress={() => setAccountCurrencyPickerVisible(true)}
+                >
+                  <Text style={{ color: T_HI, fontSize: 13 }}>
+                    {(() => {
+                      const selected = CURRENCIES.find(
+                        (c) => c.code === currency,
+                      );
+                      return selected
+                        ? `${selected.code} — ${selected.name} (${selected.symbol})`
+                        : "Select currency";
+                    })()}
+                  </Text>
+                </TouchableOpacity>
+              </Labeled>
+
+              <Labeled label="CURRENT BALANCE">
+                <TextInput
+                  style={s.input}
+                  value={balanceMajor}
+                  onChangeText={setBalanceMajor}
+                  inputMode="decimal"
+                  placeholder="e.g. 1250.00"
+                  placeholderTextColor={T_DIM}
+                />
+              </Labeled>
+
+              <Labeled label="INSTITUTION (OPTIONAL)">
+                <TextInput
+                  style={s.input}
+                  value={institution}
+                  onChangeText={setInstitution}
+                  placeholder="Your bank"
+                  placeholderTextColor={T_DIM}
+                />
+              </Labeled>
+
+              <Labeled label="LAST 4 (OPTIONAL)">
+                <TextInput
+                  style={s.input}
+                  value={last4}
+                  onChangeText={setLast4}
+                  placeholder="1234"
+                  placeholderTextColor={T_DIM}
+                  maxLength={4}
+                  keyboardType="number-pad"
+                />
+              </Labeled>
+            </ScrollView>
+
+            <View style={s.modalActions}>
+              <TouchableOpacity
+                style={s.modalCancelBtn}
+                onPress={onClose}
+                disabled={busy}
+              >
+                <Text style={s.modalCancelText}>CANCEL</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={s.modalPrimaryBtn}
+                onPress={handleSubmit}
+                disabled={busy}
+              >
+                <Text style={s.modalPrimaryText}>
+                  {busy ? "SAVING…" : initial ? "SAVE" : "ADD"}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <CurrencyPickerModal
+        visible={accountCurrencyPickerVisible}
+        onClose={() => setAccountCurrencyPickerVisible(false)}
+        value={currency}
+        onSelect={setCurrency}
+        title="SELECT ACCOUNT CURRENCY"
+      />
+    </>
   );
 }
 
@@ -1266,6 +1463,7 @@ const s = StyleSheet.create({
   logoRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   statusDot: { width: 6, height: 6, borderRadius: 999 },
   logoTxt: { fontSize: 13, fontWeight: "800", color: T_HI, letterSpacing: 3 },
+
   homeBtn: {
     width: 36,
     height: 36,
@@ -1278,6 +1476,13 @@ const s = StyleSheet.create({
     justifyContent: "center",
     position: "relative",
   },
+
+  homeBtnImg: {
+    width: 20,
+    height: 20,
+    resizeMode: "contain",
+  },
+
   sectionCard: {
     margin: 12,
     marginTop: 0,
@@ -1290,6 +1495,7 @@ const s = StyleSheet.create({
     overflow: "hidden",
     position: "relative",
   },
+
   sectionHairline: {
     position: "absolute",
     top: 0,
@@ -1298,12 +1504,14 @@ const s = StyleSheet.create({
     height: 1.5,
     opacity: 0.65,
   },
+
   sectionHeaderRow: {
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
     marginBottom: 12,
   },
+
   sectionEyebrow: {
     fontSize: 8,
     fontWeight: "800",
@@ -1311,6 +1519,7 @@ const s = StyleSheet.create({
     letterSpacing: 2,
     marginBottom: 3,
   },
+
   sectionTitle: {
     fontSize: 18,
     fontWeight: "800",
@@ -1321,10 +1530,12 @@ const s = StyleSheet.create({
   profileBlock: {
     alignItems: "center",
   },
+
   avatarTouchable: {
     alignItems: "center",
     marginBottom: 8,
   },
+
   avatarCircle: {
     width: 92,
     height: 92,
@@ -1337,33 +1548,39 @@ const s = StyleSheet.create({
     marginBottom: 6,
     overflow: "hidden",
   },
+
   avatarImage: {
     width: "100%",
     height: "100%",
     resizeMode: "cover",
   },
+
   changePhotoText: {
     fontSize: 10,
     color: MINT,
     fontWeight: "800",
     letterSpacing: 1,
   },
+
   avatarText: {
     fontSize: 34,
     fontWeight: "800",
     color: T_HI,
   },
+
   profileName: {
     fontSize: 20,
     fontWeight: "800",
     color: T_HI,
     marginTop: 2,
   },
+
   profileProfession: {
     marginTop: 2,
     fontSize: 13,
     color: T_MID,
   },
+
   profileEmail: {
     marginTop: 2,
     fontSize: 12,
@@ -1378,6 +1595,7 @@ const s = StyleSheet.create({
     marginBottom: 8,
     overflow: "hidden",
   },
+
   statHairline: {
     position: "absolute",
     top: 0,
@@ -1386,6 +1604,7 @@ const s = StyleSheet.create({
     height: 1.5,
     opacity: 0.65,
   },
+
   statLabel: {
     fontSize: 9,
     textTransform: "uppercase",
@@ -1393,11 +1612,13 @@ const s = StyleSheet.create({
     color: T_DIM,
     marginBottom: 4,
   },
+
   statValue: {
     fontSize: 24,
     fontWeight: "800",
     letterSpacing: -0.6,
   },
+
   statHint: {
     fontSize: 9,
     color: T_DIM,
@@ -1412,6 +1633,7 @@ const s = StyleSheet.create({
     paddingVertical: 10,
     marginBottom: 10,
   },
+
   noticeText: {
     fontSize: 12,
     fontWeight: "600",
@@ -1425,6 +1647,7 @@ const s = StyleSheet.create({
     marginBottom: 6,
     marginTop: 2,
   },
+
   input: {
     borderRadius: 2,
     borderWidth: 1,
@@ -1448,18 +1671,30 @@ const s = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.025)",
     marginRight: 6,
   },
+
   chipSmall: { paddingHorizontal: 8, paddingVertical: 5 },
+
   chipSelected: { backgroundColor: "rgba(255,255,255,0.04)" },
+
   chipDot: { width: 4, height: 4, borderRadius: 999 },
+
   chipText: { fontSize: 11, color: T_DIM },
+
   chipTextSmall: { fontSize: 10 },
+
   chipTextSelected: { fontWeight: "700" },
+
+  chipWide: {
+    minWidth: 220,
+    maxWidth: 260,
+  },
 
   actionsRow: {
     flexDirection: "row",
     gap: 10,
     marginTop: 10,
   },
+
   primaryBtn: {
     flex: 1,
     borderRadius: 2,
@@ -1467,12 +1702,14 @@ const s = StyleSheet.create({
     alignItems: "center",
     backgroundColor: MINT,
   },
+
   primaryBtnText: {
     color: BG,
     fontWeight: "800",
     fontSize: 11,
     letterSpacing: 1,
   },
+
   dangerOutlineBtn: {
     paddingVertical: 11,
     paddingHorizontal: 14,
@@ -1481,12 +1718,14 @@ const s = StyleSheet.create({
     borderColor: "rgba(167,139,250,0.28)",
     backgroundColor: "rgba(167,139,250,0.08)",
   },
+
   dangerOutlineText: {
     color: VIOLET,
     fontWeight: "800",
     fontSize: 11,
     letterSpacing: 1,
   },
+
   logoutOutlineBtn: {
     marginTop: 10,
     borderRadius: 2,
@@ -1496,6 +1735,7 @@ const s = StyleSheet.create({
     borderColor: CARD_BD,
     backgroundColor: "rgba(255,255,255,0.025)",
   },
+
   logoutOutlineText: {
     color: T_MID,
     fontWeight: "800",
@@ -1509,6 +1749,7 @@ const s = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: ORANGE,
   },
+
   smallPrimaryBtnText: {
     color: BG,
     fontSize: 10,
@@ -1531,6 +1772,7 @@ const s = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255,255,255,0.04)",
   },
+
   accountTopRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1538,16 +1780,19 @@ const s = StyleSheet.create({
     marginBottom: 8,
     flexWrap: "wrap",
   },
+
   accountName: {
     fontSize: 14,
     fontWeight: "700",
     color: T_HI,
     marginBottom: 2,
   },
+
   accountMeta: {
     fontSize: 11,
     color: T_MID,
   },
+
   accountBalance: {
     marginLeft: "auto",
     fontSize: 15,
@@ -1564,13 +1809,16 @@ const s = StyleSheet.create({
     paddingVertical: 4,
     backgroundColor: "rgba(0,0,0,0.3)",
   },
+
   rowCatDot: { width: 5, height: 5, borderRadius: 999 },
+
   rowCatTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 0.8 },
 
   accountActionRow: {
     flexDirection: "row",
     gap: 8,
   },
+
   rowBtnEdit: {
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -1579,6 +1827,7 @@ const s = StyleSheet.create({
     borderColor: "rgba(0,212,255,0.25)",
     backgroundColor: "rgba(0,212,255,0.06)",
   },
+
   rowBtnDel: {
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -1587,6 +1836,7 @@ const s = StyleSheet.create({
     borderColor: "rgba(167,139,250,0.25)",
     backgroundColor: "rgba(167,139,250,0.06)",
   },
+
   rowBtnTxt: {
     fontSize: 8,
     fontWeight: "800",
@@ -1600,6 +1850,7 @@ const s = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 16,
   },
+
   modalCard: {
     width: "100%",
     maxWidth: 420,
@@ -1611,6 +1862,7 @@ const s = StyleSheet.create({
     position: "relative",
     overflow: "hidden",
   },
+
   modalHairline: {
     position: "absolute",
     top: 0,
@@ -1619,6 +1871,7 @@ const s = StyleSheet.create({
     height: 1.5,
     opacity: 0.65,
   },
+
   modalTitle: {
     fontSize: 13,
     fontWeight: "800",
@@ -1627,18 +1880,21 @@ const s = StyleSheet.create({
     marginBottom: 6,
     marginTop: 4,
   },
+
   modalText: {
     marginTop: 6,
     fontSize: 13,
     color: T_MID,
     lineHeight: 20,
   },
+
   modalActions: {
     flexDirection: "row",
     justifyContent: "flex-end",
     gap: 8,
     marginTop: 14,
   },
+
   modalCancelBtn: {
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -1647,36 +1903,42 @@ const s = StyleSheet.create({
     borderColor: CARD_BD,
     backgroundColor: "rgba(255,255,255,0.025)",
   },
+
   modalCancelText: {
     color: T_MID,
     fontSize: 11,
     fontWeight: "800",
     letterSpacing: 1,
   },
+
   modalDangerBtn: {
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 2,
     backgroundColor: VIOLET,
   },
+
   modalDangerText: {
     color: BG,
     fontSize: 11,
     fontWeight: "800",
     letterSpacing: 1,
   },
+
   modalPrimaryBtn: {
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 2,
     backgroundColor: ORANGE,
   },
+
   modalPrimaryText: {
     color: BG,
     fontSize: 11,
     fontWeight: "800",
     letterSpacing: 1,
   },
+
   profileMiniStatsRow: {
     flexDirection: "row",
     gap: 8,
@@ -1709,6 +1971,7 @@ const s = StyleSheet.create({
     color: T_DIM,
     letterSpacing: 1.4,
   },
+
   headerCard: {
     margin: 12,
     padding: 12,
@@ -1716,13 +1979,6 @@ const s = StyleSheet.create({
     borderWidth: 1,
     overflow: "hidden",
     position: "relative",
-  },
-
-  topBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
   },
 
   logoTxt: {
@@ -1743,19 +1999,6 @@ const s = StyleSheet.create({
     fontSize: 7,
     fontWeight: "800",
     letterSpacing: 1.2,
-  },
-
-  homeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 2,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(0,255,135,0.20)",
-    backgroundColor: "rgba(255,255,255,0.04)",
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
   },
 
   heroTitle: {
@@ -1794,5 +2037,40 @@ const s = StyleSheet.create({
     fontSize: 9,
     fontWeight: "800",
     letterSpacing: 0.8,
+  },
+
+  ctrlDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 999,
+  },
+
+  currencyOption: {
+    borderWidth: 1,
+    borderColor: CARD_BD,
+    backgroundColor: "rgba(255,255,255,0.025)",
+    borderRadius: 2,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+
+  currencyOptionSelected: {
+    borderColor: "rgba(0,212,255,0.35)",
+    backgroundColor: "rgba(0,212,255,0.07)",
+  },
+
+  currencyOptionCode: {
+    color: T_HI,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+
+  currencyOptionMeta: {
+    color: T_DIM,
+    fontSize: 11,
+    marginTop: 2,
   },
 });
