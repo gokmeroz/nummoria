@@ -268,12 +268,12 @@ if (!isProd) {
 // Auth & consent endpoints must stay BEFORE the consent gate
 app.use("/auth", authLimiter, authRoutes);
 app.use("/consent", consentRoutes);
+app.use("/me", noCache, meRoutes);
 
 // ---- consent gate applies from here down ----
 app.use(consentGate);
 
 // Apply no-cache specifically to /me so clients never see 304 with empty body
-app.use("/me", noCache, meRoutes);
 
 // Auth-required / consent-gated app routes
 app.use("/accounts", accountRoutes);
