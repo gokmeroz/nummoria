@@ -32,3 +32,5 @@ pnpm-debug.log*
 **/android/build/
 **/.expo/
 **/.expo-shared/
+
+.claude/
