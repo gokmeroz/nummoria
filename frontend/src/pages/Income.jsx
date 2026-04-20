@@ -112,11 +112,14 @@ function useIncomeData() {
     accounts: [],
   });
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  const loadAll = useCallback(async () => {
+  const loadAll = useCallback(async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (silent) setRefreshing(true);
+      else setLoading(true);
+
       setError("");
       const [txRes, catRes, accRes] = await Promise.all([
         api.get("/transactions", { params: { type: "income" } }),
@@ -133,7 +136,8 @@ function useIncomeData() {
     } catch (e) {
       setError(e?.response?.data?.error || e.message || "Failed to load data");
     } finally {
-      setLoading(false);
+      if (silent) setRefreshing(false);
+      else setLoading(false);
     }
   }, []);
 
@@ -141,7 +145,7 @@ function useIncomeData() {
     loadAll();
   }, [loadAll]);
 
-  return { ...data, loading, error, refetch: loadAll };
+  return { ...data, loading, refreshing, error, refetch: loadAll };
 }
 
 function useDebounce(value, delay) {
@@ -659,6 +663,7 @@ const IncomeModal = React.memo(
       tagsCsv: "",
       accountId: defaultAccountId || "",
     });
+    const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
       if (open) {
@@ -688,6 +693,7 @@ const IncomeModal = React.memo(
             accountId: defaultAccountId || "",
           });
         }
+        setSubmitting(false);
       }
     }, [open, initialData, accounts, categories, defaultAccountId]);
 
@@ -696,6 +702,10 @@ const IncomeModal = React.memo(
     const handleSubmit = async () => {
       const amountMinor = majorToMinor(form.amount, form.currency);
       if (Number.isNaN(amountMinor)) return window.alert("Invalid amount");
+      if (!form.categoryId) return window.alert("Pick a category");
+      if (!form.accountId) return window.alert("Pick an account");
+      if (submitting) return;
+
       const payload = {
         accountId: form.accountId,
         categoryId: form.categoryId,
@@ -709,15 +719,28 @@ const IncomeModal = React.memo(
           .map((s) => s.trim())
           .filter(Boolean),
       };
-      if (form.nextDate)
+
+      if (form.nextDate) {
         payload.nextDate = new Date(form.nextDate).toISOString();
+      }
+
       try {
-        editing
+        setSubmitting(true);
+
+        const res = editing
           ? await api.put(`/transactions/${initialData._id}`, payload)
           : await api.post("/transactions", payload);
-        onSuccess();
+
+        onClose();
+
+        Promise.resolve(onSuccess?.(res?.data)).catch((e) => {
+          console.error("[INCOME MODAL] onSuccess failed", e);
+        });
       } catch (e) {
-        window.alert(e?.response?.data?.error || "Error");
+        console.error("[INCOME MODAL] submit failed", e);
+        window.alert(e?.response?.data?.error || e.message || "Error");
+      } finally {
+        setSubmitting(false);
       }
     };
 
@@ -753,6 +776,7 @@ const IncomeModal = React.memo(
                 ))}
               </select>
             </Field>
+
             <div className="grid grid-cols-1 md:grid-cols-[1fr_120px] gap-4">
               <Field label="Amount">
                 <input
@@ -770,6 +794,7 @@ const IncomeModal = React.memo(
                 />
               </Field>
             </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Field label="Date">
                 <input
@@ -790,6 +815,7 @@ const IncomeModal = React.memo(
                 />
               </Field>
             </div>
+
             <Field label="Category">
               <select
                 value={form.categoryId}
@@ -805,6 +831,7 @@ const IncomeModal = React.memo(
                 ))}
               </select>
             </Field>
+
             <Field label="Description">
               <input
                 value={form.description}
@@ -815,27 +842,37 @@ const IncomeModal = React.memo(
                 className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white outline-none focus:border-[#00ff87]/50"
               />
             </Field>
+
             <Field label="Tags (csv)">
               <input
                 value={form.tagsCsv}
                 onChange={(e) => setForm({ ...form, tagsCsv: e.target.value })}
                 placeholder="passive-income, dividend, etc"
-                className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white placeholder:text-white/50 outline-none focus:border-[#a78bfa]/50"
+                className="w-full border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white placeholder:text-white/50 outline-none focus:border-[#00ff87]/50"
               />
             </Field>
+
             <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
               <button
                 onClick={onClose}
-                className="px-4 py-2 text-xs font-extrabold uppercase text-white/70 hover:text-white"
+                disabled={submitting}
+                className="px-4 py-2 text-xs font-extrabold uppercase text-white/70 hover:text-white disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSubmit}
-                className="px-4 py-2 text-xs font-extrabold uppercase text-[#030508]"
+                disabled={submitting}
+                className="px-4 py-2 text-xs font-extrabold uppercase text-[#030508] disabled:opacity-50"
                 style={{ backgroundColor: MINT }}
               >
-                {editing ? "Save" : "Add"}
+                {submitting
+                  ? editing
+                    ? "Saving..."
+                    : "Adding..."
+                  : editing
+                    ? "Save"
+                    : "Add"}
               </button>
             </div>
           </div>
@@ -855,16 +892,20 @@ const AutoQuickAddModal = React.memo(
 
     useEffect(() => {
       if (open) {
-        setAccountId(defaultAccountId);
+        setAccountId(defaultAccountId || "");
         setText("");
         setNotice("");
-        setTimeout(() => inputRef.current?.focus(), 0);
+        setBusy(false);
+        const t = setTimeout(() => inputRef.current?.focus?.(), 0);
+        return () => clearTimeout(t);
       }
     }, [open, defaultAccountId]);
 
     const handleCreate = async () => {
+      if (busy) return;
       if (!accountId || !text.trim())
         return setNotice("Pick an account and enter text.");
+
       setBusy(true);
       try {
         const acc = accounts.find((a) => a._id === accountId);
@@ -875,9 +916,14 @@ const AutoQuickAddModal = React.memo(
           date: new Date().toISOString(),
           text: text.trim(),
         });
-        onSuccess();
+
+        onClose();
+
+        Promise.resolve(onSuccess?.()).catch((e) => {
+          console.error("[AUTO INCOME] onSuccess failed", e);
+        });
       } catch (e) {
-        setNotice(e?.response?.data?.error || "Auto parse failed");
+        setNotice(e?.response?.data?.error || e.message || "Auto parse failed");
       } finally {
         setBusy(false);
       }
@@ -929,14 +975,15 @@ const AutoQuickAddModal = React.memo(
             <div className="flex justify-end gap-3 pt-4">
               <button
                 onClick={onClose}
-                className="px-5 py-2 text-xs font-extrabold uppercase text-white/70"
+                disabled={busy}
+                className="px-5 py-2 text-xs font-extrabold uppercase text-white/70 disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreate}
                 disabled={busy}
-                className="px-5 py-2 text-xs font-extrabold uppercase text-[#030508]"
+                className="px-5 py-2 text-xs font-extrabold uppercase text-[#030508] disabled:opacity-50"
                 style={{ backgroundColor: CYAN }}
               >
                 {busy ? "Parsing..." : "Create"}
@@ -1036,8 +1083,16 @@ const Row = React.memo(
    MAIN SCREEN
 ───────────────────────────────────────────────────────────── */
 export default function IncomesScreen({ accountId }) {
-  const { transactions, categories, accounts, loading, error, refetch } =
-    useIncomeData();
+  const {
+    transactions,
+    categories,
+    accounts,
+    loading,
+    refreshing,
+    error,
+    refetch,
+  } = useIncomeData();
+
   const [filters, setFilters] = useState({
     fStartISO: "",
     fEndISO: "",
@@ -1197,6 +1252,7 @@ export default function IncomesScreen({ accountId }) {
     (filters.fCurrency !== "ALL"
       ? filters.fCurrency
       : distCurrencies[0] || "USD");
+
   const insights = useMemo(() => {
     const cur = currentKpiCurrency;
     const curRows = rows.filter((r) => (r.currency || "USD") === cur);
@@ -1208,6 +1264,7 @@ export default function IncomesScreen({ accountId }) {
     const minorSum = (arr) =>
       arr.reduce((acc, t) => acc + Number(t.amountMinor || 0), 0);
     const monthsPassed = now.getUTCMonth() + 1;
+
     return {
       kpis: {
         last: minorSum(
@@ -1242,9 +1299,11 @@ export default function IncomesScreen({ accountId }) {
   const upcoming = useMemo(() => {
     const today = startOfUTC(new Date());
     const map = new Map();
+
     transactions
       .filter((t) => t.type === "income" && new Date(t.date) > today)
       .forEach((t) => map.set(t._id, { ...t, __kind: "actual" }));
+
     transactions
       .filter(
         (t) =>
@@ -1259,10 +1318,55 @@ export default function IncomesScreen({ accountId }) {
         };
         if (!map.has(v._id)) map.set(v._id, v);
       });
+
     return Array.from(map.values()).sort(
       (a, b) => new Date(a.date) - new Date(b.date),
     );
   }, [transactions]);
+
+  const handleModalSuccess = useCallback(() => {
+    refetch({ silent: true }).catch((e) => {
+      console.error("[INCOMES] refetch failed", e);
+    });
+  }, [refetch]);
+
+  const handleOpenCreate = useCallback(() => {
+    setEditingData(null);
+    setModalOpen(true);
+  }, []);
+
+  const handleOpenEdit = useCallback((tx) => {
+    setEditingData(tx);
+    setModalOpen(true);
+  }, []);
+
+  const handleDelete = useCallback(
+    async (tx) => {
+      if (!window.confirm("Delete record?")) return;
+      try {
+        await api.delete(`/transactions/${tx._id}`);
+        refetch({ silent: true });
+      } catch (e) {
+        window.alert(e?.response?.data?.error || e.message || "Error");
+      }
+    },
+    [refetch],
+  );
+
+  const handleCreateCategory = async (e) => {
+    e.preventDefault();
+    if (!newCatName.trim()) return;
+    try {
+      await api.post("/categories", {
+        name: newCatName.trim(),
+        kind: "income",
+      });
+      setNewCatName("");
+      refetch({ silent: true });
+    } catch (err) {
+      window.alert(err?.response?.data?.error || "Error creating category");
+    }
+  };
 
   if (loading)
     return (
@@ -1306,6 +1410,7 @@ export default function IncomesScreen({ accountId }) {
               </p>
               <ScanLine color={MINT} className="mt-6 w-full max-w-md" />
             </div>
+
             <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={() => setShowFilters(!showFilters)}
@@ -1320,16 +1425,20 @@ export default function IncomesScreen({ accountId }) {
                 Auto Add
               </button>
               <button
-                onClick={() => {
-                  setEditingData(null);
-                  setModalOpen(true);
-                }}
+                onClick={handleOpenCreate}
                 className="px-4 py-2 bg-[#00ff87] text-[#030508] text-xs font-extrabold uppercase"
               >
                 + New Income
               </button>
+              {refreshing && (
+                <div className="inline-flex items-center border border-white/10 bg-black/40 px-3 py-2">
+                  <span className="text-xs font-bold tracking-wider text-white/60 uppercase">
+                    Refreshing...
+                  </span>
+                </div>
+              )}
               <button
-                onClick={refetch}
+                onClick={() => refetch({ silent: true })}
                 className="px-3 py-2 border border-white/10 bg-black/40"
               >
                 Refresh
@@ -1528,6 +1637,7 @@ export default function IncomesScreen({ accountId }) {
                 </div>
               ))}
             </div>
+
             <SectionCard
               title="Income Feed"
               subtitle={`${rows.length} records active`}
@@ -1541,16 +1651,8 @@ export default function IncomesScreen({ accountId }) {
                       item={item}
                       categories={categories}
                       accountsById={accountsById}
-                      onEdit={(tx) => {
-                        setEditingData(tx);
-                        setModalOpen(true);
-                      }}
-                      onDelete={async (tx) => {
-                        if (window.confirm("Delete record?")) {
-                          await api.delete(`/transactions/${tx._id}`);
-                          refetch();
-                        }
-                      }}
+                      onEdit={handleOpenEdit}
+                      onDelete={handleDelete}
                     />
                   ))
                 ) : (
@@ -1615,20 +1717,9 @@ export default function IncomesScreen({ accountId }) {
                 })}
               </div>
             </SectionCard>
+
             <SectionCard title="Categorization" accent="cyan">
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  if (!newCatName.trim()) return;
-                  await api.post("/categories", {
-                    name: newCatName.trim(),
-                    kind: "income",
-                  });
-                  setNewCatName("");
-                  refetch();
-                }}
-                className="flex gap-2 mb-4"
-              >
+              <form onSubmit={handleCreateCategory} className="flex gap-2 mb-4">
                 <input
                   value={newCatName}
                   onChange={(e) => setNewCatName(e.target.value)}
@@ -1662,20 +1753,15 @@ export default function IncomesScreen({ accountId }) {
         categories={categories}
         defaultAccountId={accountId || accounts[0]?._id}
         onClose={() => setModalOpen(false)}
-        onSuccess={() => {
-          setModalOpen(false);
-          refetch();
-        }}
+        onSuccess={handleModalSuccess}
       />
+
       <AutoQuickAddModal
         open={autoModalOpen}
         accounts={accounts}
         defaultAccountId={accountId || accounts[0]?._id}
         onClose={() => setAutoModalOpen(false)}
-        onSuccess={() => {
-          setAutoModalOpen(false);
-          refetch();
-        }}
+        onSuccess={handleModalSuccess}
       />
     </div>
   );
