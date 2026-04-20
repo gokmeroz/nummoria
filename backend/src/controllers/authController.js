@@ -16,11 +16,22 @@ console.log("🔥 NEW AUTH CONTROLLER LOADED");
 
 /* ─────────────────────────── Config & Flags ─────────────────────────── */
 
-const FRONTEND_URL_RAW = process.env.FRONTEND_URL || "http://localhost:5173";
-const FRONTEND_URL = FRONTEND_URL_RAW.replace(/\/+$/, "");
-
 const IS_DEV = process.env.NODE_ENV !== "production";
 const IS_PROD = !IS_DEV;
+
+const FRONTEND_URL_RAW = IS_PROD
+  ? process.env.FRONTEND_URL_PROD || process.env.FRONTEND_URL
+  : process.env.FRONTEND_URL || "http://localhost:5173";
+
+const BACKEND_URL_RAW = IS_PROD
+  ? process.env.BACKEND_URL_PROD || process.env.BACKEND_URL
+  : process.env.BACKEND_URL || "http://localhost:4000";
+
+const FRONTEND_URL = FRONTEND_URL_RAW.replace(/\/+$/, "");
+const BACKEND_URL = BACKEND_URL_RAW.replace(/\/+$/, "");
+
+const GOOGLE_REDIRECT_URI_RAW = process.env.GOOGLE_REDIRECT_URI || "";
+const GOOGLE_REDIRECT_URI = GOOGLE_REDIRECT_URI_RAW.replace(/\/+$/, "");
 
 const JWT_SECRET = requireEnv("JWT_SECRET");
 const CURRENT_CONSENT_VERSION = "v1";
@@ -34,8 +45,14 @@ const FORCE_EMAIL_SEND =
 const DEBUG_VERIFY = String(process.env.DEBUG_VERIFY || "false") === "true";
 
 // OAuth env
-const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI } =
-  process.env;
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+
+const GOOGLE_REDIRECT_URI = (
+  IS_PROD
+    ? process.env.GOOGLE_REDIRECT_URI_PROD || process.env.GOOGLE_REDIRECT_URI
+    : process.env.GOOGLE_REDIRECT_URI
+).replace(/\/+$/, "");
 
 // Apple OAuth env
 const {
@@ -958,14 +975,28 @@ export async function appleCallback(req, res) {
 
 export async function googleStart(req, res) {
   try {
-    const state = encodeURIComponent(sanitizeNext(req.query.next || "/"));
-    const scope = ["openid", "email", "profile"].join(" ");
+    if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REDIRECT_URI) {
+      return res.status(500).json({
+        error:
+          "Google OAuth not configured. Missing GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, or GOOGLE_REDIRECT_URI.",
+      });
+    }
+
+    const next = sanitizeNext(req.query.next || "/");
+    const state = next;
+
+    console.log("[GOOGLE START]");
+    console.log("NODE_ENV:", process.env.NODE_ENV);
+    console.log("FRONTEND_URL:", FRONTEND_URL);
+    console.log("BACKEND_URL:", BACKEND_URL);
+    console.log("GOOGLE_REDIRECT_URI:", GOOGLE_REDIRECT_URI);
+    console.log("NEXT:", next);
 
     const params = new URLSearchParams({
-      client_id: GOOGLE_CLIENT_ID,
-      redirect_uri: GOOGLE_REDIRECT_URI,
+      client_id: GOOGLE_CLIENT_ID.trim(),
+      redirect_uri: GOOGLE_REDIRECT_URI.trim(),
       response_type: "code",
-      scope,
+      scope: "openid email profile",
       access_type: "offline",
       include_granted_scopes: "true",
       prompt: "consent",
@@ -973,8 +1004,11 @@ export async function googleStart(req, res) {
     });
 
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+    console.log("GOOGLE AUTH URL:", authUrl);
+
     return res.redirect(authUrl);
   } catch (err) {
+    console.error("[GOOGLE START ERROR]", err);
     return res.status(500).json({ error: err.message });
   }
 }
@@ -982,14 +1016,28 @@ export async function googleStart(req, res) {
 export async function googleCallback(req, res) {
   try {
     const { code, state } = req.query;
-    if (!code) return res.status(400).json({ error: "Missing code" });
+
+    if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REDIRECT_URI) {
+      return res.status(500).json({
+        error:
+          "Google OAuth not configured. Missing GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, or GOOGLE_REDIRECT_URI.",
+      });
+    }
+
+    if (!code) {
+      return res.status(400).json({ error: "Missing code" });
+    }
+
+    console.log("[GOOGLE CALLBACK]");
+    console.log("NODE_ENV:", process.env.NODE_ENV);
+    console.log("GOOGLE_REDIRECT_URI:", GOOGLE_REDIRECT_URI);
 
     const tokenParams = new URLSearchParams({
-      client_id: GOOGLE_CLIENT_ID,
-      client_secret: GOOGLE_CLIENT_SECRET,
-      code,
+      client_id: GOOGLE_CLIENT_ID.trim(),
+      client_secret: GOOGLE_CLIENT_SECRET.trim(),
+      code: String(code).trim(),
       grant_type: "authorization_code",
-      redirect_uri: GOOGLE_REDIRECT_URI,
+      redirect_uri: GOOGLE_REDIRECT_URI.trim(),
     });
 
     const tokenResp = await fetch("https://oauth2.googleapis.com/token", {
@@ -997,11 +1045,14 @@ export async function googleCallback(req, res) {
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: tokenParams.toString(),
     });
+
     if (!tokenResp.ok) {
       const t = await tokenResp.text();
-      return res
-        .status(400)
-        .json({ error: "Token exchange failed", details: t });
+      console.error("[GOOGLE TOKEN EXCHANGE FAILED]", t);
+      return res.status(400).json({
+        error: "Token exchange failed",
+        details: t,
+      });
     }
 
     const tokens = await tokenResp.json();
@@ -1013,11 +1064,14 @@ export async function googleCallback(req, res) {
         headers: { Authorization: `Bearer ${access_token}` },
       },
     );
+
     if (!userResp.ok) {
       const t = await userResp.text();
-      return res
-        .status(400)
-        .json({ error: "Userinfo fetch failed", details: t });
+      console.error("[GOOGLE USERINFO FAILED]", t);
+      return res.status(400).json({
+        error: "Userinfo fetch failed",
+        details: t,
+      });
     }
 
     const profile = await userResp.json();
@@ -1046,6 +1100,8 @@ export async function googleCallback(req, res) {
           version: CURRENT_CONSENT_VERSION,
         },
       });
+
+      await seedDefaultCategoriesForUser(user._id);
     } else {
       let changed = false;
 
@@ -1064,9 +1120,6 @@ export async function googleCallback(req, res) {
         changed = true;
       }
 
-      user.lastLogin = new Date();
-      changed = true;
-
       if (!user.isEmailVerified) {
         user.isEmailVerified = true;
         user.emailVerifiedAt = new Date();
@@ -1082,6 +1135,9 @@ export async function googleCallback(req, res) {
         changed = true;
       }
 
+      user.lastLogin = new Date();
+      changed = true;
+
       if (changed) await user.save();
     }
 
@@ -1093,7 +1149,7 @@ export async function googleCallback(req, res) {
 
     setAuthCookie(res, token);
 
-    const next = sanitizeNext(state ? safeDecodeURIComponentMaybe(state) : "/");
+    const next = sanitizeNext(state || "/");
 
     const redirectTo = buildOauthRedirectUrl({
       provider: "google",
@@ -1101,8 +1157,11 @@ export async function googleCallback(req, res) {
       next,
     });
 
+    console.log("[GOOGLE CALLBACK REDIRECT TO]", redirectTo);
+
     return res.redirect(redirectTo);
   } catch (err) {
+    console.error("[GOOGLE CALLBACK ERROR]", err);
     return res.status(500).json({ error: err.message });
   }
 }
