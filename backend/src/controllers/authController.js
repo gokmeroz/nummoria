@@ -30,9 +30,6 @@ const BACKEND_URL_RAW = IS_PROD
 const FRONTEND_URL = FRONTEND_URL_RAW.replace(/\/+$/, "");
 const BACKEND_URL = BACKEND_URL_RAW.replace(/\/+$/, "");
 
-const GOOGLE_REDIRECT_URI_RAW = process.env.GOOGLE_REDIRECT_URI || "";
-const GOOGLE_REDIRECT_URI = GOOGLE_REDIRECT_URI_RAW.replace(/\/+$/, "");
-
 const JWT_SECRET = requireEnv("JWT_SECRET");
 const CURRENT_CONSENT_VERSION = "v1";
 
@@ -47,7 +44,6 @@ const DEBUG_VERIFY = String(process.env.DEBUG_VERIFY || "false") === "true";
 // OAuth env
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-
 const GOOGLE_REDIRECT_URI = (
   IS_PROD
     ? process.env.GOOGLE_REDIRECT_URI_PROD || process.env.GOOGLE_REDIRECT_URI
