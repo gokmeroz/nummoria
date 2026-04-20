@@ -35,7 +35,7 @@ export async function createTransactionCore({ userId, body }) {
     throw new Error("accountId, type, currency, and date are required");
   }
 
-  if (!mongoose.Types.ObjectId.isValid(accountId)) {
+  if (!ObjectId.isValid(accountId)) {
     console.log("[CORE] step 4 - invalid accountId", accountId);
     throw new Error("Invalid accountId");
   }
