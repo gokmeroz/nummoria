@@ -222,6 +222,9 @@ const transporter = (() => {
             port: port || 587,
             secure: !!secure,
             auth: user && pass ? { user, pass } : undefined,
+            connectionTimeout: 10000,
+            greetingTimeout: 10000,
+            socketTimeout: 10000,
           },
     );
   }
@@ -327,21 +330,47 @@ export async function register(req, res) {
       consent: normalizedConsent,
     });
 
-    if (FORCE_EMAIL_SEND) {
-      const { subject, text, html } = buildVerifyEmailMessage({
-        email: normalizedEmail,
-        code,
-      });
+if (FORCE_EMAIL_SEND) {
+  const { subject, text, html } = buildVerifyEmailMessage({
+    email: normalizedEmail,
+    code,
+  });
 
-      await sendMail({
-        to: normalizedEmail,
-        subject,
-        text,
-        html,
-      });
-    } else {
-      console.log("[VERIFY:DEV] Code for %s => %s", normalizedEmail, code);
-    }
+  console.log("[REGISTER] before sendMail", {
+    to: normalizedEmail,
+    smtpHost: process.env.SMTP_HOST,
+    smtpPort: process.env.SMTP_PORT,
+    smtpSecure: process.env.SMTP_SECURE,
+    smtpUser: process.env.SMTP_USER,
+    mailFrom: process.env.MAIL_FROM,
+  });
+
+  try {
+    const info = await sendMail({
+      to: normalizedEmail,
+      subject,
+      text,
+      html,
+    });
+
+    console.log("[REGISTER] sendMail success", {
+      to: normalizedEmail,
+      messageId: info?.messageId || null,
+    });
+  } catch (mailErr) {
+    console.error("[REGISTER] sendMail failed", {
+      message: mailErr?.message,
+      code: mailErr?.code,
+      response: mailErr?.response,
+      responseCode: mailErr?.responseCode,
+      command: mailErr?.command,
+      stack: mailErr?.stack,
+    });
+    throw mailErr;
+  }
+} else {
+  console.log("[VERIFY:DEV] Code for %s => %s", normalizedEmail, code);
+}
 
     return res.status(200).json({
       message:
