@@ -837,8 +837,23 @@ export async function appleCallback(req, res) {
     console.log("[APPLE CALLBACK]");
     console.log("REDIRECT_URI USED:", APPLE_REDIRECT_URI);
     console.log("CLIENT_ID USED:", APPLE_CLIENT_ID);
+    console.log("TEAM_ID:", APPLE_TEAM_ID);
+    console.log("KEY_ID:", APPLE_KEY_ID);
+    console.log("PRIVATE_KEY present:", !!APPLE_PRIVATE_KEY);
+    console.log("PRIVATE_KEY length:", APPLE_PRIVATE_KEY?.length);
 
-    const client_secret = await createAppleClientSecret();
+    let client_secret;
+    try {
+      client_secret = await createAppleClientSecret();
+      console.log("[APPLE] client_secret created successfully");
+    } catch (secretErr) {
+      console.error("[APPLE] createAppleClientSecret FAILED:", {
+        message: secretErr.message,
+        stack: secretErr.stack,
+        privateKeyPreview: APPLE_PRIVATE_KEY?.substring(0, 50) + "...",
+      });
+      throw secretErr;
+    }
 
     const tokenParams = new URLSearchParams({
       client_id: APPLE_CLIENT_ID,
@@ -848,6 +863,7 @@ export async function appleCallback(req, res) {
       redirect_uri: APPLE_REDIRECT_URI,
     });
 
+    console.log("[APPLE] Calling Apple token endpoint...");
     const tokenResp = await fetch("https://appleid.apple.com/auth/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -856,6 +872,7 @@ export async function appleCallback(req, res) {
 
     if (!tokenResp.ok) {
       const t = await tokenResp.text();
+      console.error("[APPLE] Token exchange failed:", t);
       return res
         .status(400)
         .json({ error: "Apple token exchange failed", details: t });
@@ -979,8 +996,15 @@ export async function appleCallback(req, res) {
 
     return res.redirect(redirectTo);
   } catch (err) {
-    console.log("[APPLE CALLBACK ERROR]", err?.message || err);
-    return res.status(500).json({ error: err.message });
+    console.error("[APPLE CALLBACK ERROR] Full error:", {
+      message: err?.message,
+      stack: err?.stack,
+      name: err?.name,
+    });
+    return res.status(500).json({
+      error: err.message || "Apple sign-in failed",
+      details: IS_DEV ? err.stack : undefined,
+    });
   }
 }
 
