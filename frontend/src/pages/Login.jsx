@@ -945,6 +945,7 @@ export default function Login() {
   const [signPassword, setSignPassword] = useState("");
   const [signErr, setSignErr] = useState("");
   const [signLoading, setSignLoading] = useState(false);
+  const [signConsent, setSignConsent] = useState(false);
 
   const [socialLoading, setSocialLoading] = useState("");
   const [socialErr, setSocialErr] = useState("");
@@ -1098,6 +1099,14 @@ export default function Login() {
     setSignErr("");
     setSignLoading(true);
 
+    if (!signConsent) {
+      setSignErr(
+        "You must accept the Terms and Privacy Policy to create an account.",
+      );
+      setSignLoading(false);
+      return;
+    }
+
     try {
       const { data } = await api.post(
         "/auth/register",
@@ -1105,6 +1114,10 @@ export default function Login() {
           name,
           email: signEmail,
           password: signPassword,
+          consent: {
+            accepted: true,
+            version: "v1",
+          },
         },
         { withCredentials: true },
       );
@@ -1442,6 +1455,14 @@ export default function Login() {
                 <span className="hud-sectionHint">Start with your email</span>
               </div>
 
+              {signErr ? (
+                <StatusCard
+                  title="SIGNUP ERROR"
+                  body={signErr}
+                  accent={DANGER}
+                />
+              ) : null}
+
               <form onSubmit={onSignup} className="hud-formBlock">
                 <label className="hud-fieldLabel">Name</label>
                 <div className="hud-inputWrap">
@@ -1491,6 +1512,57 @@ export default function Login() {
                   />
                 </div>
 
+                <div
+                  className="hud-legal"
+                  style={{ textAlign: "left", marginTop: 16 }}
+                >
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 10,
+                      cursor: "pointer",
+                      color: T_MID,
+                      lineHeight: 1.7,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={signConsent}
+                      onChange={(e) => setSignConsent(e.target.checked)}
+                      disabled={signLoading}
+                      style={{
+                        marginTop: 3,
+                        accentColor: MINT,
+                        width: 16,
+                        height: 16,
+                        flexShrink: 0,
+                      }}
+                    />
+                    <span>
+                      I agree to the{" "}
+                      <a
+                        className="hud-legalLink"
+                        href="/terms"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Terms
+                      </a>{" "}
+                      and{" "}
+                      <a
+                        className="hud-legalLink"
+                        href="/privacy"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Privacy Policy
+                      </a>
+                      .
+                    </span>
+                  </label>
+                </div>
+
                 <button
                   type="submit"
                   className={`hud-secondaryBtn ${signLoading ? "hud-disabled" : ""}`}
@@ -1499,18 +1571,6 @@ export default function Login() {
                 >
                   {signLoading ? <Spinner color={CYAN} /> : "SIGN UP"}
                 </button>
-
-                <div className="hud-legal">
-                  By continuing you agree to our{" "}
-                  <a className="hud-legalLink" href="/terms">
-                    Terms
-                  </a>{" "}
-                  and{" "}
-                  <a className="hud-legalLink" href="/privacy">
-                    Privacy Policy
-                  </a>
-                  .
-                </div>
 
                 <div className="hud-footerRow" style={{ marginTop: 16 }}>
                   <span className="hud-footerHint">

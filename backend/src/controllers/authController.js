@@ -22,6 +22,7 @@ const IS_DEV = process.env.NODE_ENV !== "production";
 const IS_PROD = !IS_DEV;
 
 const JWT_SECRET = requireEnv("JWT_SECRET");
+const CURRENT_CONSENT_VERSION = "v1";
 
 // Feature flags / dev helpers
 const SKIP_EMAIL_VERIFICATION =
@@ -99,6 +100,20 @@ function buildOauthRedirectUrl({ provider, token, next }) {
   return `${FRONTEND_URL}/oauth-callback?${qs.toString()}`;
 }
 
+function normalizeConsentInput(consentInput) {
+  const accepted = consentInput?.accepted === true;
+  const version =
+    typeof consentInput?.version === "string" && consentInput.version.trim()
+      ? consentInput.version.trim()
+      : CURRENT_CONSENT_VERSION;
+
+  return {
+    accepted,
+    version: accepted ? version : null,
+    acceptedAt: accepted ? new Date() : null,
+  };
+}
+
 /* ───────────────────────── Apple helpers ───────────────────────── */
 
 function normalizeApplePrivateKey(k = "") {
@@ -159,7 +174,7 @@ async function createAppleClientSecret() {
   return new SignJWT({})
     .setProtectedHeader({ alg: "ES256", kid: APPLE_KEY_ID })
     .setIssuer(APPLE_TEAM_ID)
-    .setSubject(APPLE_CLIENT_ID) // WEB Service ID
+    .setSubject(APPLE_CLIENT_ID)
     .setAudience("https://appleid.apple.com")
     .setIssuedAt(now)
     .setExpirationTime(exp)
@@ -264,8 +279,16 @@ function buildVerifyEmailMessage({ email, code }) {
 
 export async function register(req, res) {
   try {
-    const { email, password, name, profession, role, tz, baseCurrency } =
-      req.body;
+    const {
+      email,
+      password,
+      name,
+      profession,
+      role,
+      tz,
+      baseCurrency,
+      consent,
+    } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({
@@ -288,6 +311,8 @@ export async function register(req, res) {
     const codeHash = await bcrypt.hash(code, 10);
     const expiresAt = Date.now() + 15 * 60 * 1000;
 
+    const normalizedConsent = normalizeConsentInput(consent);
+
     const regToken = createRegToken({
       email: normalizedEmail,
       passwordHash,
@@ -299,6 +324,7 @@ export async function register(req, res) {
       codeHash,
       expiresAt,
       iat: Date.now(),
+      consent: normalizedConsent,
     });
 
     if (FORCE_EMAIL_SEND) {
@@ -439,6 +465,8 @@ export async function verifyEmail(req, res) {
       return res.status(200).json({ message: "Email already verified." });
     }
 
+    const consentData = normalizeConsentInput(data.consent);
+
     const user = await User.create({
       email: data.email,
       passwordHash: data.passwordHash,
@@ -450,7 +478,9 @@ export async function verifyEmail(req, res) {
       isEmailVerified: true,
       isActive: true,
       emailVerifiedAt: new Date(),
+      consent: consentData,
     });
+
     await seedDefaultCategoriesForUser(user._id);
 
     return res.status(201).json({
@@ -736,9 +766,7 @@ export async function appleCallback(req, res) {
         const first = userObj?.name?.firstName || "";
         const last = userObj?.name?.lastName || "";
         displayName = `${first} ${last}`.trim();
-      } catch {
-        // ignore
-      }
+      } catch {}
     }
 
     if (!appleId) {
@@ -763,6 +791,11 @@ export async function appleCallback(req, res) {
         isActive: true,
         isEmailVerified: email ? !!emailVerified : true,
         emailVerifiedAt: new Date(),
+        consent: {
+          accepted: true,
+          acceptedAt: new Date(),
+          version: CURRENT_CONSENT_VERSION,
+        },
       });
     } else {
       let changed = false;
@@ -794,6 +827,15 @@ export async function appleCallback(req, res) {
       if (!user.passwordHash) {
         const randomPw = crypto.randomBytes(32).toString("hex");
         user.passwordHash = await bcrypt.hash(randomPw, 10);
+        changed = true;
+      }
+
+      if (!user?.consent?.accepted) {
+        user.consent = {
+          accepted: true,
+          acceptedAt: new Date(),
+          version: CURRENT_CONSENT_VERSION,
+        };
         changed = true;
       }
 
@@ -909,6 +951,11 @@ export async function googleCallback(req, res) {
         isActive: true,
         isEmailVerified: true,
         emailVerifiedAt: new Date(),
+        consent: {
+          accepted: true,
+          acceptedAt: new Date(),
+          version: CURRENT_CONSENT_VERSION,
+        },
       });
     } else {
       let changed = false;
@@ -934,6 +981,15 @@ export async function googleCallback(req, res) {
       if (!user.isEmailVerified) {
         user.isEmailVerified = true;
         user.emailVerifiedAt = new Date();
+        changed = true;
+      }
+
+      if (!user?.consent?.accepted) {
+        user.consent = {
+          accepted: true,
+          acceptedAt: new Date(),
+          version: CURRENT_CONSENT_VERSION,
+        };
         changed = true;
       }
 
@@ -1022,6 +1078,11 @@ export async function appleMobile(req, res) {
         isActive: true,
         isEmailVerified: email ? !!emailVerified : true,
         emailVerifiedAt: new Date(),
+        consent: {
+          accepted: true,
+          acceptedAt: new Date(),
+          version: CURRENT_CONSENT_VERSION,
+        },
       });
     } else {
       let changed = false;
@@ -1053,6 +1114,15 @@ export async function appleMobile(req, res) {
       if (!user.passwordHash) {
         const randomPw = crypto.randomBytes(32).toString("hex");
         user.passwordHash = await bcrypt.hash(randomPw, 10);
+        changed = true;
+      }
+
+      if (!user?.consent?.accepted) {
+        user.consent = {
+          accepted: true,
+          acceptedAt: new Date(),
+          version: CURRENT_CONSENT_VERSION,
+        };
         changed = true;
       }
 
