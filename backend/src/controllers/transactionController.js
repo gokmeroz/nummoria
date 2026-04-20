@@ -194,13 +194,17 @@ export async function getTransactionById(req, res) {
 // POST /transactions
 export async function createTransaction(req, res) {
   try {
-    // NEW: delegate to shared core (manual + auto)
+    console.log("[TX CREATE] hit", req.body);
+
     const result = await createTransactionCore({
       userId: req.userId,
       body: req.body,
     });
+
+    console.log("[TX CREATE] success", result?._id || result);
     return res.status(201).json(result);
   } catch (err) {
+    console.error("[TX CREATE] failed", err);
     return res.status(400).json({ error: err.message || "Create failed" });
   }
 }
