@@ -104,8 +104,16 @@ async function applyReminderScheduling({ userId, tx }) {
     ? new Date(tx.reminder.remindAt)
     : null;
 
+  // If reminders are not enabled, do not block transaction creation
   if (!enabled || !remindAt || Number.isNaN(remindAt.getTime())) {
-    await removeTransactionReminderJob(tx._id);
+    try {
+      await removeTransactionReminderJob(tx._id);
+    } catch (err) {
+      console.error(
+        "[TX CORE] removeTransactionReminderJob failed",
+        err?.message || err,
+      );
+    }
     return;
   }
 
@@ -325,7 +333,16 @@ export async function createTransactionCore({ userId, body }) {
     txLog("created main transaction", doc?._id?.toString?.());
 
     created.push(doc.toObject());
-    await applyReminderScheduling({ userId, tx: doc });
+
+    // Do not let reminder infra block the API response
+    Promise.resolve(applyReminderScheduling({ userId, tx: doc })).catch(
+      (err) => {
+        console.error(
+          "[TX CORE] reminder scheduling failed",
+          err?.message || err,
+        );
+      },
+    );
   } catch (e) {
     txLog("main create failed", e?.message);
 
@@ -389,7 +406,15 @@ export async function createTransactionCore({ userId, body }) {
         txLog("created future copy", copy?._id?.toString?.());
 
         created.push(copy.toObject());
-        await applyReminderScheduling({ userId, tx: copy });
+
+        Promise.resolve(applyReminderScheduling({ userId, tx: copy })).catch(
+          (err) => {
+            console.error(
+              "[TX CORE] future-copy reminder scheduling failed",
+              err?.message || err,
+            );
+          },
+        );
       } catch (e2) {
         txLog("future copy failed", e2?.message);
 
