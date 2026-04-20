@@ -131,11 +131,14 @@ function useExpenseData() {
     accounts: [],
   });
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  const loadAll = useCallback(async () => {
+  const loadAll = useCallback(async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (silent) setRefreshing(true);
+      else setLoading(true);
+
       setError("");
       const [txRes, catRes, accRes] = await Promise.all([
         api.get("/transactions", { params: { type: "expense" } }),
@@ -152,7 +155,8 @@ function useExpenseData() {
     } catch (e) {
       setError(e?.response?.data?.error || e.message || "Failed to load data");
     } finally {
-      setLoading(false);
+      if (silent) setRefreshing(false);
+      else setLoading(false);
     }
   }, []);
 
@@ -160,7 +164,7 @@ function useExpenseData() {
     loadAll();
   }, [loadAll]);
 
-  return { ...data, loading, error, refetch: loadAll };
+  return { ...data, loading, refreshing, error, refetch: loadAll };
 }
 
 function useDebounce(value, delay) {
@@ -849,53 +853,43 @@ const ExpenseModal = React.memo(
 
     if (!open) return null;
 
-  const handleSubmit = async () => {
-    const amountMinor = majorToMinor(form.amount, form.currency);
-    if (Number.isNaN(amountMinor)) return window.alert("Invalid amount");
-    if (!form.categoryId) return window.alert("Pick a category");
-    if (!form.accountId) return window.alert("Pick an account");
+    const handleSubmit = async () => {
+      const amountMinor = majorToMinor(form.amount, form.currency);
+      if (Number.isNaN(amountMinor)) return window.alert("Invalid amount");
+      if (!form.categoryId) return window.alert("Pick a category");
+      if (!form.accountId) return window.alert("Pick an account");
 
-    const payload = {
-      accountId: form.accountId,
-      categoryId: form.categoryId,
-      type: "expense",
-      amountMinor,
-      currency: form.currency,
-      date: new Date(form.date).toISOString(),
-      description: form.description || null,
-      tags: form.tagsCsv
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean),
+      const payload = {
+        accountId: form.accountId,
+        categoryId: form.categoryId,
+        type: "expense",
+        amountMinor,
+        currency: form.currency,
+        date: new Date(form.date).toISOString(),
+        description: form.description || null,
+        tags: form.tagsCsv
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+      };
+
+      if (form.frequency) {
+        payload.frequency = form.frequency;
+        if (form.endDate)
+          payload.endDate = new Date(form.endDate).toISOString();
+      }
+
+      try {
+        if (!editing) {
+          await api.post("/transactions", payload);
+        } else {
+          await api.put(`/transactions/${initialData._id}`, payload);
+        }
+        onSuccess();
+      } catch (e) {
+        window.alert(e?.response?.data?.error || e.message || "Error");
+      }
     };
-
-    if (form.frequency) {
-      payload.frequency = form.frequency;
-      if (form.endDate) {
-        payload.endDate = new Date(form.endDate).toISOString();
-      }
-    }
-
-    try {
-      console.log("[EXPENSE MODAL] before post", payload);
-
-      let res;
-      if (!editing) {
-        res = await api.post("/transactions", payload);
-      } else {
-        res = await api.put(`/transactions/${initialData._id}`, payload);
-      }
-
-      console.log("[EXPENSE MODAL] after post", res?.status, res?.data);
-
-      await onSuccess();
-
-      console.log("[EXPENSE MODAL] after onSuccess");
-    } catch (e) {
-      console.error("[EXPENSE MODAL] submit failed", e);
-      window.alert(e?.response?.data?.error || e.message || "Error");
-    }
-  };
 
     const handleAccountChange = (e) => {
       const accId = e.target.value;
@@ -1105,7 +1099,7 @@ const AutoQuickAddModal = React.memo(
           return setNotice("Possible duplicate detected. Not auto-created.");
         if (data?.mode === "draft")
           return setNotice("Draft created. Review it in Drafts.");
-        await onSuccess();
+        onSuccess();
       } catch (e) {
         setNotice(e?.response?.data?.error || e.message || "Auto parse failed");
       } finally {
@@ -1330,8 +1324,15 @@ const Row = React.memo(
    MAIN SCREEN
 ───────────────────────────────────────────────────────────── */
 export default function ExpensesScreen({ accountId }) {
-  const { transactions, categories, accounts, loading, error, refetch } =
-    useExpenseData();
+  const {
+    transactions,
+    categories,
+    accounts,
+    loading,
+    refreshing,
+    error,
+    refetch,
+  } = useExpenseData();
 
   const [filters, setFilters] = useState({
     fStartISO: "",
@@ -1695,14 +1696,13 @@ export default function ExpensesScreen({ accountId }) {
     [refetch],
   );
 
-  const handleModalSuccess = useCallback(async () => {
+  const handleModalSuccess = useCallback(() => {
     setModalOpen(false);
     setAutoModalOpen(false);
-    try {
-      await refetch();
-    } catch (e) {
+
+    refetch({ silent: true }).catch((e) => {
       console.error("[EXPENSES] refetch failed", e);
-    }
+    });
   }, [refetch]);
 
   const handleSeedCategories = async () => {
@@ -1827,8 +1827,15 @@ export default function ExpensesScreen({ accountId }) {
                   + New Expense
                 </span>
               </button>
+              {refreshing && (
+                <div className="inline-flex items-center border border-white/10 bg-black/40 px-3 py-2">
+                  <span className="text-xs font-bold tracking-wider text-white/60 uppercase">
+                    Refreshing...
+                  </span>
+                </div>
+              )}
               <button
-                onClick={refetch}
+                onClick={() => refetch({ silent: true })}
                 className="inline-flex items-center border border-white/10 bg-black/40 px-3 py-2 hover:bg-white/5 transition-colors"
               >
                 <span className="text-xs font-bold tracking-wider text-white/80 uppercase">
