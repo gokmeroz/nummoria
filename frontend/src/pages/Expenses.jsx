@@ -853,43 +853,57 @@ const ExpenseModal = React.memo(
 
     if (!open) return null;
 
-    const handleSubmit = async () => {
-      const amountMinor = majorToMinor(form.amount, form.currency);
-      if (Number.isNaN(amountMinor)) return window.alert("Invalid amount");
-      if (!form.categoryId) return window.alert("Pick a category");
-      if (!form.accountId) return window.alert("Pick an account");
+  const [submitting, setSubmitting] = useState(false);
 
-      const payload = {
-        accountId: form.accountId,
-        categoryId: form.categoryId,
-        type: "expense",
-        amountMinor,
-        currency: form.currency,
-        date: new Date(form.date).toISOString(),
-        description: form.description || null,
-        tags: form.tagsCsv
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean),
-      };
+  const handleSubmit = async () => {
+    const amountMinor = majorToMinor(form.amount, form.currency);
+    if (Number.isNaN(amountMinor)) return window.alert("Invalid amount");
+    if (!form.categoryId) return window.alert("Pick a category");
+    if (!form.accountId) return window.alert("Pick an account");
+    if (submitting) return;
 
-      if (form.frequency) {
-        payload.frequency = form.frequency;
-        if (form.endDate)
-          payload.endDate = new Date(form.endDate).toISOString();
-      }
-
-      try {
-        if (!editing) {
-          await api.post("/transactions", payload);
-        } else {
-          await api.put(`/transactions/${initialData._id}`, payload);
-        }
-        onSuccess();
-      } catch (e) {
-        window.alert(e?.response?.data?.error || e.message || "Error");
-      }
+    const payload = {
+      accountId: form.accountId,
+      categoryId: form.categoryId,
+      type: "expense",
+      amountMinor,
+      currency: form.currency,
+      date: new Date(form.date).toISOString(),
+      description: form.description || null,
+      tags: form.tagsCsv
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
     };
+
+    if (form.frequency) {
+      payload.frequency = form.frequency;
+      if (form.endDate) {
+        payload.endDate = new Date(form.endDate).toISOString();
+      }
+    }
+
+    try {
+      setSubmitting(true);
+
+      const res = !editing
+        ? await api.post("/transactions", payload)
+        : await api.put(`/transactions/${initialData._id}`, payload);
+
+      // close immediately after success
+      onClose();
+
+      // background refresh, do NOT await
+      Promise.resolve(onSuccess?.(res?.data)).catch((e) => {
+        console.error("[EXPENSE MODAL] onSuccess failed", e);
+      });
+    } catch (e) {
+      console.error("[EXPENSE MODAL] submit failed", e);
+      window.alert(e?.response?.data?.error || e.message || "Error");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
     const handleAccountChange = (e) => {
       const accId = e.target.value;
@@ -1048,10 +1062,17 @@ const ExpenseModal = React.memo(
               <button
                 type="button"
                 onClick={handleSubmit}
-                className="px-4 py-2 text-xs font-extrabold tracking-wider text-[#030508] uppercase hover:opacity-80"
+                disabled={submitting}
+                className="px-4 py-2 text-xs font-extrabold tracking-wider text-[#030508] uppercase hover:opacity-80 disabled:opacity-50"
                 style={{ backgroundColor: VIOLET }}
               >
-                {editing ? "Save" : "Add"}
+                {submitting
+                  ? editing
+                    ? "Saving..."
+                    : "Adding..."
+                  : editing
+                    ? "Save"
+                    : "Add"}
               </button>
             </div>
           </div>
@@ -1697,9 +1718,6 @@ export default function ExpensesScreen({ accountId }) {
   );
 
   const handleModalSuccess = useCallback(() => {
-    setModalOpen(false);
-    setAutoModalOpen(false);
-
     refetch({ silent: true }).catch((e) => {
       console.error("[EXPENSES] refetch failed", e);
     });
