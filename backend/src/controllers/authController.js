@@ -3,7 +3,7 @@ import "../config/env.js"; // <- MUST be first
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
-import nodemailer from "nodemailer";
+import { google } from "googleapis";
 import { User } from "../models/user.js";
 import { requireEnv } from "../config/env.js";
 import { setAuthCookie, clearAuthCookie } from "../utils/cookies.js";
@@ -46,6 +46,17 @@ const {
   APPLE_PRIVATE_KEY,
   APPLE_ALLOWED_AUDIENCES,
 } = process.env;
+
+/* ───────────────────────── Gmail API Mailer env ─────────────────────── */
+
+const GMAIL_CLIENT_ID = process.env.GMAIL_CLIENT_ID;
+const GMAIL_CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET;
+const GMAIL_REFRESH_TOKEN = process.env.GMAIL_REFRESH_TOKEN;
+const GMAIL_API_REDIRECT_URI =
+  process.env.GMAIL_API_REDIRECT_URI ||
+  "https://developers.google.com/oauthplayground";
+const GMAIL_SENDER = process.env.GMAIL_SENDER || "nummoria@gmail.com";
+const MAIL_FROM = process.env.MAIL_FROM || `Nummoria <${GMAIL_SENDER}>`;
 
 /* ─────────────────────────── Small utils ────────────────────────────── */
 
@@ -201,56 +212,83 @@ async function verifyAppleIdToken(idToken) {
   return payload;
 }
 
-/* ─────────────────────────── Mailer (inline) ─────────────────────────── */
+/* ─────────────────────────── Mailer (Gmail API) ─────────────────────────── */
 
-const transporter = (() => {
-  const url = process.env.SMTP_URL;
-  const host = process.env.SMTP_HOST;
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  const port = process.env.SMTP_PORT
-    ? Number(process.env.SMTP_PORT)
-    : undefined;
-  const secure = String(process.env.SMTP_SECURE || "false") === "true";
+function toBase64Url(str) {
+  return Buffer.from(str)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
 
-  if (url || host) {
-    return nodemailer.createTransport(
-      url
-        ? url
-        : {
-            host,
-            port: port || 587,
-            secure: !!secure,
-            auth: user && pass ? { user, pass } : undefined,
-            connectionTimeout: 10000,
-            greetingTimeout: 10000,
-            socketTimeout: 10000,
-          },
-    );
-  }
+function buildRawEmail({ to, subject, text, html }) {
+  const boundary = `nummoria_${Date.now()}`;
 
-  if (IS_PROD) {
-    throw new Error(
-      "SMTP is required in production. Set SMTP_URL or SMTP_HOST/SMTP_USER/SMTP_PASS.",
-    );
-  }
+  const raw = [
+    `From: ${MAIL_FROM}`,
+    `To: ${to}`,
+    `Subject: ${subject}`,
+    "MIME-Version: 1.0",
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    "",
+    `--${boundary}`,
+    'Content-Type: text/plain; charset="UTF-8"',
+    "",
+    text || "",
+    "",
+    `--${boundary}`,
+    'Content-Type: text/html; charset="UTF-8"',
+    "",
+    html || "",
+    "",
+    `--${boundary}--`,
+  ].join("\r\n");
 
-  return {
-    sendMail: async (opts) => {
-      console.log("[MAIL:DEV-FALLBACK] Not sending real email.", {
-        to: opts.to,
-        subject: opts.subject,
-        text: opts.text,
-      });
-      return { messageId: `dev-${Date.now()}` };
-    },
-  };
-})();
-
-const MAIL_FROM = process.env.MAIL_FROM || "Nummoria <no-reply@nummoria.app>";
+  return toBase64Url(raw);
+}
 
 async function sendMail({ to, subject, text, html }) {
-  return transporter.sendMail({ from: MAIL_FROM, to, subject, text, html });
+  if (!GMAIL_CLIENT_ID || !GMAIL_CLIENT_SECRET || !GMAIL_REFRESH_TOKEN) {
+    if (IS_PROD) {
+      throw new Error(
+        "Gmail API is required in production. Missing GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, or GMAIL_REFRESH_TOKEN.",
+      );
+    }
+
+    console.log("[MAIL:DEV-FALLBACK] Not sending real email.", {
+      to,
+      subject,
+      text,
+    });
+    return { id: `dev-${Date.now()}` };
+  }
+
+  const oauth2Client = new google.auth.OAuth2(
+    GMAIL_CLIENT_ID,
+    GMAIL_CLIENT_SECRET,
+    GMAIL_API_REDIRECT_URI,
+  );
+
+  oauth2Client.setCredentials({
+    refresh_token: GMAIL_REFRESH_TOKEN,
+  });
+
+  const gmail = google.gmail({
+    version: "v1",
+    auth: oauth2Client,
+  });
+
+  const raw = buildRawEmail({ to, subject, text, html });
+
+  const response = await gmail.users.messages.send({
+    userId: "me",
+    requestBody: {
+      raw,
+    },
+  });
+
+  return response.data;
 }
 
 /* ───────────────────── Email verification helpers ───────────────────── */
@@ -344,11 +382,12 @@ export async function register(req, res) {
 
       console.log("[REGISTER] before sendMail", {
         to: normalizedEmail,
-        smtpHost: process.env.SMTP_HOST,
-        smtpPort: process.env.SMTP_PORT,
-        smtpSecure: process.env.SMTP_SECURE,
-        smtpUser: process.env.SMTP_USER,
-        mailFrom: process.env.MAIL_FROM,
+        gmailSender: GMAIL_SENDER,
+        mailFrom: MAIL_FROM,
+        hasClientId: !!GMAIL_CLIENT_ID,
+        hasClientSecret: !!GMAIL_CLIENT_SECRET,
+        hasRefreshToken: !!GMAIL_REFRESH_TOKEN,
+        redirectUri: GMAIL_API_REDIRECT_URI,
       });
 
       try {
@@ -361,15 +400,16 @@ export async function register(req, res) {
 
         console.log("[REGISTER] sendMail success", {
           to: normalizedEmail,
-          messageId: info?.messageId || null,
+          messageId: info?.id || info?.messageId || null,
         });
       } catch (mailErr) {
         console.error(
           `[REGISTER] sendMail failed ${JSON.stringify({
             message: mailErr?.message,
             code: mailErr?.code,
-            response: mailErr?.response,
-            responseCode: mailErr?.responseCode,
+            response: mailErr?.response?.data || mailErr?.response,
+            responseCode:
+              mailErr?.response?.status || mailErr?.responseCode || undefined,
             command: mailErr?.command,
             stack: mailErr?.stack,
           })}`,
@@ -391,16 +431,16 @@ export async function register(req, res) {
         : {}),
     });
   } catch (err) {
-   console.error(
-     `[REGISTER] failed ${JSON.stringify({
-       message: err?.message,
-       code: err?.code,
-       response: err?.response,
-       responseCode: err?.responseCode,
-       command: err?.command,
-       stack: err?.stack,
-     })}`,
-   );
+    console.error(
+      `[REGISTER] failed ${JSON.stringify({
+        message: err?.message,
+        code: err?.code,
+        response: err?.response?.data || err?.response,
+        responseCode: err?.response?.status || err?.responseCode || undefined,
+        command: err?.command,
+        stack: err?.stack,
+      })}`,
+    );
 
     return res.status(500).json({
       error: err.message || "Registration failed",
