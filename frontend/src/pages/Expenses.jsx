@@ -849,43 +849,53 @@ const ExpenseModal = React.memo(
 
     if (!open) return null;
 
-    const handleSubmit = async () => {
-      const amountMinor = majorToMinor(form.amount, form.currency);
-      if (Number.isNaN(amountMinor)) return window.alert("Invalid amount");
-      if (!form.categoryId) return window.alert("Pick a category");
-      if (!form.accountId) return window.alert("Pick an account");
+  const handleSubmit = async () => {
+    const amountMinor = majorToMinor(form.amount, form.currency);
+    if (Number.isNaN(amountMinor)) return window.alert("Invalid amount");
+    if (!form.categoryId) return window.alert("Pick a category");
+    if (!form.accountId) return window.alert("Pick an account");
 
-      const payload = {
-        accountId: form.accountId,
-        categoryId: form.categoryId,
-        type: "expense",
-        amountMinor,
-        currency: form.currency,
-        date: new Date(form.date).toISOString(),
-        description: form.description || null,
-        tags: form.tagsCsv
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean),
-      };
-
-      if (form.frequency) {
-        payload.frequency = form.frequency;
-        if (form.endDate)
-          payload.endDate = new Date(form.endDate).toISOString();
-      }
-
-      try {
-        if (!editing) {
-          await api.post("/transactions", payload);
-        } else {
-          await api.put(`/transactions/${initialData._id}`, payload);
-        }
-        onSuccess();
-      } catch (e) {
-        window.alert(e?.response?.data?.error || e.message || "Error");
-      }
+    const payload = {
+      accountId: form.accountId,
+      categoryId: form.categoryId,
+      type: "expense",
+      amountMinor,
+      currency: form.currency,
+      date: new Date(form.date).toISOString(),
+      description: form.description || null,
+      tags: form.tagsCsv
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
     };
+
+    if (form.frequency) {
+      payload.frequency = form.frequency;
+      if (form.endDate) {
+        payload.endDate = new Date(form.endDate).toISOString();
+      }
+    }
+
+    try {
+      console.log("[EXPENSE MODAL] before post", payload);
+
+      let res;
+      if (!editing) {
+        res = await api.post("/transactions", payload);
+      } else {
+        res = await api.put(`/transactions/${initialData._id}`, payload);
+      }
+
+      console.log("[EXPENSE MODAL] after post", res?.status, res?.data);
+
+      await onSuccess();
+
+      console.log("[EXPENSE MODAL] after onSuccess");
+    } catch (e) {
+      console.error("[EXPENSE MODAL] submit failed", e);
+      window.alert(e?.response?.data?.error || e.message || "Error");
+    }
+  };
 
     const handleAccountChange = (e) => {
       const accId = e.target.value;
@@ -1095,7 +1105,7 @@ const AutoQuickAddModal = React.memo(
           return setNotice("Possible duplicate detected. Not auto-created.");
         if (data?.mode === "draft")
           return setNotice("Draft created. Review it in Drafts.");
-        onSuccess();
+        await onSuccess();
       } catch (e) {
         setNotice(e?.response?.data?.error || e.message || "Auto parse failed");
       } finally {
@@ -1685,10 +1695,14 @@ export default function ExpensesScreen({ accountId }) {
     [refetch],
   );
 
-  const handleModalSuccess = useCallback(() => {
+  const handleModalSuccess = useCallback(async () => {
     setModalOpen(false);
     setAutoModalOpen(false);
-    refetch();
+    try {
+      await refetch();
+    } catch (e) {
+      console.error("[EXPENSES] refetch failed", e);
+    }
   }, [refetch]);
 
   const handleSeedCategories = async () => {
