@@ -364,14 +364,16 @@ export async function register(req, res) {
           messageId: info?.messageId || null,
         });
       } catch (mailErr) {
-        console.error("[REGISTER] sendMail failed", {
-          message: mailErr?.message,
-          code: mailErr?.code,
-          response: mailErr?.response,
-          responseCode: mailErr?.responseCode,
-          command: mailErr?.command,
-          stack: mailErr?.stack,
-        });
+        console.error(
+          `[REGISTER] sendMail failed ${JSON.stringify({
+            message: mailErr?.message,
+            code: mailErr?.code,
+            response: mailErr?.response,
+            responseCode: mailErr?.responseCode,
+            command: mailErr?.command,
+            stack: mailErr?.stack,
+          })}`,
+        );
         throw mailErr;
       }
     } else {
@@ -389,14 +391,16 @@ export async function register(req, res) {
         : {}),
     });
   } catch (err) {
-    console.error("[REGISTER] failed", {
-      message: err?.message,
-      code: err?.code,
-      response: err?.response,
-      responseCode: err?.responseCode,
-      command: err?.command,
-      stack: err?.stack,
-    });
+   console.error(
+     `[REGISTER] failed ${JSON.stringify({
+       message: err?.message,
+       code: err?.code,
+       response: err?.response,
+       responseCode: err?.responseCode,
+       command: err?.command,
+       stack: err?.stack,
+     })}`,
+   );
 
     return res.status(500).json({
       error: err.message || "Registration failed",
