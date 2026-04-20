@@ -12,9 +12,9 @@ export function consentGate(req, res, next) {
     return next();
   }
 
-  // existing cookie-based logic
-  const consentCookie = req.cookies?.nummoriaConsent;
-  if (consentCookie === "granted") return next();
+  // ✅ FIXED: match actual cookie name + value
+  const consentCookie = req.cookies?.nummoria_cookie_consent;
+  if (consentCookie === "yes") return next();
 
   return res.status(403).json({ error: "Consent required" });
 }
