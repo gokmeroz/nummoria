@@ -9,6 +9,8 @@ import {
   getMe,
   updateMe,
   softDeleteMe,
+  getMyConsent,
+  acceptMyConsent,
 } from "../controllers/userController.js";
 import { User } from "../models/user.js";
 
@@ -19,6 +21,10 @@ router.get("/", requireAuth, getMe);
 router.put("/", requireAuth, updateMe);
 router.delete("/", requireAuth, softDeleteMe);
 
+// ---------- consent ----------
+router.get("/consent", requireAuth, getMyConsent);
+router.post("/consent", requireAuth, acceptMyConsent);
+
 // ---------- uploads setup ----------
 const uploadDir = path.join(process.cwd(), "uploads");
 fs.mkdirSync(uploadDir, { recursive: true });
@@ -27,14 +33,13 @@ const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
     const ext = (path.extname(file.originalname || "") || ".jpg").toLowerCase();
-    // unique filename per upload to avoid stale caches; tied to userId
     cb(null, `avatar_${req.userId}_${Date.now()}${ext}`);
   },
 });
 
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (!file.mimetype?.startsWith("image/")) {
       return cb(new Error("Only image files are allowed"));
@@ -43,10 +48,9 @@ const upload = multer({
   },
 });
 
-// helper to build absolute public URL for uploaded file
 function buildPublicUrl(req, filename) {
   const base =
-    process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`; // e.g. http://localhost:4000
+    process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`;
   return `${base}/uploads/${filename}`;
 }
 
@@ -62,11 +66,10 @@ router.post(
       const newUrl = buildPublicUrl(req, req.file.filename);
       const avatarVersion = Date.now();
 
-      // best-effort: remove previous disk file if it was under /uploads
       const prev = await User.findById(req.userId).lean();
       if (prev?.avatarUrl?.includes("/uploads/")) {
         try {
-          const prevRel = prev.avatarUrl.replace(/^https?:\/\/[^/]+/, ""); // strip host
+          const prevRel = prev.avatarUrl.replace(/^https?:\/\/[^/]+/, "");
           const absPrev = path.join(process.cwd(), prevRel.replace(/^\//, ""));
           if (absPrev.startsWith(uploadDir)) fs.unlink(absPrev, () => {});
         } catch {}
@@ -89,6 +92,7 @@ router.post(
 router.delete("/avatar", requireAuth, async (req, res) => {
   try {
     const current = await User.findById(req.userId).lean();
+
     if (current?.avatarUrl?.includes("/uploads/")) {
       try {
         const rel = current.avatarUrl.replace(/^https?:\/\/[^/]+/, "");
@@ -98,6 +102,7 @@ router.delete("/avatar", requireAuth, async (req, res) => {
     }
 
     const avatarVersion = Date.now();
+
     await User.findByIdAndUpdate(
       req.userId,
       { $set: { avatarUrl: undefined, avatarVersion } },

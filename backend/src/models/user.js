@@ -62,6 +62,11 @@ const userSchema = new mongoose.Schema(
         message: "Invalid flags.",
       },
     },
+    consent: {
+      accepted: { type: Boolean, default: false },
+      acceptedAt: { type: Date, default: null },
+      version: { type: String, default: null },
+    },
   },
   { timestamps: { createdAt: "createdAt", updatedAt: false } },
 );
