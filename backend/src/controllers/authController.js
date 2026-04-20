@@ -12,6 +12,7 @@ import { seedDefaultCategoriesForUser } from "../services/categorySeedService.js
 
 // Apple Sign-In verification + client_secret JWT
 import { SignJWT, importPKCS8, createRemoteJWKSet, jwtVerify } from "jose";
+console.log("🔥 NEW AUTH CONTROLLER LOADED");
 
 /* ─────────────────────────── Config & Flags ─────────────────────────── */
 
