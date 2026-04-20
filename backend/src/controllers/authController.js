@@ -19,16 +19,30 @@ console.log("🔥 NEW AUTH CONTROLLER LOADED");
 const IS_DEV = process.env.NODE_ENV !== "production";
 const IS_PROD = !IS_DEV;
 
+// Defensive: prevent undefined.replace() crashes
 const FRONTEND_URL_RAW = IS_PROD
-  ? process.env.FRONTEND_URL_PROD || process.env.FRONTEND_URL
+  ? process.env.FRONTEND_URL_PROD ||
+    process.env.FRONTEND_URL ||
+    "https://nummoria.com"
   : process.env.FRONTEND_URL || "http://localhost:5173";
 
 const BACKEND_URL_RAW = IS_PROD
-  ? process.env.BACKEND_URL_PROD || process.env.BACKEND_URL
+  ? process.env.BACKEND_URL_PROD ||
+    process.env.BACKEND_URL ||
+    "https://api.nummoria.com"
   : process.env.BACKEND_URL || "http://localhost:4000";
 
-const FRONTEND_URL = FRONTEND_URL_RAW.replace(/\/+$/, "");
-const BACKEND_URL = BACKEND_URL_RAW.replace(/\/+$/, "");
+const FRONTEND_URL = String(FRONTEND_URL_RAW).replace(/\/+$/, "");
+const BACKEND_URL = String(BACKEND_URL_RAW).replace(/\/+$/, "");
+
+// Validate critical URLs
+if (!FRONTEND_URL || !BACKEND_URL) {
+  throw new Error("FRONTEND_URL and BACKEND_URL must be configured");
+}
+
+console.log(
+  `[ENV] IS_PROD=${IS_PROD}, FRONTEND=${FRONTEND_URL}, BACKEND=${BACKEND_URL}`,
+);
 
 const JWT_SECRET = requireEnv("JWT_SECRET");
 const CURRENT_CONSENT_VERSION = "v1";
@@ -44,10 +58,13 @@ const DEBUG_VERIFY = String(process.env.DEBUG_VERIFY || "false") === "true";
 // OAuth env
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const GOOGLE_REDIRECT_URI = (
+const GOOGLE_REDIRECT_URI = String(
   IS_PROD
-    ? process.env.GOOGLE_REDIRECT_URI_PROD || process.env.GOOGLE_REDIRECT_URI
-    : process.env.GOOGLE_REDIRECT_URI
+    ? process.env.GOOGLE_REDIRECT_URI_PROD ||
+        process.env.GOOGLE_REDIRECT_URI ||
+        `${BACKEND_URL}/auth/google/callback`
+    : process.env.GOOGLE_REDIRECT_URI ||
+        "http://localhost:4000/auth/google/callback",
 ).replace(/\/+$/, "");
 
 // Apple OAuth env
