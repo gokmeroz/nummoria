@@ -78,6 +78,8 @@ const {
   APPLE_ALLOWED_AUDIENCES,
 } = process.env;
 
+const APPLE_PRIVATE_KEY_BASE64 = process.env.APPLE_PRIVATE_KEY_BASE64;
+
 /* ───────────────────────── Gmail API Mailer env ─────────────────────── */
 
 const GMAIL_CLIENT_ID = process.env.GMAIL_CLIENT_ID;
@@ -159,7 +161,15 @@ function normalizeConsentInput(consentInput) {
 /* ───────────────────────── Apple helpers ───────────────────────── */
 
 function normalizeApplePrivateKey(k = "") {
-  return String(k).replace(/\\n/g, "\n");
+  if (APPLE_PRIVATE_KEY_BASE64) {
+    return Buffer.from(APPLE_PRIVATE_KEY_BASE64, "base64")
+      .toString("utf8")
+      .trim();
+  }
+
+  return String(k || APPLE_PRIVATE_KEY || "")
+    .replace(/\\n/g, "\n")
+    .trim();
 }
 
 function decodeJwtPayloadUnsafe(token) {
@@ -198,20 +208,29 @@ async function createAppleClientSecret() {
     !APPLE_TEAM_ID ||
     !APPLE_CLIENT_ID ||
     !APPLE_KEY_ID ||
-    !APPLE_PRIVATE_KEY
+    (!APPLE_PRIVATE_KEY_BASE64 && !APPLE_PRIVATE_KEY)
   ) {
     throw new Error(
-      "Missing Apple env. Need APPLE_TEAM_ID, APPLE_CLIENT_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY.",
+      "Missing Apple env. Need APPLE_TEAM_ID, APPLE_CLIENT_ID, APPLE_KEY_ID, and APPLE_PRIVATE_KEY_BASE64 or APPLE_PRIVATE_KEY.",
     );
   }
 
   const now = Math.floor(Date.now() / 1000);
   const exp = now + 60 * 60; // 1 hour
 
-  const pk = await importPKCS8(
-    normalizeApplePrivateKey(APPLE_PRIVATE_KEY),
-    "ES256",
-  );
+  const normalizedKey = normalizeApplePrivateKey(APPLE_PRIVATE_KEY);
+
+  console.log("[APPLE KEY CHECK]", {
+    hasBase64Env: !!APPLE_PRIVATE_KEY_BASE64,
+    hasRawEnv: !!APPLE_PRIVATE_KEY,
+    hasBegin: normalizedKey.includes("BEGIN PRIVATE KEY"),
+    hasEnd: normalizedKey.includes("END PRIVATE KEY"),
+    hasNewlines: normalizedKey.includes("\n"),
+    firstLine: normalizedKey.split("\n")[0],
+    lastLine: normalizedKey.split("\n").at(-1),
+  });
+
+  const pk = await importPKCS8(normalizedKey, "ES256");
 
   return new SignJWT({})
     .setProtectedHeader({ alg: "ES256", kid: APPLE_KEY_ID })
@@ -832,15 +851,20 @@ export async function appleCallback(req, res) {
     const code = req.body?.code || req.query?.code;
     const state = req.body?.state || req.query?.state;
 
-    if (!code) return res.status(400).json({ error: "Missing code" });
+    if (!code) {
+      return res.status(400).json({ error: "Missing code" });
+    }
 
     console.log("[APPLE CALLBACK]");
     console.log("REDIRECT_URI USED:", APPLE_REDIRECT_URI);
     console.log("CLIENT_ID USED:", APPLE_CLIENT_ID);
     console.log("TEAM_ID:", APPLE_TEAM_ID);
     console.log("KEY_ID:", APPLE_KEY_ID);
-    console.log("PRIVATE_KEY present:", !!APPLE_PRIVATE_KEY);
-    console.log("PRIVATE_KEY length:", APPLE_PRIVATE_KEY?.length);
+    console.log("APPLE_PRIVATE_KEY present:", !!APPLE_PRIVATE_KEY);
+    console.log(
+      "APPLE_PRIVATE_KEY_BASE64 present:",
+      !!APPLE_PRIVATE_KEY_BASE64,
+    );
 
     let client_secret;
     try {
@@ -848,9 +872,10 @@ export async function appleCallback(req, res) {
       console.log("[APPLE] client_secret created successfully");
     } catch (secretErr) {
       console.error("[APPLE] createAppleClientSecret FAILED:", {
-        message: secretErr.message,
-        stack: secretErr.stack,
-        privateKeyPreview: APPLE_PRIVATE_KEY?.substring(0, 50) + "...",
+        message: secretErr?.message,
+        stack: secretErr?.stack,
+        hasRawEnv: !!APPLE_PRIVATE_KEY,
+        hasBase64Env: !!APPLE_PRIVATE_KEY_BASE64,
       });
       throw secretErr;
     }
@@ -870,15 +895,19 @@ export async function appleCallback(req, res) {
       body: tokenParams.toString(),
     });
 
+    const tokenRaw = await tokenResp.text();
+    console.log("[APPLE TOKEN STATUS]", tokenResp.status);
+    console.log("[APPLE TOKEN BODY]", tokenRaw);
+
     if (!tokenResp.ok) {
-      const t = await tokenResp.text();
-      console.error("[APPLE] Token exchange failed:", t);
-      return res
-        .status(400)
-        .json({ error: "Apple token exchange failed", details: t });
+      console.error("[APPLE] Token exchange failed:", tokenRaw);
+      return res.status(400).json({
+        error: "Apple token exchange failed",
+        details: tokenRaw,
+      });
     }
 
-    const tokens = await tokenResp.json();
+    const tokens = JSON.parse(tokenRaw);
     const id_token = tokens.id_token;
 
     if (!id_token) {
@@ -902,7 +931,9 @@ export async function appleCallback(req, res) {
         const first = userObj?.name?.firstName || "";
         const last = userObj?.name?.lastName || "";
         displayName = `${first} ${last}`.trim();
-      } catch {}
+      } catch {
+        console.log("[APPLE] Failed to parse optional user profile payload");
+      }
     }
 
     if (!appleId) {
@@ -933,6 +964,8 @@ export async function appleCallback(req, res) {
           version: CURRENT_CONSENT_VERSION,
         },
       });
+
+      await seedDefaultCategoriesForUser(user._id);
     } else {
       let changed = false;
 
