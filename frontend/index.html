@@ -3,65 +3,86 @@
   <head>
     <!-- BASIC -->
     <meta charset="UTF-8" />
-
-    <!-- ✅ FAVICONS (CRITICAL FIX) -->
-    <link rel="icon" href="/favicon.ico" sizes="any" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
-    <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
+    <!-- FAVICONS - All files exist in /public/ -->
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/android-chrome-192x192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/android-chrome-512x512.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
     <!-- PRIMARY SEO -->
-    <title>Nummoria — AI Personal Finance Tracker & Advisor</title>
+    <title>Nummoria — AI-Powered Personal Finance Platform</title>
     <meta
       name="description"
-      content="Nummoria is an AI-powered personal finance tracker and advisor that helps you manage expenses, income, and investments while delivering actionable insights to improve your financial decisions."
+      content="Nummoria is an AI-powered personal finance platform that helps you track spending, manage income and investments, and make smarter financial decisions with real-time insights and automation."
     />
     <meta name="robots" content="index, follow" />
 
     <!-- BRAND SIGNAL -->
     <meta
       name="keywords"
-      content="Nummoria, AI finance app, personal finance tracker, expense tracker, investment tracker, fintech app"
+      content="Nummoria, AI finance platform, personal finance tracker, expense tracker, investment tracker, fintech app"
     />
 
     <!-- OPEN GRAPH -->
-    <meta
-      property="og:title"
-      content="Nummoria — AI Personal Finance Tracker & Advisor"
-    />
+    <meta property="og:title" content="Nummoria — AI-Powered Personal Finance Platform" />
     <meta
       property="og:description"
-      content="Track expenses, manage investments, and get AI-powered financial insights with Nummoria."
+      content="Track spending, manage investments, and make smarter financial decisions with AI-powered insights."
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://nummoria.com" />
-    <meta
-      property="og:image"
-      content="https://nummoria.com/nummoria_logo.png"
-    />
+    <meta property="og:image" content="https://nummoria.com/nummoria_logo.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Nummoria Logo" />
 
     <!-- TWITTER -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta
-      name="twitter:title"
-      content="Nummoria — AI Personal Finance Tracker & Advisor"
-    />
+    <meta name="twitter:title" content="Nummoria — AI-Powered Personal Finance Platform" />
     <meta
       name="twitter:description"
-      content="Track expenses, manage investments, and get AI-powered financial insights with Nummoria."
+      content="Track spending, manage investments, and make smarter financial decisions with AI-powered insights."
     />
-    <meta
-      name="twitter:image"
-      content="https://nummoria.com/nummoria_logo.png"
-    />
+    <meta name="twitter:image" content="https://nummoria.com/nummoria_logo.png" />
 
     <!-- CANONICAL -->
     <link rel="canonical" href="https://nummoria.com/" />
 
     <!-- THEME -->
     <meta name="theme-color" content="#030508" />
+
+    <!-- STRUCTURED DATA - ORGANIZATION (Shows "Nummoria" instead of domain) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "Nummoria",
+      "url": "https://nummoria.com",
+      "logo": "https://nummoria.com/nummoria_logo.png"
+    }
+    </script>
+
+    <!-- STRUCTURED DATA - WEB APPLICATION (Rich results) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Nummoria",
+      "applicationCategory": "FinanceApplication",
+      "description": "AI-powered personal finance platform",
+      "url": "https://nummoria.com",
+      "operatingSystem": "Web",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      }
+    }
+    </script>
   </head>
 
   <body>
