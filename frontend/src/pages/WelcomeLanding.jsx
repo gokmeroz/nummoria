@@ -1979,17 +1979,17 @@ export default function NummoriasLanding() {
         >
           {[
             [
-              "01",
+              "1",
               "Add entries (fast)",
               "Log expenses, income, and investments. Manual entry or imports. Multi-currency supported.",
             ],
             [
-              "02",
+              "2",
               "Get a clear snapshot",
               "Your totals, trends, and allocation in one dashboard. No scattered spreadsheets.",
             ],
             [
-              "03",
+              "3",
               "Ask AI, get tradeoffs",
               "AI explains what changed, why it matters, and what action improves your goal.",
             ],
