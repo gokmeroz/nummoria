@@ -12,6 +12,7 @@ import React, {
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   FlatList,
   Modal,
   KeyboardAvoidingView,
@@ -24,37 +25,51 @@ import {
   TouchableOpacity,
   View,
   Image,
+  Animated,
+  Easing,
 } from "react-native";
 import TextRecognition from "@react-native-ml-kit/text-recognition";
 import { useNavigation } from "@react-navigation/native";
 import { CameraView, useCameraPermissions } from "expo-camera";
-
+import { LinearGradient } from "expo-linear-gradient";
+import * as Haptics from "expo-haptics";
 import api from "../lib/api";
 import logo from "../../assets/nummoria_logo.png";
 
-/* ──────────────────────────────────────────────────────────
-   THEME — synced with DashboardScreen cyberpunk HUD
-────────────────────────────────────────────────────────── */
-const BG = "#030508";
-const MINT = "#00ff87";
-const CYAN = "#00d4ff";
-const VIOLET = "#a78bfa";
-const CARD_BG = "rgba(255,255,255,0.025)";
-const CARD_BD = "rgba(255,255,255,0.07)";
-const T_HI = "#e2e8f0";
-const T_MID = "rgba(226,232,240,0.55)";
-const T_DIM = "rgba(226,232,240,0.32)";
-
-/* legacy aliases so business-logic helpers compile unchanged */
-const TEXT_PRIMARY = T_HI;
-const TEXT_MUTED = T_MID;
-const TEXT_SOFT = T_DIM;
-const SECONDARY = MINT;
+/* ─────────────────────────────────────────────────────────────
+   CONSTANTS & THEME
+───────────────────────────────────────────────────────────── */
+const BG       = "#030508";
+const MINT     = "#00ff87";
+const CYAN     = "#00d4ff";
+const VIOLET   = "#a78bfa";
+const NEON_PALETTE = [MINT, CYAN, VIOLET, "#ff007c", "#facc15", "#ff7300"];
+const CARD_BG  = "rgba(255,255,255,0.025)";
+const CARD_BD  = "rgba(255,255,255,0.07)";
+const T_HI     = "#e2e8f0";
+const T_MID    = "rgba(226,232,240,0.55)";
+const T_DIM    = "rgba(226,232,240,0.32)";
 const DATE_LANG = "en-US";
 
-/* ──────────────────────────────────────────────────────────
-   DATE HELPERS  (unchanged)
-────────────────────────────────────────────────────────── */
+const EXPENSE_CATEGORY_OPTIONS = [
+  "Rent", "Housing Payments & Maintenance", "Debt Payments", "Transportation",
+  "Health & Medical", "Utilities", "Groceries", "Dining Out", "Education",
+  "Miscellaneous", "Entertainment", "Travel", "Gifts & Donations",
+  "Personal Care", "Shopping", "Subscriptions", "Taxes", "Insurance",
+  "Business Expenses", "Other Expense",
+];
+
+const FREQ_OPTIONS = [
+  { label: "None",    value: "" },
+  { label: "Daily",   value: "daily" },
+  { label: "Weekly",  value: "weekly" },
+  { label: "Monthly", value: "monthly" },
+  { label: "Yearly",  value: "yearly" },
+];
+
+/* ─────────────────────────────────────────────────────────────
+   DATE HELPERS
+───────────────────────────────────────────────────────────── */
 function startOfUTC(dateLike) {
   const d = new Date(dateLike);
   d.setUTCHours(0, 0, 0, 0);
@@ -77,22 +92,19 @@ function addMonthsUTC(dateLike, n) {
   );
 }
 function fmtDateUTC(dateLike) {
-  const d = new Date(dateLike);
-  return d.toLocaleDateString(DATE_LANG, {
+  return new Date(dateLike).toLocaleDateString(DATE_LANG, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   });
 }
 
-/* ──────────────────────────────────────────────────────────
-   MONEY HELPERS  (unchanged)
-────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────
+   MONEY HELPERS
+───────────────────────────────────────────────────────────── */
 function decimalsForCurrency(code) {
-  const zero = new Set(["JPY", "KRW", "CLP", "VND"]);
-  const three = new Set(["BHD", "IQD", "JOD", "KWD", "OMR", "TND"]);
-  if (zero.has(code)) return 0;
-  if (three.has(code)) return 3;
+  if (new Set(["JPY", "KRW", "CLP", "VND"]).has(code)) return 0;
+  if (new Set(["BHD", "IQD", "JOD", "KWD", "OMR", "TND"]).has(code)) return 3;
   return 2;
 }
 function majorToMinor(amountStr, currency) {
@@ -111,9 +123,9 @@ const fmtMoney = (minor, cur = "USD") =>
     currency: cur || "USD",
   }).format((minor || 0) / Math.pow(10, decimalsForCurrency(cur || "USD")));
 
-/* ──────────────────────────────────────────────────────────
-   RECEIPT HELPERS  (unchanged)
-────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────
+   RECEIPT HELPERS
+───────────────────────────────────────────────────────────── */
 function parseReceiptFromQR(data) {
   if (!data || typeof data !== "string") return null;
   let amount, currency, dateStr, description;
@@ -135,11 +147,10 @@ function parseReceiptFromQR(data) {
     if (m) currency = m[1].toUpperCase();
   }
   if (!dateStr) {
-    const iso = data.match(/(\d{4}-\d{2}-\d{2})/);
-    const eu = data.match(/(\d{2}\.\d{2}\.\d{4})/);
-    if (iso) {
-      dateStr = iso[1];
-    } else if (eu) {
+    const iso = data.match(/(\d{4}-\d{2}-\d{2})/),
+      eu = data.match(/(\d{2}\.\d{2}\.\d{4})/);
+    if (iso) dateStr = iso[1];
+    else if (eu) {
       const [dd, mm, yyyy] = eu[1].split(".");
       dateStr = `${yyyy}-${mm}-${dd}`;
     }
@@ -155,13 +166,13 @@ function parseReceiptFromQR(data) {
 
 function parseReceiptFromText(rawText) {
   if (!rawText) return null;
-  const textRaw = String(rawText);
-  const text = textRaw.replace(/\s+/g, " ").toUpperCase();
+  const textRaw = String(rawText),
+    text = textRaw.replace(/\s+/g, " ").toUpperCase();
   const totalRegex =
     /(GENEL TOPLAM|TOPLAM|TOPLAM TUTAR|ÖDENECEK|ODENECEK|TOTAL|GRAND TOTAL|AMOUNT)[^\d]*([0-9]+[.,][0-9]{2})/;
   const totalMatch = text.match(totalRegex);
   let amount = null;
-  if (totalMatch && totalMatch[2]) {
+  if (totalMatch?.[2]) {
     amount = totalMatch[2].replace(",", ".");
   } else {
     const allMoney = [...text.matchAll(/([0-9]{1,6}[.,][0-9]{2})/g)].map(
@@ -183,11 +194,10 @@ function parseReceiptFromText(rawText) {
   else if (/\b(EUR|€)\b/.test(text)) currency = "EUR";
   else if (/\b(GBP|£)\b/.test(text)) currency = "GBP";
   let dateStr = null;
-  const iso = text.match(/(\d{4}[-/.]\d{2}[-/.]\d{2})/);
-  const eu = text.match(/(\d{2}[-/.]\d{2}[-/.]\d{4})/);
-  if (iso) {
-    dateStr = iso[1].replace(/\./g, "-").replace(/\//g, "-");
-  } else if (eu) {
+  const iso = text.match(/(\d{4}[-/.]\d{2}[-/.]\d{2})/),
+    eu = text.match(/(\d{2}[-/.]\d{2}[-/.]\d{4})/);
+  if (iso) dateStr = iso[1].replace(/\./g, "-").replace(/\//g, "-");
+  else if (eu) {
     const [dd, mm, yyyy] = eu[1].split(/[./-]/);
     dateStr = `${yyyy}-${mm}-${dd}`;
   }
@@ -216,9 +226,9 @@ function parseReceiptFromText(rawText) {
   };
 }
 
-/* ──────────────────────────────────────────────────────────
-   CATEGORY INFERENCE  (unchanged)
-────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────
+   CATEGORY INFERENCE
+───────────────────────────────────────────────────────────── */
 function normalizeKey(s) {
   return String(s || "")
     .toLowerCase()
@@ -290,9 +300,9 @@ function inferCategoryIdFromReceipt({ seller, rawText }, categories) {
   return pickCategoryIdByName(categories, ["other", "misc", "general"]) || "";
 }
 
-/* ──────────────────────────────────────────────────────────
-   HUD PRIMITIVES  (mirrors DashboardScreen)
-────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────
+   HUD PRIMITIVES & COMPONENTS
+───────────────────────────────────────────────────────────── */
 function Brackets({ color = MINT, size = 10, thick = 1.5 }) {
   const defs = [
     {
@@ -335,12 +345,132 @@ function Brackets({ color = MINT, size = 10, thick = 1.5 }) {
               width: size,
               height: size,
               borderColor: color,
+              shadowColor: color,
+              shadowOffset: { width: 0, height: 0 },
+              shadowOpacity: 0.5,
+              shadowRadius: 3,
             },
             d,
           ]}
         />
       ))}
     </>
+  );
+}
+
+function HoloCard({
+  title,
+  subtitle,
+  right,
+  children,
+  accent = "violet",
+  containerStyle,
+}) {
+  const AC = {
+    violet: {
+      col: VIOLET,
+      from: "rgba(167,139,250,0.08)",
+      to: "rgba(167,139,250,0.01)",
+    },
+    cyan: {
+      col: CYAN,
+      from: "rgba(0,212,255,0.08)",
+      to: "rgba(0,212,255,0.01)",
+    },
+    mint: {
+      col: MINT,
+      from: "rgba(0,255,135,0.08)",
+      to: "rgba(0,255,135,0.01)",
+    },
+  }[accent] || {
+    col: VIOLET,
+    from: "rgba(167,139,250,0.08)",
+    to: "rgba(167,139,250,0.01)",
+  };
+
+  return (
+    <LinearGradient
+      colors={[AC.from, AC.to]}
+      style={[s.holoCard, containerStyle]}
+    >
+      <Brackets color={AC.col} size={12} thick={1.5} />
+      <View
+        style={[
+          s.sectionHairline,
+          {
+            backgroundColor: AC.col,
+            shadowColor: AC.col,
+            shadowOpacity: 0.8,
+            shadowRadius: 4,
+          },
+        ]}
+      />
+
+      {(title || right) && (
+        <View style={s.sectionHeaderRow}>
+          <View style={{ flex: 1 }}>
+            {title && <Text style={s.sectionTitle}>{title}</Text>}
+            {subtitle && <Text style={s.sectionSubtitle}>{subtitle}</Text>}
+          </View>
+          {right && <View style={{ marginLeft: 8 }}>{right}</View>}
+        </View>
+      )}
+      {children}
+    </LinearGradient>
+  );
+}
+
+function PulseButton({ onPress, color = MINT, icon }) {
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.15,
+          duration: 1500,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1500,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+  }, [pulseAnim]);
+
+  return (
+    <TouchableOpacity
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        onPress();
+      }}
+      activeOpacity={0.8}
+      style={s.pulseWrap}
+    >
+      <Animated.View
+        style={[
+          s.pulseRing,
+          {
+            borderColor: color,
+            transform: [{ scale: pulseAnim }],
+            opacity: pulseAnim.interpolate({
+              inputRange: [1, 1.15],
+              outputRange: [0.6, 0],
+            }),
+          },
+        ]}
+      />
+      <LinearGradient
+        colors={[`${color}99`, `${color}33`]}
+        style={[s.fabCore, { borderColor: color }]}
+      >
+        <Text style={s.fabIcon}>{icon}</Text>
+      </LinearGradient>
+    </TouchableOpacity>
   );
 }
 
@@ -375,7 +505,7 @@ function ScanLine({ color = MINT, style: extra }) {
 }
 
 function GridBG() {
-  const { width, height } = require("react-native").Dimensions.get("window");
+  const { width, height } = Dimensions.get("window");
   const COLS = 10,
     ROWS = 22,
     cw = width / COLS,
@@ -422,17 +552,6 @@ function GridBG() {
       <View
         style={{
           position: "absolute",
-          top: height * 0.44,
-          left: 0,
-          right: 0,
-          height: 1,
-          backgroundColor: CYAN,
-          opacity: 0.06,
-        }}
-      />
-      <View
-        style={{
-          position: "absolute",
           bottom: 0,
           left: 0,
           right: 0,
@@ -445,9 +564,6 @@ function GridBG() {
   );
 }
 
-/* ──────────────────────────────────────────────────────────
-   CHIP
-────────────────────────────────────────────────────────── */
 function Chip({ label, selected, onPress, small, accent = MINT }) {
   return (
     <TouchableOpacity
@@ -455,7 +571,7 @@ function Chip({ label, selected, onPress, small, accent = MINT }) {
       style={[
         s.chip,
         small && s.chipSmall,
-        selected && [s.chipSelected, { borderColor: accent + "55" }],
+        selected && [s.chipSelected, { borderColor: `${accent}55` }],
       ]}
       activeOpacity={0.75}
     >
@@ -474,116 +590,287 @@ function Chip({ label, selected, onPress, small, accent = MINT }) {
   );
 }
 
-/* ──────────────────────────────────────────────────────────
-   STAT CARD
-────────────────────────────────────────────────────────── */
-function StatCard({
-  title,
-  value,
-  accent = "expense",
-  chipText = "THIS MONTH",
-}) {
-  const accentMap = {
-    expense: {
-      color: VIOLET,
-      glow: "rgba(167,139,250,0.10)",
-      bd: "rgba(167,139,250,0.22)",
-    },
-    neutral: {
-      color: CYAN,
-      glow: "rgba(0,212,255,0.09)",
-      bd: "rgba(0,212,255,0.22)",
-    },
-    green: {
-      color: MINT,
-      glow: "rgba(0,255,135,0.08)",
-      bd: "rgba(0,255,135,0.22)",
-    },
-  };
-  const a = accentMap[accent] || accentMap.neutral;
+function MetricCard({ label, value, accent = "cyan" }) {
+  const color = { violet: VIOLET, cyan: CYAN, mint: MINT }[accent] || CYAN;
+  const bd = {
+    violet: "rgba(167,139,250,0.22)",
+    cyan: "rgba(0,212,255,0.22)",
+    mint: "rgba(0,255,135,0.22)",
+  }[accent];
+  const bg = {
+    violet: "rgba(167,139,250,0.04)",
+    cyan: "rgba(0,212,255,0.04)",
+    mint: "rgba(0,255,135,0.04)",
+  }[accent];
   return (
-    <View style={[s.statCard, { borderColor: a.bd, backgroundColor: a.glow }]}>
-      <Brackets color={a.color} size={9} thick={1.5} />
-      <View style={[s.statHairline, { backgroundColor: a.color }]} />
-      <View style={[s.statBadge, { borderColor: a.bd }]}>
-        <View style={[s.statBadgeDot, { backgroundColor: a.color }]} />
-        <Text style={[s.statBadgeTxt, { color: a.color }]}>{chipText}</Text>
-      </View>
-      <Text style={s.statLabel}>{title}</Text>
-      <Text style={[s.statValue, { color: a.color }]}>{value}</Text>
-      <ScanLine color={a.color} style={{ marginTop: 12 }} />
-      <Text style={s.statHint}>Updated from filters</Text>
+    <View style={[s.metricCard, { borderColor: bd, backgroundColor: bg }]}>
+      <Brackets color={color} size={6} thick={1} />
+      <Text style={s.metricLabel}>{label}</Text>
+      <Text style={[s.metricValue, { color }]} numberOfLines={1}>
+        {value}
+      </Text>
     </View>
   );
 }
 
-/* ══════════════════════════════════════════════════════════
-   SCREEN
-══════════════════════════════════════════════════════════ */
+function CurrencyPill({ currencies, value, onChange, accent = CYAN }) {
+  if (!currencies || currencies.length <= 1) {
+    return (
+      <View style={[s.currPill, { borderColor: `${accent}44` }]}>
+        <View style={[s.currPillDot, { backgroundColor: accent }]} />
+        <Text style={[s.currPillTxt, { color: accent }]}>
+          {value || currencies?.[0] || "USD"}
+        </Text>
+      </View>
+    );
+  }
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={{ gap: 4 }}
+    >
+      {currencies.map((c) => (
+        <TouchableOpacity
+          key={c}
+          onPress={() => onChange(c)}
+          style={[
+            s.currPill,
+            {
+              borderColor: c === value ? `${accent}88` : `${accent}22`,
+              backgroundColor: c === value ? `${accent}14` : "transparent",
+            },
+          ]}
+          activeOpacity={0.75}
+        >
+          {c === value && (
+            <View style={[s.currPillDot, { backgroundColor: accent }]} />
+          )}
+          <Text
+            style={[s.currPillTxt, { color: c === value ? accent : T_DIM }]}
+          >
+            {c}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+  );
+}
+
+function BarChart({ data, currency }) {
+  if (!data || data.length === 0) {
+    return <Text style={s.chartEmpty}>No data for this month.</Text>;
+  }
+  const maxMinor = Math.max(...data.map((d) => d.minor), 1);
+  return (
+    <View style={s.barChartWrap}>
+      {data.map((item, i) => {
+        const pct = item.minor / maxMinor;
+        return (
+          <View key={i} style={s.barRow}>
+            <Text style={s.barLabel} numberOfLines={1}>
+              {item.name}
+            </Text>
+            <View style={s.barTrackWrap}>
+              <View style={s.barTrack}>
+                <View
+                  style={[
+                    s.barFill,
+                    {
+                      width: `${Math.max(pct * 100, 2)}%`,
+                      backgroundColor: VIOLET,
+                      opacity: 0.4 + pct * 0.6,
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+            <Text style={s.barValue} numberOfLines={1}>
+              {fmtMoney(item.minor, currency)}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function DistributionList({ data, currency }) {
+  if (!data || data.length === 0) {
+    return <Text style={s.chartEmpty}>No distribution data.</Text>;
+  }
+  const total = data.reduce((a, d) => a + d.minor, 0) || 1;
+  return (
+    <View>
+      <View style={s.distTotalRow}>
+        <Text style={s.distTotalLabel}>TOTAL</Text>
+        <Text style={[s.distTotalValue, { color: CYAN }]}>
+          {fmtMoney(total, currency)}
+        </Text>
+      </View>
+      <ScanLine color={CYAN} style={{ marginBottom: 10 }} />
+      {data.map((item, i) => {
+        const color = NEON_PALETTE[i % NEON_PALETTE.length];
+        const pct = Math.round((item.minor / total) * 100);
+        return (
+          <View key={i} style={s.distRow}>
+            <View style={[s.distColorBar, { backgroundColor: color }]} />
+            <View style={s.distContent}>
+              <View style={s.distTopRow}>
+                <Text style={s.distName} numberOfLines={1}>
+                  {item.name}
+                </Text>
+                <Text style={[s.distPct, { color }]}>{pct}%</Text>
+                <Text style={[s.distAmount, { color }]} numberOfLines={1}>
+                  {fmtMoney(item.minor, currency)}
+                </Text>
+              </View>
+              <View style={s.distBarTrack}>
+                <View
+                  style={[
+                    s.distBarFill,
+                    { width: `${Math.max(pct, 2)}%`, backgroundColor: color },
+                  ]}
+                />
+              </View>
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function CyberNode({ label, selected, onPress, accent }) {
+  return (
+    <TouchableOpacity 
+      onPress={onPress} 
+      activeOpacity={0.75}
+      style={[
+        s.cNode, 
+        selected && { borderColor: accent, backgroundColor: `${accent}15` }
+      ]}
+    >
+      {selected && <View style={[s.cNodeGlow, { backgroundColor: accent }]} />}
+      <Text style={[s.cNodeTxt, selected && { color: accent, fontWeight: "800" }]}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+function FilterDataRow({ label, val, set, opts, accent }) {
+  return (
+    <View style={s.cRowWrap}>
+      <Text style={s.cRowLabel}>{label}</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.cRowScroll} keyboardShouldPersistTaps="handled">
+        {opts.map((o) => (
+          <CyberNode 
+            key={o._id} 
+            label={o.label} 
+            selected={val === o._id} 
+            onPress={() => set(o._id)} 
+            accent={accent} 
+          />
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   MAIN SCREEN
+───────────────────────────────────────────────────────────── */
 export default function ExpensesScreen({ route }) {
   const navigation = useNavigation();
   const scrollRef = useRef(null);
   const accountId = route?.params?.accountId;
 
+  /* ── data ── */
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
   const [accounts, setAccounts] = useState([]);
-  const [autoOpen, setAutoOpen] = useState(false);
-  const [autoText, setAutoText] = useState("");
-  const [autoAccountId, setAutoAccountId] = useState("");
-  const [autoLoading, setAutoLoading] = useState(false);
-  const [scanProcessing, setScanProcessing] = useState(false);
   const [initialDone, setInitialDone] = useState(false);
   const [err, setErr] = useState("");
+
+  /* ── filters ── */
   const [q, setQ] = useState("");
   const [fAccountId, setFAccountId] = useState("ALL");
   const [fCategoryId, setFCategoryId] = useState("ALL");
   const [fCurrency, setFCurrency] = useState("ALL");
+  const [fTag, setFTag] = useState("ALL");
+  const [minAmount, setMinAmount] = useState("");
+  const [maxAmount, setMaxAmount] = useState("");
+  const [minDate, setMinDate] = useState("");
+  const [maxDate, setMaxDate] = useState("");
   const [sortKey, setSortKey] = useState("date_desc");
-  const [showUpcoming, setShowUpcoming] = useState(false);
   const [datePreset, setDatePreset] = useState("ALL");
+
+  /* ── ui state ── */
+  const [showUpcoming, setShowUpcoming] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
+
+  /* ── per-section currency pickers ── */
+  const [kpiCurrency, setKpiCurrency] = useState("");
+  const [barCurrency, setBarCurrency] = useState("");
+  const [distCurrency, setDistCurrency] = useState("");
+
+  /* ── expense modal ── */
   const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState(null);
+  const [editingData, setEditingData] = useState(null);
   const [form, setForm] = useState({
     amount: "",
     currency: "USD",
     date: new Date().toISOString().slice(0, 10),
-    nextDate: "",
+    frequency: "",
+    endDate: "",
     categoryId: "",
     description: "",
     tagsCsv: "",
     accountId: "",
   });
+
+  /* ── auto-add modal ── */
+  const [autoOpen, setAutoOpen] = useState(false);
+  const [autoText, setAutoText] = useState("");
+  const [autoAccountId, setAutoAccountId] = useState("");
+  const [autoLoading, setAutoLoading] = useState(false);
+
+  /* ── scanner ── */
   const [scannerVisible, setScannerVisible] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
-  const [permission, requestPermission] = useCameraPermissions();
+  const [scanProcessing, setScanProcessing] = useState(false);
   const [facing, setFacing] = useState("back");
   const [flash, setFlash] = useState("off");
+  const [permission, requestPermission] = useCameraPermissions();
   const scannedOnceRef = useRef(false);
   const cameraRef = useRef(null);
   const ocrBusyRef = useRef(false);
 
-  const categoriesById = useMemo(() => {
-    const m = new Map();
-    for (const c of categories) m.set(c._id, c);
-    return m;
-  }, [categories]);
-  const accountsById = useMemo(() => {
-    const m = new Map();
-    for (const a of accounts) m.set(a._id, a);
-    return m;
-  }, [accounts]);
+  /* ── derived lookups ── */
+  const categoriesById = useMemo(
+    () => new Map(categories.map((c) => [c._id, c])),
+    [categories],
+  );
+  const accountsById = useMemo(
+    () => new Map(accounts.map((a) => [a._id, a])),
+    [accounts],
+  );
   const defaultAccountId = accounts[0]?._id || "";
 
-  const currencies = useMemo(() => {
-    const s = new Set(
-      transactions
-        .filter((t) => t.type === "expense" && !t.isDeleted)
-        .map((t) => t.currency || "USD"),
-    );
-    return ["ALL", ...Array.from(s)];
+  /* ── dynamic tags extractor ── */
+  const allTags = useMemo(() => {
+    const tags = new Set();
+    transactions.forEach((t) => {
+      if (t.type === "expense" && !t.isDeleted && t.tags) {
+        t.tags.forEach((tag) => tags.add(tag.toLowerCase()));
+      }
+    });
+    return Array.from(tags).sort();
   }, [transactions]);
 
+  /* ── load ── */
   const loadAll = useCallback(async () => {
     try {
       setErr("");
@@ -610,6 +897,9 @@ export default function ExpensesScreen({ route }) {
     loadAll();
   }, [loadAll]);
 
+  /* ─────────────────────────────────────────────────────────
+     FILTERING
+  ───────────────────────────────────────────────────────── */
   function passesDateFilter(dateStr, preset) {
     if (preset === "ALL") return true;
     const txDate = startOfUTC(new Date(dateStr));
@@ -629,6 +919,21 @@ export default function ExpensesScreen({ route }) {
     return true;
   }
 
+  const clearFilters = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setQ("");
+    setFAccountId("ALL");
+    setFCategoryId("ALL");
+    setFCurrency("ALL");
+    setFTag("ALL");
+    setMinAmount("");
+    setMaxAmount("");
+    setMinDate("");
+    setMaxDate("");
+    setDatePreset("ALL");
+    setSortKey("date_desc");
+  };
+
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const filtered = transactions.filter((t) => {
@@ -639,7 +944,37 @@ export default function ExpensesScreen({ route }) {
         return false;
       if (fCurrency !== "ALL" && (t.currency || "USD") !== fCurrency)
         return false;
+
+      if (fTag !== "ALL") {
+        const lowerTags = (t.tags || []).map((x) => x.toLowerCase());
+        if (!lowerTags.includes(fTag)) return false;
+      }
+
+      const txMajor =
+        Number(t.amountMinor || 0) /
+        Math.pow(10, decimalsForCurrency(t.currency || "USD"));
+      if (minAmount !== "") {
+        const minNode = parseFloat(minAmount);
+        if (!isNaN(minNode) && txMajor < minNode) return false;
+      }
+      if (maxAmount !== "") {
+        const maxNode = parseFloat(maxAmount);
+        if (!isNaN(maxNode) && txMajor > maxNode) return false;
+      }
+
+      // Custom Date Check
+      if (minDate.length >= 10) {
+        const dMin = startOfUTC(minDate);
+        if (!isNaN(dMin.getTime()) && new Date(t.date) < dMin) return false;
+      }
+      if (maxDate.length >= 10) {
+        const dMax = new Date(maxDate);
+        dMax.setUTCHours(23, 59, 59, 999);
+        if (!isNaN(dMax.getTime()) && new Date(t.date) > dMax) return false;
+      }
+
       if (!passesDateFilter(t.date, datePreset)) return false;
+
       if (needle) {
         const hay =
           `${t.description || ""} ${t.notes || ""} ${categoriesById.get(t.categoryId)?.name || ""} ${accountsById.get(t.accountId)?.name || ""} ${(t.tags || []).join(" ")}`.toLowerCase();
@@ -647,28 +982,25 @@ export default function ExpensesScreen({ route }) {
       }
       return true;
     });
+
     filtered.sort((a, b) => {
       switch (sortKey) {
         case "date_asc":
           return new Date(a.date) - new Date(b.date);
-        case "amount_desc": {
-          const av =
-            Number(a.amountMinor || 0) /
-            Math.pow(10, decimalsForCurrency(a.currency || "USD"));
-          const bv =
+        case "amount_desc":
+          return (
             Number(b.amountMinor || 0) /
-            Math.pow(10, decimalsForCurrency(b.currency || "USD"));
-          return bv - av;
-        }
-        case "amount_asc": {
-          const av =
+              Math.pow(10, decimalsForCurrency(b.currency || "USD")) -
             Number(a.amountMinor || 0) /
-            Math.pow(10, decimalsForCurrency(a.currency || "USD"));
-          const bv =
+              Math.pow(10, decimalsForCurrency(a.currency || "USD"))
+          );
+        case "amount_asc":
+          return (
+            Number(a.amountMinor || 0) /
+              Math.pow(10, decimalsForCurrency(a.currency || "USD")) -
             Number(b.amountMinor || 0) /
-            Math.pow(10, decimalsForCurrency(b.currency || "USD"));
-          return av - bv;
-        }
+              Math.pow(10, decimalsForCurrency(b.currency || "USD"))
+          );
         default:
           return new Date(b.date) - new Date(a.date);
       }
@@ -680,12 +1012,38 @@ export default function ExpensesScreen({ route }) {
     fAccountId,
     fCategoryId,
     fCurrency,
+    fTag,
+    minAmount,
+    maxAmount,
+    minDate,
+    maxDate,
     categoriesById,
     accountsById,
     sortKey,
     datePreset,
   ]);
 
+  /* ─────────────────────────────────────────────────────────
+     AVAILABLE CURRENCIES
+  ───────────────────────────────────────────────────────── */
+  const distCurrencies = useMemo(
+    () => [...new Set(rows.map((t) => t.currency || "USD"))],
+    [rows],
+  );
+
+  const currentKpiCurrency = distCurrencies.includes(kpiCurrency)
+    ? kpiCurrency
+    : distCurrencies[0] || "USD";
+  const currentBarCurrency = distCurrencies.includes(barCurrency)
+    ? barCurrency
+    : distCurrencies[0] || "USD";
+  const currentDistCurrency = distCurrencies.includes(distCurrency)
+    ? distCurrency
+    : distCurrencies[0] || "USD";
+
+  /* ─────────────────────────────────────────────────────────
+     TOTALS
+  ───────────────────────────────────────────────────────── */
   const totals = useMemo(() => {
     const byCur = {};
     for (const t of rows) {
@@ -700,149 +1058,253 @@ export default function ExpensesScreen({ route }) {
     }));
   }, [rows]);
 
+  /* ─────────────────────────────────────────────────────────
+     UPCOMING — 12-month horizon
+  ───────────────────────────────────────────────────────── */
   const upcoming = useMemo(() => {
     const today = startOfUTC(new Date());
-    const keyOf = (t) =>
+    const horizon = addMonthsUTC(today, 12);
+    const keyOf = (t, vDate) =>
       [
         t.accountId,
         t.categoryId,
         t.type,
         t.amountMinor,
         t.currency,
-        startOfUTC(t.date).toISOString(),
-        (t.description || "").trim(),
+        vDate.toISOString(),
       ].join("|");
     const map = new Map();
-    for (const t of transactions) {
-      if (t.type !== "expense" || t.isDeleted) continue;
-      if (new Date(t.date) > today)
-        map.set(keyOf(t), { ...t, __kind: "actual" });
-    }
-    for (const t of transactions) {
-      if (t.type !== "expense" || !t.nextDate || t.isDeleted) continue;
-      const nd = new Date(t.nextDate);
-      if (nd <= today) continue;
-      const v = {
-        ...t,
-        _id: `virtual-${t._id}`,
-        date: nd.toISOString(),
-        __kind: "virtual",
-        __parentId: t._id,
-      };
-      if (!map.has(keyOf(v))) map.set(keyOf(v), v);
-    }
-    const needle = q.trim().toLowerCase();
-    const arr = Array.from(map.values()).filter((t) => {
-      if (fAccountId !== "ALL" && String(t.accountId) !== String(fAccountId))
-        return false;
-      if (fCategoryId !== "ALL" && String(t.categoryId) !== String(fCategoryId))
-        return false;
-      if (fCurrency !== "ALL" && (t.currency || "USD") !== fCurrency)
-        return false;
-      if (!passesDateFilter(t.date, datePreset)) return false;
-      if (needle) {
-        const hay =
-          `${t.description || ""} ${t.notes || ""} ${categoriesById.get(t.categoryId)?.name || ""} ${accountsById.get(t.accountId)?.name || ""} ${(t.tags || []).join(" ")}`.toLowerCase();
-        if (!hay.includes(needle)) return false;
-      }
-      return true;
-    });
-    arr.sort((a, b) => new Date(a.date) - new Date(b.date));
-    return arr;
-  }, [
-    transactions,
-    q,
-    fAccountId,
-    fCategoryId,
-    fCurrency,
-    categoriesById,
-    accountsById,
-    datePreset,
-  ]);
 
-  const { statsCurrency, kpis, noteMixedCurrency } = useMemo(() => {
-    const chosen = fCurrency !== "ALL" ? fCurrency : rows[0]?.currency || "USD";
-    const byCur = rows.filter((r) => r.currency === chosen);
+    for (const t of transactions) {
+      if (t.type !== "expense") continue;
+      const txDate = new Date(t.date);
+
+      if (txDate > today) map.set(keyOf(t, txDate), { ...t, __kind: "actual" });
+
+      if (t.frequency) {
+        let nextVDate = new Date(t.date);
+        const eDate = t.endDate ? new Date(t.endDate) : new Date("2099-01-01");
+
+        const advance = (d) => {
+          const nd = new Date(d);
+          if (t.frequency === "daily") nd.setUTCDate(nd.getUTCDate() + 1);
+          else if (t.frequency === "weekly") nd.setUTCDate(nd.getUTCDate() + 7);
+          else if (t.frequency === "monthly")
+            nd.setUTCMonth(nd.getUTCMonth() + 1);
+          else if (t.frequency === "yearly")
+            nd.setUTCFullYear(nd.getUTCFullYear() + 1);
+          return nd;
+        };
+
+        nextVDate = advance(nextVDate);
+        while (nextVDate <= today) nextVDate = advance(nextVDate);
+
+        while (nextVDate <= horizon && nextVDate <= eDate) {
+          const v = {
+            ...t,
+            _id: `virtual-${t._id}-${nextVDate.getTime()}`,
+            date: nextVDate.toISOString(),
+            __kind: "virtual",
+            __parentId: t._id,
+          };
+          map.set(keyOf(v, nextVDate), v);
+          nextVDate = advance(nextVDate);
+        }
+      }
+    }
+    return Array.from(map.values()).sort(
+      (a, b) => new Date(a.date) - new Date(b.date),
+    );
+  }, [transactions]);
+
+  /* ─────────────────────────────────────────────────────────
+     KPI INSIGHTS
+  ───────────────────────────────────────────────────────── */
+  const insights = useMemo(() => {
+    const chosen = currentKpiCurrency;
+    const filteredByCur = rows.filter((r) => r.currency === chosen);
     const now = new Date();
+    const thisStart = startOfMonthUTC(now),
+      thisEnd = endOfMonthUTC(now);
+    const lastStart = startOfMonthUTC(addMonthsUTC(now, -1)),
+      lastEnd = endOfMonthUTC(addMonthsUTC(now, -1));
+    const minorSum = (arr) =>
+      arr.reduce((acc, t) => acc + Number(t.amountMinor || 0), 0);
     const within = (arr, s, e) =>
       arr.filter((t) => {
         const d = new Date(t.date);
         return d >= s && d <= e;
       });
-    const minSum = (arr) =>
-      arr.reduce((acc, t) => acc + Number(t.amountMinor || 0), 0);
-    const passed = now.getUTCMonth() + 1;
+    const monthsPassed = now.getUTCMonth() + 1;
     let yearMinor = 0;
-    for (let m = 0; m < passed; m++) {
+    for (let m = 0; m < monthsPassed; m++) {
       const ref = new Date(Date.UTC(now.getUTCFullYear(), m, 1));
-      yearMinor += minSum(
-        within(byCur, startOfMonthUTC(ref), endOfMonthUTC(ref)),
+      yearMinor += minorSum(
+        within(filteredByCur, startOfMonthUTC(ref), endOfMonthUTC(ref)),
       );
     }
     return {
       statsCurrency: chosen,
       kpis: {
-        last: minSum(
-          within(
-            byCur,
-            startOfMonthUTC(addMonthsUTC(now, -1)),
-            endOfMonthUTC(addMonthsUTC(now, -1)),
-          ),
-        ),
-        this: minSum(within(byCur, startOfMonthUTC(now), endOfMonthUTC(now))),
-        yearlyAvg: passed ? Math.round(yearMinor / passed) : 0,
+        last: minorSum(within(filteredByCur, lastStart, lastEnd)),
+        this: minorSum(within(filteredByCur, thisStart, thisEnd)),
+        yearlyAvg: monthsPassed ? Math.round(yearMinor / monthsPassed) : 0,
       },
-      noteMixedCurrency: fCurrency === "ALL",
+      noteMixed: fCurrency === "ALL",
     };
-  }, [rows, fCurrency]);
+  }, [rows, currentKpiCurrency, fCurrency]);
 
-  const spendingByCategory = useMemo(() => {
-    if (!rows.length) return [];
-    const map = new Map();
-    for (const t of rows) {
-      if (t.currency !== statsCurrency) continue;
-      const key = t.categoryId || "UNCAT";
-      map.set(key, (map.get(key) || 0) + Number(t.amountMinor || 0));
-    }
-    const entries = Array.from(map.entries()).filter(([, sum]) => sum > 0);
-    if (!entries.length) return [];
-    const total = entries.reduce((acc, [, s]) => acc + s, 0);
-    entries.sort((a, b) => b[1] - a[1]);
-    return entries.slice(0, 5).map(([catId, sum]) => ({
-      catId,
-      catName: categoriesById.get(catId)?.name || "Other",
-      major: sum / Math.pow(10, decimalsForCurrency(statsCurrency || "USD")),
-      pct: total ? Math.round((sum / total) * 100) : 0,
-    }));
-  }, [rows, statsCurrency, categoriesById]);
+  /* ─────────────────────────────────────────────────────────
+     BAR CHART DATA & DISTRIBUTION
+  ───────────────────────────────────────────────────────── */
+  const barChartData = useMemo(() => {
+    const now = new Date(),
+      thisStart = startOfMonthUTC(now),
+      thisEnd = endOfMonthUTC(now);
+    const curRows = rows.filter(
+      (r) =>
+        (r.currency || "USD") === currentBarCurrency &&
+        new Date(r.date) >= thisStart &&
+        new Date(r.date) <= thisEnd,
+    );
+    const catMap = new Map();
+    for (const t of curRows)
+      catMap.set(
+        t.categoryId || "—",
+        (catMap.get(t.categoryId || "—") || 0) + Number(t.amountMinor || 0),
+      );
+    return Array.from(catMap.entries())
+      .map(([cid, minor]) => ({
+        name: categoriesById.get(cid)?.name || "—",
+        minor,
+      }))
+      .sort((a, b) => b.minor - a.minor);
+  }, [rows, currentBarCurrency, categoriesById]);
 
-  const dailySeries = useMemo(() => {
-    const today = startOfUTC(new Date());
-    const days = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(today);
-      d.setUTCDate(d.getUTCDate() - i);
-      days.push({ key: d.toISOString().slice(0, 10), date: d });
-    }
-    const sums = new Map();
-    for (const t of rows) {
-      if (t.currency !== statsCurrency) continue;
-      const key = startOfUTC(new Date(t.date)).toISOString().slice(0, 10);
-      sums.set(key, (sums.get(key) || 0) + Number(t.amountMinor || 0));
-    }
-    const points = days.map((d) => ({
-      label: d.date.toLocaleDateString(DATE_LANG, {
-        month: "2-digit",
-        day: "2-digit",
-      }),
-      value:
-        (sums.get(d.key) || 0) /
-        Math.pow(10, decimalsForCurrency(statsCurrency || "USD")),
-    }));
-    return { points, max: points.reduce((m, p) => Math.max(m, p.value), 0) };
-  }, [rows, statsCurrency]);
+  const distributionData = useMemo(() => {
+    const curRows = rows.filter(
+      (r) => (r.currency || "USD") === currentDistCurrency,
+    );
+    const pieMap = new Map();
+    for (const t of curRows)
+      pieMap.set(
+        t.categoryId || "—",
+        (pieMap.get(t.categoryId || "—") || 0) + Number(t.amountMinor || 0),
+      );
+    const total = Array.from(pieMap.values()).reduce((a, b) => a + b, 0) || 1;
+    return Array.from(pieMap.entries())
+      .map(([cid, minor]) => ({
+        name: categoriesById.get(cid)?.name || "—",
+        minor,
+        pct: minor / total,
+      }))
+      .sort((a, b) => b.minor - a.minor);
+  }, [rows, currentDistCurrency, categoriesById]);
 
-  /* ── actions ── */
+  /* ─────────────────────────────────────────────────────────
+     ACTIONS
+  ───────────────────────────────────────────────────────── */
+  function openCreate() {
+    const aId = accountId || accounts[0]?._id || "";
+    const cur = accounts.find((a) => a._id === aId)?.currency || "USD";
+    setEditingData(null);
+    setForm({
+      amount: "",
+      currency: cur,
+      date: new Date().toISOString().slice(0, 10),
+      frequency: "",
+      endDate: "",
+      categoryId: categories[0]?._id || "",
+      description: "",
+      tagsCsv: "",
+      accountId: aId,
+    });
+    setModalOpen(true);
+  }
+
+  function openEdit(tx) {
+    setEditingData(tx);
+    setForm({
+      amount: minorToMajor(tx.amountMinor, tx.currency),
+      currency: tx.currency,
+      date: new Date(tx.date).toISOString().slice(0, 10),
+      frequency: tx.frequency || "",
+      endDate: tx.endDate
+        ? new Date(tx.endDate).toISOString().slice(0, 10)
+        : "",
+      categoryId: tx.categoryId || "",
+      description: tx.description || "",
+      tagsCsv: (tx.tags || []).join(", "),
+      accountId: tx.accountId || accountId || accounts[0]?._id || "",
+    });
+    setModalOpen(true);
+  }
+
+  async function softDelete(tx) {
+    Alert.alert("Delete expense?", "This action cannot be undone.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await api.delete(`/transactions/${tx._id}`);
+            setTransactions((prev) =>
+              prev.filter((t) => String(t._id) !== String(tx._id)),
+            );
+          } catch (e) {
+            Alert.alert(
+              "Error",
+              e?.response?.data?.error || e.message || "Delete failed",
+            );
+          }
+        },
+      },
+    ]);
+  }
+
+  const handleSeedCategories = async () => {
+    Alert.alert("Seed Categories", "Add all standard expense categories?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Seed",
+        onPress: async () => {
+          try {
+            const existingNames = new Set(categories.map((c) => c.name));
+            for (const name of EXPENSE_CATEGORY_OPTIONS) {
+              if (!existingNames.has(name))
+                await api.post("/categories", { name, kind: "expense" });
+            }
+            loadAll();
+          } catch (e) {
+            Alert.alert(
+              "Error",
+              e?.response?.data?.error || "Error seeding categories",
+            );
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleCreateCategory = async () => {
+    if (!newCatName.trim()) return;
+    try {
+      await api.post("/categories", {
+        name: newCatName.trim(),
+        kind: "expense",
+      });
+      setNewCatName("");
+      loadAll();
+    } catch (e) {
+      Alert.alert(
+        "Error",
+        e?.response?.data?.error || "Error creating category",
+      );
+    }
+  };
+
+  /* ── auto-add ── */
   const openAutoAdd = useCallback(() => {
     setAutoAccountId(accountId || defaultAccountId || "");
     setAutoText("");
@@ -877,131 +1339,7 @@ export default function ExpensesScreen({ route }) {
     }
   }, [autoText, autoAccountId, accountId, defaultAccountId, loadAll]);
 
-  function openCreate() {
-    const aId = accountId || accounts[0]?._id || "";
-    const cur = accounts.find((a) => a._id === aId)?.currency || "USD";
-    setEditing(null);
-    setForm({
-      amount: "",
-      currency: cur,
-      date: new Date().toISOString().slice(0, 10),
-      nextDate: "",
-      categoryId: categories[0]?._id || "",
-      description: "",
-      tagsCsv: "",
-      accountId: aId,
-    });
-    setModalOpen(true);
-  }
-  function openCreateSeed(seed) {
-    setEditing(null);
-    setForm({
-      amount: minorToMajor(seed.amountMinor, seed.currency),
-      currency: seed.currency,
-      date: new Date(seed.date).toISOString().slice(0, 10),
-      nextDate: "",
-      categoryId: seed.categoryId || "",
-      description: seed.description || "",
-      tagsCsv: (seed.tags || []).join(", "),
-      accountId: seed.accountId || accountId || accounts[0]?._id || "",
-    });
-    setModalOpen(true);
-  }
-  function openEdit(tx) {
-    setEditing(tx);
-    setForm({
-      amount: minorToMajor(tx.amountMinor, tx.currency),
-      currency: tx.currency,
-      date: new Date(tx.date).toISOString().slice(0, 10),
-      nextDate: tx.nextDate
-        ? new Date(tx.nextDate).toISOString().slice(0, 10)
-        : "",
-      categoryId: tx.categoryId || "",
-      description: tx.description || "",
-      tagsCsv: (tx.tags || []).join(", "),
-      accountId: tx.accountId || accountId || accounts[0]?._id || "",
-    });
-    setModalOpen(true);
-  }
-  async function softDelete(tx) {
-    Alert.alert("Delete expense?", "This action can't be undone.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await api.delete(`/transactions/${tx._id}`);
-            setTransactions((prev) =>
-              prev.filter((t) => String(t._id) !== String(tx._id)),
-            );
-          } catch (e) {
-            Alert.alert(
-              "Error",
-              e?.response?.data?.error || e.message || "Error deleting",
-            );
-          }
-        },
-      },
-    ]);
-  }
-  async function addVirtual(v) {
-    try {
-      const { data } = await api.post("/transactions", {
-        accountId: v.accountId,
-        categoryId: v.categoryId,
-        type: "expense",
-        amountMinor: v.amountMinor,
-        currency: v.currency,
-        date: new Date(v.date).toISOString(),
-        description: v.description || null,
-        tags: v.tags || [],
-      });
-      if (v.__kind === "virtual" && v.__parentId) {
-        try {
-          const { data: p } = await api.put(`/transactions/${v.__parentId}`, {
-            nextDate: null,
-          });
-          setTransactions((prev) =>
-            prev.map((t) => (String(t._id) === String(p._id) ? p : t)),
-          );
-        } catch {}
-      }
-      const created = Array.isArray(data?.created) ? data.created : [data];
-      setTransactions((prev) => [...created, ...prev]);
-    } catch (e) {
-      Alert.alert(
-        "Error",
-        e?.response?.data?.error || e.message || "Add failed",
-      );
-    }
-  }
-  async function deleteUpcoming(item) {
-    if (item.__kind === "virtual") {
-      try {
-        const { data } = await api.put(`/transactions/${item.__parentId}`, {
-          nextDate: null,
-        });
-        setTransactions((prev) =>
-          prev.map((t) => (String(t._id) === String(data._id) ? data : t)),
-        );
-      } catch (e) {
-        Alert.alert(
-          "Error",
-          e?.response?.data?.error || e.message || "Delete failed",
-        );
-      }
-    } else {
-      await softDelete(item);
-    }
-  }
-  const openUpcomingAuto = useCallback(() => {
-    setShowUpcoming(true);
-    requestAnimationFrame(() =>
-      scrollRef.current?.scrollTo({ y: 0, animated: true }),
-    );
-  }, []);
-
+  /* ── scanner helpers ── */
   async function parseReceiptViaBackend(photoUri) {
     const fd = new FormData();
     fd.append("file", {
@@ -1012,6 +1350,7 @@ export default function ExpensesScreen({ route }) {
     const res = await api.post("/receipt/parse", fd, { timeout: 30000 });
     return res?.data || null;
   }
+
   function applyParsedToForm(parsed, rawTextForCategory) {
     const pickedAccId = form.accountId || accountId || accounts[0]?._id || "";
     const pickedAccCur =
@@ -1038,6 +1377,7 @@ export default function ExpensesScreen({ route }) {
         inferredCategoryId || prev.categoryId || categories[0]?._id || "",
     }));
   }
+
   const runSmartScanFromPhoto = useCallback(
     async (photoUri, { receiptId } = {}) => {
       let rawText = "",
@@ -1153,7 +1493,9 @@ export default function ExpensesScreen({ route }) {
     setIsScanning(false);
   }, [permission, requestPermission]);
 
-  /* ── row renderer ── */
+  /* ─────────────────────────────────────────────────────────
+     RENDER HELPERS
+  ───────────────────────────────────────────────────────── */
   function renderRow({ item }) {
     const catName =
       categories.find((c) => c._id === item.categoryId)?.name || "—";
@@ -1199,6 +1541,23 @@ export default function ExpensesScreen({ route }) {
         {item.tags?.length ? (
           <Text style={s.rowTags}>#{item.tags.join("  #")}</Text>
         ) : null}
+        {item.frequency && (
+          <View
+            style={[
+              s.badge,
+              {
+                alignSelf: "flex-start",
+                marginTop: 6,
+                borderColor: `rgba(0,212,255,0.2)`,
+                backgroundColor: `rgba(0,212,255,0.05)`,
+              },
+            ]}
+          >
+            <Text style={[s.badgeTxt, { color: CYAN }]}>
+              {item.frequency.toUpperCase()}
+            </Text>
+          </View>
+        )}
         <ScanLine color={VIOLET} style={{ marginTop: 10, marginBottom: 8 }} />
         <View style={s.rowActions}>
           <TouchableOpacity
@@ -1220,58 +1579,429 @@ export default function ExpensesScreen({ route }) {
     );
   }
 
-  /* ── expense modal ── */
-  const ExpenseModal = useCallback(() => {
+  function HeaderSection() {
+    const activeCatName =
+      fCategoryId === "ALL"
+        ? "ALL_CATS"
+        : categoriesById.get(fCategoryId)?.name || "CAT";
+    const activeAccName =
+      fAccountId === "ALL"
+        ? "ALL_ACCS"
+        : accountsById.get(fAccountId)?.name || "ACC";
+    const activePeriod = datePreset === "ALL" ? "INF_LOOP" : datePreset;
+    const activeReadout = `ACTV // ${activeAccName} · ${activeCatName} · ${fCurrency} · ${activePeriod}`;
+
+    return (
+      <HoloCard accent="cyan" containerStyle={{ marginBottom: 0 }}>
+        <View style={s.topBar}>
+          <View style={s.logoRow}>
+            <View style={[s.statusDot, { backgroundColor: CYAN }]} />
+            <Text style={s.logoTxt}>EXPENSE LEDGER</Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => navigation.navigate("Dashboard")}
+            activeOpacity={0.8}
+            style={[s.homeBtn, { borderColor: "rgba(0,212,255,0.20)" }]}
+          >
+            <Image source={logo} style={s.homeBtnImg} />
+            <Brackets color={CYAN} size={7} thick={1} />
+          </TouchableOpacity>
+        </View>
+
+        <Text style={s.heroTitle}>Expense{"\n"}Control</Text>
+        <Text style={s.heroSub}>
+          Review spending, spot patterns, and keep your outflow decision-ready.
+        </Text>
+        <ScanLine color={CYAN} style={{ marginTop: 12, marginBottom: 14 }} />
+
+        <View style={s.controlsRow}>
+          <TouchableOpacity
+            style={[
+              s.ctrlPill,
+              {
+                borderColor: showFilters ? `${MINT}55` : `${CYAN}33`,
+                backgroundColor: showFilters ? `${MINT}15` : "transparent",
+                flex: 1,
+              },
+            ]}
+            onPress={() => setShowFilters(!showFilters)}
+            activeOpacity={0.75}
+          >
+            <View
+              style={[
+                s.ctrlDot,
+                { backgroundColor: showFilters ? MINT : CYAN },
+              ]}
+            />
+            <Text style={[s.ctrlTxt, { color: showFilters ? MINT : CYAN }]}>
+              {showFilters ? "SYS_RDY" : "FILTER"}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.ctrlPill, { borderColor: `${VIOLET}33` }]}
+            onPress={() => setShowUpcoming((v) => !v)}
+            activeOpacity={0.75}
+          >
+            <View style={[s.ctrlDot, { backgroundColor: VIOLET }]} />
+            <Text style={[s.ctrlTxt, { color: VIOLET }]}>UPCOMING</Text>
+            <View style={s.upcomingBadge}>
+              <Text style={s.upcomingBadgeTxt}>{upcoming.length}</Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.ctrlPill, { borderColor: `${MINT}22` }]}
+            onPress={loadAll}
+            activeOpacity={0.75}
+          >
+            <View style={[s.ctrlDot, { backgroundColor: MINT }]} />
+            <Text style={[s.ctrlTxt, { color: MINT }]}>REFRESH</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={s.cyberLinkBox}>
+          <ScanLine
+            color={CYAN}
+            style={{
+              position: "absolute",
+              top: -1,
+              left: 10,
+              right: 10,
+              opacity: 0.3,
+            }}
+          />
+          <View style={s.cyberSearchRow}>
+            <View style={[s.cyberBlinker, { backgroundColor: CYAN }]} />
+            <TextInput
+              value={q}
+              onChangeText={setQ}
+              placeholder="INPUT_QUERY..."
+              placeholderTextColor={"rgba(226,232,240,0.40)"}
+              style={s.cyberSearchInput}
+            />
+          </View>
+
+          {!showFilters && (
+            <View style={s.cyberReadoutRow}>
+              <Text style={s.cyberReadoutTxt} numberOfLines={1}>
+                {activeReadout}
+              </Text>
+            </View>
+          )}
+
+          {showFilters && (
+            <View style={s.cyberMatrix}>
+              <Brackets color={MINT} size={6} thick={1} />
+
+              <FilterDataRow
+                label="NODE"
+                val={fAccountId}
+                set={setFAccountId}
+                accent={CYAN}
+                opts={[
+                  { _id: "ALL", label: "ALL_ACCS" },
+                  ...accounts.map((a) => ({ _id: a._id, label: a.name })),
+                ]}
+              />
+              <FilterDataRow
+                label="TYPE"
+                val={fCategoryId}
+                set={setFCategoryId}
+                accent={VIOLET}
+                opts={[
+                  { _id: "ALL", label: "ALL_CATS" },
+                  ...categories.map((c) => ({ _id: c._id, label: c.name })),
+                ]}
+              />
+
+              {/* TAGS FILTER - Extracted Dynamically */}
+              {allTags.length > 0 && (
+                <FilterDataRow
+                  label="TAGS"
+                  val={fTag}
+                  set={setFTag}
+                  accent={MINT}
+                  opts={[
+                    { _id: "ALL", label: "ALL_TAGS" },
+                    ...allTags.map((tag) => ({
+                      _id: tag,
+                      label: `#${tag.toUpperCase()}`,
+                    })),
+                  ]}
+                />
+              )}
+
+              <FilterDataRow
+                label="CRED"
+                val={fCurrency}
+                set={setFCurrency}
+                accent={CYAN}
+                opts={[
+                  { _id: "ALL", label: "ALL_CCY" },
+                  ...[
+                    ...new Set(transactions.map((t) => t.currency || "USD")),
+                  ].map((c) => ({ _id: c, label: c })),
+                ]}
+              />
+              <FilterDataRow
+                label="TIME"
+                val={datePreset}
+                set={setDatePreset}
+                accent={VIOLET}
+                opts={[
+                  { _id: "ALL", label: "INF_LOOP" },
+                  { _id: "THIS_MONTH", label: "CUR_CYC" },
+                  { _id: "LAST_MONTH", label: "PRV_CYC" },
+                  { _id: "LAST_90", label: "-90_CYC" },
+                ]}
+              />
+              <FilterDataRow
+                label="SORT"
+                val={sortKey}
+                set={setSortKey}
+                accent={MINT}
+                opts={[
+                  { _id: "date_desc", label: "LATEST" },
+                  { _id: "date_asc", label: "OLDEST" },
+                  { _id: "amount_desc", label: "MAX_VOL" },
+                  { _id: "amount_asc", label: "MIN_VOL" },
+                ]}
+              />
+
+              {/* AMOUNT RANGE FILTER */}
+              <View style={s.cRowWrap}>
+                <Text style={s.cRowLabel}>RANGE</Text>
+                <View style={{ flexDirection: "row", gap: 8, flex: 1 }}>
+                  <TextInput
+                    value={minAmount}
+                    onChangeText={setMinAmount}
+                    placeholder="MIN AMT"
+                    keyboardType="numeric"
+                    placeholderTextColor={T_DIM}
+                    style={[
+                      s.modalInput,
+                      {
+                        flex: 1,
+                        paddingVertical: 6,
+                        fontSize: 11,
+                        backgroundColor: "transparent",
+                      },
+                    ]}
+                  />
+                  <TextInput
+                    value={maxAmount}
+                    onChangeText={setMaxAmount}
+                    placeholder="MAX AMT"
+                    keyboardType="numeric"
+                    placeholderTextColor={T_DIM}
+                    style={[
+                      s.modalInput,
+                      {
+                        flex: 1,
+                        paddingVertical: 6,
+                        fontSize: 11,
+                        backgroundColor: "transparent",
+                      },
+                    ]}
+                  />
+                </View>
+              </View>
+
+              {/* DATE RANGE FILTER */}
+              <View style={s.cRowWrap}>
+                <Text style={s.cRowLabel}>D-RNG</Text>
+                <View style={{ flexDirection: "row", gap: 8, flex: 1 }}>
+                  <TextInput
+                    value={minDate}
+                    onChangeText={setMinDate}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor={T_DIM}
+                    maxLength={10}
+                    style={[
+                      s.modalInput,
+                      {
+                        flex: 1,
+                        paddingVertical: 6,
+                        fontSize: 11,
+                        backgroundColor: "transparent",
+                      },
+                    ]}
+                  />
+                  <TextInput
+                    value={maxDate}
+                    onChangeText={setMaxDate}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor={T_DIM}
+                    maxLength={10}
+                    style={[
+                      s.modalInput,
+                      {
+                        flex: 1,
+                        paddingVertical: 6,
+                        fontSize: 11,
+                        backgroundColor: "transparent",
+                      },
+                    ]}
+                  />
+                </View>
+              </View>
+
+              {/* CLEAR FILTERS */}
+              <TouchableOpacity
+                style={s.resetBtn}
+                onPress={clearFilters}
+                activeOpacity={0.7}
+              >
+                <Text style={s.resetBtnTxt}>[ RESET SYS ]</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </HoloCard>
+    );
+  }
+
+  function UpcomingPanel() {
+    if (!showUpcoming) return null;
+    return (
+      <HoloCard
+        title={`Scheduled Flow (${upcoming.length})`}
+        subtitle="Upcoming and planned expenses"
+        accent="violet"
+      >
+        {upcoming.length === 0 ? (
+          <Text style={s.emptyText}>
+            Nothing upcoming within current filters.
+          </Text>
+        ) : (
+          upcoming.slice(0, 20).map((u) => {
+            const catName = categoriesById.get(u.categoryId)?.name || "—";
+            const isVirtual = u.__kind === "virtual";
+            const ac = isVirtual ? MINT : CYAN;
+            return (
+              <View key={u._id} style={s.timelineItem}>
+                <View
+                  style={[
+                    s.timelineDot,
+                    { backgroundColor: ac, shadowColor: ac },
+                  ]}
+                />
+                <View style={[s.flowCard, { borderColor: `${ac}22` }]}>
+                  <View style={[s.flowAccent, { backgroundColor: ac }]} />
+                  <View style={{ paddingLeft: 10 }}>
+                    <View style={s.rowTopLine}>
+                      <Text
+                        style={[s.flowCat, { color: ac }]}
+                        numberOfLines={1}
+                      >
+                        {catName}
+                      </Text>
+                      <View
+                        style={[
+                          s.badge,
+                          {
+                            borderColor: `${ac}33`,
+                            backgroundColor: `${ac}11`,
+                            marginLeft: 4,
+                          },
+                        ]}
+                      >
+                        <Text style={[s.badgeTxt, { color: ac }]}>
+                          {isVirtual ? "PLANNED" : "IN DB"}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={s.rowDesc} numberOfLines={2}>
+                      {u.description || "No description"}
+                    </Text>
+                    <View
+                      style={[
+                        s.rowTopLine,
+                        {
+                          marginTop: 8,
+                          borderTopWidth: 1,
+                          borderTopColor: "rgba(255,255,255,0.05)",
+                          paddingTop: 6,
+                        },
+                      ]}
+                    >
+                      <Text style={[s.rowDate, { flex: 1 }]}>
+                        {fmtDateUTC(u.date)}
+                      </Text>
+                      <Text style={[s.rowAmount, { fontSize: 13 }]}>
+                        -{minorToMajor(u.amountMinor, u.currency)}{" "}
+                        <Text style={{ fontSize: 8, opacity: 0.7 }}>
+                          {u.currency}
+                        </Text>
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            );
+          })
+        )}
+        {upcoming.length > 20 && (
+          <Text style={[s.emptyText, { marginTop: 8 }]}>
+            + {upcoming.length - 20} more…
+          </Text>
+        )}
+        <TouchableOpacity
+          style={{ marginTop: 10, alignSelf: "flex-end" }}
+          onPress={() => setShowUpcoming(false)}
+        >
+          <Text style={[s.ctrlTxt, { color: "rgba(226,232,240,0.40)" }]}>
+            CLOSE PANEL
+          </Text>
+        </TouchableOpacity>
+      </HoloCard>
+    );
+  }
+
+  function ExpenseModal() {
     if (!modalOpen) return null;
     const submit = async () => {
-      const {
-        amount,
-        currency,
-        date,
-        nextDate,
-        categoryId,
-        description,
-        tagsCsv,
-        accountId: aId,
-      } = form;
-      const cur = (currency || "USD").toString().toUpperCase();
-      const pickedAccountId = aId || accountId || accounts[0]?._id || "";
-      const amountMinor = majorToMinor(amount, cur);
+      const cur = (form.currency || "USD").toString().toUpperCase();
+      const pickedAccId = form.accountId || accountId || accounts[0]?._id || "";
+      const amountMinor = majorToMinor(form.amount, cur);
       if (Number.isNaN(amountMinor)) {
         Alert.alert("Invalid amount", "Enter a valid number.");
         return;
       }
-      if (!categoryId) {
+      if (!form.categoryId) {
         Alert.alert("Missing category", "Pick a category.");
         return;
       }
-      if (!pickedAccountId) {
+      if (!pickedAccId) {
         Alert.alert("Missing account", "Pick an account.");
         return;
       }
+
       const payload = {
-        accountId: pickedAccountId,
-        categoryId,
+        accountId: pickedAccId,
+        categoryId: form.categoryId,
         type: "expense",
         amountMinor,
         currency: cur,
-        date: new Date(date || new Date()).toISOString(),
-        description: (description || "").trim() || null,
-        tags: (tagsCsv || "")
+        date: new Date(form.date || new Date()).toISOString(),
+        description: (form.description || "").trim() || null,
+        tags: (form.tagsCsv || "")
           .split(",")
           .map((x) => x.trim())
           .filter((x) => x.length > 0),
       };
-      if ((nextDate || "").trim())
-        payload.nextDate = new Date(nextDate).toISOString();
+      if (form.frequency) {
+        payload.frequency = form.frequency;
+        if ((form.endDate || "").trim())
+          payload.endDate = new Date(form.endDate).toISOString();
+      }
       try {
-        if (!editing) {
+        if (!editingData) {
           const { data } = await api.post("/transactions", payload);
           const created = Array.isArray(data?.created) ? data.created : [data];
           setTransactions((prev) => [...created, ...prev]);
         } else {
           const { data } = await api.put(
-            `/transactions/${editing._id}`,
+            `/transactions/${editingData._id}`,
             payload,
           );
           setTransactions((prev) =>
@@ -1283,6 +2013,7 @@ export default function ExpensesScreen({ route }) {
         Alert.alert("Error", e?.response?.data?.error || e.message || "Error");
       }
     };
+
     return (
       <Modal
         visible={modalOpen}
@@ -1301,9 +2032,11 @@ export default function ExpensesScreen({ route }) {
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
-              <Text style={s.modalTitle}>
-                {editing ? "EDIT EXPENSE" : "NEW EXPENSE"}
+              <Text style={[s.modalTitle, { color: VIOLET }]}>
+                {editingData ? "EDIT EXPENSE" : "NEW EXPENSE"}
               </Text>
+              <ScanLine color={VIOLET} style={{ marginBottom: 16 }} />
+
               <Text style={s.modalLabel}>ACCOUNT</Text>
               <ScrollView
                 horizontal
@@ -1327,6 +2060,7 @@ export default function ExpensesScreen({ route }) {
                   />
                 ))}
               </ScrollView>
+
               <View style={s.modalRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={s.modalLabel}>AMOUNT</Text>
@@ -1339,21 +2073,17 @@ export default function ExpensesScreen({ route }) {
                     style={s.modalInput}
                   />
                 </View>
-                <View style={{ width: 88 }}>
+                <View style={{ width: 80 }}>
                   <Text style={s.modalLabel}>CCY</Text>
                   <TextInput
                     value={form.currency}
-                    onChangeText={(v) =>
-                      setForm((f) => ({ ...f, currency: v.toUpperCase() }))
-                    }
-                    autoCapitalize="characters"
-                    placeholder="USD"
-                    placeholderTextColor={T_DIM}
-                    style={s.modalInput}
+                    editable={false}
+                    style={[s.modalInput, { opacity: 0.5 }]}
                   />
                 </View>
               </View>
-              <View style={{ marginBottom: 10, marginTop: 10 }}>
+
+              <View style={{ marginVertical: 10, gap: 8 }}>
                 <TouchableOpacity
                   style={s.scanBtn}
                   onPress={openScanner}
@@ -1365,10 +2095,7 @@ export default function ExpensesScreen({ route }) {
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[
-                    s.scanBtn,
-                    { marginTop: 8, borderColor: "rgba(0,212,255,0.30)" },
-                  ]}
+                  style={[s.scanBtn, { borderColor: `${CYAN}44` }]}
                   onPress={openOcrScanner}
                   activeOpacity={0.8}
                 >
@@ -1381,6 +2108,7 @@ export default function ExpensesScreen({ route }) {
                   Extracts total, date, merchant and infers category.
                 </Text>
               </View>
+
               <View style={s.modalRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={s.modalLabel}>DATE</Text>
@@ -1392,19 +2120,45 @@ export default function ExpensesScreen({ route }) {
                     style={s.modalInput}
                   />
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.modalLabel}>NEXT DATE</Text>
-                  <TextInput
-                    value={form.nextDate}
-                    onChangeText={(v) =>
-                      setForm((f) => ({ ...f, nextDate: v }))
+              </View>
+
+              <Text style={s.modalLabel}>FREQUENCY (OPTIONAL)</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                style={{ marginBottom: 10 }}
+              >
+                {FREQ_OPTIONS.map((opt) => (
+                  <Chip
+                    key={opt.value}
+                    label={opt.label}
+                    accent={CYAN}
+                    selected={form.frequency === opt.value}
+                    onPress={() =>
+                      setForm((f) => ({
+                        ...f,
+                        frequency: opt.value,
+                        endDate: opt.value ? f.endDate : "",
+                      }))
                     }
+                  />
+                ))}
+              </ScrollView>
+
+              {form.frequency ? (
+                <>
+                  <Text style={s.modalLabel}>END DATE (OPTIONAL)</Text>
+                  <TextInput
+                    value={form.endDate}
+                    onChangeText={(v) => setForm((f) => ({ ...f, endDate: v }))}
                     placeholder="YYYY-MM-DD"
                     placeholderTextColor={T_DIM}
-                    style={s.modalInput}
+                    style={[s.modalInput, { marginBottom: 10 }]}
                   />
-                </View>
-              </View>
+                </>
+              ) : null}
+
               <Text style={s.modalLabel}>CATEGORY</Text>
               <ScrollView
                 horizontal
@@ -1424,15 +2178,17 @@ export default function ExpensesScreen({ route }) {
                   />
                 ))}
               </ScrollView>
+
               <Text style={s.modalLabel}>DESCRIPTION</Text>
               <TextInput
                 value={form.description}
                 onChangeText={(v) => setForm((f) => ({ ...f, description: v }))}
-                placeholder="Optional description"
+                placeholder="Optional memo"
                 placeholderTextColor={T_DIM}
                 style={[s.modalInput, { marginBottom: 10 }]}
               />
-              <Text style={s.modalLabel}>TAGS</Text>
+
+              <Text style={s.modalLabel}>TAGS (COMMA-SEPARATED)</Text>
               <TextInput
                 value={form.tagsCsv}
                 onChangeText={(v) => setForm((f) => ({ ...f, tagsCsv: v }))}
@@ -1440,9 +2196,8 @@ export default function ExpensesScreen({ route }) {
                 placeholderTextColor={T_DIM}
                 style={s.modalInput}
               />
-              <Text style={s.modalHint}>
-                Comma-separated · e.g. groceries, dinner, weekend
-              </Text>
+              <Text style={s.modalHint}>e.g. groceries, dinner, weekend</Text>
+
               <ScanLine
                 color={VIOLET}
                 style={{ marginTop: 18, marginBottom: 14 }}
@@ -1459,7 +2214,7 @@ export default function ExpensesScreen({ route }) {
                   onPress={submit}
                 >
                   <Text style={[s.modalBtnTxt, { color: BG }]}>
-                    {editing ? "SAVE" : "ADD"}
+                    {editingData ? "SAVE" : "ADD"}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1468,487 +2223,8 @@ export default function ExpensesScreen({ route }) {
         </KeyboardAvoidingView>
       </Modal>
     );
-  }, [
-    modalOpen,
-    form,
-    editing,
-    accounts,
-    categories,
-    accountId,
-    openScanner,
-    openOcrScanner,
-  ]);
-
-  /* ── sub-sections ── */
-  function Header() {
-    const filterGroups = [
-      {
-        label: "CATEGORY",
-        chips: [
-          {
-            key: "ALL",
-            label: "All categories",
-            sel: fCategoryId === "ALL",
-            onPress: () => setFCategoryId("ALL"),
-            accent: CYAN,
-          },
-          ...categories.map((c) => ({
-            key: c._id,
-            label: c.name,
-            sel: fCategoryId === c._id,
-            onPress: () => setFCategoryId(c._id),
-            accent: VIOLET,
-          })),
-        ],
-      },
-      {
-        label: "ACCOUNT",
-        small: true,
-        chips: [
-          {
-            key: "ALL",
-            label: "All accounts",
-            sel: fAccountId === "ALL",
-            onPress: () => setFAccountId("ALL"),
-            accent: CYAN,
-          },
-          ...accounts.map((a) => ({
-            key: a._id,
-            label: a.name,
-            sel: fAccountId === a._id,
-            onPress: () => setFAccountId(a._id),
-            accent: MINT,
-          })),
-        ],
-      },
-      {
-        label: "CURRENCY",
-        small: true,
-        chips: currencies.map((c) => ({
-          key: c,
-          label: c === "ALL" ? "All currencies" : c,
-          sel: fCurrency === c,
-          onPress: () => setFCurrency(c),
-          accent: CYAN,
-        })),
-      },
-      {
-        label: "SORT",
-        small: true,
-        chips: [
-          {
-            key: "date_desc",
-            label: "Newest",
-            sel: sortKey === "date_desc",
-            onPress: () => setSortKey("date_desc"),
-            accent: MINT,
-          },
-          {
-            key: "date_asc",
-            label: "Oldest",
-            sel: sortKey === "date_asc",
-            onPress: () => setSortKey("date_asc"),
-            accent: MINT,
-          },
-          {
-            key: "amount_desc",
-            label: "Amount ↓",
-            sel: sortKey === "amount_desc",
-            onPress: () => setSortKey("amount_desc"),
-            accent: MINT,
-          },
-          {
-            key: "amount_asc",
-            label: "Amount ↑",
-            sel: sortKey === "amount_asc",
-            onPress: () => setSortKey("amount_asc"),
-            accent: MINT,
-          },
-        ],
-      },
-      {
-        label: "PERIOD",
-        small: true,
-        chips: [
-          {
-            key: "ALL",
-            label: "All time",
-            sel: datePreset === "ALL",
-            onPress: () => setDatePreset("ALL"),
-            accent: CYAN,
-          },
-          {
-            key: "THIS_MONTH",
-            label: "This month",
-            sel: datePreset === "THIS_MONTH",
-            onPress: () => setDatePreset("THIS_MONTH"),
-            accent: CYAN,
-          },
-          {
-            key: "LAST_MONTH",
-            label: "Last month",
-            sel: datePreset === "LAST_MONTH",
-            onPress: () => setDatePreset("LAST_MONTH"),
-            accent: CYAN,
-          },
-          {
-            key: "LAST_90",
-            label: "Last 90 days",
-            sel: datePreset === "LAST_90",
-            onPress: () => setDatePreset("LAST_90"),
-            accent: CYAN,
-          },
-        ],
-      },
-    ];
-    return (
-      <View style={s.headerCard}>
-        <Brackets color={VIOLET} size={12} thick={1.5} />
-        <View style={[s.headerHairline, { backgroundColor: VIOLET }]} />
-        <View style={s.topBar}>
-          <View style={s.logoRow}>
-            <View style={[s.statusDot, { backgroundColor: VIOLET }]} />
-            <Text style={s.logoTxt}>EXPENSES</Text>
-            <View
-              style={[
-                s.livePill,
-                {
-                  borderColor: "rgba(167,139,250,0.25)",
-                  backgroundColor: "rgba(167,139,250,0.12)",
-                },
-              ]}
-            >
-              <Text style={[s.livePillTxt, { color: VIOLET }]}>MODULE</Text>
-            </View>
-          </View>
-          <TouchableOpacity
-            onPress={() => navigation.navigate("Dashboard")}
-            activeOpacity={0.8}
-            style={s.homeBtn}
-          >
-            <Image source={logo} style={s.homeBtnImg} />
-            <Brackets color={MINT} size={7} thick={1} />
-          </TouchableOpacity>
-        </View>
-        <Text style={s.heroTitle}>Expense{"\n"}Control</Text>
-        <Text style={s.heroSub}>
-          Review spending, spot patterns, and keep your outflow decision-ready.
-        </Text>
-        <ScanLine color={VIOLET} style={{ marginTop: 12, marginBottom: 14 }} />
-        <View style={s.controlsRow}>
-          <TouchableOpacity
-            style={[s.ctrlPill, { borderColor: "rgba(167,139,250,0.25)" }]}
-            onPress={() => setShowUpcoming((v) => !v)}
-            activeOpacity={0.75}
-          >
-            <View style={[s.ctrlDot, { backgroundColor: VIOLET }]} />
-            <Text style={[s.ctrlTxt, { color: VIOLET }]}>UPCOMING</Text>
-            <View style={s.upcomingBadge}>
-              <Text style={s.upcomingBadgeTxt}>{upcoming.length}</Text>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[s.ctrlPill, { borderColor: "rgba(0,212,255,0.22)" }]}
-            onPress={loadAll}
-            activeOpacity={0.75}
-          >
-            <View style={[s.ctrlDot, { backgroundColor: CYAN }]} />
-            <Text style={[s.ctrlTxt, { color: CYAN }]}>REFRESH</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={s.searchWrap}>
-          <View style={[s.searchDot, { backgroundColor: MINT }]} />
-          <TextInput
-            value={q}
-            onChangeText={setQ}
-            placeholder="Search description, account, category or #tags"
-            placeholderTextColor={T_DIM}
-            style={s.searchInput}
-          />
-        </View>
-        {filterGroups.map((g) => (
-          <View key={g.label} style={{ marginBottom: 2 }}>
-            <Text style={s.filterGroupLabel}>{g.label}</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={s.chipScroll}
-              keyboardShouldPersistTaps="handled"
-            >
-              {g.chips.map((c) => (
-                <Chip
-                  key={c.key}
-                  label={c.label}
-                  selected={c.sel}
-                  onPress={c.onPress}
-                  small={g.small}
-                  accent={c.accent}
-                />
-              ))}
-            </ScrollView>
-          </View>
-        ))}
-      </View>
-    );
   }
 
-  function UpcomingPanel() {
-    if (!showUpcoming) return null;
-    return (
-      <View style={s.sectionCard}>
-        <Brackets color={VIOLET} size={10} thick={1} />
-        <View style={[s.sectionHairline, { backgroundColor: VIOLET }]} />
-        <View style={s.sectionHeaderRow}>
-          <View>
-            <Text style={s.sectionEyebrow}>SCHEDULED FLOW</Text>
-            <Text style={s.sectionTitle}>Upcoming expenses</Text>
-          </View>
-          <TouchableOpacity onPress={() => setShowUpcoming(false)}>
-            <Text style={[s.sectionClose, { color: T_DIM }]}>CLOSE</Text>
-          </TouchableOpacity>
-        </View>
-        {upcoming.length === 0 ? (
-          <Text style={s.emptyText}>
-            Nothing upcoming within current filters.
-          </Text>
-        ) : (
-          upcoming.map((u) => {
-            const catName =
-              categories.find((c) => c._id === u.categoryId)?.name || "—";
-            const accName = accountsById.get(u.accountId)?.name || "—";
-            const isVirtual = u.__kind === "virtual";
-            const ac = isVirtual ? MINT : CYAN;
-            return (
-              <View key={u._id} style={s.rowCard}>
-                <Brackets color={ac} size={7} thick={1} />
-                <View style={s.rowTopLine}>
-                  <View style={[s.rowCatPill, { borderColor: ac + "44" }]}>
-                    <View style={[s.rowCatDot, { backgroundColor: ac }]} />
-                    <Text
-                      style={[s.rowCatTxt, { color: ac }]}
-                      numberOfLines={1}
-                    >
-                      {catName}
-                    </Text>
-                  </View>
-                  <View
-                    style={[
-                      s.badge,
-                      { borderColor: ac + "44", backgroundColor: ac + "14" },
-                    ]}
-                  >
-                    <Text style={[s.badgeTxt, { color: ac }]}>
-                      {isVirtual ? "PLANNED" : "IN DB"}
-                    </Text>
-                  </View>
-                  <Text style={s.rowAmount}>
-                    -{minorToMajor(u.amountMinor, u.currency)}{" "}
-                    <Text style={{ fontSize: 9, opacity: 0.6 }}>
-                      {u.currency}
-                    </Text>
-                  </Text>
-                </View>
-                <View style={s.rowAccPill}>
-                  <Text style={s.rowAccTxt}>{accName}</Text>
-                </View>
-                <Text style={s.rowDesc} numberOfLines={2}>
-                  {u.description || "No description"}
-                </Text>
-                <Text style={s.rowDate}>Scheduled: {fmtDateUTC(u.date)}</Text>
-                <ScanLine
-                  color={ac}
-                  style={{ marginTop: 10, marginBottom: 8 }}
-                />
-                <View style={s.rowActions}>
-                  {isVirtual ? (
-                    <>
-                      <TouchableOpacity
-                        style={[s.rowBtnEdit, { borderColor: MINT + "44" }]}
-                        onPress={() => addVirtual(u)}
-                        activeOpacity={0.75}
-                      >
-                        <Text style={[s.rowBtnTxt, { color: MINT }]}>ADD</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={s.rowBtnEdit}
-                        onPress={() => openCreateSeed(u)}
-                        activeOpacity={0.75}
-                      >
-                        <Text style={[s.rowBtnTxt, { color: CYAN }]}>EDIT</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={s.rowBtnDel}
-                        onPress={() => deleteUpcoming(u)}
-                        activeOpacity={0.75}
-                      >
-                        <Text style={[s.rowBtnTxt, { color: VIOLET }]}>
-                          SKIP
-                        </Text>
-                      </TouchableOpacity>
-                    </>
-                  ) : (
-                    <>
-                      <TouchableOpacity
-                        style={s.rowBtnEdit}
-                        onPress={() => openEdit(u)}
-                        activeOpacity={0.75}
-                      >
-                        <Text style={[s.rowBtnTxt, { color: CYAN }]}>EDIT</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={s.rowBtnDel}
-                        onPress={() => deleteUpcoming(u)}
-                        activeOpacity={0.75}
-                      >
-                        <Text style={[s.rowBtnTxt, { color: VIOLET }]}>
-                          DELETE
-                        </Text>
-                      </TouchableOpacity>
-                    </>
-                  )}
-                </View>
-              </View>
-            );
-          })
-        )}
-      </View>
-    );
-  }
-
-  function Insights() {
-    const effectiveCur =
-      (fCurrency !== "ALL" ? fCurrency : rows[0]?.currency) || "—";
-    return (
-      <View style={s.sectionCard}>
-        <Brackets color={CYAN} size={10} thick={1} />
-        <View style={[s.sectionHairline, { backgroundColor: CYAN }]} />
-        <View style={s.sectionHeaderRow}>
-          <View>
-            <Text style={s.sectionEyebrow}>SPENDING KPIs</Text>
-            <Text style={s.sectionTitle}>Insights</Text>
-          </View>
-          <View
-            style={[s.currencyPill, { borderColor: "rgba(0,212,255,0.22)" }]}
-          >
-            <View style={[s.ctrlDot, { backgroundColor: CYAN }]} />
-            <Text style={[s.currencyPillTxt, { color: CYAN }]}>
-              {effectiveCur}
-            </Text>
-          </View>
-        </View>
-        {noteMixedCurrency && (
-          <Text style={s.sectionNote}>
-            KPIs calculated in {statsCurrency}. Pick a currency above to switch.
-          </Text>
-        )}
-        <View style={{ marginBottom: 10 }}>
-          <StatCard
-            title="Last Month"
-            value={fmtMoney(kpis.last, statsCurrency)}
-            accent="neutral"
-            chipText="LOOKBACK"
-          />
-          <StatCard
-            title="This Month"
-            value={fmtMoney(kpis.this, statsCurrency)}
-            accent="expense"
-            chipText="CURRENT"
-          />
-          <StatCard
-            title="Yearly Avg"
-            value={fmtMoney(kpis.yearlyAvg, statsCurrency)}
-            accent="green"
-            chipText="AVERAGE"
-          />
-        </View>
-        <View style={s.chartBlock}>
-          <View style={s.chartHeaderRow}>
-            <View style={[s.ctrlDot, { backgroundColor: VIOLET }]} />
-            <Text style={[s.chartTitle, { color: VIOLET }]}>BY CATEGORY</Text>
-          </View>
-          {!spendingByCategory.length ? (
-            <Text style={s.chartEmpty}>No data yet.</Text>
-          ) : (
-            spendingByCategory.map((c) => (
-              <View key={c.catId} style={s.catRow}>
-                <View style={s.catRowTop}>
-                  <Text style={s.catName} numberOfLines={1}>
-                    {c.catName}
-                  </Text>
-                  <Text style={[s.catAmount, { color: VIOLET }]}>
-                    {fmtMoney(
-                      c.major *
-                        Math.pow(10, decimalsForCurrency(statsCurrency)),
-                      statsCurrency,
-                    )}
-                  </Text>
-                </View>
-                <View style={s.catBarTrack}>
-                  <View
-                    style={[
-                      s.catBarFill,
-                      {
-                        width: `${Math.max(6, c.pct)}%`,
-                        backgroundColor: VIOLET,
-                      },
-                    ]}
-                  />
-                </View>
-              </View>
-            ))
-          )}
-        </View>
-        <View style={s.chartBlock}>
-          <View style={s.chartHeaderRow}>
-            <View style={[s.ctrlDot, { backgroundColor: MINT }]} />
-            <Text style={[s.chartTitle, { color: MINT }]}>LAST 7 DAYS</Text>
-          </View>
-          {!dailySeries.points.length || dailySeries.max <= 0 ? (
-            <Text style={s.chartEmpty}>No recent data.</Text>
-          ) : (
-            <View style={s.sparklineRow}>
-              {dailySeries.points.map((p) => {
-                const ratio = dailySeries.max ? p.value / dailySeries.max : 0;
-                const barH = 8 + ratio * 34;
-                return (
-                  <View key={p.label} style={s.sparkCol}>
-                    <View style={s.sparkBarTrack}>
-                      <View
-                        style={[
-                          s.sparkBarFill,
-                          {
-                            height: barH,
-                            marginTop: 42 - barH,
-                            backgroundColor: MINT,
-                          },
-                        ]}
-                      />
-                    </View>
-                    <Text style={s.sparkLabel}>{p.label}</Text>
-                  </View>
-                );
-              })}
-            </View>
-          )}
-        </View>
-        <View style={s.totalWrap}>
-          {totals.map(({ cur, major }) => (
-            <View
-              key={cur}
-              style={[s.totalPill, { borderColor: "rgba(0,212,255,0.22)" }]}
-            >
-              <View style={[s.ctrlDot, { backgroundColor: CYAN }]} />
-              <Text style={[s.totalPillTxt, { color: CYAN }]}>
-                Total {cur}: {major}
-              </Text>
-            </View>
-          ))}
-        </View>
-      </View>
-    );
-  }
-
-  /* ── loading ── */
   if (!initialDone) {
     return (
       <SafeAreaView style={s.loadingScreen}>
@@ -1980,12 +2256,18 @@ export default function ExpensesScreen({ route }) {
       <ScrollView
         ref={scrollRef}
         style={s.content}
-        contentContainerStyle={{ paddingBottom: 132 }}
+        contentContainerStyle={{
+          paddingBottom: 132,
+          gap: 10,
+          paddingHorizontal: 12,
+          paddingTop: 12,
+        }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <Header />
+        <HeaderSection />
         <UpcomingPanel />
+
         {!!err && (
           <View style={s.errorCard}>
             <Brackets color={VIOLET} size={8} thick={1} />
@@ -1998,24 +2280,95 @@ export default function ExpensesScreen({ route }) {
             </View>
           </View>
         )}
-        <Insights />
-        <View style={s.sectionCard}>
-          <Brackets color={MINT} size={10} thick={1} />
-          <View style={[s.sectionHairline, { backgroundColor: MINT }]} />
-          <View style={s.sectionHeaderRow}>
-            <View>
-              <Text style={s.sectionEyebrow}>TRANSACTION FEED</Text>
-              <Text style={s.sectionTitle}>Expense history</Text>
-            </View>
-            <View
-              style={[s.currencyPill, { borderColor: "rgba(0,255,135,0.22)" }]}
-            >
-              <View style={[s.ctrlDot, { backgroundColor: MINT }]} />
-              <Text style={[s.currencyPillTxt, { color: MINT }]}>
-                {rows.length} records
-              </Text>
-            </View>
+
+        <HoloCard
+          title="KPIs"
+          accent="cyan"
+          right={
+            <CurrencyPill
+              currencies={distCurrencies}
+              value={currentKpiCurrency}
+              onChange={setKpiCurrency}
+              accent={CYAN}
+            />
+          }
+        >
+          {insights.noteMixed && (
+            <Text style={[s.sectionNote, { marginBottom: 8 }]}>
+              Mixed currency — KPIs in {insights.statsCurrency}.
+            </Text>
+          )}
+          <View style={{ gap: 8 }}>
+            <MetricCard
+              label="Last Month"
+              value={fmtMoney(insights.kpis.last, insights.statsCurrency)}
+              accent="cyan"
+            />
+            <MetricCard
+              label="This Month"
+              value={fmtMoney(insights.kpis.this, insights.statsCurrency)}
+              accent="violet"
+            />
+            <MetricCard
+              label="Yearly Avg"
+              value={fmtMoney(insights.kpis.yearlyAvg, insights.statsCurrency)}
+              accent="mint"
+            />
           </View>
+          <View style={s.totalWrap}>
+            {totals.map(({ cur, major }) => (
+              <View
+                key={cur}
+                style={[s.totalPill, { borderColor: `rgba(0,212,255,0.22)` }]}
+              >
+                <View style={[s.ctrlDot, { backgroundColor: CYAN }]} />
+                <Text style={[s.totalPillTxt, { color: CYAN }]}>
+                  Total {cur}: <Text style={{ color: "#ffffff" }}>{major}</Text>
+                </Text>
+              </View>
+            ))}
+          </View>
+        </HoloCard>
+
+        <HoloCard
+          title="By Category"
+          subtitle="Current Month"
+          accent="violet"
+          right={
+            <CurrencyPill
+              currencies={distCurrencies}
+              value={currentBarCurrency}
+              onChange={setBarCurrency}
+              accent={VIOLET}
+            />
+          }
+        >
+          <BarChart data={barChartData} currency={currentBarCurrency} />
+        </HoloCard>
+
+        <HoloCard
+          title="Distribution"
+          accent="mint"
+          right={
+            <CurrencyPill
+              currencies={distCurrencies}
+              value={currentDistCurrency}
+              onChange={setDistCurrency}
+              accent={MINT}
+            />
+          }
+        >
+          <DistributionList
+            data={distributionData}
+            currency={currentDistCurrency}
+          />
+        </HoloCard>
+
+        <HoloCard
+          title="Transaction Feed"
+          subtitle={`${rows.length} records in view`}
+          accent="mint"
+        >
           {rows.length === 0 ? (
             <Text style={s.emptyText}>
               No expenses found. Add your first one or adjust filters.
@@ -2028,30 +2381,97 @@ export default function ExpensesScreen({ route }) {
               scrollEnabled={false}
             />
           )}
-        </View>
+        </HoloCard>
+
+        <HoloCard
+          title="Category Config"
+          subtitle="Manage expense categories"
+          accent="cyan"
+        >
+          <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+            <TextInput
+              value={newCatName}
+              onChangeText={setNewCatName}
+              placeholder="NEW CATEGORY NAME"
+              placeholderTextColor={"rgba(226,232,240,0.40)"}
+              style={[s.modalInput, { flex: 1, fontSize: 11 }]}
+            />
+            <TouchableOpacity
+              style={[
+                s.rowBtnEdit,
+                {
+                  borderColor: `rgba(0,212,255,0.44)`,
+                  justifyContent: "center",
+                },
+              ]}
+              onPress={handleCreateCategory}
+              activeOpacity={0.75}
+            >
+              <Text style={[s.rowBtnTxt, { color: CYAN }]}>ADD</Text>
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity
+            style={[
+              s.ctrlPill,
+              {
+                borderColor: "rgba(255,255,255,0.1)",
+                width: "100%",
+                justifyContent: "center",
+                marginBottom: 12,
+              },
+            ]}
+            onPress={handleSeedCategories}
+            activeOpacity={0.75}
+          >
+            <Text style={[s.ctrlTxt, { color: "rgba(226,232,240,0.70)" }]}>
+              SEED STANDARD CATEGORIES
+            </Text>
+          </TouchableOpacity>
+          <Text style={[s.filterGroupLabel, { marginBottom: 8 }]}>
+            EXISTING CATEGORIES
+          </Text>
+          {categories.length === 0 ? (
+            <Text style={s.emptyText}>None yet.</Text>
+          ) : (
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+              {categories.map((c) => (
+                <View
+                  key={c._id}
+                  style={[s.badge, { borderColor: "rgba(255,255,255,0.1)" }]}
+                >
+                  <Text
+                    style={[s.badgeTxt, { color: "rgba(226,232,240,0.70)" }]}
+                  >
+                    {c.name}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </HoloCard>
       </ScrollView>
 
-      {/* FABs */}
-      <View style={s.fabWrap}>
+      {/* FAB Array */}
+      <View style={s.fabContainer}>
         <TouchableOpacity
-          style={s.fabAuto}
-          onPress={openAutoAdd}
+          style={s.fabSecondary}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            openAutoAdd();
+          }}
           activeOpacity={0.8}
         >
           <Brackets color={VIOLET} size={8} thick={1} />
-          <Text style={[s.fabTxt, { color: VIOLET }]}>AUTO</Text>
+          <Text style={[s.fabSecondaryTxt, { color: VIOLET }]}>AUTO</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={s.fabAdd}
-          onPress={openCreate}
-          activeOpacity={0.8}
-        >
-          <Brackets color={BG} size={8} thick={1} />
-          <Text style={s.fabAddTxt}>+</Text>
-        </TouchableOpacity>
+
+        <PulseButton onPress={openCreate} color={MINT} icon="+" />
       </View>
 
-      {/* Auto-add modal */}
+      {/* EXPENSE MODAL */}
+      <ExpenseModal />
+
+      {/* AUTO-ADD MODAL */}
       <Modal
         visible={autoOpen}
         transparent
@@ -2063,13 +2483,19 @@ export default function ExpensesScreen({ route }) {
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
           <View style={s.modalCard}>
-            <Brackets color={MINT} size={10} thick={1.5} />
-            <View style={[s.modalHairline, { backgroundColor: MINT }]} />
+            <Brackets color={CYAN} size={10} thick={1.5} />
+            <View style={[s.modalHairline, { backgroundColor: CYAN }]} />
             <ScrollView
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
-              <Text style={s.modalTitle}>AUTO ADD EXPENSE</Text>
+              <Text style={[s.modalTitle, { color: CYAN }]}>
+                AUTO ADD EXPENSE
+              </Text>
+              <Text style={s.modalHint}>
+                Parse a short sentence into a transaction.
+              </Text>
+              <ScanLine color={CYAN} style={{ marginVertical: 12 }} />
               <Text style={s.modalLabel}>ACCOUNT</Text>
               {accounts.length === 0 ? (
                 <Text style={s.modalHint}>
@@ -2086,27 +2512,27 @@ export default function ExpensesScreen({ route }) {
                     <Chip
                       key={a._id}
                       label={`${a.name} · ${a.currency}`}
-                      accent={MINT}
+                      accent={CYAN}
                       selected={autoAccountId === a._id}
                       onPress={() => setAutoAccountId(a._id)}
                     />
                   ))}
                 </ScrollView>
               )}
-              <Text style={s.modalLabel}>TEXT INPUT</Text>
+              <Text style={s.modalLabel}>TEXT</Text>
               <TextInput
                 value={autoText}
                 onChangeText={setAutoText}
-                placeholder="e.g. groceries 45 usd today, category groceries"
+                placeholder="e.g. paid 280 TRY coffee"
                 placeholderTextColor={T_DIM}
-                style={[s.modalInput, { minHeight: 90 }]}
+                style={[s.modalInput, { minHeight: 80 }]}
                 multiline
               />
               <Text style={s.modalHint}>
-                Include amount + currency + category + date if possible.
+                Examples: "paid 280 TRY coffee", "uber 180"
               </Text>
               <ScanLine
-                color={MINT}
+                color={CYAN}
                 style={{ marginTop: 16, marginBottom: 14 }}
               />
               <View style={s.modalActions}>
@@ -2119,7 +2545,7 @@ export default function ExpensesScreen({ route }) {
                 <TouchableOpacity
                   style={[
                     s.modalBtnPrimary,
-                    { backgroundColor: MINT },
+                    { backgroundColor: CYAN },
                     autoLoading && { opacity: 0.7 },
                   ]}
                   onPress={submitAuto}
@@ -2130,30 +2556,12 @@ export default function ExpensesScreen({ route }) {
                   </Text>
                 </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                onPress={() => {
-                  setAutoOpen(false);
-                  openUpcomingAuto();
-                }}
-                style={{ marginTop: 10 }}
-              >
-                <Text
-                  style={[
-                    s.modalHint,
-                    { color: CYAN, textDecorationLine: "underline" },
-                  ]}
-                >
-                  Open Upcoming panel instead
-                </Text>
-              </TouchableOpacity>
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>
 
-      {ExpenseModal()}
-
-      {/* Camera overlay */}
+      {/* CAMERA OVERLAY */}
       {scannerVisible && (
         <View style={s.camOverlay}>
           <SafeAreaView>
@@ -2344,12 +2752,11 @@ export default function ExpensesScreen({ route }) {
 }
 
 /* ══════════════════════════════════════════════════════════
-   STYLES — cyberpunk HUD, synced with DashboardScreen
+   STYLES
 ══════════════════════════════════════════════════════════ */
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: BG },
   content: { flex: 1 },
-
   loadingScreen: {
     flex: 1,
     backgroundColor: BG,
@@ -2366,25 +2773,76 @@ const s = StyleSheet.create({
   },
   loadingMono: { fontSize: 10, color: T_DIM, letterSpacing: 1.5 },
 
-  headerCard: {
-    margin: 12,
-    padding: 16,
-    borderRadius: 4,
+  /* section card / HoloCard */
+  holoCard: {
+    padding: 18,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: "rgba(167,139,250,0.22)",
-    backgroundColor: "rgba(167,139,250,0.04)",
-    overflow: "hidden",
+    borderColor: "rgba(255,255,255,0.05)",
     position: "relative",
+    overflow: "hidden",
   },
-  headerHairline: {
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "900",
+    letterSpacing: 2,
+    textTransform: "uppercase",
+    color: "#ffffff",
+  },
+  sectionSubtitle: {
+    fontSize: 12,
+    color: "rgba(226,232,240,0.70)",
+    marginTop: 2,
+  },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  sectionHairline: {
+    height: 1,
+    width: "100%",
     position: "absolute",
     top: 0,
-    left: "10%",
-    right: "10%",
-    height: 1.5,
-    opacity: 0.65,
+    left: 0,
   },
+  sectionNote: { fontSize: 10, color: T_MID, lineHeight: 15 },
 
+  /* metric card */
+  metricCard: {
+    position: "relative",
+    borderRadius: 2,
+    borderWidth: 1,
+    padding: 14,
+    overflow: "hidden",
+    flex: 1,
+  },
+  metricLabel: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: T_DIM,
+    letterSpacing: 2,
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+  metricValue: { fontSize: 22, fontWeight: "800", letterSpacing: -0.5 },
+
+  /* currency pill */
+  currPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: "rgba(255,255,255,0.025)",
+  },
+  currPillDot: { width: 4, height: 4, borderRadius: 999 },
+  currPillTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 1 },
+
+  /* header */
   topBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -2393,14 +2851,13 @@ const s = StyleSheet.create({
   },
   logoRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   statusDot: { width: 6, height: 6, borderRadius: 999 },
-  logoTxt: { fontSize: 13, fontWeight: "800", color: T_HI, letterSpacing: 3 },
-  livePill: {
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 2,
-    borderWidth: 1,
+  logoTxt: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: T_HI,
+    letterSpacing: 3,
+    textTransform: "uppercase",
   },
-  livePillTxt: { fontSize: 8, fontWeight: "800", letterSpacing: 1.5 },
   homeBtn: {
     width: 36,
     height: 36,
@@ -2414,7 +2871,6 @@ const s = StyleSheet.create({
     position: "relative",
   },
   homeBtnImg: { width: "100%", height: "100%", resizeMode: "cover" },
-
   heroTitle: {
     fontSize: 28,
     fontWeight: "800",
@@ -2424,12 +2880,12 @@ const s = StyleSheet.create({
     marginBottom: 6,
   },
   heroSub: { fontSize: 13, color: T_MID, lineHeight: 18 },
-
   controlsRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     marginBottom: 12,
+    flexWrap: "wrap",
   },
   ctrlPill: {
     flexDirection: "row",
@@ -2442,7 +2898,12 @@ const s = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.025)",
   },
   ctrlDot: { width: 5, height: 5, borderRadius: 999 },
-  ctrlTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 1.2 },
+  ctrlTxt: {
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+  },
   upcomingBadge: {
     marginLeft: 4,
     minWidth: 20,
@@ -2455,7 +2916,6 @@ const s = StyleSheet.create({
     borderColor: "rgba(167,139,250,0.28)",
   },
   upcomingBadgeTxt: { fontSize: 10, fontWeight: "800", color: VIOLET },
-
   searchWrap: {
     flexDirection: "row",
     alignItems: "center",
@@ -2474,18 +2934,19 @@ const s = StyleSheet.create({
     marginRight: 8,
     opacity: 0.7,
   },
-  searchInput: { flex: 1, fontSize: 13, color: T_HI, paddingVertical: 10 },
-
+  searchInput: { flex: 1, fontSize: 12, color: T_HI, paddingVertical: 10 },
   filterGroupLabel: {
     fontSize: 8,
     fontWeight: "800",
     color: T_DIM,
     letterSpacing: 2,
-    marginBottom: 3,
-    marginTop: 8,
+    marginBottom: 4,
+    marginTop: 6,
+    textTransform: "uppercase",
   },
   chipScroll: { paddingBottom: 6, paddingRight: 8 },
 
+  /* chip */
   chip: {
     flexDirection: "row",
     alignItems: "center",
@@ -2505,172 +2966,122 @@ const s = StyleSheet.create({
   chipTextSmall: { fontSize: 10 },
   chipTextSelected: { fontWeight: "700" },
 
-  sectionCard: {
-    margin: 12,
-    marginTop: 10,
-    padding: 16,
-    borderRadius: 4,
-    backgroundColor: CARD_BG,
-    borderWidth: 1,
-    borderColor: CARD_BD,
+  /* bar chart */
+  barChartWrap: { gap: 10 },
+  barRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  barLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: T_MID,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    width: 90,
+  },
+  barTrackWrap: { flex: 1 },
+  barTrack: {
+    height: 18,
+    backgroundColor: "rgba(167,139,250,0.06)",
+    borderRadius: 1,
     overflow: "hidden",
-    position: "relative",
+    justifyContent: "center",
   },
-  sectionHairline: {
-    position: "absolute",
-    top: 0,
-    left: "10%",
-    right: "10%",
-    height: 1.5,
-    opacity: 0.65,
-  },
-  sectionHeaderRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  sectionEyebrow: {
-    fontSize: 8,
-    fontWeight: "800",
-    color: T_DIM,
-    letterSpacing: 2,
-    marginBottom: 3,
-  },
-  sectionTitle: {
-    fontSize: 18,
+  barFill: { height: "100%", borderRadius: 1 },
+  barValue: {
+    fontSize: 10,
     fontWeight: "800",
     color: T_HI,
-    letterSpacing: -0.3,
+    width: 90,
+    textAlign: "right",
   },
-  sectionClose: {
+
+  /* distribution */
+  distTotalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  distTotalLabel: {
     fontSize: 9,
     fontWeight: "800",
-    letterSpacing: 1.5,
-    marginTop: 2,
-  },
-  sectionNote: {
-    marginTop: -4,
-    marginBottom: 12,
-    fontSize: 11,
-    color: T_MID,
-    lineHeight: 17,
-  },
-
-  currencyPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 2,
-    borderWidth: 1,
-    backgroundColor: "rgba(255,255,255,0.025)",
-  },
-  currencyPillTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 1 },
-
-  statCard: {
-    position: "relative",
-    borderRadius: 4,
-    borderWidth: 1,
-    padding: 16,
-    marginBottom: 9,
-    overflow: "hidden",
-  },
-  statHairline: {
-    position: "absolute",
-    top: 0,
-    left: "10%",
-    right: "10%",
-    height: 1.5,
-    opacity: 0.65,
-  },
-  statBadge: {
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderWidth: 1,
-    borderRadius: 2,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    marginBottom: 10,
-    backgroundColor: "rgba(0,0,0,0.35)",
-  },
-  statBadgeDot: { width: 5, height: 5, borderRadius: 999 },
-  statBadgeTxt: { fontSize: 8, fontWeight: "800", letterSpacing: 1.4 },
-  statLabel: {
-    fontSize: 9,
-    textTransform: "uppercase",
-    letterSpacing: 1.2,
+    letterSpacing: 2,
     color: T_DIM,
-    marginBottom: 4,
+    textTransform: "uppercase",
   },
-  statValue: { fontSize: 28, fontWeight: "700", letterSpacing: -0.8 },
-  statHint: { fontSize: 9, color: T_DIM, marginTop: 5, letterSpacing: 0.3 },
-
-  chartBlock: {
-    marginTop: 12,
-    padding: 12,
-    borderRadius: 2,
-    backgroundColor: "rgba(255,255,255,0.02)",
-    borderWidth: 1,
-    borderColor: CARD_BD,
-  },
-  chartHeaderRow: {
+  distTotalValue: { fontSize: 18, fontWeight: "800" },
+  distRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
     marginBottom: 10,
-  },
-  chartTitle: { fontSize: 9, fontWeight: "800", letterSpacing: 2 },
-  chartEmpty: { fontSize: 11, color: T_DIM },
-  catRow: { marginBottom: 8 },
-  catRowTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  catName: { fontSize: 11, color: T_HI, flex: 1, marginRight: 4 },
-  catAmount: { fontSize: 11, fontWeight: "700" },
-  catBarTrack: {
-    height: 5,
-    borderRadius: 1,
-    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.05)",
     overflow: "hidden",
   },
-  catBarFill: { height: "100%", borderRadius: 1 },
-  sparklineRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
-    marginTop: 2,
-  },
-  sparkCol: { alignItems: "center", flex: 1 },
-  sparkBarTrack: {
-    width: 8,
-    height: 42,
-    borderRadius: 1,
-    backgroundColor: "rgba(255,255,255,0.04)",
-    overflow: "hidden",
-    justifyContent: "flex-end",
-  },
-  sparkBarFill: { width: "100%", borderRadius: 1 },
-  sparkLabel: { marginTop: 4, fontSize: 7, color: T_DIM },
-  totalWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
-  totalPill: {
+  distColorBar: { width: 3, minHeight: 48 },
+  distContent: { flex: 1, paddingVertical: 8, paddingHorizontal: 10 },
+  distTopRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 2,
-    borderWidth: 1,
-    backgroundColor: "rgba(255,255,255,0.025)",
+    marginBottom: 4,
   },
-  totalPillTxt: { fontSize: 11, fontWeight: "700" },
+  distName: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: "700",
+    color: T_HI,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  distPct: { fontSize: 10, fontWeight: "800", width: 32, textAlign: "right" },
+  distAmount: {
+    fontSize: 11,
+    fontWeight: "800",
+    width: 80,
+    textAlign: "right",
+  },
+  distBarTrack: {
+    height: 4,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: 1,
+    overflow: "hidden",
+  },
+  distBarFill: { height: "100%", borderRadius: 1 },
 
+  /* timeline/upcoming */
+  timelineItem: {
+    flexDirection: "row",
+    marginBottom: 12,
+    paddingLeft: 16,
+    position: "relative",
+  },
+  timelineDot: {
+    position: "absolute",
+    left: 0,
+    top: 16,
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  flowCard: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 2,
+    overflow: "hidden",
+    position: "relative",
+  },
+  flowAccent: { position: "absolute", left: 0, top: 0, bottom: 0, width: 2 },
+  flowCat: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+
+  /* row card */
   rowCard: {
     position: "relative",
     paddingVertical: 14,
@@ -2697,14 +3108,24 @@ const s = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.3)",
   },
   rowCatDot: { width: 5, height: 5, borderRadius: 999 },
-  rowCatTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 0.8 },
+  rowCatTxt: {
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
   badge: {
     borderWidth: 1,
     borderRadius: 2,
     paddingHorizontal: 6,
     paddingVertical: 3,
   },
-  badgeTxt: { fontSize: 8, fontWeight: "800", letterSpacing: 1.2 },
+  badgeTxt: {
+    fontSize: 8,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+  },
   rowAmount: {
     marginLeft: "auto",
     fontSize: 15,
@@ -2742,7 +3163,26 @@ const s = StyleSheet.create({
     borderColor: "rgba(167,139,250,0.25)",
     backgroundColor: "rgba(167,139,250,0.06)",
   },
-  rowBtnTxt: { fontSize: 8, fontWeight: "800", letterSpacing: 1 },
+  rowBtnTxt: {
+    fontSize: 8,
+    fontWeight: "800",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+
+  /* totals */
+  totalWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
+  totalPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 2,
+    borderWidth: 1,
+    backgroundColor: "rgba(255,255,255,0.025)",
+  },
+  totalPillTxt: { fontSize: 11, fontWeight: "700" },
 
   emptyText: {
     paddingVertical: 12,
@@ -2751,15 +3191,20 @@ const s = StyleSheet.create({
     textAlign: "center",
     letterSpacing: 0.5,
   },
+  chartEmpty: {
+    fontSize: 11,
+    color: T_DIM,
+    textAlign: "center",
+    paddingVertical: 20,
+  },
 
+  /* error */
   errorCard: {
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 12,
     borderRadius: 4,
     padding: 14,
-    margin: 12,
-    marginTop: 8,
     backgroundColor: "rgba(167,139,250,0.06)",
     borderWidth: 1,
     borderColor: "rgba(167,139,250,0.22)",
@@ -2780,6 +3225,7 @@ const s = StyleSheet.create({
   errorTitle: { fontSize: 12, fontWeight: "700", color: T_HI, marginBottom: 3 },
   errorBody: { fontSize: 12, color: T_MID, lineHeight: 17 },
 
+  /* modal */
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(3,5,8,0.92)",
@@ -2811,7 +3257,8 @@ const s = StyleSheet.create({
     fontWeight: "800",
     color: T_HI,
     letterSpacing: 3,
-    marginBottom: 14,
+    textTransform: "uppercase",
+    marginBottom: 4,
     marginTop: 4,
   },
   modalLabel: {
@@ -2819,6 +3266,7 @@ const s = StyleSheet.create({
     fontWeight: "800",
     color: T_DIM,
     letterSpacing: 2,
+    textTransform: "uppercase",
     marginBottom: 6,
     marginTop: 10,
   },
@@ -2854,8 +3302,12 @@ const s = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 2,
   },
-  modalBtnTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 1 },
-
+  modalBtnTxt: {
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
   scanBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -2868,38 +3320,74 @@ const s = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.025)",
   },
   scanBtnDot: { width: 5, height: 5, borderRadius: 999 },
-  scanBtnTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 1 },
+  scanBtnTxt: {
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
 
-  fabWrap: {
+  /* NEW PULSE BUTTON / FABs STYLES */
+  fabContainer: {
     position: "absolute",
-    right: 16,
-    bottom: 24,
-    alignItems: "flex-end",
-    gap: 10,
-  },
-  fabAuto: {
-    width: 52,
-    height: 52,
-    borderRadius: 2,
+    right: 20,
+    bottom: 30,
     alignItems: "center",
+    gap: 16,
+  },
+  pulseWrap: {
+    width: 60,
+    height: 60,
     justifyContent: "center",
-    backgroundColor: "rgba(167,139,250,0.10)",
+    alignItems: "center",
+  },
+  pulseRing: {
+    position: "absolute",
+    width: 75,
+    height: 75,
+    borderRadius: 40,
     borderWidth: 1,
-    borderColor: "rgba(167,139,250,0.30)",
-    position: "relative",
   },
-  fabTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 1 },
-  fabAdd: {
-    width: 54,
-    height: 54,
-    borderRadius: 2,
-    backgroundColor: MINT,
+  fabCore: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 1.5,
     alignItems: "center",
     justifyContent: "center",
-    position: "relative",
+    shadowColor: MINT,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+    elevation: 8,
   },
-  fabAddTxt: { fontSize: 26, lineHeight: 28, color: BG, fontWeight: "800" },
+  fabIcon: {
+    fontSize: 30,
+    color: BG,
+    fontWeight: "300",
+    marginTop: -4,
+  },
+  fabSecondary: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "rgba(167,139,250,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(167,139,250,0.4)",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: VIOLET,
+    shadowOpacity: 0.4,
+    shadowRadius: 5,
+  },
+  fabSecondaryTxt: {
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1,
+    marginTop: 2,
+  },
 
+  /* camera */
   camOverlay: {
     position: "absolute",
     top: 0,
@@ -2917,7 +3405,12 @@ const s = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "rgba(0,255,135,0.12)",
   },
-  camTopTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 1.5 },
+  camTopTxt: {
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+  },
   camBody: { flex: 1, position: "relative" },
   camHudFrame: { borderWidth: 1, borderColor: "rgba(0,255,135,0.15)" },
   camBottomBar: {
@@ -2937,7 +3430,12 @@ const s = StyleSheet.create({
     borderColor: CARD_BD,
     backgroundColor: "rgba(255,255,255,0.025)",
   },
-  camIconTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 1.5 },
+  camIconTxt: {
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+  },
   shutterOuter: {
     width: 60,
     height: 60,
@@ -2947,7 +3445,6 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   shutterInner: { width: 42, height: 42, borderRadius: 2 },
-
   processingOverlay: {
     position: "absolute",
     top: 0,
@@ -2957,5 +3454,114 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(3,5,8,0.78)",
+  },
+
+  /* 2086 DATALINK UI STYLES */
+  cyberLinkBox: {
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: CARD_BD,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    borderRadius: 2,
+    position: "relative",
+  },
+  cyberSearchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  cyberBlinker: {
+    width: 4,
+    height: 12,
+    marginRight: 10,
+    opacity: 0.8,
+  },
+  cyberSearchInput: {
+    flex: 1,
+    color: T_HI,
+    fontSize: 12,
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+    paddingVertical: 4,
+  },
+  cyberFilterToggle: {
+    borderWidth: 1,
+    borderColor: CARD_BD,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 2,
+    marginLeft: 8,
+    backgroundColor: "rgba(255,255,255,0.02)",
+  },
+  cyberToggleTxt: {
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1.5,
+  },
+  cyberReadoutRow: {
+    paddingHorizontal: 12,
+    paddingBottom: 10,
+  },
+  cyberReadoutTxt: {
+    fontSize: 9,
+    color: T_MID,
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+    letterSpacing: 0.5,
+  },
+  cyberMatrix: {
+    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: CARD_BD,
+    backgroundColor: "rgba(0,212,255,0.02)",
+    position: "relative",
+    gap: 12,
+  },
+  cRowWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  cRowLabel: {
+    width: 42,
+    fontSize: 9,
+    fontWeight: "800",
+    color: T_DIM,
+    letterSpacing: 1,
+  },
+  cRowScroll: {
+    flex: 1,
+  },
+  cNode: {
+    borderWidth: 1,
+    borderColor: CARD_BD,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    marginRight: 6,
+    borderRadius: 2,
+    position: "relative",
+    backgroundColor: "rgba(255,255,255,0.01)",
+  },
+  cNodeGlow: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 2,
+  },
+  cNodeTxt: {
+    fontSize: 9,
+    color: T_DIM,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  resetBtn: {
+    alignSelf: "flex-end",
+    marginTop: 6,
+    paddingVertical: 4,
+  },
+  resetBtnTxt: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "rgba(255, 115, 0, 0.8)",
+    letterSpacing: 1,
   },
 });
