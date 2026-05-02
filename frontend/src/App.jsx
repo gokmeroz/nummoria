@@ -93,7 +93,7 @@ export default function App() {
               path="/investments/performance"
               element={<InvestmentPerformances />}
             />
-            <Route path="/support" element={<SupportPage />} />
+            {/* <Route path="/support" element={<SupportPage />} /> */}
             <Route path="/ai/financial-helper" element={<FinancialHelper />} />
             <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/subscriptions" element={<SubscriptionManager />} />

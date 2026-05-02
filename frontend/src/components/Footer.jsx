@@ -34,6 +34,7 @@ export default function Footer({
       { label: "Privacy", href: "/privacy" },
       { label: "Terms", href: "/terms" },
     ],
+    Support: [{ label: "Contact Us", href: "/support" }],
   },
   socials = {
     x: "nummoria",
