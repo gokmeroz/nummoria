@@ -14,6 +14,7 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
+  Linking,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
@@ -37,6 +38,9 @@ const CARD_BD = "rgba(255,255,255,0.07)";
 const T_HI = "#e2e8f0";
 const T_MID = "rgba(226,232,240,0.55)";
 const T_DIM = "rgba(226,232,240,0.32)";
+
+const SUPPORT_EMAIL = "nummoria@gmail.com";
+const WEB_ORIGIN = "https://nummoria.com";
 
 const ACCOUNT_TYPES = ["checking", "savings", "credit", "cash", "other"];
 const CURRENCIES = [
@@ -744,6 +748,46 @@ export default function UserScreen() {
     ]);
   }
 
+  const openExternal = async (
+    url,
+    fallbackMessage = "Could not open this link.",
+  ) => {
+    try {
+      await Linking.openURL(url);
+    } catch (e) {
+      console.warn("Open external link failed:", e);
+      Alert.alert("Unable to open", fallbackMessage);
+    }
+  };
+
+  const openSupportEmail = async (subject) => {
+    const encodedSubject = encodeURIComponent(subject);
+    const encodedBody = encodeURIComponent(
+      [
+        "",
+        "",
+        "----",
+        `Account email: ${email || "unknown"}`,
+        `Name: ${name || "unknown"}`,
+        `Plan: ${subscription || "Standard"}`,
+        `Base currency: ${baseCurrency || "USD"}`,
+        `Time zone: ${tz || "UTC"}`,
+      ].join("\n"),
+    );
+
+    const url = `mailto:${SUPPORT_EMAIL}?subject=${encodedSubject}&body=${encodedBody}`;
+
+    try {
+      await Linking.openURL(url);
+    } catch (e) {
+      console.warn("Open mail failed:", e);
+      Alert.alert(
+        "Could not open mail",
+        `Email us directly at ${SUPPORT_EMAIL}.`,
+      );
+    }
+  };
+
   const initials = useMemo(() => {
     return (
       (name || email || "U")
@@ -1151,6 +1195,93 @@ export default function UserScreen() {
     );
   }
 
+  function SupportPanel() {
+    return (
+      <View style={s.sectionCard}>
+        <Brackets color={CYAN} size={10} thick={1} />
+        <View style={[s.sectionHairline, { backgroundColor: CYAN }]} />
+
+        <View style={s.sectionHeaderRow}>
+          <View>
+            <Text style={s.sectionEyebrow}>SUPPORT CENTER</Text>
+            <Text style={s.sectionTitle}>Help & legal</Text>
+          </View>
+        </View>
+
+        <Text style={s.supportIntro}>
+          Need help with your account, transactions, subscriptions, or data?
+          Reach Nummoria support from here.
+        </Text>
+
+        <View style={s.supportGrid}>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={[s.supportTile, { borderColor: "rgba(0,212,255,0.22)" }]}
+            onPress={() => openSupportEmail("Nummoria Support Request")}
+          >
+            <View style={s.supportTileTop}>
+              <View style={[s.supportDot, { backgroundColor: CYAN }]} />
+              <Text style={[s.supportTileTitle, { color: CYAN }]}>
+                CONTACT SUPPORT
+              </Text>
+            </View>
+            <Text style={s.supportTileText}>Account, billing, or app help</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={[s.supportTile, { borderColor: "rgba(167,139,250,0.22)" }]}
+            onPress={() => openSupportEmail("Nummoria Bug Report")}
+          >
+            <View style={s.supportTileTop}>
+              <View style={[s.supportDot, { backgroundColor: VIOLET }]} />
+              <Text style={[s.supportTileTitle, { color: VIOLET }]}>
+                REPORT BUG
+              </Text>
+            </View>
+            <Text style={s.supportTileText}>Tell us what broke</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={[s.supportTile, { borderColor: "rgba(0,255,135,0.22)" }]}
+            onPress={() =>
+              openExternal(
+                `${WEB_ORIGIN}/privacy`,
+                "Privacy page is currently unavailable.",
+              )
+            }
+          >
+            <View style={s.supportTileTop}>
+              <View style={[s.supportDot, { backgroundColor: MINT }]} />
+              <Text style={[s.supportTileTitle, { color: MINT }]}>PRIVACY</Text>
+            </View>
+            <Text style={s.supportTileText}>How your data is handled</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={[s.supportTile, { borderColor: "rgba(251,191,36,0.22)" }]}
+            onPress={() =>
+              openExternal(
+                `${WEB_ORIGIN}/terms`,
+                "Terms page is currently unavailable.",
+              )
+            }
+          >
+            <View style={s.supportTileTop}>
+              <View style={[s.supportDot, { backgroundColor: GOLD }]} />
+              <Text style={[s.supportTileTitle, { color: GOLD }]}>TERMS</Text>
+            </View>
+            <Text style={s.supportTileText}>Usage and service rules</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScanLine color={CYAN} style={{ marginTop: 12 }} />
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={s.screen}>
       <GridBG />
@@ -1165,6 +1296,7 @@ export default function UserScreen() {
         {IdentityPanel()}
         {SettingsPanel()}
         {AccountsPanel()}
+        {SupportPanel()}
       </ScrollView>
 
       <Modal
@@ -1462,7 +1594,12 @@ const s = StyleSheet.create({
   },
   logoRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   statusDot: { width: 6, height: 6, borderRadius: 999 },
-  logoTxt: { fontSize: 13, fontWeight: "800", color: T_HI, letterSpacing: 3 },
+  logoTxt: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: T_HI,
+    letterSpacing: 2.4,
+  },
 
   homeBtn: {
     width: 36,
@@ -1981,13 +2118,6 @@ const s = StyleSheet.create({
     position: "relative",
   },
 
-  logoTxt: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: T_HI,
-    letterSpacing: 2.4,
-  },
-
   livePill: {
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -2072,5 +2202,51 @@ const s = StyleSheet.create({
     color: T_DIM,
     fontSize: 11,
     marginTop: 2,
+  },
+
+  supportIntro: {
+    fontSize: 12,
+    color: T_MID,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+
+  supportGrid: {
+    gap: 8,
+  },
+
+  supportTile: {
+    position: "relative",
+    borderWidth: 1,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.025)",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    overflow: "hidden",
+  },
+
+  supportTileTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginBottom: 5,
+  },
+
+  supportDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 999,
+  },
+
+  supportTileTitle: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+  },
+
+  supportTileText: {
+    fontSize: 11,
+    color: T_DIM,
+    lineHeight: 15,
   },
 });

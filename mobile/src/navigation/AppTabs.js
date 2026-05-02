@@ -9,7 +9,7 @@ import ExpensesScreen from "../screens/ExpenseScreen";
 import IncomeScreen from "../screens/IncomeScreen";
 import InvestmentScreen from "../screens/InvestmentScreen";
 import FinancialAdvisorScreen from "../screens/FinancialAdvisorScreen";
-import ReportsScreen from "../screens/ReportsScreen";
+// import ReportsScreen from "../screens/ReportsScreen";
 import ScanReceiptScreen from "../screens/ScanReceiptScreen";
 const Tab = createBottomTabNavigator();
 
@@ -113,7 +113,7 @@ export default function AppTabs() {
           ),
         }}
       />
-      <Tab.Screen
+      {/* <Tab.Screen
         name="Reports"
         component={ReportsScreen}
         options={{
@@ -125,7 +125,7 @@ export default function AppTabs() {
             <Text style={{ fontSize: 18 }}>{focused ? "📄" : "📄"}</Text>
           ),
         }}
-      />
+      /> */}
       <Tab.Screen
         name="ScanReceipt"
         component={ScanReceiptScreen}

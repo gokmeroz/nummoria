@@ -49,13 +49,13 @@ const ITEMS = [
     routeName: "Investments",
     accent: VIOLET,
   },
-  {
-    key: "reports",
-    label: "Reports",
-    glyph: "≡",
-    routeName: "Reports",
-    accent: CYAN,
-  },
+  // {
+  //   key: "reports",
+  //   label: "Reports",
+  //   glyph: "≡",
+  //   routeName: "Reports",
+  //   accent: CYAN,
+  // },
 ];
 
 /* ─── hex → rgba helper ─── */
