@@ -147,7 +147,7 @@ export default function Layout({ onLogout }) {
             <NavLink to="/incomes">Income</NavLink>
             <NavLink to="/investments">Investments</NavLink>
             <NavLink to="/reports">Reports</NavLink>
-            <NavLink to="/support">Support</NavLink>
+            {/* <NavLink to="/support">Support</NavLink> */}
           </nav>
 
           {/* Right side */}
