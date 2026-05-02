@@ -23,6 +23,7 @@ export default function Footer({
   nav = {
     Product: [
       { label: "Expenses", href: "/expenses" },
+      { label: "Income", href: "/incomes" },
       { label: "Reports", href: "/reports" },
       { label: "Investments", href: "/investments" },
     ],
@@ -30,11 +31,11 @@ export default function Footer({
       { label: "About", href: "/about-us" },
       { label: "Contact", href: "/contact" },
     ],
+    Support: [{ label: "Contact Support", href: "/support" }],
     Legal: [
       { label: "Privacy", href: "/privacy" },
       { label: "Terms", href: "/terms" },
     ],
-    Support: [{ label: "Contact Us", href: "/support" }],
   },
   socials = {
     x: "nummoria",
@@ -54,8 +55,7 @@ export default function Footer({
     ? "w-full px-6 lg:px-10 py-5"
     : "mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-5";
 
-  const sectionsOrder = ["Product", "Company", "Legal"];
-
+  const sectionsOrder = ["Product", "Company", "Support", "Legal"];
   const xUrl = socialUrl("x", socials.x);
   const ghUrl = socialUrl("github", socials.github);
   const igUrl = socialUrl("instagram", socials.instagram);
@@ -81,9 +81,9 @@ export default function Footer({
 
       {/* Top */}
       <div className={wrapTop}>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-10">
           {/* Brand */}
-          <div className="col-span-1 md:col-span-2">
+          <div className="col-span-1 sm:col-span-2 lg:col-span-2">
             <div className="flex items-center gap-3">
               <div className="relative">
                 <div className="absolute -inset-2 rounded-2xl blur-2xl opacity-25 bg-white/10" />
@@ -125,7 +125,7 @@ export default function Footer({
           {sectionsOrder.map((section) => {
             const items = nav[section] || [];
             return (
-              <div key={section} className="md:col-span-1">
+              <div key={section} className="sm:col-span-1 lg:col-span-1">
                 <div className="inline-flex items-center gap-2 text-xs uppercase tracking-wider text-white/60">
                   <span
                     className="h-2 w-2 rounded-full"
