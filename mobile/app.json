@@ -2,16 +2,19 @@
   "expo": {
     "name": "Nummoria",
     "slug": "mobile",
+    "scheme": "nummoria",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/nummoria_logo.png",
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "usesAppleSignIn": true,
       "supportsTablet": true,
@@ -44,7 +47,8 @@
           }
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-web-browser"
     ],
     "extra": {
       "eas": {

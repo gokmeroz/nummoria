@@ -12,6 +12,7 @@ import { seedDefaultCategoriesForUser } from "../services/categorySeedService.js
 
 // Apple Sign-In verification + client_secret JWT
 import { SignJWT, importPKCS8, createRemoteJWKSet, jwtVerify } from "jose";
+
 console.log("🔥 NEW AUTH CONTROLLER LOADED");
 
 /* ─────────────────────────── Config & Flags ─────────────────────────── */
@@ -19,7 +20,6 @@ console.log("🔥 NEW AUTH CONTROLLER LOADED");
 const IS_DEV = process.env.NODE_ENV !== "production";
 const IS_PROD = !IS_DEV;
 
-// Defensive: prevent undefined.replace() crashes
 const FRONTEND_URL_RAW = IS_PROD
   ? process.env.FRONTEND_URL_PROD ||
     process.env.FRONTEND_URL ||
@@ -35,7 +35,6 @@ const BACKEND_URL_RAW = IS_PROD
 const FRONTEND_URL = String(FRONTEND_URL_RAW).replace(/\/+$/, "");
 const BACKEND_URL = String(BACKEND_URL_RAW).replace(/\/+$/, "");
 
-// Validate critical URLs
 if (!FRONTEND_URL || !BACKEND_URL) {
   throw new Error("FRONTEND_URL and BACKEND_URL must be configured");
 }
@@ -47,7 +46,6 @@ console.log(
 const JWT_SECRET = requireEnv("JWT_SECRET");
 const CURRENT_CONSENT_VERSION = "v1";
 
-// Feature flags / dev helpers
 const SKIP_EMAIL_VERIFICATION =
   String(process.env.AUTH_SKIP_EMAIL_VERIFICATION || "false") === "true";
 const DEV_VERIFICATION_CODE = process.env.DEV_VERIFICATION_CODE || "000000";
@@ -55,7 +53,8 @@ const FORCE_EMAIL_SEND =
   String(process.env.FORCE_EMAIL_SEND || "false") === "true";
 const DEBUG_VERIFY = String(process.env.DEBUG_VERIFY || "false") === "true";
 
-// OAuth env
+/* ─────────────────────────── OAuth env ─────────────────────────── */
+
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const GOOGLE_REDIRECT_URI = String(
@@ -67,10 +66,9 @@ const GOOGLE_REDIRECT_URI = String(
         "http://localhost:4000/auth/google/callback",
 ).replace(/\/+$/, "");
 
-// Apple OAuth env
 const {
-  APPLE_CLIENT_ID, // WEB Service ID
-  APPLE_IOS_BUNDLE_ID, // iOS bundle id
+  APPLE_CLIENT_ID,
+  APPLE_IOS_BUNDLE_ID,
   APPLE_REDIRECT_URI,
   APPLE_TEAM_ID,
   APPLE_KEY_ID,
@@ -93,8 +91,8 @@ const MAIL_FROM = process.env.MAIL_FROM || `Nummoria <${GMAIL_SENDER}>`;
 
 /* ─────────────────────────── Small utils ────────────────────────────── */
 
-function base64url(buf) {
-  return Buffer.from(buf)
+function base64url(input) {
+  return Buffer.from(input)
     .toString("base64")
     .replace(/=/g, "")
     .replace(/\+/g, "-")
@@ -103,12 +101,15 @@ function base64url(buf) {
 
 function sanitizeNext(nextRaw) {
   if (!nextRaw) return "/";
+
   try {
     if (typeof nextRaw !== "string") return "/";
+
     if (/^https?:\/\//i.test(nextRaw)) {
       const u = new URL(nextRaw);
       return (u.pathname || "/") + (u.search || "") + (u.hash || "");
     }
+
     return nextRaw.startsWith("/") ? nextRaw : "/" + nextRaw;
   } catch {
     return "/";
@@ -119,6 +120,7 @@ function maskEmail(email = "") {
   const [u, d] = String(email).split("@");
   if (!d) return email;
   if (!u || u.length <= 2) return `${(u || "").slice(0, 1)}*@${d}`;
+
   return `${u[0]}${"*".repeat(Math.max(1, u.length - 2))}${
     u[u.length - 1]
   }@${d}`;
@@ -126,6 +128,7 @@ function maskEmail(email = "") {
 
 function safeDecodeURIComponentMaybe(s) {
   if (!s || typeof s !== "string") return "";
+
   try {
     return decodeURIComponent(s);
   } catch {
@@ -158,6 +161,110 @@ function normalizeConsentInput(consentInput) {
   };
 }
 
+function createAuthToken(user) {
+  return jwt.sign(
+    {
+      id: user._id,
+      email: user.email,
+      role: user.role || "user",
+    },
+    JWT_SECRET,
+    { expiresIn: "8h" },
+  );
+}
+
+function publicUser(user) {
+  return {
+    id: user._id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    tz: user.tz,
+    baseCurrency: user.baseCurrency,
+    profession: user.profession,
+    createdAt: user.createdAt,
+    lastLogin: user.lastLogin,
+    isActive: user.isActive,
+    isEmailVerified: user.isEmailVerified,
+    subscription: user.subscription,
+  };
+}
+
+/* ───────────────────────── Google mobile OAuth helpers ───────────────────────── */
+
+const GOOGLE_MOBILE_DEFAULT_REDIRECT_URI = "nummoria://auth/google";
+
+function isAllowedMobileRedirectUri(uri) {
+  if (!uri || typeof uri !== "string") return false;
+
+  try {
+    const parsed = new URL(uri);
+
+    return (
+      parsed.protocol === "nummoria:" &&
+      parsed.hostname === "auth" &&
+      parsed.pathname === "/google"
+    );
+  } catch {
+    return false;
+  }
+}
+
+function encodeGoogleMobileState({ redirectUri, next = "/" }) {
+  const safeRedirectUri = isAllowedMobileRedirectUri(redirectUri)
+    ? redirectUri
+    : GOOGLE_MOBILE_DEFAULT_REDIRECT_URI;
+
+  const payload = {
+    platform: "mobile",
+    provider: "google",
+    redirectUri: safeRedirectUri,
+    next: sanitizeNext(next || "/"),
+  };
+
+  return base64url(JSON.stringify(payload));
+}
+
+function parseGoogleState(state) {
+  if (!state || typeof state !== "string") {
+    return {
+      platform: "web",
+      next: "/",
+    };
+  }
+
+  try {
+    const normalized = state.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+
+    const decoded = Buffer.from(padded, "base64").toString("utf8");
+    const parsed = JSON.parse(decoded);
+
+    if (parsed?.platform === "mobile") {
+      return {
+        platform: "mobile",
+        provider: parsed.provider || "google",
+        redirectUri: isAllowedMobileRedirectUri(parsed.redirectUri)
+          ? parsed.redirectUri
+          : GOOGLE_MOBILE_DEFAULT_REDIRECT_URI,
+        next: sanitizeNext(parsed.next || "/"),
+      };
+    }
+  } catch {
+    // Old web flow sends state as a plain next path. That is expected.
+  }
+
+  return {
+    platform: "web",
+    next: sanitizeNext(state || "/"),
+  };
+}
+
+function appendQueryParamsToUrl(baseUrl, params) {
+  const joiner = baseUrl.includes("?") ? "&" : "?";
+  return `${baseUrl}${joiner}${params.toString()}`;
+}
+
 /* ───────────────────────── Apple helpers ───────────────────────── */
 
 function normalizeApplePrivateKey(k = "") {
@@ -180,6 +287,7 @@ function decodeJwtPayloadUnsafe(token) {
     const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
     const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
     const json = Buffer.from(padded, "base64").toString("utf8");
+
     return JSON.parse(json);
   } catch {
     return null;
@@ -216,7 +324,7 @@ async function createAppleClientSecret() {
   }
 
   const now = Math.floor(Date.now() / 1000);
-  const exp = now + 60 * 60; // 1 hour
+  const exp = now + 60 * 60;
 
   const normalizedKey = normalizeApplePrivateKey(APPLE_PRIVATE_KEY);
 
@@ -248,6 +356,7 @@ const APPLE_JWKS = createRemoteJWKSet(
 
 async function verifyAppleIdToken(idToken) {
   const audiences = getAppleAudiences();
+
   if (!audiences.length) {
     throw new Error(
       "Apple audiences not configured. Set APPLE_CLIENT_ID / APPLE_IOS_BUNDLE_ID / APPLE_ALLOWED_AUDIENCES.",
@@ -262,7 +371,7 @@ async function verifyAppleIdToken(idToken) {
   return payload;
 }
 
-/* ─────────────────────────── Mailer (Gmail API) ─────────────────────────── */
+/* ─────────────────────────── Mailer ─────────────────────────── */
 
 function toBase64Url(str) {
   return Buffer.from(str)
@@ -311,6 +420,7 @@ async function sendMail({ to, subject, text, html }) {
       subject,
       text,
     });
+
     return { id: `dev-${Date.now()}` };
   }
 
@@ -352,8 +462,11 @@ function buildVerifyEmailMessage({ email, code }) {
   const verifyUrl = `${FRONTEND_URL}/verify-email?email=${encodeURIComponent(
     email,
   )}`;
+
   const subject = "Verify your email for Nummoria";
+
   const text = `Your Nummoria verification code is ${code}. It expires in 15 minutes.\n\nOpen: ${verifyUrl}`;
+
   const html = `
     <div style="font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif">
       <h2>Verify your email</h2>
@@ -363,6 +476,7 @@ function buildVerifyEmailMessage({ email, code }) {
       <p><a href="${verifyUrl}" target="_blank" rel="noopener">Open verification page</a></p>
     </div>
   `;
+
   return { subject, text, html };
 }
 
@@ -501,12 +615,16 @@ export async function register(req, res) {
 export async function login(req, res) {
   try {
     const { email, password } = req.body;
+
     const user = await User.findOne({
       email: (email || "").toLowerCase(),
     }).select(
       "+passwordHash +emailVerificationCodeHash +emailVerificationExpiresAt",
     );
-    if (!user) return res.status(401).json({ error: "Invalid credentials" });
+
+    if (!user) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
 
     if (!user.passwordHash) {
       return res.status(401).json({
@@ -516,7 +634,9 @@ export async function login(req, res) {
     }
 
     const match = await bcrypt.compare(password, user.passwordHash);
-    if (!match) return res.status(401).json({ error: "Invalid credentials" });
+    if (!match) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
 
     if (!user.isEmailVerified) {
       if (IS_DEV && SKIP_EMAIL_VERIFICATION) {
@@ -537,31 +657,14 @@ export async function login(req, res) {
     user.lastLogin = new Date();
     await user.save();
 
-    const token = jwt.sign(
-      { id: user._id, email: user.email, role: user.role || "user" },
-      JWT_SECRET,
-      { expiresIn: "8h" },
-    );
+    const token = createAuthToken(user);
 
     setAuthCookie(res, token);
 
     return res.json({
       ok: true,
       token,
-      user: {
-        id: user._id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        tz: user.tz,
-        baseCurrency: user.baseCurrency,
-        profession: user.profession,
-        createdAt: user.createdAt,
-        lastLogin: user.lastLogin,
-        isActive: user.isActive,
-        isEmailVerified: user.isEmailVerified,
-        subscription: user.subscription,
-      },
+      user: publicUser(user),
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -580,27 +683,38 @@ export async function verifyEmail(req, res) {
     const { regToken, code } = req.body;
 
     if (!regToken || !code) {
-      return res.status(400).json({ error: "regToken and code are required" });
+      return res.status(400).json({
+        error: "regToken and code are required",
+      });
     }
 
     const data = readRegToken(regToken);
     if (!data || !data.email || !data.codeHash || !data.expiresAt) {
-      return res.status(400).json({ error: "Invalid or expired code" });
+      return res.status(400).json({
+        error: "Invalid or expired code",
+      });
     }
 
     if (Number(data.expiresAt) < Date.now()) {
-      return res.status(400).json({ error: "Invalid or expired code" });
+      return res.status(400).json({
+        error: "Invalid or expired code",
+      });
     }
 
     if (!(IS_DEV && code === DEV_VERIFICATION_CODE)) {
       const ok = await bcrypt.compare(code, data.codeHash);
-      if (!ok)
-        return res.status(400).json({ error: "Invalid or expired code" });
+      if (!ok) {
+        return res.status(400).json({
+          error: "Invalid or expired code",
+        });
+      }
     }
 
     const existing = await User.findOne({ email: data.email });
     if (existing) {
-      return res.status(200).json({ message: "Email already verified." });
+      return res.status(200).json({
+        message: "Email already verified.",
+      });
     }
 
     const consentData = normalizeConsentInput(data.consent);
@@ -632,15 +746,20 @@ export async function verifyEmail(req, res) {
       },
     });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({
+      error: err.message,
+    });
   }
 }
 
 export async function verifyExistingEmail(req, res) {
   try {
     const { email, code } = req.body;
+
     if (!email || !code) {
-      return res.status(400).json({ error: "email and code are required" });
+      return res.status(400).json({
+        error: "email and code are required",
+      });
     }
 
     const user = await User.findOne({
@@ -650,53 +769,75 @@ export async function verifyExistingEmail(req, res) {
     );
 
     if (!user) {
-      return res.status(400).json({ error: "Invalid or expired code" });
+      return res.status(400).json({
+        error: "Invalid or expired code",
+      });
     }
 
     if (user.isEmailVerified) {
-      return res.status(200).json({ message: "Email already verified." });
+      return res.status(200).json({
+        message: "Email already verified.",
+      });
     }
 
     if (!user.emailVerificationCodeHash || !user.emailVerificationExpiresAt) {
-      return res.status(400).json({ error: "Invalid or expired code" });
+      return res.status(400).json({
+        error: "Invalid or expired code",
+      });
     }
 
     if (user.emailVerificationExpiresAt.getTime() < Date.now()) {
-      return res.status(400).json({ error: "Invalid or expired code" });
+      return res.status(400).json({
+        error: "Invalid or expired code",
+      });
     }
 
     const ok = await bcrypt.compare(code, user.emailVerificationCodeHash);
     if (!ok) {
-      return res.status(400).json({ error: "Invalid or expired code" });
+      return res.status(400).json({
+        error: "Invalid or expired code",
+      });
     }
 
     user.isEmailVerified = true;
     user.emailVerifiedAt = new Date();
     user.emailVerificationCodeHash = undefined;
     user.emailVerificationExpiresAt = undefined;
+
     await user.save();
 
-    return res.json({ message: "Email verified." });
+    return res.json({
+      message: "Email verified.",
+    });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({
+      error: err.message,
+    });
   }
 }
 
 export async function resendCode(req, res) {
   try {
     const { regToken } = req.body;
+
     if (!regToken) {
-      return res.status(400).json({ error: "regToken is required" });
+      return res.status(400).json({
+        error: "regToken is required",
+      });
     }
 
     const data = readRegToken(regToken);
     if (!data || !data.email || !data.passwordHash) {
-      return res.json({ message: "If the email exists, a new code was sent." });
+      return res.json({
+        message: "If the email exists, a new code was sent.",
+      });
     }
 
     const existing = await User.findOne({ email: data.email });
     if (existing) {
-      return res.json({ message: "If the email exists, a new code was sent." });
+      return res.json({
+        message: "If the email exists, a new code was sent.",
+      });
     }
 
     const code = makeVerificationCode();
@@ -715,7 +856,13 @@ export async function resendCode(req, res) {
         email: data.email,
         code,
       });
-      await sendMail({ to: data.email, subject, text, html });
+
+      await sendMail({
+        to: data.email,
+        subject,
+        text,
+        html,
+      });
     } else {
       console.log("[VERIFY:DEV-RESEND] Code for %s => %s", data.email, code);
     }
@@ -728,7 +875,9 @@ export async function resendCode(req, res) {
         : {}),
     });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({
+      error: err.message,
+    });
   }
 }
 
@@ -737,9 +886,16 @@ export async function resendCode(req, res) {
 export async function forgotPassword(req, res) {
   try {
     const { email } = req.body;
-    if (!email) return res.status(400).json({ error: "Email is required" });
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!email) {
+      return res.status(400).json({
+        error: "Email is required",
+      });
+    }
+
+    const user = await User.findOne({
+      email: email.toLowerCase(),
+    });
 
     if (!user) {
       return res.json({
@@ -754,13 +910,15 @@ export async function forgotPassword(req, res) {
 
     user.resetPasswordTokenHash = tokenHash;
     user.resetPasswordExpiresAt = expires;
+
     await user.save();
 
     const resetUrl = `${FRONTEND_URL}/reset-password?token=${rawToken}&email=${encodeURIComponent(
       email,
     )}`;
+
     console.log(
-      `Password reset requested for ${email}. Reset URL (valid for 30 mins): ${resetUrl}`,
+      `Password reset requested for ${email}. Reset URL valid for 30 mins: ${resetUrl}`,
     );
 
     return res.json({
@@ -769,7 +927,9 @@ export async function forgotPassword(req, res) {
       ...(IS_DEV ? { token: rawToken } : {}),
     });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({
+      error: err.message,
+    });
   }
 }
 
@@ -790,15 +950,23 @@ export async function resetPassword(req, res) {
     const user = await User.findOne(query);
 
     if (!user || !user.resetPasswordTokenHash || !user.resetPasswordExpiresAt) {
-      return res.status(400).json({ error: "Invalid or expired token" });
+      return res.status(400).json({
+        error: "Invalid or expired token",
+      });
     }
 
     if (user.resetPasswordExpiresAt < new Date()) {
-      return res.status(400).json({ error: "Invalid or expired token" });
+      return res.status(400).json({
+        error: "Invalid or expired token",
+      });
     }
 
     const ok = await bcrypt.compare(token, user.resetPasswordTokenHash);
-    if (!ok) return res.status(400).json({ error: "Invalid or expired token" });
+    if (!ok) {
+      return res.status(400).json({
+        error: "Invalid or expired token",
+      });
+    }
 
     user.passwordHash = await bcrypt.hash(newPassword, 10);
     user.resetPasswordTokenHash = null;
@@ -807,13 +975,17 @@ export async function resetPassword(req, res) {
 
     await user.save();
 
-    return res.json({ message: "Password updated" });
+    return res.json({
+      message: "Password updated",
+    });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({
+      error: err.message,
+    });
   }
 }
 
-/* ───────────────────────────── Apple OAuth (WEB) ───────────────────────────── */
+/* ───────────────────────────── Apple OAuth WEB ───────────────────────────── */
 
 export async function appleStart(req, res) {
   try {
@@ -840,9 +1012,12 @@ export async function appleStart(req, res) {
     });
 
     const authUrl = `https://appleid.apple.com/auth/authorize?${params.toString()}`;
+
     return res.redirect(authUrl);
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({
+      error: err.message,
+    });
   }
 }
 
@@ -852,7 +1027,9 @@ export async function appleCallback(req, res) {
     const state = req.body?.state || req.query?.state;
 
     if (!code) {
-      return res.status(400).json({ error: "Missing code" });
+      return res.status(400).json({
+        error: "Missing code",
+      });
     }
 
     console.log("[APPLE CALLBACK]");
@@ -867,6 +1044,7 @@ export async function appleCallback(req, res) {
     );
 
     let client_secret;
+
     try {
       client_secret = await createAppleClientSecret();
       console.log("[APPLE] client_secret created successfully");
@@ -889,18 +1067,23 @@ export async function appleCallback(req, res) {
     });
 
     console.log("[APPLE] Calling Apple token endpoint...");
+
     const tokenResp = await fetch("https://appleid.apple.com/auth/token", {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
       body: tokenParams.toString(),
     });
 
     const tokenRaw = await tokenResp.text();
+
     console.log("[APPLE TOKEN STATUS]", tokenResp.status);
     console.log("[APPLE TOKEN BODY]", tokenRaw);
 
     if (!tokenResp.ok) {
       console.error("[APPLE] Token exchange failed:", tokenRaw);
+
       return res.status(400).json({
         error: "Apple token exchange failed",
         details: tokenRaw,
@@ -911,7 +1094,9 @@ export async function appleCallback(req, res) {
     const id_token = tokens.id_token;
 
     if (!id_token) {
-      return res.status(400).json({ error: "Missing id_token from Apple" });
+      return res.status(400).json({
+        error: "Missing id_token from Apple",
+      });
     }
 
     const payload = await verifyAppleIdToken(id_token);
@@ -924,12 +1109,15 @@ export async function appleCallback(req, res) {
 
     let displayName = "";
     const userRaw = req.body?.user;
+
     if (userRaw) {
       try {
         const userObj =
           typeof userRaw === "string" ? JSON.parse(userRaw) : userRaw;
+
         const first = userObj?.name?.firstName || "";
         const last = userObj?.name?.lastName || "";
+
         displayName = `${first} ${last}`.trim();
       } catch {
         console.log("[APPLE] Failed to parse optional user profile payload");
@@ -937,7 +1125,9 @@ export async function appleCallback(req, res) {
     }
 
     if (!appleId) {
-      return res.status(400).json({ error: "Apple token missing sub" });
+      return res.status(400).json({
+        error: "Apple token missing sub",
+      });
     }
 
     let user = await User.findOne({
@@ -1008,14 +1198,12 @@ export async function appleCallback(req, res) {
         changed = true;
       }
 
-      if (changed) await user.save();
+      if (changed) {
+        await user.save();
+      }
     }
 
-    const token = jwt.sign(
-      { id: user._id, email: user.email, role: user.role || "user" },
-      JWT_SECRET,
-      { expiresIn: "8h" },
-    );
+    const token = createAuthToken(user);
 
     setAuthCookie(res, token);
 
@@ -1034,6 +1222,7 @@ export async function appleCallback(req, res) {
       stack: err?.stack,
       name: err?.name,
     });
+
     return res.status(500).json({
       error: err.message || "Apple sign-in failed",
       details: IS_DEV ? err.stack : undefined,
@@ -1055,7 +1244,7 @@ export async function googleStart(req, res) {
     const next = sanitizeNext(req.query.next || "/");
     const state = next;
 
-    console.log("[GOOGLE START]");
+    console.log("[GOOGLE START:WEB]");
     console.log("NODE_ENV:", process.env.NODE_ENV);
     console.log("FRONTEND_URL:", FRONTEND_URL);
     console.log("BACKEND_URL:", BACKEND_URL);
@@ -1074,12 +1263,72 @@ export async function googleStart(req, res) {
     });
 
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+
     console.log("GOOGLE AUTH URL:", authUrl);
 
     return res.redirect(authUrl);
   } catch (err) {
-    console.error("[GOOGLE START ERROR]", err);
-    return res.status(500).json({ error: err.message });
+    console.error("[GOOGLE START WEB ERROR]", err);
+
+    return res.status(500).json({
+      error: err.message,
+    });
+  }
+}
+
+export async function googleMobileStart(req, res) {
+  try {
+    if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REDIRECT_URI) {
+      return res.status(500).json({
+        error:
+          "Google OAuth not configured. Missing GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, or GOOGLE_REDIRECT_URI.",
+      });
+    }
+
+    const requestedRedirectUri = String(
+      req.query.redirect_uri || GOOGLE_MOBILE_DEFAULT_REDIRECT_URI,
+    ).trim();
+
+    const redirectUri = isAllowedMobileRedirectUri(requestedRedirectUri)
+      ? requestedRedirectUri
+      : GOOGLE_MOBILE_DEFAULT_REDIRECT_URI;
+
+    const next = sanitizeNext(req.query.next || "/");
+
+    const state = encodeGoogleMobileState({
+      redirectUri,
+      next,
+    });
+
+    console.log("[GOOGLE START:MOBILE]");
+    console.log("NODE_ENV:", process.env.NODE_ENV);
+    console.log("BACKEND_URL:", BACKEND_URL);
+    console.log("GOOGLE_REDIRECT_URI:", GOOGLE_REDIRECT_URI);
+    console.log("MOBILE_REDIRECT_URI:", redirectUri);
+    console.log("NEXT:", next);
+
+    const params = new URLSearchParams({
+      client_id: GOOGLE_CLIENT_ID.trim(),
+      redirect_uri: GOOGLE_REDIRECT_URI.trim(),
+      response_type: "code",
+      scope: "openid email profile",
+      access_type: "offline",
+      include_granted_scopes: "true",
+      prompt: "consent",
+      state,
+    });
+
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+
+    console.log("GOOGLE MOBILE AUTH URL:", authUrl);
+
+    return res.redirect(authUrl);
+  } catch (err) {
+    console.error("[GOOGLE START MOBILE ERROR]", err);
+
+    return res.status(500).json({
+      error: err.message,
+    });
   }
 }
 
@@ -1095,12 +1344,17 @@ export async function googleCallback(req, res) {
     }
 
     if (!code) {
-      return res.status(400).json({ error: "Missing code" });
+      return res.status(400).json({
+        error: "Missing code",
+      });
     }
+
+    const stateData = parseGoogleState(String(state || ""));
 
     console.log("[GOOGLE CALLBACK]");
     console.log("NODE_ENV:", process.env.NODE_ENV);
     console.log("GOOGLE_REDIRECT_URI:", GOOGLE_REDIRECT_URI);
+    console.log("STATE_DATA:", stateData);
 
     const tokenParams = new URLSearchParams({
       client_id: GOOGLE_CLIENT_ID.trim(),
@@ -1112,13 +1366,17 @@ export async function googleCallback(req, res) {
 
     const tokenResp = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
       body: tokenParams.toString(),
     });
 
     if (!tokenResp.ok) {
       const t = await tokenResp.text();
+
       console.error("[GOOGLE TOKEN EXCHANGE FAILED]", t);
+
       return res.status(400).json({
         error: "Token exchange failed",
         details: t,
@@ -1131,13 +1389,17 @@ export async function googleCallback(req, res) {
     const userResp = await fetch(
       "https://openidconnect.googleapis.com/v1/userinfo",
       {
-        headers: { Authorization: `Bearer ${access_token}` },
+        headers: {
+          Authorization: `Bearer ${access_token}`,
+        },
       },
     );
 
     if (!userResp.ok) {
       const t = await userResp.text();
+
       console.error("[GOOGLE USERINFO FAILED]", t);
+
       return res.status(400).json({
         error: "Userinfo fetch failed",
         details: t,
@@ -1149,10 +1411,14 @@ export async function googleCallback(req, res) {
     const email = (profile.email || "").toLowerCase();
 
     if (!email) {
-      return res.status(400).json({ error: "Google account has no email" });
+      return res.status(400).json({
+        error: "Google account has no email",
+      });
     }
 
-    let user = await User.findOne({ $or: [{ email }, { googleId }] });
+    let user = await User.findOne({
+      $or: [{ email }, { googleId }],
+    });
 
     if (!user) {
       user = await User.create({
@@ -1208,42 +1474,60 @@ export async function googleCallback(req, res) {
       user.lastLogin = new Date();
       changed = true;
 
-      if (changed) await user.save();
+      if (changed) {
+        await user.save();
+      }
     }
 
-    const token = jwt.sign(
-      { id: user._id, email: user.email, role: user.role || "user" },
-      JWT_SECRET,
-      { expiresIn: "8h" },
-    );
+    const token = createAuthToken(user);
 
     setAuthCookie(res, token);
 
-    const next = sanitizeNext(state || "/");
+    if (stateData.platform === "mobile") {
+      const mobileParams = new URLSearchParams({
+        provider: "google",
+        token,
+        next: stateData.next || "/",
+      });
+
+      const mobileRedirectTo = appendQueryParamsToUrl(
+        stateData.redirectUri || GOOGLE_MOBILE_DEFAULT_REDIRECT_URI,
+        mobileParams,
+      );
+
+      console.log("[GOOGLE CALLBACK MOBILE REDIRECT TO]", mobileRedirectTo);
+
+      return res.redirect(mobileRedirectTo);
+    }
 
     const redirectTo = buildOauthRedirectUrl({
       provider: "google",
       token,
-      next,
+      next: stateData.next || "/",
     });
 
-    console.log("[GOOGLE CALLBACK REDIRECT TO]", redirectTo);
+    console.log("[GOOGLE CALLBACK WEB REDIRECT TO]", redirectTo);
 
     return res.redirect(redirectTo);
   } catch (err) {
     console.error("[GOOGLE CALLBACK ERROR]", err);
-    return res.status(500).json({ error: err.message });
+
+    return res.status(500).json({
+      error: err.message,
+    });
   }
 }
 
-/* ───────────────────────── Apple (MOBILE / Expo) ───────────────────────── */
+/* ───────────────────────── Apple MOBILE / Expo ───────────────────────── */
 
 export async function appleMobile(req, res) {
   try {
     const { identityToken, fullName } = req.body || {};
 
     if (!identityToken) {
-      return res.status(400).json({ error: "identityToken is required" });
+      return res.status(400).json({
+        error: "identityToken is required",
+      });
     }
 
     if (!APPLE_IOS_BUNDLE_ID && !APPLE_ALLOWED_AUDIENCES) {
@@ -1254,6 +1538,7 @@ export async function appleMobile(req, res) {
     }
 
     const unsafe = decodeJwtPayloadUnsafe(identityToken);
+
     if (unsafe) {
       console.log("[APPLE MOBILE PAYLOAD UNSAFE]", {
         iss: unsafe.iss,
@@ -1267,7 +1552,9 @@ export async function appleMobile(req, res) {
 
     const appleId = String(payload.sub || "");
     if (!appleId) {
-      return res.status(400).json({ error: "Apple token missing sub" });
+      return res.status(400).json({
+        error: "Apple token missing sub",
+      });
     }
 
     const email = (payload.email || "").toLowerCase();
@@ -1302,6 +1589,8 @@ export async function appleMobile(req, res) {
           version: CURRENT_CONSENT_VERSION,
         },
       });
+
+      await seedDefaultCategoriesForUser(user._id);
     } else {
       let changed = false;
 
@@ -1344,35 +1633,21 @@ export async function appleMobile(req, res) {
         changed = true;
       }
 
-      if (changed) await user.save();
+      if (changed) {
+        await user.save();
+      }
     }
 
-    const token = jwt.sign(
-      { id: user._id, email: user.email, role: user.role || "user" },
-      JWT_SECRET,
-      { expiresIn: "8h" },
-    );
+    const token = createAuthToken(user);
 
     return res.json({
       ok: true,
       token,
-      user: {
-        id: user._id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        tz: user.tz,
-        baseCurrency: user.baseCurrency,
-        profession: user.profession,
-        createdAt: user.createdAt,
-        lastLogin: user.lastLogin,
-        isActive: user.isActive,
-        isEmailVerified: user.isEmailVerified,
-        subscription: user.subscription,
-      },
+      user: publicUser(user),
     });
   } catch (err) {
     console.log("[APPLE_MOBILE] error:", err?.message);
+
     return res.status(400).json({
       error: "Apple sign-in failed",
       details: String(err?.message || err),

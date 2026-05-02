@@ -9,12 +9,22 @@
       "distribution": "internal",
       "ios": {
         "simulator": true
+      },
+      "env": {
+        "EXPO_PUBLIC_ENV": "development",
+        "EXPO_PUBLIC_API_URL": "http://192.168.1.4:4000",
+        "EXPO_PUBLIC_WEB_URL": "http://localhost:5173"
       }
     },
     "preview": {
       "distribution": "internal",
       "ios": {
         "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_ENV": "production",
+        "EXPO_PUBLIC_API_URL": "https://api.nummoria.com",
+        "EXPO_PUBLIC_WEB_URL": "https://nummoria.com"
       }
     },
     "production": {
@@ -22,6 +32,11 @@
       "distribution": "store",
       "ios": {
         "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_ENV": "production",
+        "EXPO_PUBLIC_API_URL": "https://api.nummoria.com",
+        "EXPO_PUBLIC_WEB_URL": "https://nummoria.com"
       }
     },
     "testflight": {
@@ -32,7 +47,9 @@
         "buildConfiguration": "Release"
       },
       "env": {
-        "EXPO_PUBLIC_ENV": "production"
+        "EXPO_PUBLIC_ENV": "production",
+        "EXPO_PUBLIC_API_URL": "https://api.nummoria.com",
+        "EXPO_PUBLIC_WEB_URL": "https://nummoria.com"
       }
     }
   },
@@ -40,7 +57,14 @@
     "production": {
       "ios": {
         "appleId": "mertthewhite@gmail.com",
-        "ascAppId": "placeholder",
+        "ascAppId": "6765803794",
+        "appleTeamId": "SCJDP6KNLF"
+      }
+    },
+    "testflight": {
+      "ios": {
+        "appleId": "mertthewhite@gmail.com",
+        "ascAppId": "6765803794",
         "appleTeamId": "SCJDP6KNLF"
       }
     }

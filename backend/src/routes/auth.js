@@ -9,6 +9,7 @@ import {
   verifyExistingEmail,
   resendCode,
   googleStart,
+  googleMobileStart,
   googleCallback,
   appleStart,
   appleCallback,
@@ -33,12 +34,13 @@ router.post("/resend-code", resendCode);
 
 // Google OAuth
 router.get("/google", googleStart);
+router.get("/google/mobile", googleMobileStart);
 router.get("/google/callback", googleCallback);
 
 // Apple OAuth (WEB)
 router.get("/apple", appleStart);
-router.post("/apple/callback", appleCallback); // form_post
-router.get("/apple/callback", appleCallback); // fallback
+router.post("/apple/callback", appleCallback);
+router.get("/apple/callback", appleCallback);
 
 // Apple OAuth (MOBILE)
 router.post("/apple/mobile", appleMobile);

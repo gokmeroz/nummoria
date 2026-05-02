@@ -14,15 +14,18 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  Linking,
   Modal,
   SafeAreaView,
 } from "react-native";
 import { AntDesign } from "@expo/vector-icons";
 import * as AppleAuthentication from "expo-apple-authentication";
+import * as WebBrowser from "expo-web-browser";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
 import api from "../lib/api";
 import logo from "../../assets/nummoria_logo.png";
+
+WebBrowser.maybeCompleteAuthSession();
 
 /* ──────────────────────────────────────────────────────────
    THEME — synced with Dashboard / Expenses cyberpunk HUD
@@ -38,12 +41,48 @@ const T_MID = "rgba(226,232,240,0.55)";
 const T_DIM = "rgba(226,232,240,0.32)";
 const DANGER = "#fb7185";
 
-/* Consent (local gate) */
+/* Consent / local persistence */
 const CONSENT_KEY = (userId) => `consent:${String(userId)}`;
-
-/* Verification persistence keys */
 const PENDING_VERIFY_EMAIL_KEY = "pendingVerifyEmail";
 const PENDING_REG_TOKEN_KEY = "pendingRegToken";
+
+/* Google mobile OAuth */
+const GOOGLE_MOBILE_REDIRECT_URI = "nummoria://auth/google";
+
+/* ──────────────────────────────────────────────────────────
+   HELPERS
+────────────────────────────────────────────────────────── */
+function getQueryParamFromUrl(url, key) {
+  try {
+    const query =
+      String(url || "")
+        .split("?")[1]
+        ?.split("#")[0] || "";
+    const params = new URLSearchParams(query);
+    return params.get(key);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeUser(raw) {
+  const user = raw?.user || raw || {};
+
+  return {
+    id: user.id || user._id,
+    email: user.email || "",
+    name: user.name || "",
+    role: user.role || "user",
+    tz: user.tz || "UTC",
+    baseCurrency: user.baseCurrency || "USD",
+    profession: user.profession || "",
+    createdAt: user.createdAt,
+    lastLogin: user.lastLogin,
+    isActive: user.isActive,
+    isEmailVerified: user.isEmailVerified,
+    subscription: user.subscription || "Standard",
+  };
+}
 
 /* ──────────────────────────────────────────────────────────
    HUD PRIMITIVES
@@ -152,6 +191,7 @@ function GridBG() {
           }}
         />
       ))}
+
       {Array.from({ length: COLS + 1 }, (_, i) => (
         <View
           key={`v${i}`}
@@ -177,6 +217,7 @@ function GridBG() {
           opacity: 0.15,
         }}
       />
+
       <View
         style={{
           position: "absolute",
@@ -188,6 +229,7 @@ function GridBG() {
           opacity: 0.06,
         }}
       />
+
       <View
         style={{
           position: "absolute",
@@ -246,6 +288,9 @@ function StatusCard({ title, body, accent = VIOLET }) {
   );
 }
 
+/* ══════════════════════════════════════════════════════════
+   SCREEN
+══════════════════════════════════════════════════════════ */
 export default function LoginScreen({ navigation, onLoggedIn }) {
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -272,12 +317,15 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
   const maskedEmail = useMemo(() => {
     const email = verifyEmail?.trim();
     if (!email) return "";
+
     const [u, d] = email.split("@");
     if (!d) return email;
+
     const maskU =
       u.length <= 2
         ? `${u[0]}*`
         : `${u[0]}${"*".repeat(Math.max(1, u.length - 2))}${u[u.length - 1]}`;
+
     return `${maskU}@${d}`;
   }, [verifyEmail]);
 
@@ -288,6 +336,7 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
         await AsyncStorage.setItem("userEmail", data.user.email || "");
         await AsyncStorage.setItem("userName", data.user.name || "");
       }
+
       if (data?.token) {
         await AsyncStorage.setItem("token", data.token);
         api.defaults.headers.Authorization = `Bearer ${data.token}`;
@@ -302,14 +351,17 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
       onLoggedIn();
       return;
     }
+
     navigation?.replace?.("MainTabs");
   }
 
   async function hasAcceptedConsent(userId) {
     try {
       if (!userId) return false;
+
       const raw = await AsyncStorage.getItem(CONSENT_KEY(userId));
       if (!raw) return false;
+
       const consent = JSON.parse(raw);
       return !!(consent?.termsAccepted && consent?.cookiesAccepted);
     } catch {
@@ -324,6 +376,7 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
       data?.user?.id || (await AsyncStorage.getItem("defaultId")) || null;
 
     const ok = await hasAcceptedConsent(userId);
+
     if (!ok) {
       if (navigation?.replace) {
         navigation.replace("Terms", {
@@ -345,6 +398,7 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
 
   async function openVerifyModal(email, regTokenMaybe) {
     const cleanEmail = (email || "").trim();
+
     setVerifyEmail(cleanEmail);
     setCode("");
     setVerifyErr("");
@@ -385,6 +439,7 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
       });
 
       const data = resp?.data || {};
+
       setLoginLoading(false);
 
       await routeAfterAuth(data);
@@ -406,8 +461,8 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
         const message = body.maskedEmail
           ? `Your account is not verified yet. Check your inbox (${body.maskedEmail}) or resend the code.`
           : "Your account is not verified yet. Check your inbox or resend the code.";
-        setLoginErr(message);
 
+        setLoginErr(message);
         await openVerifyModal(email, body?.regToken);
         return;
       }
@@ -416,23 +471,56 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
     }
   }
 
-  async function startSocial(provider) {
+  async function startGoogleMobile() {
     try {
       setSocialErr("");
       setSocialLoading(true);
-      const next = encodeURIComponent("/dashboard");
-      const url = `${API_BASE}/auth/${provider}?next=${next}`;
-      const canOpen = await Linking.canOpenURL(url);
 
-      if (canOpen) {
-        await Linking.openURL(url);
-      } else {
-        setSocialErr("Cannot open browser. Please try again.");
+      const authUrl = `${API_BASE}/auth/google/mobile?redirect_uri=${encodeURIComponent(
+        GOOGLE_MOBILE_REDIRECT_URI,
+      )}&next=${encodeURIComponent("/dashboard")}`;
+
+      console.log("[GOOGLE MOBILE AUTH URL]", authUrl);
+
+      const result = await WebBrowser.openAuthSessionAsync(
+        authUrl,
+        GOOGLE_MOBILE_REDIRECT_URI,
+      );
+
+      console.log("[GOOGLE MOBILE RESULT]", result);
+
+      if (result.type !== "success" || !result.url) {
         setSocialLoading(false);
+        return;
       }
-    } catch (err) {
-      setSocialErr(`Could not start social sign in. ${String(err)}`);
+
+      const token = getQueryParamFromUrl(result.url, "token");
+
+      if (!token) {
+        throw new Error("Google login did not return a token.");
+      }
+
+      await AsyncStorage.setItem("token", token);
+      api.defaults.headers.Authorization = `Bearer ${token}`;
+
+      const meResp = await api.get("/me");
+      const user = normalizeUser(meResp?.data);
+
       setSocialLoading(false);
+
+      await routeAfterAuth({
+        ok: true,
+        token,
+        user,
+      });
+    } catch (err) {
+      console.warn("Google mobile login failed:", err);
+      setSocialLoading(false);
+      setSocialErr(
+        err?.response?.data?.error ||
+          err?.message ||
+          "Google sign-in failed. Please try again.",
+      );
     }
   }
 
@@ -493,12 +581,14 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
   async function onVerifySubmit() {
     try {
       const email = (verifyEmail || "").trim();
+
       if (!email) {
         setVerifyErr("Email is missing.");
         return;
       }
 
       const codeTrimmed = (code || "").trim();
+
       if (!codeTrimmed) {
         setVerifyErr("Please enter the verification code.");
         return;
@@ -562,6 +652,7 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
       const resp = await api.post("/auth/resend-code", {
         regToken: storedRegToken,
       });
+
       const data = resp?.data || {};
 
       if (data?.regToken) {
@@ -763,7 +854,7 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
 
             <TouchableOpacity
               style={[styles.socialBtn, socialLoading && styles.buttonDisabled]}
-              onPress={() => startSocial("google")}
+              onPress={startGoogleMobile}
               disabled={socialLoading}
               activeOpacity={0.8}
             >
