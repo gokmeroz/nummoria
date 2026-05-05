@@ -1624,20 +1624,19 @@ export default function NummoriasLanding() {
               </a>
             ))}
           </nav>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center" }}>
             <a
               href="/login"
-              className="cta-ghost"
-              style={{ height: 38, padding: "0 16px", fontSize: 13 }}
-            >
-              Log in
-            </a>
-            <a
-              href="/signup"
               className="cta-primary"
-              style={{ height: 38, padding: "0 18px", fontSize: 13 }}
+              aria-label="Continue to Nummoria on web"
+              style={{
+                height: 38,
+                padding: "0 20px",
+                fontSize: 13,
+                whiteSpace: "nowrap",
+              }}
             >
-              Create account
+              Continue on web
             </a>
           </div>
         </div>
