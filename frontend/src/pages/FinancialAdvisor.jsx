@@ -671,6 +671,9 @@ export default function FinancialAdvisor() {
   const [thinking, setThinking] = useState(false);
   const [plan, setPlan] = useState(null);
   const [planLoading, setPlanLoading] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(
+    () => localStorage.getItem("fh_onboarding_dismissed") !== "true"
+  );
   const [quota, setQuota] = useState({
     used: 0,
     limit: 0,
@@ -1969,6 +1972,170 @@ function TypingBubble({ logoSrc }) {
           thinking
         </span>
       </div>
+
+      {/* ── ONBOARDING MODAL ── */}
+      {showOnboarding && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 999,
+            background: "rgba(3,5,8,.82)",
+            backdropFilter: "blur(12px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+          onClick={() => setShowOnboarding(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(0,255,135,.18)",
+              borderRadius: 20,
+              padding: "36px 32px 28px",
+              maxWidth: 520,
+              width: "100%",
+              position: "relative",
+              boxShadow: "0 0 60px rgba(0,255,135,.06), 0 24px 48px rgba(0,0,0,.6)",
+            }}
+          >
+            {/* close × */}
+            <button
+              onClick={() => setShowOnboarding(false)}
+              style={{
+                position: "absolute",
+                top: 14,
+                right: 16,
+                background: "none",
+                border: "none",
+                color: "rgba(226,232,240,.4)",
+                fontSize: 20,
+                cursor: "pointer",
+                lineHeight: 1,
+              }}
+            >
+              ×
+            </button>
+
+            {/* header */}
+            <div style={{ marginBottom: 20 }}>
+              <div
+                style={{
+                  fontFamily: "'Syne',sans-serif",
+                  fontWeight: 800,
+                  fontSize: 20,
+                  color: "#00ff87",
+                  marginBottom: 4,
+                }}
+              >
+                How to use AI Financial Advisor
+              </div>
+              <div style={{ fontSize: 13, color: "rgba(226,232,240,.45)", fontFamily: "'DM Mono',monospace" }}>
+                Get the most out of your personal finance AI
+              </div>
+            </div>
+
+            {/* tips */}
+            {[
+              {
+                icon: "💬",
+                title: "Ask anything about your money",
+                body: "Your transactions are already loaded. Ask things like "How much did I spend on dining last month?" or "Where is my money going?"",
+              },
+              {
+                icon: "🎯",
+                title: "Set real goals",
+                body: "Tell the AI what you're saving for and by when — "I want to save $1,000 before June" — and it'll build a plan from your actual spending.",
+              },
+              {
+                icon: "🔍",
+                title: "Dig into specific categories",
+                body: "Ask "What are my top 3 biggest expenses?" or "Am I overpaying on subscriptions?" for instant, data-backed answers.",
+              },
+              {
+                icon: "📄",
+                title: "Import bank statements (optional)",
+                body: "Got a CSV or PDF from another bank? Upload it to layer in that data alongside your Nummoria transactions.",
+              },
+              {
+                icon: "🎙️",
+                title: "Switch tone anytime",
+                body: "Toggle between Buddy and Formal mode at the top to get casual advice or a straight professional breakdown.",
+              },
+            ].map(({ icon, title, body }) => (
+              <div
+                key={title}
+                style={{
+                  display: "flex",
+                  gap: 14,
+                  marginBottom: 16,
+                }}
+              >
+                <span style={{ fontSize: 20, lineHeight: 1.4, flexShrink: 0 }}>{icon}</span>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: "#e2e8f0", marginBottom: 2 }}>{title}</div>
+                  <div style={{ fontSize: 12, color: "rgba(226,232,240,.5)", lineHeight: 1.6 }}>{body}</div>
+                </div>
+              </div>
+            ))}
+
+            {/* footer */}
+            <div
+              style={{
+                marginTop: 24,
+                paddingTop: 18,
+                borderTop: "1px solid rgba(255,255,255,.06)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                flexWrap: "wrap",
+              }}
+            >
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  cursor: "pointer",
+                  fontSize: 12,
+                  color: "rgba(226,232,240,.4)",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  onChange={(e) => {
+                    if (e.target.checked) localStorage.setItem("fh_onboarding_dismissed", "true");
+                    else localStorage.removeItem("fh_onboarding_dismissed");
+                  }}
+                  style={{ accentColor: "#00ff87", width: 14, height: 14 }}
+                />
+                Don't show again
+              </label>
+
+              <button
+                onClick={() => setShowOnboarding(false)}
+                style={{
+                  background: "linear-gradient(135deg,#00ff87,#00d4ff)",
+                  border: "none",
+                  borderRadius: 10,
+                  padding: "9px 22px",
+                  fontWeight: 700,
+                  fontSize: 13,
+                  color: "#030508",
+                  cursor: "pointer",
+                  fontFamily: "'Outfit',sans-serif",
+                }}
+              >
+                Got it, let's go →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
