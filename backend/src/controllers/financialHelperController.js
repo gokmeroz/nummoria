@@ -12,6 +12,7 @@ import { parse as parseCSV } from "csv-parse/sync";
 
 import AiAdvisorFile from "../models/AiAdvisorFile.js";
 import { User } from "../models/user.js";
+import { Transaction } from "../models/transaction.js";
 import { computeMetrics } from "../ai/financialMetrics.js";
 import { parseTransactionsFromText } from "../ai/pdfParser.js";
 import { getPromptForSubscription } from "../ai/prompts/index.js";
@@ -877,6 +878,34 @@ function buildContextFromFile(fileDoc) {
   };
 }
 
+async function buildContextFromUserTransactions(userId) {
+  if (!userId) return { parsedTransactions: [], computedMetrics: {} };
+
+  const dbTxs = await Transaction.find({ userId, isDeleted: false })
+    .populate("categoryId", "name")
+    .sort({ date: -1 })
+    .limit(500)
+    .lean();
+
+  const parsedTransactions = dbTxs.map((t) => {
+    const isExpense = t.type === "expense";
+    const isIncome = t.type === "income";
+    const amount =
+      (t.amountMinor / 100) * (isExpense ? -1 : 1);
+    return {
+      date: t.date instanceof Date ? t.date.toISOString().slice(0, 10) : String(t.date).slice(0, 10),
+      amount,
+      description: t.description || "",
+      type: t.type,
+      category: t.categoryId?.name || t.type,
+      currency: t.currency,
+    };
+  });
+
+  const computedMetrics = computeMetrics(parsedTransactions);
+  return { parsedTransactions, computedMetrics };
+}
+
 /* -------------------------------------------------------------------------- */
 /*                            FILE INGEST FOR ADVISOR                          */
 /* -------------------------------------------------------------------------- */
@@ -1106,7 +1135,9 @@ export async function chat(req, res) {
     const subscription = await getSubscriptionForUser(userId);
     const systemPrompt = getPromptForSubscription(subscription);
     const fileDoc = await getLatestFileForUser(userId, fileId);
-    const context = buildContextFromFile(fileDoc);
+    const context = fileDoc
+      ? buildContextFromFile(fileDoc)
+      : await buildContextFromUserTransactions(userId);
     const safeTone = tonePreference === "buddy" ? "buddy" : "formal";
 
     // IMPORTANT:
