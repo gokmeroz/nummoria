@@ -2043,17 +2043,17 @@ function TypingBubble({ logoSrc }) {
               {
                 icon: "💬",
                 title: "Ask anything about your money",
-                body: "Your transactions are already loaded. Ask things like "How much did I spend on dining last month?" or "Where is my money going?"",
+                body: "Your transactions are already loaded. Ask things like 'How much did I spend on dining last month?' or 'Where is my money going?'",
               },
               {
                 icon: "🎯",
                 title: "Set real goals",
-                body: "Tell the AI what you're saving for and by when — "I want to save $1,000 before June" — and it'll build a plan from your actual spending.",
+                body: "Tell the AI what you're saving for and by when — 'I want to save $1,000 before June' — and it'll build a plan from your actual spending.",
               },
               {
                 icon: "🔍",
                 title: "Dig into specific categories",
-                body: "Ask "What are my top 3 biggest expenses?" or "Am I overpaying on subscriptions?" for instant, data-backed answers.",
+                body: "Ask 'What are my top 3 biggest expenses?' or 'Am I overpaying on subscriptions?' for instant, data-backed answers.",
               },
               {
                 icon: "📄",
