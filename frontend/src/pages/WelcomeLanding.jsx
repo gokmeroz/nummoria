@@ -1,5 +1,5 @@
 /* eslint-disable */
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 const logoUrl = new URL("../assets/nummoria_logo.png", import.meta.url).href;
 const phone1 = new URL("../assets/phone-1.png", import.meta.url).href;
@@ -7,7 +7,6 @@ const phone2 = new URL("../assets/phone-2.png", import.meta.url).href;
 const phone3 = new URL("../assets/phone-3.png", import.meta.url).href;
 const phone4 = new URL("../assets/phone-4.png", import.meta.url).href;
 const phone5 = new URL("../assets/phone-5.png", import.meta.url).href;
-// const phone6 = new URL("../assets/phone-6.png", import.meta.url).href;
 const phone7 = new URL("../assets/phone-7.png", import.meta.url).href;
 const phone8 = new URL("../assets/phone-8.png", import.meta.url).href;
 const phone9 = new URL("../assets/phone-9.png", import.meta.url).href;
@@ -108,7 +107,7 @@ const G = `
   }
 
   .faq-body { max-height: 0; overflow: hidden; transition: max-height .4s cubic-bezier(.4,0,.2,1); }
-  .faq-body.open { max-height: 180px; }
+  .faq-body.open { max-height: 220px; }
 
   .chip {
     display: inline-flex; align-items: center; gap: 6px;
@@ -146,37 +145,118 @@ const G = `
     transition: border-color .2s, background .2s, transform .2s;
   }
   .cta-ghost:hover { border-color: rgba(0,255,135,.28); background: rgba(0,255,135,.05); transform: translateY(-1px); }
-    @keyframes phone-float {
+
+  @keyframes phone-float {
     0%,100% { transform: translateY(0px); }
     50% { transform: translateY(-12px); }
   }
-
   @keyframes phone-glow-pulse {
     0%,100% { opacity: .5; transform: scale(1); }
     50% { opacity: .92; transform: scale(1.06); }
   }
-
   @keyframes screen-scan {
     0%   { transform: translateY(-130%); opacity: 0; }
     14%  { opacity: .2; }
     100% { transform: translateY(240%); opacity: 0; }
   }
-
   @keyframes phone-orb-float-a {
     0%,100% { transform: translate3d(0,0,0); }
     50% { transform: translate3d(0,-14px,0); }
   }
-
   @keyframes phone-orb-float-b {
     0%,100% { transform: translate3d(0,0,0); }
     50% { transform: translate3d(0,12px,0); }
   }
+
+  /* ─── MOBILE NAV DRAWER ─── */
+  .nav-drawer-overlay {
+    position: fixed; inset: 0; z-index: 998;
+    background: rgba(0,0,0,.72); backdrop-filter: blur(8px);
+    opacity: 0; pointer-events: none; transition: opacity .3s;
+  }
+  .nav-drawer-overlay.open { opacity: 1; pointer-events: auto; }
+
+  .nav-drawer {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 999;
+    width: 280px; max-width: 80vw;
+    background: rgba(6,10,16,.97); border-left: 1px solid rgba(0,255,135,.1);
+    backdrop-filter: blur(24px);
+    transform: translateX(100%); transition: transform .35s cubic-bezier(.22,1,.36,1);
+    padding: 80px 28px 28px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .nav-drawer.open { transform: translateX(0); }
+  .nav-drawer a {
+    display: block; padding: 14px 16px; border-radius: 12px; font-size: 15px;
+    font-weight: 600; color: rgba(226,232,240,.7); transition: all .2s;
+  }
+  .nav-drawer a:hover, .nav-drawer a:active {
+    color: #00ff87; background: rgba(0,255,135,.07);
+  }
+
+  /* ─── RESPONSIVE ─── */
+  @media (max-width: 1024px) {
+    .hero-grid   { grid-template-columns: 1fr !important; gap: 40px !important; }
+    .feat-row-a  { grid-template-columns: 1fr !important; }
+    .feat-row-b  { grid-template-columns: 1fr !important; }
+    .price-grid  { grid-template-columns: 1fr !important; }
+    .steps-grid  { grid-template-columns: 1fr !important; }
+    .metrics-grid { grid-template-columns: repeat(2, 1fr) !important; }
+    .conviction-inner { flex-direction: column !important; align-items: flex-start !important; }
+  }
+
+  @media (max-width: 768px) {
+    .desktop-nav  { display: none !important; }
+    .burger-btn   { display: flex !important; }
+    .cursor-glow  { display: none !important; }
+    .hero-badges  { grid-template-columns: repeat(2, 1fr) !important; }
+    .hero-ctas    { flex-direction: column !important; align-items: stretch !important; }
+    .hero-ctas .cta-primary,
+    .hero-ctas .cta-ghost { width: 100%; text-align: center; }
+    .store-row    { justify-content: center !important; }
+    .phone-float-card { display: none !important; }
+    .phone-shell  { width: 240px !important; height: 488px !important; border-radius: 36px !important; }
+    .phone-screen { border-radius: 28px !important; }
+    .phone-notch  { width: 86px !important; height: 22px !important; top: 11px !important; }
+    .phone-wrap   { min-height: 520px !important; }
+    .conviction-orbit { display: none !important; }
+    .metrics-grid { grid-template-columns: repeat(2, 1fr) !important; }
+    .section-pad  { padding-top: 60px !important; padding-bottom: 60px !important; }
+    .cta-box      { padding: 48px 24px !important; border-radius: 22px !important; }
+    .cta-bottom-row { flex-direction: column !important; align-items: stretch !important; }
+    .cta-bottom-row > * { width: 100%; justify-content: center; }
+  }
+
+  @media (max-width: 480px) {
+    .hero-badges  { grid-template-columns: repeat(2, 1fr) !important; }
+    .metrics-grid { grid-template-columns: 1fr 1fr !important; }
+    .metrics-grid > div { border-left: none !important; border-bottom: 1px solid rgba(255,255,255,.06); }
+    .ghost-num    { font-size: 56px !important; }
+    .phone-shell  { width: 200px !important; height: 408px !important; border-radius: 30px !important; }
+    .phone-screen { border-radius: 22px !important; }
+    .phone-notch  { width: 72px !important; height: 18px !important; top: 9px !important; }
+    .phone-wrap   { min-height: 440px !important; }
+  }
 `;
+
+/* ─── HOOKS ─── */
+function useIsMobile(breakpoint = 768) {
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${breakpoint}px)`);
+    setMobile(mq.matches);
+    const handler = (e) => setMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, [breakpoint]);
+  return mobile;
+}
 
 /* ─── PARTICLE CANVAS ─── */
 function ParticleNet() {
   const cvs = useRef(null);
   const mouse = useRef({ x: -9999, y: -9999 });
+  const isMobile = useIsMobile();
+
   useEffect(() => {
     const c = cvs.current;
     const ctx = c.getContext("2d");
@@ -187,10 +267,12 @@ function ParticleNet() {
     };
     fit();
     window.addEventListener("resize", fit);
-    window.addEventListener("mousemove", (e) => {
-      mouse.current = { x: e.clientX, y: e.clientY };
-    });
-    const N = 68;
+    if (!isMobile) {
+      window.addEventListener("mousemove", (e) => {
+        mouse.current = { x: e.clientX, y: e.clientY };
+      });
+    }
+    const N = isMobile ? 28 : 68;
     const pts = Array.from({ length: N }, () => ({
       x: Math.random() * window.innerWidth,
       y: Math.random() * window.innerHeight,
@@ -217,18 +299,20 @@ function ParticleNet() {
             ctx.stroke();
           }
         }
-        const mdx = pts[i].x - mx,
-          mdy = pts[i].y - my,
-          md = Math.hypot(mdx, mdy);
-        if (md < 165) {
-          ctx.beginPath();
-          ctx.strokeStyle = `rgba(0,212,255,${0.14 * (1 - md / 165)})`;
-          ctx.lineWidth = 0.5;
-          ctx.moveTo(pts[i].x, pts[i].y);
-          ctx.lineTo(mx, my);
-          ctx.stroke();
-          pts[i].x += (mdx / md) * 0.2;
-          pts[i].y += (mdy / md) * 0.2;
+        if (!isMobile) {
+          const mdx = pts[i].x - mx,
+            mdy = pts[i].y - my,
+            md = Math.hypot(mdx, mdy);
+          if (md < 165) {
+            ctx.beginPath();
+            ctx.strokeStyle = `rgba(0,212,255,${0.14 * (1 - md / 165)})`;
+            ctx.lineWidth = 0.5;
+            ctx.moveTo(pts[i].x, pts[i].y);
+            ctx.lineTo(mx, my);
+            ctx.stroke();
+            pts[i].x += (mdx / md) * 0.2;
+            pts[i].y += (mdy / md) * 0.2;
+          }
         }
         ctx.beginPath();
         ctx.arc(pts[i].x, pts[i].y, pts[i].r, 0, Math.PI * 2);
@@ -253,7 +337,8 @@ function ParticleNet() {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", fit);
     };
-  }, []);
+  }, [isMobile]);
+
   return (
     <canvas
       ref={cvs}
@@ -318,38 +403,6 @@ function useTypewriter(phrases, spd = 72, del = 36, pause = 2400) {
   return txt;
 }
 
-function Tilt({ children, className = "", style = {} }) {
-  const ref = useRef(null);
-  const mv = (e) => {
-    const el = ref.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const x = (e.clientX - r.left) / r.width - 0.5,
-      y = (e.clientY - r.top) / r.height - 0.5;
-    el.style.transform = `perspective(1000px) rotateY(${x * 8}deg) rotateX(${-y * 8}deg) scale(1.022)`;
-  };
-  const lv = () => {
-    if (ref.current)
-      ref.current.style.transform =
-        "perspective(1000px) rotateY(0) rotateX(0) scale(1)";
-  };
-  return (
-    <div
-      ref={ref}
-      onMouseMove={mv}
-      onMouseLeave={lv}
-      className={className}
-      style={{
-        transition: "transform .2s ease",
-        transformStyle: "preserve-3d",
-        ...style,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
 function Counter({ to, suffix = "", prefix = "", duration = 1600 }) {
   const [val, setVal] = useState(0);
   const ref = useRef(null);
@@ -361,8 +414,7 @@ function Counter({ to, suffix = "", prefix = "", duration = 1600 }) {
           const start = Date.now();
           const tick = () => {
             const p = Math.min((Date.now() - start) / duration, 1);
-            const ease = 1 - Math.pow(1 - p, 3);
-            setVal(Math.round(ease * to));
+            setVal(Math.round((1 - Math.pow(1 - p, 3)) * to));
             if (p < 1) requestAnimationFrame(tick);
           };
           requestAnimationFrame(tick);
@@ -385,6 +437,7 @@ function Counter({ to, suffix = "", prefix = "", duration = 1600 }) {
 function OrbitVisual() {
   return (
     <div
+      className="conviction-orbit"
       style={{ position: "relative", width: 200, height: 200, flexShrink: 0 }}
     >
       <div
@@ -431,10 +484,6 @@ function OrbitVisual() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          fontFamily: "'Syne',sans-serif",
-          fontWeight: 800,
-          fontSize: 14,
-          color: "#00ff87",
         }}
       >
         <img
@@ -494,7 +543,7 @@ function OrbitVisual() {
 
 function SectionHead({ label, title, sub }) {
   return (
-    <div className="rv rv-up" style={{ textAlign: "center", marginBottom: 52 }}>
+    <div className="rv rv-up" style={{ textAlign: "center", marginBottom: 42 }}>
       <div
         style={{
           fontFamily: "'DM Mono',monospace",
@@ -511,7 +560,7 @@ function SectionHead({ label, title, sub }) {
       <h2
         style={{
           fontFamily: "'Syne',sans-serif",
-          fontSize: "clamp(2rem,4vw,3rem)",
+          fontSize: "clamp(1.6rem,4vw,3rem)",
           fontWeight: 800,
           letterSpacing: "-.035em",
           lineHeight: 1.1,
@@ -538,7 +587,7 @@ function SectionHead({ label, title, sub }) {
 }
 
 const Divider = () => (
-  <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 28px" }}>
+  <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 20px" }}>
     <div
       style={{
         height: 1,
@@ -600,7 +649,7 @@ function FeatureCard({ title, accent, desc, items, className = "" }) {
         borderRadius: 24,
         border: "1px solid rgba(255,255,255,.07)",
         background: "rgba(255,255,255,.03)",
-        padding: "28px 26px",
+        padding: "28px 22px",
         position: "relative",
         overflow: "hidden",
         transition: "border-color .3s",
@@ -887,16 +936,6 @@ function PriceCard({
               : "none",
             transition: "all .2s",
           }}
-          onMouseEnter={(e) => {
-            e.target.style.transform = "translateY(-2px)";
-            e.target.style.boxShadow = `0 8px 44px -10px ${h2r(accent, 0.8)}`;
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.transform = "translateY(0)";
-            e.target.style.boxShadow = highlight
-              ? `0 0 36px -10px ${h2r(accent, 0.7)}`
-              : "none";
-          }}
         >
           {actionLabel}
         </button>
@@ -936,7 +975,7 @@ function FAQ({ q, a }) {
     >
       <div
         style={{
-          padding: "18px 22px",
+          padding: "18px 20px",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
@@ -974,7 +1013,7 @@ function FAQ({ q, a }) {
       <div className={`faq-body${open ? " open" : ""}`}>
         <div
           style={{
-            padding: "0 22px 18px",
+            padding: "0 20px 18px",
             color: "var(--muted)",
             fontSize: 14,
             lineHeight: 1.75,
@@ -986,6 +1025,7 @@ function FAQ({ q, a }) {
     </div>
   );
 }
+
 function HeroPhoneShowcase() {
   const screens = [
     phone1,
@@ -993,24 +1033,93 @@ function HeroPhoneShowcase() {
     phone3,
     phone4,
     phone5,
-    // phone6,
     phone7,
     phone8,
     phone9,
   ];
-
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
-    const id = setInterval(() => {
-      setIndex((prev) => (prev + 1) % screens.length);
-    }, 2200);
-
+    const id = setInterval(
+      () => setIndex((prev) => (prev + 1) % screens.length),
+      2200,
+    );
     return () => clearInterval(id);
   }, [screens.length]);
 
+  const FloatCard = ({
+    top,
+    left,
+    right,
+    bottom,
+    border,
+    glow,
+    glowColor,
+    label,
+    text,
+    textColor,
+    delay,
+    zIndex = 3,
+  }) => (
+    <div
+      className="phone-float-card"
+      style={{
+        position: "absolute",
+        top,
+        left,
+        right,
+        bottom,
+        zIndex,
+        width: 172,
+        padding: "14px 16px",
+        borderRadius: 18,
+        border,
+        background:
+          "linear-gradient(180deg, rgba(10,16,24,.92), rgba(6,10,16,.84))",
+        backdropFilter: "blur(18px)",
+        WebkitBackdropFilter: "blur(18px)",
+        boxShadow: `0 18px 50px rgba(0,0,0,.42), 0 0 0 1px ${glowColor}, 0 0 28px ${glow}`,
+        animation: `float-y 5.8s ease-in-out infinite ${delay || "0s"}`,
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 14,
+          right: 14,
+          height: 1,
+          background: `linear-gradient(to right, transparent, ${glowColor.replace(/[\d.]+\)$/, ".45)")}, transparent)`,
+        }}
+      />
+      <div
+        style={{
+          fontSize: 10,
+          color: "rgba(226,232,240,.56)",
+          fontFamily: "'DM Mono', monospace",
+          letterSpacing: ".12em",
+          marginBottom: 8,
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontSize: 14,
+          fontWeight: 800,
+          color: textColor,
+          lineHeight: 1.35,
+        }}
+      >
+        {text}
+      </div>
+    </div>
+  );
+
   return (
     <div
+      className="phone-wrap"
       style={{
         position: "relative",
         width: "100%",
@@ -1020,7 +1129,7 @@ function HeroPhoneShowcase() {
         justifyContent: "center",
       }}
     >
-      {/* ambient back glow */}
+      {/* ambient glow */}
       <div
         style={{
           position: "absolute",
@@ -1035,269 +1144,78 @@ function HeroPhoneShowcase() {
         }}
       />
 
-      {/* floating accent orb top right */}
-      <div
-        style={{
-          position: "absolute",
-          top: 42,
-          right: 38,
-          width: 92,
-          height: 92,
-          borderRadius: "50%",
-          background:
-            "radial-gradient(circle, rgba(0,255,135,.18), transparent 66%)",
-          animation: "phone-orb-float-a 6s ease-in-out infinite",
-          pointerEvents: "none",
-        }}
+      {/* floating cards — hidden on mobile via CSS */}
+      <FloatCard
+        top={150}
+        left={-80}
+        border="1px solid rgba(255,255,255,.12)"
+        glow="rgba(0,255,135,.10)"
+        glowColor="rgba(0,255,135,.08)"
+        label="AI INSIGHT"
+        text={
+          <>
+            Subscriptions
+            <br />
+            detected
+          </>
+        }
+        textColor="#f8fafc"
       />
-
-      {/* floating accent orb bottom left */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: 52,
-          left: 34,
-          width: 76,
-          height: 76,
-          borderRadius: "50%",
-          background:
-            "radial-gradient(circle, rgba(0,212,255,.16), transparent 66%)",
-          animation: "phone-orb-float-b 7s ease-in-out infinite",
-          pointerEvents: "none",
-        }}
+      <FloatCard
+        top={365}
+        left={-80}
+        border="1px solid rgba(0,212,255,.14)"
+        glow="rgba(0,212,255,.10)"
+        glowColor="rgba(0,212,255,.08)"
+        label="CASH FLOW"
+        text={
+          <>
+            Inflow sources
+            <br />
+            visible
+          </>
+        }
+        textColor="#7dd3fc"
+        delay="0.8s"
       />
-
-      {/* LEFT TOP */}
-      <div
-        style={{
-          position: "absolute",
-          left: -80,
-          top: 150,
-          zIndex: 3,
-          width: 172,
-          padding: "14px 16px",
-          borderRadius: 18,
-          border: "1px solid rgba(255,255,255,.12)",
-          background:
-            "linear-gradient(180deg, rgba(10,16,24,.92), rgba(6,10,16,.84))",
-          backdropFilter: "blur(18px)",
-          WebkitBackdropFilter: "blur(18px)",
-          boxShadow:
-            "0 18px 50px rgba(0,0,0,.42), 0 0 0 1px rgba(0,255,135,.08), 0 0 26px rgba(0,255,135,.10)",
-          animation: "float-y 5.4s ease-in-out infinite",
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 14,
-            right: 14,
-            height: 1,
-            background:
-              "linear-gradient(to right, transparent, rgba(0,255,135,.45), transparent)",
-          }}
-        />
-        <div
-          style={{
-            fontSize: 10,
-            color: "rgba(226,232,240,.56)",
-            fontFamily: "'DM Mono', monospace",
-            letterSpacing: ".12em",
-            marginBottom: 8,
-          }}
-        >
-          AI INSIGHT
-        </div>
-        <div
-          style={{
-            fontSize: 14,
-            fontWeight: 800,
-            color: "#f8fafc",
-            lineHeight: 1.35,
-          }}
-        >
-          Subscriptions
-          <br />
-          detected
-        </div>
-      </div>
-
-      {/* LEFT LOWER */}
-      <div
-        style={{
-          position: "absolute",
-          left: -80,
-          top: 365,
-          zIndex: 3,
-          width: 172,
-          padding: "14px 16px",
-          borderRadius: 18,
-          border: "1px solid rgba(0,212,255,.14)",
-          background:
-            "linear-gradient(180deg, rgba(10,16,24,.92), rgba(6,10,16,.84))",
-          backdropFilter: "blur(18px)",
-          WebkitBackdropFilter: "blur(18px)",
-          boxShadow:
-            "0 18px 50px rgba(0,0,0,.42), 0 0 0 1px rgba(0,212,255,.08), 0 0 28px rgba(0,212,255,.10)",
-          animation: "float-y 6.2s ease-in-out infinite 0.8s",
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 14,
-            right: 14,
-            height: 1,
-            background:
-              "linear-gradient(to right, transparent, rgba(0,212,255,.45), transparent)",
-          }}
-        />
-        <div
-          style={{
-            fontSize: 10,
-            color: "rgba(226,232,240,.56)",
-            fontFamily: "'DM Mono', monospace",
-            letterSpacing: ".12em",
-            marginBottom: 8,
-          }}
-        >
-          CASH FLOW
-        </div>
-        <div
-          style={{
-            fontSize: 14,
-            fontWeight: 800,
-            color: "#7dd3fc",
-            lineHeight: 1.35,
-          }}
-        >
-          Inflow sources
-          <br />
-          visible
-        </div>
-      </div>
-
-      {/* RIGHT TOP */}
-      <div
-        style={{
-          position: "absolute",
-          right: -80,
-          top: 170,
-          zIndex: 3,
-          width: 172,
-          padding: "14px 16px",
-          borderRadius: 18,
-          border: "1px solid rgba(0,255,135,.16)",
-          background:
-            "linear-gradient(180deg, rgba(10,16,24,.94), rgba(6,10,16,.86))",
-          backdropFilter: "blur(18px)",
-          WebkitBackdropFilter: "blur(18px)",
-          boxShadow:
-            "0 18px 50px rgba(0,0,0,.42), 0 0 0 1px rgba(0,255,135,.10), 0 0 34px rgba(0,255,135,.15)",
-          animation: "float-y 5.8s ease-in-out infinite 0.5s",
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 14,
-            right: 14,
-            height: 1,
-            background:
-              "linear-gradient(to right, transparent, rgba(0,255,135,.5), transparent)",
-          }}
-        />
-        <div
-          style={{
-            fontSize: 10,
-            color: "rgba(226,232,240,.58)",
-            fontFamily: "'DM Mono', monospace",
-            letterSpacing: ".12em",
-            marginBottom: 8,
-          }}
-        >
-          MONTHLY CLARITY
-        </div>
-        <div
-          style={{
-            fontSize: 15,
-            fontWeight: 800,
-            color: "#00ff87",
-            lineHeight: 1.32,
-            textShadow: "0 0 14px rgba(0,255,135,.18)",
-          }}
-        >
-          + better
-          <br />
-          visibility
-        </div>
-      </div>
-
-      {/* RIGHT LOWER */}
-      <div
-        style={{
-          position: "absolute",
-          right: -80,
-          top: 392,
-          zIndex: 3,
-          width: 172,
-          padding: "14px 16px",
-          borderRadius: 18,
-          border: "1px solid rgba(167,139,250,.16)",
-          background:
-            "linear-gradient(180deg, rgba(10,16,24,.92), rgba(6,10,16,.84))",
-          backdropFilter: "blur(18px)",
-          WebkitBackdropFilter: "blur(18px)",
-          boxShadow:
-            "0 18px 50px rgba(0,0,0,.42), 0 0 0 1px rgba(167,139,250,.08), 0 0 28px rgba(167,139,250,.12)",
-          animation: "float-y 6.6s ease-in-out infinite 1.2s",
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 14,
-            right: 14,
-            height: 1,
-            background:
-              "linear-gradient(to right, transparent, rgba(167,139,250,.45), transparent)",
-          }}
-        />
-        <div
-          style={{
-            fontSize: 10,
-            color: "rgba(226,232,240,.56)",
-            fontFamily: "'DM Mono', monospace",
-            letterSpacing: ".12em",
-            marginBottom: 8,
-          }}
-        >
-          PORTFOLIO VIEW
-        </div>
-        <div
-          style={{
-            fontSize: 14,
-            fontWeight: 800,
-            color: "#c4b5fd",
-            lineHeight: 1.35,
-          }}
-        >
-          Assets in one
-          <br />
-          system
-        </div>
-      </div>
+      <FloatCard
+        top={170}
+        right={-80}
+        border="1px solid rgba(0,255,135,.16)"
+        glow="rgba(0,255,135,.15)"
+        glowColor="rgba(0,255,135,.10)"
+        label="MONTHLY CLARITY"
+        text={
+          <>
+            + better
+            <br />
+            visibility
+          </>
+        }
+        textColor="#00ff87"
+        delay="0.5s"
+      />
+      <FloatCard
+        top={392}
+        right={-80}
+        border="1px solid rgba(167,139,250,.16)"
+        glow="rgba(167,139,250,.12)"
+        glowColor="rgba(167,139,250,.08)"
+        label="PORTFOLIO VIEW"
+        text={
+          <>
+            Assets in one
+            <br />
+            system
+          </>
+        }
+        textColor="#c4b5fd"
+        delay="1.2s"
+      />
 
       {/* phone shell */}
       <div
+        className="phone-shell"
         style={{
           position: "relative",
           width: 305,
@@ -1313,20 +1231,18 @@ function HeroPhoneShowcase() {
           backdropFilter: "blur(18px)",
         }}
       >
-        {/* metal edge */}
         <div
           style={{
             position: "absolute",
             inset: 0,
-            borderRadius: 44,
+            borderRadius: "inherit",
             boxShadow:
               "inset 0 0 0 1px rgba(255,255,255,.05), inset 0 0 40px rgba(255,255,255,.03)",
             pointerEvents: "none",
           }}
         />
-
-        {/* notch */}
         <div
+          className="phone-notch"
           style={{
             position: "absolute",
             top: 14,
@@ -1341,8 +1257,8 @@ function HeroPhoneShowcase() {
           }}
         />
 
-        {/* screen */}
         <div
+          className="phone-screen"
           style={{
             position: "relative",
             width: "100%",
@@ -1356,7 +1272,6 @@ function HeroPhoneShowcase() {
             const active = i === index;
             const previous =
               i === (index - 1 + screens.length) % screens.length;
-
             return (
               <img
                 key={src}
@@ -1376,14 +1291,12 @@ function HeroPhoneShowcase() {
                     : previous
                       ? "translateY(-10%) scale(.985)"
                       : "translateY(12%) scale(1.02)",
-                  opacity: active ? 1 : previous ? 0 : 0,
+                  opacity: active ? 1 : 0,
                   filter: active ? "blur(0px)" : "blur(8px)",
                 }}
               />
             );
           })}
-
-          {/* top reflection */}
           <div
             style={{
               position: "absolute",
@@ -1393,8 +1306,6 @@ function HeroPhoneShowcase() {
               pointerEvents: "none",
             }}
           />
-
-          {/* scan beam */}
           <div
             style={{
               position: "absolute",
@@ -1408,8 +1319,6 @@ function HeroPhoneShowcase() {
               pointerEvents: "none",
             }}
           />
-
-          {/* subtle bottom overlay */}
           <div
             style={{
               position: "absolute",
@@ -1423,13 +1332,12 @@ function HeroPhoneShowcase() {
             }}
           />
 
-          {/* bottom status */}
           <div
             style={{
               position: "absolute",
-              left: 18,
-              right: 18,
-              bottom: 18,
+              left: 14,
+              right: 14,
+              bottom: 14,
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
@@ -1438,9 +1346,9 @@ function HeroPhoneShowcase() {
           >
             <div
               style={{
-                padding: "7px 12px",
+                padding: "7px 10px",
                 borderRadius: 999,
-                fontSize: 10,
+                fontSize: 9,
                 fontWeight: 700,
                 letterSpacing: ".08em",
                 fontFamily: "'DM Mono', monospace",
@@ -1452,14 +1360,13 @@ function HeroPhoneShowcase() {
             >
               LIVE PREVIEW
             </div>
-
-            <div style={{ display: "flex", gap: 6 }}>
+            <div style={{ display: "flex", gap: 5 }}>
               {screens.map((_, i) => (
                 <span
                   key={i}
                   style={{
-                    width: i === index ? 18 : 6,
-                    height: 6,
+                    width: i === index ? 16 : 5,
+                    height: 5,
                     borderRadius: 999,
                     background:
                       i === index ? "#00ff87" : "rgba(255,255,255,.22)",
@@ -1476,8 +1383,9 @@ function HeroPhoneShowcase() {
     </div>
   );
 }
-/* ═══════════════════════════════════════ MAIN ═══════════════════════════════════════ */
-export default function NummoriasLanding() {
+
+/* ═══════════════════════════════ MAIN ═══════════════════════════════ */
+export default function WelcomeLanding() {
   useReveal();
   const tw = useTypewriter([
     "a clear picture",
@@ -1486,13 +1394,29 @@ export default function NummoriasLanding() {
     "one simple system",
   ]);
   const [scrolled, setScrolled] = useState(false);
-  const W = { maxWidth: 1200, margin: "0 auto", padding: "0 28px" };
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const W = { maxWidth: 1200, margin: "0 auto", padding: "0 20px" };
 
   useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 30);
     window.addEventListener("scroll", fn);
     return () => window.removeEventListener("scroll", fn);
   }, []);
+
+  // Lock body scroll when drawer open
+  useEffect(() => {
+    document.body.style.overflow = drawerOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [drawerOpen]);
+
+  const navLinks = [
+    ["How it works", "#how"],
+    ["Features", "#features"],
+    ["Pricing", "#pricing"],
+    ["FAQ", "#faq"],
+  ];
 
   return (
     <div
@@ -1510,6 +1434,34 @@ export default function NummoriasLanding() {
       <CursorGlow />
       <div className="scanlines" />
 
+      {/* MOBILE DRAWER */}
+      <div
+        className={`nav-drawer-overlay${drawerOpen ? " open" : ""}`}
+        onClick={() => setDrawerOpen(false)}
+      />
+      <div className={`nav-drawer${drawerOpen ? " open" : ""}`}>
+        {navLinks.map(([l, h]) => (
+          <a key={h} href={h} onClick={() => setDrawerOpen(false)}>
+            {l}
+          </a>
+        ))}
+        <div style={{ marginTop: 16 }}>
+          <a
+            href="/login"
+            className="cta-primary"
+            style={{
+              width: "100%",
+              textAlign: "center",
+              height: 44,
+              fontSize: 14,
+            }}
+            onClick={() => setDrawerOpen(false)}
+          >
+            Continue on web
+          </a>
+        </div>
+      </div>
+
       {/* NAV */}
       <header
         style={{
@@ -1525,7 +1477,7 @@ export default function NummoriasLanding() {
         <div
           style={{
             ...W,
-            height: 68,
+            height: 62,
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -1549,25 +1501,21 @@ export default function NummoriasLanding() {
               <div
                 style={{
                   position: "relative",
-                  width: 38,
-                  height: 38,
-                  borderRadius: 11,
+                  width: 34,
+                  height: 34,
+                  borderRadius: 10,
                   background:
                     "linear-gradient(135deg,rgba(0,255,135,.2),rgba(0,212,255,.1))",
                   border: "1px solid rgba(0,255,135,.22)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontFamily: "'Syne',sans-serif",
-                  fontWeight: 800,
-                  fontSize: 16,
-                  color: "#00ff87",
                 }}
               >
                 <img
                   src={logoUrl}
                   alt="Nummoria Logo"
-                  style={{ width: 38, height: 38, borderRadius: 11 }}
+                  style={{ width: 34, height: 34, borderRadius: 10 }}
                 />
               </div>
             </div>
@@ -1576,7 +1524,7 @@ export default function NummoriasLanding() {
                 style={{
                   fontFamily: "'Syne',sans-serif",
                   fontWeight: 800,
-                  fontSize: 16,
+                  fontSize: 15,
                   letterSpacing: "-.02em",
                 }}
               >
@@ -1584,7 +1532,7 @@ export default function NummoriasLanding() {
               </div>
               <div
                 style={{
-                  fontSize: 10,
+                  fontSize: 9,
                   color: "rgba(226,232,240,.38)",
                   letterSpacing: ".04em",
                 }}
@@ -1593,13 +1541,13 @@ export default function NummoriasLanding() {
               </div>
             </div>
           </a>
-          <nav style={{ display: "flex", alignItems: "center", gap: 1 }}>
-            {[
-              ["How it works", "#how"],
-              ["Features", "#features"],
-              ["Pricing", "#pricing"],
-              ["FAQ", "#faq"],
-            ].map(([l, h]) => (
+
+          {/* Desktop nav */}
+          <nav
+            className="desktop-nav"
+            style={{ display: "flex", alignItems: "center", gap: 1 }}
+          >
+            {navLinks.map(([l, h]) => (
               <a
                 key={h}
                 href={h}
@@ -1624,20 +1572,68 @@ export default function NummoriasLanding() {
               </a>
             ))}
           </nav>
-          <div style={{ display: "flex", alignItems: "center" }}>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <a
               href="/login"
-              className="cta-primary"
-              aria-label="Continue to Nummoria on web"
+              className="cta-primary desktop-nav"
               style={{
-                height: 38,
-                padding: "0 20px",
-                fontSize: 13,
+                height: 36,
+                padding: "0 18px",
+                fontSize: 12.5,
                 whiteSpace: "nowrap",
               }}
             >
               Continue on web
             </a>
+
+            {/* Burger */}
+            <button
+              className="burger-btn"
+              onClick={() => setDrawerOpen(!drawerOpen)}
+              style={{
+                display: "none",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 40,
+                height: 40,
+                borderRadius: 10,
+                background: "rgba(255,255,255,.06)",
+                border: "1px solid rgba(255,255,255,.1)",
+                color: "#e2e8f0",
+                flexDirection: "column",
+                gap: 5,
+                padding: 0,
+              }}
+            >
+              <span
+                style={{
+                  display: "block",
+                  width: 18,
+                  height: 2,
+                  background: drawerOpen ? "#00ff87" : "currentColor",
+                  borderRadius: 2,
+                  transition: "all .3s",
+                  transform: drawerOpen
+                    ? "rotate(45deg) translateY(3.5px)"
+                    : "none",
+                }}
+              />
+              <span
+                style={{
+                  display: "block",
+                  width: 18,
+                  height: 2,
+                  background: drawerOpen ? "#00ff87" : "currentColor",
+                  borderRadius: 2,
+                  transition: "all .3s",
+                  transform: drawerOpen
+                    ? "rotate(-45deg) translateY(-3.5px)"
+                    : "none",
+                  opacity: drawerOpen ? 1 : 1,
+                }}
+              />
+            </button>
           </div>
         </div>
       </header>
@@ -1691,10 +1687,11 @@ export default function NummoriasLanding() {
       {/* HERO */}
       <section
         id="top"
+        className="section-pad"
         style={{
           ...W,
-          paddingTop: 82,
-          paddingBottom: 70,
+          paddingTop: 62,
+          paddingBottom: 50,
           position: "relative",
           zIndex: 1,
         }}
@@ -1712,21 +1709,9 @@ export default function NummoriasLanding() {
             pointerEvents: "none",
           }}
         />
-        <div
-          style={{
-            position: "absolute",
-            top: -80,
-            right: -50,
-            width: 420,
-            height: 420,
-            borderRadius: "50%",
-            background:
-              "radial-gradient(ellipse,rgba(0,212,255,.04),transparent 62%)",
-            pointerEvents: "none",
-          }}
-        />
 
         <div
+          className="hero-grid"
           style={{
             display: "grid",
             gridTemplateColumns: "1.08fr .92fr",
@@ -1734,9 +1719,8 @@ export default function NummoriasLanding() {
             alignItems: "center",
           }}
         >
-          {/* LEFT */}
           <div className="rv rv-lft">
-            <div className="chip" style={{ marginBottom: 24 }}>
+            <div className="chip" style={{ marginBottom: 20 }}>
               <span
                 style={{
                   width: 7,
@@ -1752,7 +1736,7 @@ export default function NummoriasLanding() {
             <h1
               style={{
                 fontFamily: "'Syne',sans-serif",
-                fontSize: "clamp(2.7rem,4.8vw,4rem)",
+                fontSize: "clamp(2rem,4.8vw,4rem)",
                 fontWeight: 800,
                 letterSpacing: "-.04em",
                 lineHeight: 1.07,
@@ -1778,8 +1762,8 @@ export default function NummoriasLanding() {
 
             <p
               style={{
-                marginTop: 20,
-                fontSize: 15.5,
+                marginTop: 18,
+                fontSize: 15,
                 color: "var(--muted)",
                 lineHeight: 1.8,
                 maxWidth: 460,
@@ -1791,8 +1775,9 @@ export default function NummoriasLanding() {
             </p>
 
             <div
+              className="hero-ctas"
               style={{
-                marginTop: 30,
+                marginTop: 26,
                 display: "flex",
                 flexWrap: "wrap",
                 gap: 12,
@@ -1808,8 +1793,9 @@ export default function NummoriasLanding() {
             </div>
 
             <div
+              className="store-row"
               style={{
-                marginTop: 16,
+                marginTop: 14,
                 display: "flex",
                 gap: 10,
                 flexWrap: "wrap",
@@ -1820,8 +1806,9 @@ export default function NummoriasLanding() {
             </div>
 
             <div
+              className="hero-badges"
               style={{
-                marginTop: 32,
+                marginTop: 28,
                 display: "grid",
                 gridTemplateColumns: "repeat(4,1fr)",
                 gap: 10,
@@ -1841,14 +1828,6 @@ export default function NummoriasLanding() {
                     border: "1px solid rgba(255,255,255,.06)",
                     background: "rgba(255,255,255,.03)",
                     transition: "all .2s",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = "rgba(0,255,135,.16)";
-                    e.currentTarget.style.background = "rgba(0,255,135,.045)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = "rgba(255,255,255,.06)";
-                    e.currentTarget.style.background = "rgba(255,255,255,.03)";
                   }}
                 >
                   <div
@@ -1875,7 +1854,6 @@ export default function NummoriasLanding() {
             </div>
           </div>
 
-          {/* RIGHT */}
           <div className="rv rv-rgt" style={{ position: "relative" }}>
             <HeroPhoneShowcase />
           </div>
@@ -1892,8 +1870,9 @@ export default function NummoriasLanding() {
           zIndex: 1,
         }}
       >
-        <div style={{ ...W, padding: "36px 28px" }}>
+        <div style={{ ...W, padding: "28px 20px" }}>
           <div
+            className="metrics-grid"
             style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)" }}
           >
             {[
@@ -1913,7 +1892,7 @@ export default function NummoriasLanding() {
                 style={{
                   transitionDelay: `${i * 0.08}s`,
                   textAlign: "center",
-                  padding: "20px 16px",
+                  padding: "16px 12px",
                   borderLeft:
                     i === 0 ? "none" : "1px solid rgba(255,255,255,.06)",
                 }}
@@ -1921,7 +1900,7 @@ export default function NummoriasLanding() {
                 <div
                   style={{
                     fontFamily: "'Syne',sans-serif",
-                    fontSize: "clamp(1.8rem,3vw,2.5rem)",
+                    fontSize: "clamp(1.5rem,3vw,2.5rem)",
                     fontWeight: 800,
                     letterSpacing: "-.04em",
                     color: "#fff",
@@ -1937,7 +1916,7 @@ export default function NummoriasLanding() {
                 </div>
                 <div
                   style={{
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: 600,
                     color: "var(--muted)",
                     letterSpacing: ".03em",
@@ -1956,6 +1935,7 @@ export default function NummoriasLanding() {
       {/* HOW IT WORKS */}
       <section
         id="how"
+        className="section-pad"
         style={{
           ...W,
           paddingTop: 90,
@@ -1970,10 +1950,11 @@ export default function NummoriasLanding() {
           sub="Nummoria is simple: capture your reality, structure it cleanly, and use AI to understand your decisions."
         />
         <div
+          className="steps-grid"
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(3,1fr)",
-            gap: 18,
+            gap: 16,
           }}
         >
           {[
@@ -2001,7 +1982,7 @@ export default function NummoriasLanding() {
                 borderRadius: 24,
                 border: "1px solid rgba(255,255,255,.07)",
                 background: "rgba(255,255,255,.03)",
-                padding: "30px 26px",
+                padding: "28px 22px",
                 position: "relative",
                 overflow: "hidden",
                 transition: "border-color .3s, background .3s",
@@ -2068,6 +2049,7 @@ export default function NummoriasLanding() {
       {/* FEATURES */}
       <section
         id="features"
+        className="section-pad"
         style={{
           ...W,
           paddingTop: 90,
@@ -2083,6 +2065,7 @@ export default function NummoriasLanding() {
         />
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div
+            className="feat-row-a"
             style={{ display: "grid", gridTemplateColumns: "58% 1fr", gap: 16 }}
           >
             <FeatureCard
@@ -2109,6 +2092,7 @@ export default function NummoriasLanding() {
             />
           </div>
           <div
+            className="feat-row-b"
             style={{ display: "grid", gridTemplateColumns: "1fr 58%", gap: 16 }}
           >
             <FeatureCard
@@ -2141,6 +2125,7 @@ export default function NummoriasLanding() {
 
       {/* CONVICTION STRIP */}
       <div
+        className="section-pad"
         style={{
           ...W,
           paddingTop: 60,
@@ -2150,7 +2135,7 @@ export default function NummoriasLanding() {
         }}
       >
         <div
-          className="rv rv-up"
+          className="rv rv-up conviction-inner"
           style={{
             display: "flex",
             alignItems: "center",
@@ -2158,18 +2143,25 @@ export default function NummoriasLanding() {
             borderRadius: 26,
             border: "1px solid rgba(255,255,255,.07)",
             background: "rgba(255,255,255,.025)",
-            padding: "36px 44px",
+            padding: "36px 32px",
             flexWrap: "wrap",
             justifyContent: "space-between",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 22,
+              flexWrap: "wrap",
+            }}
+          >
             <OrbitVisual />
             <div>
               <div
                 style={{
                   fontFamily: "'Syne',sans-serif",
-                  fontSize: "clamp(1.5rem,2.5vw,2rem)",
+                  fontSize: "clamp(1.3rem,2.5vw,2rem)",
                   fontWeight: 800,
                   letterSpacing: "-.03em",
                   marginBottom: 10,
@@ -2233,6 +2225,7 @@ export default function NummoriasLanding() {
       {/* PRICING */}
       <section
         id="pricing"
+        className="section-pad"
         style={{
           ...W,
           paddingTop: 90,
@@ -2261,6 +2254,7 @@ export default function NummoriasLanding() {
           sub="Start free. Upgrade when you want deeper AI clarity. Cancel anytime."
         />
         <div
+          className="price-grid"
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(3,1fr)",
@@ -2330,10 +2324,11 @@ export default function NummoriasLanding() {
       {/* FAQ */}
       <section
         id="faq"
+        className="section-pad"
         style={{
           maxWidth: 800,
           margin: "0 auto",
-          padding: "90px 28px",
+          padding: "90px 20px",
           position: "relative",
           zIndex: 1,
         }}
@@ -2365,7 +2360,7 @@ export default function NummoriasLanding() {
         style={{ ...W, paddingBottom: 90, position: "relative", zIndex: 1 }}
       >
         <div
-          className="rv rv-scl"
+          className="rv rv-scl cta-box"
           style={{
             borderRadius: 30,
             border: "1px solid rgba(0,255,135,.11)",
@@ -2447,7 +2442,7 @@ export default function NummoriasLanding() {
             <h3
               style={{
                 fontFamily: "'Syne',sans-serif",
-                fontSize: "clamp(2rem,4vw,3.2rem)",
+                fontSize: "clamp(1.6rem,4vw,3.2rem)",
                 fontWeight: 800,
                 letterSpacing: "-.035em",
                 marginBottom: 16,
@@ -2461,16 +2456,17 @@ export default function NummoriasLanding() {
             <p
               style={{
                 color: "var(--muted)",
-                fontSize: 15.5,
+                fontSize: 15,
                 lineHeight: 1.8,
                 maxWidth: 500,
-                margin: "0 auto 36px",
+                margin: "0 auto 32px",
               }}
             >
               Create an account, add your first entries, and get your first AI
               explanation immediately.
             </p>
             <div
+              className="cta-bottom-row"
               style={{
                 display: "flex",
                 flexWrap: "wrap",
@@ -2481,14 +2477,14 @@ export default function NummoriasLanding() {
               <a
                 href="/signup"
                 className="cta-primary"
-                style={{ height: 52, padding: "0 32px", fontSize: 15 }}
+                style={{ height: 50, padding: "0 28px", fontSize: 14.5 }}
               >
                 Create free account
               </a>
               <a
                 href="/login"
                 className="cta-ghost"
-                style={{ height: 52, padding: "0 26px", fontSize: 14 }}
+                style={{ height: 50, padding: "0 24px", fontSize: 13.5 }}
               >
                 I already have an account
               </a>
