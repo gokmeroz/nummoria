@@ -574,6 +574,10 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
     const askBurn =
       /(burn rate|monthly burn|ayl[ıi]k gider|ayl[ıi]k harcama)/i.test(q);
     const askTrend = /(trend|ay baz[ıi]nda|month over month|m[oa]m)/i.test(q);
+    const askGoal =
+      /(save|saving|savings|plan|goal|afford|cut|reduce|trim|budget|summer|vacation|holiday|trip|yaz|tatil|biriktir|tasarruf|hedef)/i.test(
+        q,
+      );
 
     const start = range?.start || null;
     const end = range?.end || null;
@@ -743,6 +747,49 @@ function buildRuleBasedReply(ctx, tone, userMsg) {
         .join("\n");
 
       return `${head}\nLast 3 months trend:\n${lines}\n\n${disclaimer}`;
+    }
+
+    if (askGoal) {
+      const expenses = txs.filter((t) => t.amount < 0);
+
+      // Group by category and sum
+      const byCat = {};
+      for (const t of expenses) {
+        const cat = t.category || "Other";
+        byCat[cat] = (byCat[cat] || 0) + Math.abs(t.amount);
+      }
+
+      const sortedCats = Object.entries(byCat)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5);
+
+      const totalExpense = sortedCats.reduce((s, [, v]) => s + v, 0);
+
+      const tips = sortedCats.map(([cat, total]) => {
+        const monthly = total / Math.max(1, m.months?.length || 1);
+        const cut20 = monthly * 0.2;
+        return `${bullet} ${cat}: ${monthly.toFixed(2)}/mo — cutting 20% frees up ~${cut20.toFixed(2)}/mo`;
+      });
+
+      const monthsOfData = m.months?.length || 1;
+      const avgMonthlyExpense = totalExpense / monthsOfData;
+      const potentialMonthly = avgMonthlyExpense * 0.2;
+      const potential3mo = (potentialMonthly * 3).toFixed(2);
+
+      const isBuddyTone = tone === "buddy";
+      const intro = isBuddyTone
+        ? `Alright, let's look at what your actual numbers say:`
+        : `Based on your transaction history, here are the most impactful areas to target:`;
+
+      return [
+        intro,
+        "",
+        ...tips,
+        "",
+        `If you trim 20% across these categories, you could free up ~${potentialMonthly.toFixed(2)}/mo — that's ~${potential3mo} over 3 months toward your goal.`,
+        "",
+        disclaimer,
+      ].join("\n");
     }
   }
 
