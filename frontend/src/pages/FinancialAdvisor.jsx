@@ -1639,79 +1639,36 @@ export default function FinancialAdvisor() {
                     ) : quotaActive && quota.locked ? (
                       "Daily AI limit reached."
                     ) : (
-                      <span className="grad-txt">Start a conversation</span>
+                      <span className="grad-txt">How to use me</span>
                     )}
                   </div>
-                  <div
-                    style={{
-                      fontSize: 12,
-                      color: "rgba(226,232,240,.3)",
-                      fontFamily: "'DM Mono',monospace",
-                      maxWidth: 280,
-                      margin: "0 auto",
-                      lineHeight: 1.7,
-                    }}
-                  >
-                    {quotaActive && quota.locked
-                      ? `Resets in ${formatDuration(quota.resetInSeconds)}`
-                      : "Upload a file or ask any financial question"}
-                  </div>
+                  {quotaActive && quota.locked ? (
+                    <div style={{ fontSize: 12, color: "rgba(226,232,240,.3)", fontFamily: "'DM Mono',monospace" }}>
+                      {`Resets in ${formatDuration(quota.resetInSeconds)}`}
+                    </div>
+                  ) : !planLoading && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 16, textAlign: "left", maxWidth: 380 }}>
+                      {[
+                        { icon: "💬", title: "Ask about your money", body: "Your transactions are already loaded — try 'How much did I spend on dining last month?'" },
+                        { icon: "🎯", title: "Set a real goal", body: "'I want to save $1,000 before June' — I'll build a plan from your actual spending." },
+                        { icon: "🔍", title: "Dig into categories", body: "'What are my top 3 biggest expenses?' or 'Am I overpaying on subscriptions?'" },
+                        { icon: "📄", title: "Import bank statements", body: "Optional — upload a CSV or PDF from another bank to layer in that data." },
+                        { icon: "🎙️", title: "Switch tone", body: "Toggle Buddy / Formal at the top anytime." },
+                      ].map(({ icon, title, body }) => (
+                        <div key={title} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                          <span style={{ fontSize: 16, lineHeight: 1.5, flexShrink: 0 }}>{icon}</span>
+                          <div>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: "#e2e8f0" }}>{title} — </span>
+                            <span style={{ fontSize: 12, color: "rgba(226,232,240,.45)", lineHeight: 1.6 }}>{body}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-
-                {/* suggestion pills */}
-                {!planLoading && !quota.locked && (
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 9,
-                      flexWrap: "wrap",
-                      justifyContent: "center",
-                      maxWidth: 400,
-                    }}
-                  >
-                    {[
-                      "Budget analysis",
-                      "Risk assessment",
-                      "Investment clarity",
-                      "Habit cost · annual",
-                    ].map((label) => (
-                      <span
-                        key={label}
-                        style={{
-                          padding: "5px 14px",
-                          borderRadius: 100,
-                          border: "1px solid rgba(255,255,255,.07)",
-                          background: "rgba(255,255,255,.03)",
-                          fontSize: 11,
-                          fontFamily: "'DM Mono',monospace",
-                          color: "rgba(226,232,240,.32)",
-                          letterSpacing: ".03em",
-                          cursor: "default",
-                        }}
-                      >
-                        {label}
-                      </span>
-                    ))}
-                  </div>
-                )}
               </div>
             ) : (
               <>
-                {messages.length === 0 && (
-                  <ChatBubble
-                    role="assistant"
-                    logoSrc={logo}
-                    text={[
-                      "Hey! Here's how to get the most out of me:\n",
-                      "💬 **Ask anything about your money** — your transactions are already loaded. Try: *'How much did I spend on dining last month?'*\n",
-                      "🎯 **Set a real goal** — tell me what you're saving for and by when: *'I want to save $1,000 before June'* and I'll build a plan from your actual spending.\n",
-                      "🔍 **Dig into categories** — ask *'What are my top 3 biggest expenses?'* or *'Am I overpaying on subscriptions?'*\n",
-                      "📄 **Import bank statements** *(optional)* — got a CSV or PDF from another bank? Upload it above to layer in that data.\n",
-                      "🎙️ **Switch tone** — toggle Buddy / Formal at the top anytime.\n",
-                      "This is educational guidance, not licensed financial advice.",
-                    ].join("\n")}
-                  />
-                )}
                 {messages.map((m, i) => (
                   <ChatBubble
                     key={i}
