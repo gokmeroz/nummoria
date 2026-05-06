@@ -671,9 +671,6 @@ export default function FinancialAdvisor() {
   const [thinking, setThinking] = useState(false);
   const [plan, setPlan] = useState(null);
   const [planLoading, setPlanLoading] = useState(true);
-  const [showOnboarding, setShowOnboarding] = useState(
-    () => localStorage.getItem("fh_onboarding_dismissed") !== "true"
-  );
   const [quota, setQuota] = useState({
     used: 0,
     limit: 0,
@@ -1700,6 +1697,21 @@ export default function FinancialAdvisor() {
               </div>
             ) : (
               <>
+                {messages.length === 0 && (
+                  <ChatBubble
+                    role="assistant"
+                    logoSrc={logo}
+                    text={[
+                      "Hey! Here's how to get the most out of me:\n",
+                      "💬 **Ask anything about your money** — your transactions are already loaded. Try: *'How much did I spend on dining last month?'*\n",
+                      "🎯 **Set a real goal** — tell me what you're saving for and by when: *'I want to save $1,000 before June'* and I'll build a plan from your actual spending.\n",
+                      "🔍 **Dig into categories** — ask *'What are my top 3 biggest expenses?'* or *'Am I overpaying on subscriptions?'*\n",
+                      "📄 **Import bank statements** *(optional)* — got a CSV or PDF from another bank? Upload it above to layer in that data.\n",
+                      "🎙️ **Switch tone** — toggle Buddy / Formal at the top anytime.\n",
+                      "This is educational guidance, not licensed financial advice.",
+                    ].join("\n")}
+                  />
+                )}
                 {messages.map((m, i) => (
                   <ChatBubble
                     key={i}
@@ -1973,8 +1985,8 @@ function TypingBubble({ logoSrc }) {
         </span>
       </div>
 
-      {/* ── ONBOARDING MODAL ── */}
-      {showOnboarding && (
+      {/* ── ONBOARDING MODAL ── (removed, replaced by welcome chat message) */}
+      {false && (
         <div
           style={{
             position: "fixed",
