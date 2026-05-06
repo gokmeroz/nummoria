@@ -47,13 +47,41 @@ async function callLLM(
 ) {
   const safeTone = tonePreference === "buddy" ? "buddy" : "formal";
 
+  const allTxs = Array.isArray(context?.parsedTransactions)
+    ? context.parsedTransactions
+    : [];
+
+  // Summarize transactions by category so the prompt stays well within token limits
+  const byCat = {};
+  for (const t of allTxs) {
+    const cat = t.category || (t.amount < 0 ? "Expense" : "Income");
+    if (!byCat[cat]) byCat[cat] = { count: 0, total: 0 };
+    byCat[cat].count += 1;
+    byCat[cat].total += t.amount;
+  }
+  const categorySummary = Object.entries(byCat)
+    .sort((a, b) => Math.abs(b[1].total) - Math.abs(a[1].total))
+    .map(([cat, { count, total }]) => ({
+      category: cat,
+      transactions: count,
+      total: parseFloat(total.toFixed(2)),
+    }));
+
+  // Send the 30 most recent transactions for concrete examples
+  const recentTransactions = allTxs.slice(0, 30).map((t) => ({
+    date: t.date,
+    description: t.description,
+    amount: t.amount,
+    category: t.category,
+  }));
+
   const userPayload = {
     tonePreference: safeTone,
     message: String(message || "").trim(),
     context: {
-      parsedTransactions: Array.isArray(context?.parsedTransactions)
-        ? context.parsedTransactions
-        : [],
+      totalTransactions: allTxs.length,
+      categorySummary,
+      recentTransactions,
       computedMetrics:
         context?.computedMetrics && typeof context.computedMetrics === "object"
           ? context.computedMetrics
@@ -1209,25 +1237,16 @@ export async function chat(req, res) {
 
       return res.json({ reply });
     } catch (e) {
-      if (isDev) {
-        console.warn(
-          `${agentToUse} failed in chat, using rule fallback:`,
-          e?.status || e?.code,
-          e?.message,
-        );
-      }
+      console.error(
+        `[FinancialHelper] ${agentToUse} call failed:`,
+        e?.status || e?.code,
+        e?.message,
+        e?.stack,
+      );
 
-      const reply = buildRuleBasedReply(context, safeTone, message);
-
-      if (isDev) {
-        return res.json({
-          reply:
-            reply +
-            `\n\n(Dev note: AI call to ${agentToUse} failed; served rule-based reply. Check API key, network, or model config.)`,
-        });
-      }
-
-      return res.json({ reply });
+      return res.status(502).json({
+        error: "AI agent failed to respond. Check server logs for details.",
+      });
     }
   } catch (err) {
     console.error("chat error:", err);
