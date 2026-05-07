@@ -43,6 +43,17 @@ const T_MID = "rgba(226,232,240,0.55)";
 const T_DIM = "rgba(226,232,240,0.32)";
 
 /* ──────────────────────────────────────────────────────────
+   INSTRUCTIONS DATA
+────────────────────────────────────────────────────────── */
+const INSTRUCTIONS = [
+  { icon: "💬", title: "Ask about your money", body: "Your transactions are already loaded — try 'How much did I spend on dining last month?'" },
+  { icon: "🎯", title: "Set a real goal", body: "'I want to save $1,000 before June' — I'll build a plan from your actual spending." },
+  { icon: "🔍", title: "Dig into categories", body: "'What are my top 3 biggest expenses?' or 'Am I overpaying on subscriptions?'" },
+  { icon: "📄", title: "Import bank statements", body: "Optional — upload a CSV or PDF from another bank to layer in that data." },
+  { icon: "🎙️", title: "Switch tone", body: "Toggle Buddy / Formal at the top anytime." },
+];
+
+/* ──────────────────────────────────────────────────────────
    PLAN GATE
 ────────────────────────────────────────────────────────── */
 const ELIGIBLE_PLANS = new Set(["plus", "premium"]);
@@ -733,13 +744,30 @@ export default function FinancialAdvisorScreen() {
             >
               {messages.length === 0 ? (
                 <View style={s.emptyChatWrap}>
-                  <Text style={s.emptyChatText}>
-                    {planLoading
-                      ? "Checking your plan…"
-                      : isEligible(plan)
-                        ? "Optional: Upload statement for deeper analysis, ask about your budget, savings, or investments."
-                        : "Upgrade to Plus or Premium to chat with the advisor."}
-                  </Text>
+                  {planLoading ? (
+                    <Text style={s.emptyChatText}>Checking your plan…</Text>
+                  ) : !isEligible(plan) ? (
+                    <Text style={s.emptyChatText}>
+                      Upgrade to Plus or Premium to chat with the advisor.
+                    </Text>
+                  ) : (
+                    <View style={s.instructionsContainer}>
+                      <Text style={s.instructionsHeader}>How to use me</Text>
+                      {INSTRUCTIONS.map((item, idx) => (
+                        <View key={idx} style={s.instructionRow}>
+                          <Text style={s.instructionIcon}>{item.icon}</Text>
+                          <View style={s.instructionTextWrap}>
+                            <Text style={s.instructionBody}>
+                              <Text style={s.instructionTitle}>
+                                {item.title} —{" "}
+                              </Text>
+                              {item.body}
+                            </Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  )}
                 </View>
               ) : (
                 <View>
@@ -1154,6 +1182,44 @@ const s = StyleSheet.create({
     textAlign: "center",
     paddingHorizontal: 16,
     lineHeight: 20,
+  },
+
+  // Added Instruction Styles
+  instructionsContainer: {
+    width: "100%",
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 20,
+  },
+  instructionsHeader: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: MINT,
+    marginBottom: 16,
+    textAlign: "center",
+  },
+  instructionRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 12,
+    gap: 10,
+  },
+  instructionIcon: {
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  instructionTextWrap: {
+    flex: 1,
+  },
+  instructionTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: T_HI,
+  },
+  instructionBody: {
+    fontSize: 12,
+    color: T_MID,
+    lineHeight: 18,
   },
 
   bubbleRow: {
