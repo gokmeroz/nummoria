@@ -17,6 +17,7 @@ import { useNavigation } from "@react-navigation/native";
 
 import api from "../lib/api";
 import DashboardMenuFab from "../components/DashboardMenuFab";
+import TutorialOverlay, { shouldShowTutorial } from "../components/TutorialOverlay";
 
 const { width, height } = Dimensions.get("window");
 
@@ -424,6 +425,7 @@ export default function DashboardScreen() {
   });
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [showTutorial, setShowTutorial] = useState(false);
 
   useEffect(() => {
     async function init() {
@@ -507,6 +509,9 @@ export default function DashboardScreen() {
       } finally {
         setLoading(false);
       }
+
+      const show = await shouldShowTutorial();
+      if (show) setShowTutorial(true);
     }
     init();
   }, []);
@@ -757,6 +762,11 @@ export default function DashboardScreen() {
 
       {/* DashboardMenuFab owns its ITEMS list internally — no props needed */}
       <DashboardMenuFab />
+
+      <TutorialOverlay
+        visible={showTutorial}
+        onDone={() => setShowTutorial(false)}
+      />
     </View>
   );
 }
