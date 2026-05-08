@@ -429,7 +429,6 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     async function init() {
-      await AsyncStorage.removeItem("hasSeenTutorial_v1"); // DEV ONLY — remove before release
       try {
         setLoading(true);
         setLoadError("");
