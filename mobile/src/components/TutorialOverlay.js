@@ -17,7 +17,7 @@ const BG      = "#030508";
 const MINT    = "#00ff87";
 const CYAN    = "#00d4ff";
 const VIOLET  = "#a78bfa";
-const CARD_BG = "rgba(255,255,255,0.03)";
+const CARD_BG = "rgba(4,8,16,0.97)";
 const BORDER  = "rgba(255,255,255,0.09)";
 const T_HI    = "#e2e8f0";
 const T_MID   = "rgba(226,232,240,0.55)";
@@ -181,7 +181,6 @@ export default function TutorialOverlay({ visible, onDone, navigation }) {
   const [step, setStep] = React.useState(0);
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
-  const glowAnim  = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) {
@@ -190,12 +189,6 @@ export default function TutorialOverlay({ visible, onDone, navigation }) {
         Animated.timing(fadeAnim,  { toValue: 1, duration: 400, useNativeDriver: true }),
         Animated.timing(slideAnim, { toValue: 0, duration: 400, useNativeDriver: true }),
       ]).start();
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(glowAnim, { toValue: 1, duration: 1800, useNativeDriver: true }),
-          Animated.timing(glowAnim, { toValue: 0, duration: 1800, useNativeDriver: true }),
-        ])
-      ).start();
     }
   }, [visible]);
 
@@ -237,8 +230,6 @@ export default function TutorialOverlay({ visible, onDone, navigation }) {
   const cur    = STEPS[step];
   const isLast = step === STEPS.length - 1;
 
-  const glowOpacity = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.45, 0.9] });
-
   return (
     <Modal
       visible={visible}
@@ -262,16 +253,10 @@ export default function TutorialOverlay({ visible, onDone, navigation }) {
           ))}
         </View>
 
-        {/* Ambient glow behind card */}
-        <Animated.View
-          pointerEvents="none"
-          style={[s.ambientGlow, { backgroundColor: cur.accent, opacity: glowOpacity }]}
-        />
-
         <Animated.View
           style={[
             s.card,
-            { borderColor: cur.accent + "35" },
+            { borderColor: cur.accent + "50", shadowColor: cur.accent },
             { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
           ]}
         >
@@ -390,14 +375,6 @@ const s = StyleSheet.create({
     width: 1,
     backgroundColor: "rgba(255,255,255,0.025)",
   },
-  ambientGlow: {
-    position: "absolute",
-    width: 280,
-    height: 280,
-    borderRadius: 140,
-    opacity: 0.06,
-    filter: "blur(60px)",
-  },
   card: {
     width: "100%",
     maxWidth: 390,
@@ -406,6 +383,10 @@ const s = StyleSheet.create({
     borderWidth: 1,
     padding: 22,
     alignItems: "center",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 24,
+    elevation: 12,
   },
   headerRow: {
     flexDirection: "row",
