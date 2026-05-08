@@ -765,6 +765,7 @@ export default function DashboardScreen() {
 
       <TutorialOverlay
         visible={showTutorial}
+        navigation={navigation}
         onDone={() => setShowTutorial(false)}
       />
     </View>
