@@ -297,6 +297,7 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
   const [loginErr, setLoginErr] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginReason, setLoginReason] = useState("");
+  const [stayLoggedIn, setStayLoggedIn] = useState(false);
 
   const [socialLoading, setSocialLoading] = useState(false);
   const [socialErr, setSocialErr] = useState("");
@@ -436,6 +437,7 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
       const resp = await api.post("/auth/login", {
         email: loginEmail.trim(),
         password: loginPassword,
+        rememberMe: stayLoggedIn,
       });
 
       const data = resp?.data || {};
@@ -813,6 +815,30 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
                 )}
               </TouchableOpacity>
 
+              <TouchableOpacity
+                style={styles.stayRow}
+                onPress={() => setStayLoggedIn((v) => !v)}
+                activeOpacity={0.75}
+                disabled={loginLoading}
+              >
+                <View
+                  style={[
+                    styles.stayBox,
+                    stayLoggedIn && styles.stayBoxActive,
+                  ]}
+                >
+                  {stayLoggedIn && <View style={styles.stayCheck} />}
+                </View>
+                <Text
+                  style={[
+                    styles.stayLabel,
+                    stayLoggedIn && { color: MINT },
+                  ]}
+                >
+                  STAY LOGGED IN
+                </Text>
+              </TouchableOpacity>
+
               {loginReason === "UNVERIFIED" ? (
                 <View style={styles.inlineActions}>
                   <TouchableOpacity
@@ -1183,6 +1209,39 @@ const styles = StyleSheet.create({
   },
 
   buttonDisabled: { opacity: 0.65 },
+
+  stayRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 14,
+  },
+  stayBox: {
+    width: 16,
+    height: 16,
+    borderRadius: 2,
+    borderWidth: 1,
+    borderColor: "rgba(0,255,135,0.35)",
+    backgroundColor: "rgba(255,255,255,0.025)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stayBoxActive: {
+    borderColor: MINT,
+    backgroundColor: "rgba(0,255,135,0.15)",
+  },
+  stayCheck: {
+    width: 8,
+    height: 8,
+    borderRadius: 1,
+    backgroundColor: MINT,
+  },
+  stayLabel: {
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1.4,
+    color: T_MID,
+  },
 
   inlineActions: {
     flexDirection: "row",

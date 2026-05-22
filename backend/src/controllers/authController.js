@@ -161,7 +161,7 @@ function normalizeConsentInput(consentInput) {
   };
 }
 
-function createAuthToken(user) {
+function createAuthToken(user, rememberMe = false) {
   return jwt.sign(
     {
       id: user._id,
@@ -169,7 +169,7 @@ function createAuthToken(user) {
       role: user.role || "user",
     },
     JWT_SECRET,
-    { expiresIn: "8h" },
+    { expiresIn: rememberMe ? "30d" : "8h" },
   );
 }
 
@@ -614,7 +614,7 @@ export async function register(req, res) {
 
 export async function login(req, res) {
   try {
-    const { email, password } = req.body;
+    const { email, password, rememberMe = false } = req.body;
 
     const user = await User.findOne({
       email: (email || "").toLowerCase(),
@@ -657,9 +657,12 @@ export async function login(req, res) {
     user.lastLogin = new Date();
     await user.save();
 
-    const token = createAuthToken(user);
+    const token = createAuthToken(user, rememberMe);
+    const cookieMaxAge = rememberMe
+      ? 1000 * 60 * 60 * 24 * 30
+      : 1000 * 60 * 60 * 8;
 
-    setAuthCookie(res, token);
+    setAuthCookie(res, token, cookieMaxAge);
 
     return res.json({
       ok: true,
