@@ -17,36 +17,19 @@ import {
   Modal,
   SafeAreaView,
 } from "react-native";
-import { AntDesign, Ionicons } from "@expo/vector-icons";
+import { Feather } from "@expo/vector-icons";
 import * as AppleAuthentication from "expo-apple-authentication";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { LinearGradient } from "expo-linear-gradient";
+
 import api from "../lib/api";
 import logo from "../../assets/nummoria_logo.png";
-
-/* ──────────────────────────────────────────────────────────
-   THEME — synced with Dashboard / Expenses / Login HUD
-────────────────────────────────────────────────────────── */
-const BG = "#030508";
-const MINT = "#00ff87";
-const CYAN = "#00d4ff";
-const VIOLET = "#a78bfa";
-const CARD_BG = "rgba(255,255,255,0.025)";
-const CARD_BD = "rgba(255,255,255,0.07)";
-const T_HI = "#e2e8f0";
-const T_MID = "rgba(226,232,240,0.55)";
-const T_DIM = "rgba(226,232,240,0.32)";
-const DANGER = "#fb7185";
-
-const APPLE_BG = "#000000";
-const APPLE_TEXT = "#ffffff";
+import { useTheme } from "../theme/ThemeContext";
 
 const PENDING_VERIFY_EMAIL_KEY = "pendingVerifyEmail";
 const PENDING_REG_TOKEN_KEY = "pendingRegToken";
 const APPLE_NAME_CACHE_KEY = "appleFullNameCache";
 
-/* ──────────────────────────────────────────────────────────
-   HELPERS
-────────────────────────────────────────────────────────── */
 function buildAppleFullName(fn) {
   if (!fn) return "";
   return [fn.givenName, fn.middleName, fn.familyName, fn.nickname]
@@ -55,212 +38,16 @@ function buildAppleFullName(fn) {
     .trim();
 }
 
-/* ──────────────────────────────────────────────────────────
-   HUD PRIMITIVES
-────────────────────────────────────────────────────────── */
-function Brackets({ color = MINT, size = 10, thick = 1.5 }) {
-  const defs = [
-    {
-      top: 0,
-      left: 0,
-      borderTopWidth: thick,
-      borderLeftWidth: thick,
-      borderTopLeftRadius: 2,
-    },
-    {
-      top: 0,
-      right: 0,
-      borderTopWidth: thick,
-      borderRightWidth: thick,
-      borderTopRightRadius: 2,
-    },
-    {
-      bottom: 0,
-      left: 0,
-      borderBottomWidth: thick,
-      borderLeftWidth: thick,
-      borderBottomLeftRadius: 2,
-    },
-    {
-      bottom: 0,
-      right: 0,
-      borderBottomWidth: thick,
-      borderRightWidth: thick,
-      borderBottomRightRadius: 2,
-    },
-  ];
-
-  return (
-    <>
-      {defs.map((d, i) => (
-        <View
-          key={i}
-          style={[
-            {
-              position: "absolute",
-              width: size,
-              height: size,
-              borderColor: color,
-            },
-            d,
-          ]}
-        />
-      ))}
-    </>
-  );
-}
-
-function ScanLine({ color = MINT, style: extra }) {
-  return (
-    <View
-      style={[{ flexDirection: "row", alignItems: "center", gap: 6 }, extra]}
-    >
-      <View
-        style={{
-          width: 3,
-          height: 3,
-          borderRadius: 999,
-          backgroundColor: color,
-          opacity: 0.6,
-        }}
-      />
-      <View
-        style={{ flex: 1, height: 1, backgroundColor: color, opacity: 0.2 }}
-      />
-      <View
-        style={{
-          width: 3,
-          height: 3,
-          borderRadius: 999,
-          backgroundColor: color,
-          opacity: 0.6,
-        }}
-      />
-    </View>
-  );
-}
-
-function GridBG() {
-  const { width, height } = require("react-native").Dimensions.get("window");
-  const COLS = 10;
-  const ROWS = 22;
-  const cw = width / COLS;
-  const rh = height / ROWS;
-
-  return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      {Array.from({ length: ROWS + 1 }, (_, i) => (
-        <View
-          key={`h${i}`}
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            top: i * rh,
-            height: 1,
-            backgroundColor: "rgba(0,255,135,0.035)",
-          }}
-        />
-      ))}
-      {Array.from({ length: COLS + 1 }, (_, i) => (
-        <View
-          key={`v${i}`}
-          style={{
-            position: "absolute",
-            top: 0,
-            bottom: 0,
-            left: i * cw,
-            width: 1,
-            backgroundColor: "rgba(0,212,255,0.025)",
-          }}
-        />
-      ))}
-
-      <View
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: 2,
-          backgroundColor: MINT,
-          opacity: 0.15,
-        }}
-      />
-      <View
-        style={{
-          position: "absolute",
-          top: height * 0.42,
-          left: 0,
-          right: 0,
-          height: 1,
-          backgroundColor: CYAN,
-          opacity: 0.06,
-        }}
-      />
-      <View
-        style={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 1,
-          backgroundColor: VIOLET,
-          opacity: 0.1,
-        }}
-      />
-    </View>
-  );
-}
-
-function ChipButton({ label, accent = MINT, disabled, loading }) {
-  return (
-    <TouchableOpacity
-      disabled={disabled}
-      activeOpacity={0.8}
-      style={[
-        styles.ctrlPill,
-        { borderColor: `${accent}55` },
-        disabled && { opacity: 0.6 },
-      ]}
-    >
-      <View style={[styles.ctrlDot, { backgroundColor: accent }]} />
-      <Text style={[styles.ctrlTxt, { color: accent }]}>
-        {loading ? "PROCESSING" : label}
-      </Text>
-    </TouchableOpacity>
-  );
-}
-
-function StatusCard({ title, body, accent = VIOLET }) {
-  return (
-    <View
-      style={[
-        styles.infoCard,
-        {
-          borderColor: `${accent}33`,
-          backgroundColor:
-            accent === DANGER
-              ? "rgba(251,113,133,0.08)"
-              : accent === MINT
-                ? "rgba(0,255,135,0.08)"
-                : "rgba(167,139,250,0.08)",
-        },
-      ]}
-    >
-      <Brackets color={accent} size={8} thick={1} />
-      <Text style={[styles.infoTitle, { color: accent }]}>{title}</Text>
-      <Text style={styles.infoBody}>{body}</Text>
-    </View>
-  );
-}
-
 export default function SignUpScreen({ navigation, onSignedUp }) {
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
+
   const [name, setName] = useState("");
   const [signEmail, setSignEmail] = useState("");
   const [signPassword, setSignPassword] = useState("");
   const [signErr, setSignErr] = useState("");
   const [signLoading, setSignLoading] = useState(false);
+  const [showPwd, setShowPwd] = useState(false);
 
   const [socialLoading, setSocialLoading] = useState(false);
   const [socialErr, setSocialErr] = useState("");
@@ -303,17 +90,12 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
     }
   }
 
-  function goToLogin() {
-    navigation.replace("Login");
-  }
-
   async function openVerifyModal(email, regToken) {
     const cleanEmail = (email || "").trim();
     setVerifyEmail(cleanEmail);
     setVerifyErr("");
     setVerifyMsg("");
     setCode("");
-
     if (regToken) {
       const rt = String(regToken);
       setVerifyRegToken(rt);
@@ -322,7 +104,6 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
       const stored = await AsyncStorage.getItem(PENDING_REG_TOKEN_KEY);
       setVerifyRegToken(stored || "");
     }
-
     await AsyncStorage.setItem(PENDING_VERIFY_EMAIL_KEY, cleanEmail);
     setShowVerify(true);
   }
@@ -330,7 +111,6 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
   async function onSignup() {
     try {
       setSignErr("");
-
       if (!name || !name.trim()) {
         setSignErr("Please enter your full name.");
         return;
@@ -340,11 +120,11 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
         return;
       }
       if (!signPassword || !signPassword.trim()) {
-        setSignErr("Please enter a password.");
+        setSignErr("Please choose a password.");
         return;
       }
       if (signPassword.length < 8) {
-        setSignErr("Password must be at least 8 characters long.");
+        setSignErr("Password must be at least 8 characters.");
         return;
       }
 
@@ -366,15 +146,14 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
 
       Alert.alert(
         "Verify your email",
-        "A verification code has been sent to your email. Please verify to continue.",
-        [{ text: "OK" }],
+        "We sent a 6-digit code to your inbox. Enter it to continue.",
       );
     } catch (e) {
       setSignLoading(false);
       const msg =
         e?.response?.data?.error ||
         e?.message ||
-        "Registration failed. Please try again.";
+        "Sign-up failed. Please try again.";
       setSignErr(msg);
     }
   }
@@ -388,7 +167,6 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
         );
         return;
       }
-
       setSocialErr("");
       setSocialLoading(true);
 
@@ -406,11 +184,9 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
       }
 
       const freshName = buildAppleFullName(cred.fullName);
-
       if (freshName) {
         await AsyncStorage.setItem(APPLE_NAME_CACHE_KEY, freshName);
       }
-
       const cachedName =
         freshName || (await AsyncStorage.getItem(APPLE_NAME_CACHE_KEY)) || "";
 
@@ -418,17 +194,14 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
         identityToken: cred.identityToken,
         fullName: cachedName,
       });
-
       const data = resp?.data || {};
       setSocialLoading(false);
 
       await storeUser(data);
-
       if (typeof onSignedUp === "function") {
         await onSignedUp();
         return;
       }
-
       const uid = data?.user?.id || (await AsyncStorage.getItem("defaultId"));
       navigation.replace("Terms", {
         userId: String(uid || ""),
@@ -437,7 +210,6 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
     } catch (e) {
       setSocialLoading(false);
       if (e?.code === "ERR_REQUEST_CANCELED") return;
-
       setSocialErr(
         e?.response?.data?.error ||
           e?.message ||
@@ -453,20 +225,17 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
         setVerifyErr("Email is missing.");
         return;
       }
-
       const codeTrimmed = (code || "").trim();
       if (!codeTrimmed) {
         setVerifyErr("Please enter the verification code.");
         return;
       }
-
       setVerifyErr("");
       setVerifyMsg("");
       setVerifying(true);
 
       const storedRegToken =
         verifyRegToken || (await AsyncStorage.getItem(PENDING_REG_TOKEN_KEY));
-
       if (!storedRegToken) {
         setVerifying(false);
         setVerifyErr("Missing verification token. Please tap Resend code.");
@@ -478,15 +247,13 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
         code: codeTrimmed,
       });
 
-      setVerifyMsg("Email verified. Signing you in...");
+      setVerifyMsg("Email verified. Signing you in…");
 
       const { data } = await api.post("/auth/login", {
         email,
         password: tempPassword,
       });
-
       await storeUser(data);
-
       await AsyncStorage.removeItem(PENDING_VERIFY_EMAIL_KEY);
       await AsyncStorage.removeItem(PENDING_REG_TOKEN_KEY);
 
@@ -497,7 +264,6 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
         await onSignedUp();
         return;
       }
-
       const uid = data?.user?.id || (await AsyncStorage.getItem("defaultId"));
       navigation.replace("Terms", {
         userId: String(uid || ""),
@@ -520,10 +286,9 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
 
       const storedRegToken =
         verifyRegToken || (await AsyncStorage.getItem(PENDING_REG_TOKEN_KEY));
-
       if (!storedRegToken) {
         setResending(false);
-        setVerifyErr("Missing verification token. Please sign up again.");
+        setVerifyErr("Missing token. Please sign up again.");
         return;
       }
 
@@ -531,14 +296,12 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
         regToken: storedRegToken,
       });
       const data = resp?.data || {};
-
       if (data?.regToken) {
         const rt = String(data.regToken);
         setVerifyRegToken(rt);
         await AsyncStorage.setItem(PENDING_REG_TOKEN_KEY, rt);
       }
-
-      setVerifyMsg("A new verification code has been sent to your email.");
+      setVerifyMsg("A new code has been sent to your email.");
       setResending(false);
     } catch (e) {
       setResending(false);
@@ -548,7 +311,21 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <GridBG />
+      {/* ambient gradient blobs */}
+      <View pointerEvents="none" style={styles.bgWrap}>
+        <LinearGradient
+          colors={[colors.lilacSoft, "transparent"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.blob, { top: -60, right: -40 }]}
+        />
+        <LinearGradient
+          colors={[colors.mintSoft, "transparent"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.blob, { bottom: 40, left: -50 }]}
+        />
+      </View>
 
       <KeyboardAvoidingView
         style={styles.flex}
@@ -559,204 +336,161 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.headerCard}>
-            <Brackets color={CYAN} size={12} thick={1.5} />
-            <View style={[styles.headerHairline, { backgroundColor: CYAN }]} />
-
-            <View style={styles.topBar}>
-              <View style={styles.logoRow}>
-                <View style={[styles.statusDot, { backgroundColor: CYAN }]} />
-                <Text style={styles.logoTxt}>AUTH</Text>
-                <View
-                  style={[
-                    styles.livePill,
-                    {
-                      borderColor: "rgba(0,212,255,0.25)",
-                      backgroundColor: "rgba(0,212,255,0.12)",
-                    },
-                  ]}
-                >
-                  <Text style={[styles.livePillTxt, { color: CYAN }]}>
-                    SIGNUP MODULE
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.homeBtn}>
-                <Image source={logo} style={styles.homeBtnImg} />
-                <Brackets color={MINT} size={7} thick={1} />
-              </View>
+          <View style={styles.hero}>
+            <View style={styles.logoBubble}>
+              <Image source={logo} style={styles.logoImg} />
             </View>
-
-            <Text style={styles.heroTitle}>Create{"\n"}Your Access</Text>
+            <Text style={styles.heroTitle}>Join Nummoria</Text>
             <Text style={styles.heroSub}>
-              Start your Nummoria account and unlock your financial control
-              system.
+              Your finances, beautifully simple — built around how you actually
+              spend.
             </Text>
+          </View>
 
-            <ScanLine
-              color={CYAN}
-              style={{ marginTop: 12, marginBottom: 14 }}
-            />
-
-            <View style={styles.controlsRow}>
-              <ChipButton
-                label="REGISTER"
-                accent={CYAN}
-                disabled={signLoading || socialLoading}
-              />
-              <ChipButton
-                label="SECURE"
-                accent={MINT}
-                disabled={signLoading || socialLoading}
-              />
-            </View>
-
+          <View style={styles.card}>
             {signErr ? (
-              <StatusCard title="SIGNUP ERROR" body={signErr} accent={DANGER} />
+              <View style={styles.notice}>
+                <Feather name="alert-circle" size={14} color={colors.rose} />
+                <Text style={styles.noticeTxt}>{signErr}</Text>
+              </View>
             ) : null}
-
             {socialErr ? (
-              <StatusCard
-                title="SOCIAL SIGNUP"
-                body={socialErr}
-                accent={VIOLET}
-              />
+              <View style={styles.notice}>
+                <Feather name="alert-circle" size={14} color={colors.rose} />
+                <Text style={styles.noticeTxt}>{socialErr}</Text>
+              </View>
             ) : null}
 
-            <View style={styles.formBlock}>
-              <Text style={styles.fieldLabel}>FULL NAME</Text>
-              <View style={styles.inputWrap}>
-                <View style={[styles.inputDot, { backgroundColor: CYAN }]} />
-                <TextInput
-                  style={styles.input}
-                  value={name}
-                  onChangeText={setName}
-                  placeholder="Your full name"
-                  placeholderTextColor={T_DIM}
-                  editable={!signLoading}
-                  autoCapitalize="words"
-                />
-              </View>
-
-              <Text style={styles.fieldLabel}>EMAIL ADDRESS</Text>
-              <View style={styles.inputWrap}>
-                <View style={[styles.inputDot, { backgroundColor: MINT }]} />
-                <TextInput
-                  style={styles.input}
-                  value={signEmail}
-                  onChangeText={setSignEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  placeholder="you@nummoria.com"
-                  placeholderTextColor={T_DIM}
-                  editable={!signLoading}
-                />
-              </View>
-
-              <Text style={styles.fieldLabel}>PASSWORD</Text>
-              <View style={styles.inputWrap}>
-                <View style={[styles.inputDot, { backgroundColor: VIOLET }]} />
-                <TextInput
-                  style={styles.input}
-                  value={signPassword}
-                  onChangeText={setSignPassword}
-                  secureTextEntry
-                  placeholder="At least 8 characters"
-                  placeholderTextColor={T_DIM}
-                  editable={!signLoading}
-                />
-              </View>
-
-              <Text style={styles.passwordHint}>
-                Minimum 8 characters required.
-              </Text>
-
-              <TouchableOpacity
-                style={[
-                  styles.primaryBtn,
-                  signLoading && styles.buttonDisabled,
-                ]}
-                onPress={onSignup}
-                disabled={signLoading}
-                activeOpacity={0.8}
-              >
-                <Brackets color={BG} size={8} thick={1} />
-                {signLoading ? (
-                  <ActivityIndicator color={BG} />
-                ) : (
-                  <Text style={styles.primaryBtnTxt}>CREATE ACCOUNT</Text>
-                )}
-              </TouchableOpacity>
+            <Text style={styles.label}>Full name</Text>
+            <View style={styles.inputWrap}>
+              <Feather
+                name="user"
+                size={16}
+                color={colors.textLow}
+                style={styles.inputIcon}
+              />
+              <TextInput
+                style={styles.input}
+                value={name}
+                onChangeText={setName}
+                placeholder="Alex Morgan"
+                placeholderTextColor={colors.textLow}
+                editable={!signLoading}
+                autoCapitalize="words"
+              />
             </View>
 
-            <ScanLine
-              color={MINT}
-              style={{ marginTop: 18, marginBottom: 14 }}
-            />
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>Email</Text>
+            </View>
+            <View style={styles.inputWrap}>
+              <Feather
+                name="mail"
+                size={16}
+                color={colors.textLow}
+                style={styles.inputIcon}
+              />
+              <TextInput
+                style={styles.input}
+                value={signEmail}
+                onChangeText={setSignEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholder="you@nummoria.com"
+                placeholderTextColor={colors.textLow}
+                editable={!signLoading}
+              />
+            </View>
 
-            <View style={styles.sectionRow}>
-              <Text style={styles.sectionEyebrow}>SOCIAL ACCESS</Text>
-              <Text style={styles.sectionHint}>Native / assisted signup</Text>
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>Password</Text>
+              <Text style={styles.hintTrail}>min. 8 characters</Text>
+            </View>
+            <View style={styles.inputWrap}>
+              <Feather
+                name="lock"
+                size={16}
+                color={colors.textLow}
+                style={styles.inputIcon}
+              />
+              <TextInput
+                style={styles.input}
+                value={signPassword}
+                onChangeText={setSignPassword}
+                secureTextEntry={!showPwd}
+                placeholder="••••••••"
+                placeholderTextColor={colors.textLow}
+                editable={!signLoading}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPwd((v) => !v)}
+                hitSlop={8}
+                style={styles.inputTrail}
+              >
+                <Feather
+                  name={showPwd ? "eye-off" : "eye"}
+                  size={16}
+                  color={colors.textLow}
+                />
+              </TouchableOpacity>
             </View>
 
             <TouchableOpacity
-              style={[styles.socialBtn, socialLoading && styles.buttonDisabled]}
-              onPress={() =>
-                Alert.alert(
-                  "Google signup",
-                  "Use your Login screen Google flow for now.",
-                )
-              }
-              disabled={socialLoading}
-              activeOpacity={0.8}
+              style={[styles.primaryBtn, signLoading && { opacity: 0.6 }]}
+              onPress={onSignup}
+              disabled={signLoading}
+              activeOpacity={0.85}
             >
-              <View
-                style={[styles.socialIconBox, { borderColor: `${CYAN}44` }]}
-              >
-                <AntDesign name="google" size={16} color={CYAN} />
-              </View>
-              <Text style={styles.socialText}>
-                {socialLoading ? "WORKING..." : "CONTINUE WITH GOOGLE"}
-              </Text>
+              {signLoading ? (
+                <ActivityIndicator color={colors.textInverse} />
+              ) : (
+                <Text style={styles.primaryBtnTxt}>Create Account</Text>
+              )}
             </TouchableOpacity>
 
-            {Platform.OS === "ios" ? (
-              <TouchableOpacity
-                style={[
-                  styles.socialBtn,
-                  styles.appleBtn,
-                  socialLoading && styles.buttonDisabled,
-                ]}
-                onPress={signUpWithAppleNative}
-                disabled={socialLoading}
-                activeOpacity={0.8}
-              >
-                <View
-                  style={[
-                    styles.socialIconBox,
-                    { borderColor: "rgba(255,255,255,0.14)" },
-                  ]}
-                >
-                  <Ionicons name="logo-apple" size={16} color="#fff" />
-                </View>
-                <Text style={[styles.socialText, styles.appleText]}>
-                  {socialLoading ? "SIGNING UP..." : "CONTINUE WITH APPLE"}
-                </Text>
-              </TouchableOpacity>
-            ) : null}
+            <Text style={styles.terms}>
+              By continuing you agree to our Terms and Privacy Policy.
+            </Text>
 
-            <View style={styles.footerRow}>
-              <Text style={styles.footerHint}>ALREADY HAVE AN ACCOUNT?</Text>
-              <TouchableOpacity onPress={goToLogin} activeOpacity={0.75}>
-                <Text style={styles.footerLink}>LOG IN</Text>
-              </TouchableOpacity>
-            </View>
+            {Platform.OS === "ios" ? (
+              <>
+                <View style={styles.dividerRow}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerTxt}>or</Text>
+                  <View style={styles.dividerLine} />
+                </View>
+                <AppleAuthentication.AppleAuthenticationButton
+                  buttonType={
+                    AppleAuthentication.AppleAuthenticationButtonType.SIGN_UP
+                  }
+                  buttonStyle={
+                    isDark
+                      ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+                      : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+                  }
+                  cornerRadius={14}
+                  style={{ width: "100%", height: 50 }}
+                  onPress={signUpWithAppleNative}
+                  disabled={socialLoading}
+                />
+              </>
+            ) : null}
+          </View>
+
+          <View style={styles.footer}>
+            <Text style={styles.footerTxt}>Already have an account? </Text>
+            <TouchableOpacity
+              onPress={() => navigation.replace("Login")}
+              hitSlop={8}
+            >
+              <Text style={styles.footerLink}>Sign in</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
+      {/* Verify modal */}
       <Modal
         visible={showVerify}
         transparent
@@ -768,87 +502,91 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
           <View style={styles.modalCard}>
-            <Brackets color={VIOLET} size={10} thick={1.5} />
-            <View style={[styles.modalHairline, { backgroundColor: VIOLET }]} />
-
             <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>VERIFY EMAIL</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Verify your email</Text>
                 <Text style={styles.modalSub}>
-                  We sent a six-digit code to{" "}
+                  We sent a 6-digit code to{" "}
                   <Text style={styles.modalEmail}>{maskedEmail}</Text>
                 </Text>
               </View>
-
-              <TouchableOpacity onPress={() => setShowVerify(false)}>
-                <Text style={styles.modalClose}>×</Text>
+              <TouchableOpacity
+                onPress={() => setShowVerify(false)}
+                hitSlop={10}
+                style={styles.modalCloseBtn}
+              >
+                <Feather name="x" size={18} color={colors.textMid} />
               </TouchableOpacity>
             </View>
 
             {verifyErr ? (
-              <StatusCard
-                title="VERIFY ERROR"
-                body={verifyErr}
-                accent={DANGER}
-              />
+              <View style={styles.notice}>
+                <Feather name="alert-circle" size={14} color={colors.rose} />
+                <Text style={styles.noticeTxt}>{verifyErr}</Text>
+              </View>
             ) : null}
-
             {verifyMsg ? (
-              <StatusCard
-                title="VERIFY STATUS"
-                body={verifyMsg}
-                accent={MINT}
-              />
+              <View
+                style={[
+                  styles.notice,
+                  {
+                    backgroundColor: colors.mintSoft,
+                    borderColor: colors.mintBorder,
+                  },
+                ]}
+              >
+                <Feather name="check-circle" size={14} color={colors.mint} />
+                <Text style={[styles.noticeTxt, { color: colors.textHi }]}>
+                  {verifyMsg}
+                </Text>
+              </View>
             ) : null}
 
-            <Text style={styles.fieldLabel}>VERIFICATION CODE</Text>
+            <Text style={styles.label}>Verification code</Text>
             <View style={styles.inputWrap}>
-              <View style={[styles.inputDot, { backgroundColor: VIOLET }]} />
+              <Feather
+                name="hash"
+                size={16}
+                color={colors.textLow}
+                style={styles.inputIcon}
+              />
               <TextInput
-                style={styles.input}
+                style={[styles.input, { letterSpacing: 8 }]}
                 keyboardType="number-pad"
                 maxLength={6}
                 value={code}
                 onChangeText={(t) => setCode(t.replace(/\D/g, ""))}
-                placeholder="Enter 6-digit code"
-                placeholderTextColor={T_DIM}
+                placeholder="000000"
+                placeholderTextColor={colors.textLow}
                 editable={!verifying}
               />
             </View>
-
-            <Text style={styles.modalHint}>
-              Code expires 15 minutes after request.
+            <Text style={styles.hint}>
+              The code expires 15 minutes after request.
             </Text>
-
-            <ScanLine
-              color={VIOLET}
-              style={{ marginTop: 16, marginBottom: 14 }}
-            />
 
             <View style={styles.modalActions}>
               <TouchableOpacity
-                style={styles.modalBtnCancel}
+                style={styles.modalBtnGhost}
                 onPress={() => setShowVerify(false)}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.modalBtnTxt, { color: T_MID }]}>
-                  CANCEL
-                </Text>
+                <Text style={styles.modalBtnGhostTxt}>Cancel</Text>
               </TouchableOpacity>
-
               <TouchableOpacity
                 style={[
-                  styles.modalBtnPrimary,
-                  verifying && styles.buttonDisabled,
+                  styles.primaryBtn,
+                  { flex: 1, marginTop: 0 },
+                  verifying && { opacity: 0.6 },
                 ]}
                 onPress={onVerifySubmit}
                 disabled={verifying}
-                activeOpacity={0.8}
+                activeOpacity={0.85}
               >
                 {verifying ? (
-                  <ActivityIndicator color={BG} />
+                  <ActivityIndicator color={colors.textInverse} />
                 ) : (
-                  <Text style={styles.modalPrimaryTxt}>VERIFY & CONTINUE</Text>
+                  <Text style={styles.primaryBtnTxt}>Verify & Continue</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -857,10 +595,10 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
               onPress={onResendCode}
               disabled={resending}
               activeOpacity={0.75}
-              style={{ marginTop: 12 }}
+              style={{ marginTop: 14, alignSelf: "center" }}
             >
-              <Text style={styles.resendLink}>
-                {resending ? "RESENDING..." : "RESEND CODE"}
+              <Text style={styles.linkTxt}>
+                {resending ? "Resending…" : "Resend code"}
               </Text>
             </TouchableOpacity>
           </View>
@@ -870,340 +608,214 @@ export default function SignUpScreen({ navigation, onSignedUp }) {
   );
 }
 
-const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  screen: { flex: 1, backgroundColor: BG },
+function makeStyles(c, isDark) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: c.bg },
+    flex: { flex: 1 },
+    bgWrap: { ...StyleSheet.absoluteFillObject, overflow: "hidden" },
+    blob: {
+      position: "absolute",
+      width: 320,
+      height: 320,
+      borderRadius: 999,
+      opacity: 0.9,
+    },
+    scrollContent: {
+      paddingHorizontal: 22,
+      paddingTop: 18,
+      paddingBottom: 40,
+    },
 
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: "center",
-    paddingHorizontal: 14,
-    paddingTop: 26,
-    paddingBottom: 32,
-  },
+    hero: { alignItems: "center", marginTop: 20, marginBottom: 22 },
+    logoBubble: {
+      width: 76,
+      height: 76,
+      borderRadius: 20,
+      backgroundColor: c.cardSoft,
+      borderWidth: 1,
+      borderColor: c.border,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 14,
+      shadowColor: c.lilac,
+      shadowOpacity: isDark ? 0.3 : 0.15,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 8 },
+    },
+    logoImg: { width: 46, height: 46, resizeMode: "contain" },
+    heroTitle: {
+      fontSize: 26,
+      fontWeight: "700",
+      color: c.textHi,
+      letterSpacing: -0.4,
+    },
+    heroSub: {
+      fontSize: 14,
+      color: c.textMid,
+      marginTop: 6,
+      textAlign: "center",
+      lineHeight: 20,
+      maxWidth: 320,
+    },
 
-  headerCard: {
-    marginVertical: 8,
-    padding: 16,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: "rgba(0,212,255,0.20)",
-    backgroundColor: "rgba(0,212,255,0.035)",
-    overflow: "hidden",
-    position: "relative",
-  },
-  headerHairline: {
-    position: "absolute",
-    top: 0,
-    left: "10%",
-    right: "10%",
-    height: 1.5,
-    opacity: 0.65,
-  },
+    card: {
+      backgroundColor: c.card,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: c.border,
+      padding: 20,
+      shadowColor: "#000",
+      shadowOpacity: isDark ? 0.25 : 0.06,
+      shadowRadius: 24,
+      shadowOffset: { width: 0, height: 10 },
+    },
 
-  topBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
-  logoRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  statusDot: { width: 6, height: 6, borderRadius: 999 },
-  logoTxt: { fontSize: 13, fontWeight: "800", color: T_HI, letterSpacing: 3 },
-  livePill: {
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 2,
-    borderWidth: 1,
-  },
-  livePillTxt: { fontSize: 8, fontWeight: "800", letterSpacing: 1.3 },
+    notice: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: 12,
+      backgroundColor: c.roseSoft,
+      borderWidth: 1,
+      borderColor: c.roseBorder,
+      marginBottom: 12,
+    },
+    noticeTxt: { flex: 1, fontSize: 13, color: c.textHi, lineHeight: 18 },
 
-  homeBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 2,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(0,255,135,0.20)",
-    backgroundColor: "rgba(255,255,255,0.04)",
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-  },
-  homeBtnImg: { width: "100%", height: "100%", resizeMode: "cover" },
+    label: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: c.textMid,
+      marginBottom: 8,
+    },
+    labelRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 8,
+      marginTop: 14,
+    },
+    hintTrail: { fontSize: 12, color: c.textLow },
+    linkTxt: { fontSize: 13, fontWeight: "600", color: c.sky },
+    inputWrap: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: c.cardSoft,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      paddingHorizontal: 12,
+      height: 50,
+      marginBottom: 4,
+    },
+    inputIcon: { marginRight: 8 },
+    inputTrail: { paddingLeft: 8 },
+    input: {
+      flex: 1,
+      color: c.textHi,
+      fontSize: 15,
+      paddingVertical: 0,
+    },
+    hint: { fontSize: 12, color: c.textLow, marginTop: 6 },
 
-  heroTitle: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: T_HI,
-    letterSpacing: -0.7,
-    lineHeight: 32,
-    marginBottom: 6,
-  },
-  heroSub: { fontSize: 13, color: T_MID, lineHeight: 18 },
+    primaryBtn: {
+      marginTop: 22,
+      height: 52,
+      borderRadius: 14,
+      backgroundColor: c.mint,
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: c.mint,
+      shadowOpacity: isDark ? 0.35 : 0.18,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 8 },
+    },
+    primaryBtnTxt: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: c.textInverse,
+      letterSpacing: 0.2,
+    },
+    terms: {
+      fontSize: 12,
+      color: c.textLow,
+      textAlign: "center",
+      marginTop: 12,
+      lineHeight: 18,
+    },
 
-  controlsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 12,
-  },
-  ctrlPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 2,
-    borderWidth: 1,
-    backgroundColor: "rgba(255,255,255,0.025)",
-  },
-  ctrlDot: { width: 5, height: 5, borderRadius: 999 },
-  ctrlTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 1.2 },
+    dividerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      marginTop: 18,
+      marginBottom: 12,
+    },
+    dividerLine: { flex: 1, height: 1, backgroundColor: c.divider },
+    dividerTxt: { fontSize: 12, color: c.textLow, fontWeight: "500" },
 
-  infoCard: {
-    position: "relative",
-    borderRadius: 4,
-    borderWidth: 1,
-    padding: 12,
-    marginBottom: 10,
-    overflow: "hidden",
-  },
-  infoTitle: {
-    fontSize: 9,
-    fontWeight: "800",
-    letterSpacing: 1.6,
-    marginBottom: 6,
-  },
-  infoBody: {
-    fontSize: 12,
-    color: T_HI,
-    lineHeight: 17,
-    paddingRight: 6,
-  },
+    footer: {
+      flexDirection: "row",
+      justifyContent: "center",
+      marginTop: 22,
+    },
+    footerTxt: { fontSize: 14, color: c.textMid },
+    footerLink: { fontSize: 14, fontWeight: "700", color: c.mint },
 
-  formBlock: { marginTop: 2 },
-
-  fieldLabel: {
-    fontSize: 8,
-    fontWeight: "800",
-    color: T_DIM,
-    letterSpacing: 2,
-    marginBottom: 6,
-    marginTop: 10,
-  },
-  inputWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: CARD_BD,
-    borderRadius: 2,
-    paddingHorizontal: 10,
-    paddingVertical: 2,
-    backgroundColor: "rgba(255,255,255,0.025)",
-  },
-  inputDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 999,
-    marginRight: 8,
-    opacity: 0.75,
-  },
-  input: {
-    flex: 1,
-    fontSize: 13,
-    color: T_HI,
-    paddingVertical: 10,
-  },
-
-  passwordHint: {
-    marginTop: 6,
-    fontSize: 10,
-    color: T_DIM,
-    letterSpacing: 0.4,
-  },
-
-  primaryBtn: {
-    marginTop: 18,
-    height: 52,
-    borderRadius: 2,
-    backgroundColor: CYAN,
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-  },
-  primaryBtnTxt: {
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 1.6,
-    color: BG,
-  },
-
-  buttonDisabled: { opacity: 0.65 },
-
-  sectionRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  sectionEyebrow: {
-    fontSize: 8,
-    fontWeight: "800",
-    color: T_DIM,
-    letterSpacing: 2,
-  },
-  sectionHint: {
-    fontSize: 9,
-    color: T_DIM,
-    letterSpacing: 0.6,
-  },
-
-  socialBtn: {
-    marginTop: 10,
-    paddingVertical: 13,
-    paddingHorizontal: 14,
-    borderRadius: 2,
-    borderWidth: 1,
-    borderColor: CARD_BD,
-    backgroundColor: CARD_BG,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-  },
-  socialIconBox: {
-    width: 28,
-    height: 28,
-    borderRadius: 2,
-    borderWidth: 1,
-    backgroundColor: "rgba(255,255,255,0.025)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  socialText: {
-    fontSize: 11,
-    color: T_HI,
-    fontWeight: "800",
-    letterSpacing: 1.1,
-  },
-
-  appleBtn: {
-    backgroundColor: APPLE_BG,
-    borderColor: "rgba(255,255,255,0.14)",
-  },
-  appleText: {
-    color: APPLE_TEXT,
-  },
-
-  footerRow: {
-    marginTop: 20,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 6,
-  },
-  footerHint: {
-    fontSize: 11,
-    color: T_DIM,
-    letterSpacing: 0.8,
-  },
-  footerLink: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: MINT,
-    letterSpacing: 1,
-  },
-
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(3,5,8,0.92)",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 16,
-  },
-  modalCard: {
-    width: "100%",
-    maxWidth: 420,
-    borderRadius: 4,
-    padding: 18,
-    backgroundColor: BG,
-    borderWidth: 1,
-    borderColor: CARD_BD,
-    overflow: "hidden",
-    position: "relative",
-  },
-  modalHairline: {
-    position: "absolute",
-    top: 0,
-    left: "10%",
-    right: "10%",
-    height: 1.5,
-    opacity: 0.65,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 12,
-    marginBottom: 4,
-  },
-  modalTitle: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: T_HI,
-    letterSpacing: 2.4,
-    marginBottom: 6,
-    marginTop: 4,
-  },
-  modalSub: { fontSize: 12, color: T_MID, lineHeight: 18, maxWidth: "92%" },
-  modalEmail: { color: T_HI, fontWeight: "700" },
-  modalClose: {
-    fontSize: 26,
-    lineHeight: 26,
-    color: T_DIM,
-    marginTop: 2,
-  },
-  modalHint: {
-    marginTop: 5,
-    fontSize: 10,
-    color: T_DIM,
-    lineHeight: 15,
-    letterSpacing: 0.3,
-  },
-  modalActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 8,
-  },
-  modalBtnCancel: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 2,
-    borderWidth: 1,
-    borderColor: CARD_BD,
-    backgroundColor: "rgba(255,255,255,0.025)",
-  },
-  modalBtnPrimary: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 2,
-    backgroundColor: VIOLET,
-    alignItems: "center",
-    justifyContent: "center",
-    minWidth: 138,
-  },
-  modalBtnTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 1 },
-  modalPrimaryTxt: {
-    fontSize: 9,
-    fontWeight: "800",
-    letterSpacing: 1,
-    color: BG,
-  },
-  resendLink: {
-    textAlign: "center",
-    fontSize: 10,
-    color: CYAN,
-    fontWeight: "800",
-    letterSpacing: 1,
-  },
-});
+    /* modal */
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: c.overlay,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 22,
+    },
+    modalCard: {
+      width: "100%",
+      backgroundColor: c.card,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: c.border,
+      padding: 22,
+    },
+    modalHeader: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      marginBottom: 16,
+    },
+    modalTitle: {
+      fontSize: 19,
+      fontWeight: "700",
+      color: c.textHi,
+      marginBottom: 4,
+    },
+    modalSub: { fontSize: 13, color: c.textMid, lineHeight: 18 },
+    modalEmail: { color: c.textHi, fontWeight: "600" },
+    modalCloseBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: c.cardSoft,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    modalActions: {
+      flexDirection: "row",
+      gap: 10,
+      marginTop: 18,
+    },
+    modalBtnGhost: {
+      flex: 1,
+      height: 50,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: c.cardSoft,
+    },
+    modalBtnGhostTxt: { fontSize: 15, fontWeight: "600", color: c.textMid },
+  });
+}

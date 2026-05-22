@@ -17,29 +17,17 @@ import {
   Modal,
   SafeAreaView,
 } from "react-native";
-import { AntDesign } from "@expo/vector-icons";
+import { AntDesign, Feather } from "@expo/vector-icons";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as WebBrowser from "expo-web-browser";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { LinearGradient } from "expo-linear-gradient";
 
 import api from "../lib/api";
 import logo from "../../assets/nummoria_logo.png";
+import { useTheme } from "../theme/ThemeContext";
 
 WebBrowser.maybeCompleteAuthSession();
-
-/* ──────────────────────────────────────────────────────────
-   THEME — synced with Dashboard / Expenses cyberpunk HUD
-────────────────────────────────────────────────────────── */
-const BG = "#030508";
-const MINT = "#00ff87";
-const CYAN = "#00d4ff";
-const VIOLET = "#a78bfa";
-const CARD_BG = "rgba(255,255,255,0.025)";
-const CARD_BD = "rgba(255,255,255,0.07)";
-const T_HI = "#e2e8f0";
-const T_MID = "rgba(226,232,240,0.55)";
-const T_DIM = "rgba(226,232,240,0.32)";
-const DANGER = "#fb7185";
 
 /* Consent / local persistence */
 const CONSENT_KEY = (userId) => `consent:${String(userId)}`;
@@ -49,9 +37,6 @@ const PENDING_REG_TOKEN_KEY = "pendingRegToken";
 /* Google mobile OAuth */
 const GOOGLE_MOBILE_REDIRECT_URI = "nummoria://auth/google";
 
-/* ──────────────────────────────────────────────────────────
-   HELPERS
-────────────────────────────────────────────────────────── */
 function getQueryParamFromUrl(url, key) {
   try {
     const query =
@@ -67,7 +52,6 @@ function getQueryParamFromUrl(url, key) {
 
 function normalizeUser(raw) {
   const user = raw?.user || raw || {};
-
   return {
     id: user.id || user._id,
     email: user.email || "",
@@ -84,220 +68,17 @@ function normalizeUser(raw) {
   };
 }
 
-/* ──────────────────────────────────────────────────────────
-   HUD PRIMITIVES
-────────────────────────────────────────────────────────── */
-function Brackets({ color = MINT, size = 10, thick = 1.5 }) {
-  const defs = [
-    {
-      top: 0,
-      left: 0,
-      borderTopWidth: thick,
-      borderLeftWidth: thick,
-      borderTopLeftRadius: 2,
-    },
-    {
-      top: 0,
-      right: 0,
-      borderTopWidth: thick,
-      borderRightWidth: thick,
-      borderTopRightRadius: 2,
-    },
-    {
-      bottom: 0,
-      left: 0,
-      borderBottomWidth: thick,
-      borderLeftWidth: thick,
-      borderBottomLeftRadius: 2,
-    },
-    {
-      bottom: 0,
-      right: 0,
-      borderBottomWidth: thick,
-      borderRightWidth: thick,
-      borderBottomRightRadius: 2,
-    },
-  ];
-
-  return (
-    <>
-      {defs.map((d, i) => (
-        <View
-          key={i}
-          style={[
-            {
-              position: "absolute",
-              width: size,
-              height: size,
-              borderColor: color,
-            },
-            d,
-          ]}
-        />
-      ))}
-    </>
-  );
-}
-
-function ScanLine({ color = MINT, style: extra }) {
-  return (
-    <View
-      style={[{ flexDirection: "row", alignItems: "center", gap: 6 }, extra]}
-    >
-      <View
-        style={{
-          width: 3,
-          height: 3,
-          borderRadius: 999,
-          backgroundColor: color,
-          opacity: 0.6,
-        }}
-      />
-      <View
-        style={{ flex: 1, height: 1, backgroundColor: color, opacity: 0.2 }}
-      />
-      <View
-        style={{
-          width: 3,
-          height: 3,
-          borderRadius: 999,
-          backgroundColor: color,
-          opacity: 0.6,
-        }}
-      />
-    </View>
-  );
-}
-
-function GridBG() {
-  const { width, height } = require("react-native").Dimensions.get("window");
-  const COLS = 10;
-  const ROWS = 22;
-  const cw = width / COLS;
-  const rh = height / ROWS;
-
-  return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      {Array.from({ length: ROWS + 1 }, (_, i) => (
-        <View
-          key={`h${i}`}
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            top: i * rh,
-            height: 1,
-            backgroundColor: "rgba(0,255,135,0.035)",
-          }}
-        />
-      ))}
-
-      {Array.from({ length: COLS + 1 }, (_, i) => (
-        <View
-          key={`v${i}`}
-          style={{
-            position: "absolute",
-            top: 0,
-            bottom: 0,
-            left: i * cw,
-            width: 1,
-            backgroundColor: "rgba(0,212,255,0.025)",
-          }}
-        />
-      ))}
-
-      <View
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: 2,
-          backgroundColor: MINT,
-          opacity: 0.15,
-        }}
-      />
-
-      <View
-        style={{
-          position: "absolute",
-          top: height * 0.42,
-          left: 0,
-          right: 0,
-          height: 1,
-          backgroundColor: CYAN,
-          opacity: 0.06,
-        }}
-      />
-
-      <View
-        style={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 1,
-          backgroundColor: VIOLET,
-          opacity: 0.1,
-        }}
-      />
-    </View>
-  );
-}
-
-function ChipButton({ label, accent = MINT, onPress, disabled, loading }) {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      disabled={disabled}
-      activeOpacity={0.8}
-      style={[
-        styles.ctrlPill,
-        { borderColor: `${accent}55` },
-        disabled && { opacity: 0.6 },
-      ]}
-    >
-      <View style={[styles.ctrlDot, { backgroundColor: accent }]} />
-      <Text style={[styles.ctrlTxt, { color: accent }]}>
-        {loading ? "PROCESSING" : label}
-      </Text>
-    </TouchableOpacity>
-  );
-}
-
-function StatusCard({ title, body, accent = VIOLET }) {
-  return (
-    <View
-      style={[
-        styles.infoCard,
-        {
-          borderColor: `${accent}33`,
-          backgroundColor:
-            accent === DANGER
-              ? "rgba(251,113,133,0.08)"
-              : accent === MINT
-                ? "rgba(0,255,135,0.08)"
-                : "rgba(167,139,250,0.08)",
-        },
-      ]}
-    >
-      <Brackets color={accent} size={8} thick={1} />
-      <Text style={[styles.infoTitle, { color: accent }]}>{title}</Text>
-      <Text style={styles.infoBody}>{body}</Text>
-    </View>
-  );
-}
-
-/* ══════════════════════════════════════════════════════════
-   SCREEN
-══════════════════════════════════════════════════════════ */
 export default function LoginScreen({ navigation, onLoggedIn }) {
+  const { colors, mode, isDark } = useTheme();
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
+
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginErr, setLoginErr] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginReason, setLoginReason] = useState("");
   const [stayLoggedIn, setStayLoggedIn] = useState(false);
+  const [showPwd, setShowPwd] = useState(false);
 
   const [socialLoading, setSocialLoading] = useState(false);
   const [socialErr, setSocialErr] = useState("");
@@ -318,15 +99,12 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
   const maskedEmail = useMemo(() => {
     const email = verifyEmail?.trim();
     if (!email) return "";
-
     const [u, d] = email.split("@");
     if (!d) return email;
-
     const maskU =
       u.length <= 2
         ? `${u[0]}*`
         : `${u[0]}${"*".repeat(Math.max(1, u.length - 2))}${u[u.length - 1]}`;
-
     return `${maskU}@${d}`;
   }, [verifyEmail]);
 
@@ -337,7 +115,6 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
         await AsyncStorage.setItem("userEmail", data.user.email || "");
         await AsyncStorage.setItem("userName", data.user.name || "");
       }
-
       if (data?.token) {
         await AsyncStorage.setItem("token", data.token);
         api.defaults.headers.Authorization = `Bearer ${data.token}`;
@@ -352,17 +129,14 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
       onLoggedIn();
       return;
     }
-
     navigation?.replace?.("MainTabs");
   }
 
   async function hasAcceptedConsent(userId) {
     try {
       if (!userId) return false;
-
       const raw = await AsyncStorage.getItem(CONSENT_KEY(userId));
       if (!raw) return false;
-
       const consent = JSON.parse(raw);
       return !!(consent?.termsAccepted && consent?.cookiesAccepted);
     } catch {
@@ -372,12 +146,9 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
 
   async function routeAfterAuth(data) {
     await storeUser(data);
-
     const userId =
       data?.user?.id || (await AsyncStorage.getItem("defaultId")) || null;
-
     const ok = await hasAcceptedConsent(userId);
-
     if (!ok) {
       if (navigation?.replace) {
         navigation.replace("Terms", {
@@ -386,25 +157,21 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
         });
         return;
       }
-
       Alert.alert(
         "Terms required",
         "You must accept Terms & Conditions and Cookies to continue.",
       );
       return;
     }
-
     goToDashboard();
   }
 
   async function openVerifyModal(email, regTokenMaybe) {
     const cleanEmail = (email || "").trim();
-
     setVerifyEmail(cleanEmail);
     setCode("");
     setVerifyErr("");
     setVerifyMsg("");
-
     if (regTokenMaybe) {
       setVerifyRegToken(String(regTokenMaybe));
       await AsyncStorage.setItem(PENDING_REG_TOKEN_KEY, String(regTokenMaybe));
@@ -412,7 +179,6 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
       const stored = await AsyncStorage.getItem(PENDING_REG_TOKEN_KEY);
       setVerifyRegToken(stored || "");
     }
-
     await AsyncStorage.setItem(PENDING_VERIFY_EMAIL_KEY, cleanEmail);
     setShowVerify(true);
   }
@@ -426,7 +192,6 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
         setLoginErr("Please enter your email address.");
         return;
       }
-
       if (!loginPassword || !loginPassword.trim()) {
         setLoginErr("Please enter your password.");
         return;
@@ -441,13 +206,10 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
       });
 
       const data = resp?.data || {};
-
       setLoginLoading(false);
-
       await routeAfterAuth(data);
     } catch (e) {
       setLoginLoading(false);
-
       const status = e?.response?.status;
       const body = e?.response?.data || {};
       const errMsg =
@@ -459,16 +221,13 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
       ) {
         const email = (loginEmail || "").trim();
         setLoginReason("UNVERIFIED");
-
         const message = body.maskedEmail
-          ? `Your account is not verified yet. Check your inbox (${body.maskedEmail}) or resend the code.`
-          : "Your account is not verified yet. Check your inbox or resend the code.";
-
+          ? `Your account isn't verified yet. Check ${body.maskedEmail} or resend the code.`
+          : "Your account isn't verified yet. Check your inbox or resend the code.";
         setLoginErr(message);
         await openVerifyModal(email, body?.regToken);
         return;
       }
-
       setLoginErr(errMsg);
     }
   }
@@ -477,44 +236,27 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
     try {
       setSocialErr("");
       setSocialLoading(true);
-
       const authUrl = `${API_BASE}/auth/google/mobile?redirect_uri=${encodeURIComponent(
         GOOGLE_MOBILE_REDIRECT_URI,
       )}&next=${encodeURIComponent("/dashboard")}`;
-
-      console.log("[GOOGLE MOBILE AUTH URL]", authUrl);
-
       const result = await WebBrowser.openAuthSessionAsync(
         authUrl,
         GOOGLE_MOBILE_REDIRECT_URI,
       );
-
-      console.log("[GOOGLE MOBILE RESULT]", result);
-
       if (result.type !== "success" || !result.url) {
         setSocialLoading(false);
         return;
       }
-
       const token = getQueryParamFromUrl(result.url, "token");
-
       if (!token) {
         throw new Error("Google login did not return a token.");
       }
-
       await AsyncStorage.setItem("token", token);
       api.defaults.headers.Authorization = `Bearer ${token}`;
-
       const meResp = await api.get("/me");
       const user = normalizeUser(meResp?.data);
-
       setSocialLoading(false);
-
-      await routeAfterAuth({
-        ok: true,
-        token,
-        user,
-      });
+      await routeAfterAuth({ ok: true, token, user });
     } catch (err) {
       console.warn("Google mobile login failed:", err);
       setSocialLoading(false);
@@ -535,43 +277,34 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
         );
         return;
       }
-
       setSocialErr("");
       setSocialLoading(true);
-
       const cred = await AppleAuthentication.signInAsync({
         requestedScopes: [
           AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
           AppleAuthentication.AppleAuthenticationScope.EMAIL,
         ],
       });
-
       if (!cred?.identityToken) {
         setSocialLoading(false);
         setSocialErr("Apple sign-in failed: missing identity token.");
         return;
       }
-
       const fullName = cred?.fullName
         ? [cred.fullName.givenName, cred.fullName.familyName]
             .filter(Boolean)
             .join(" ")
         : "";
-
       const resp = await api.post("/auth/apple/mobile", {
         identityToken: cred.identityToken,
         fullName,
       });
-
       const data = resp?.data || {};
       setSocialLoading(false);
-
       await routeAfterAuth(data);
     } catch (e) {
       setSocialLoading(false);
-
       if (e?.code === "ERR_REQUEST_CANCELED") return;
-
       setSocialErr(
         e?.response?.data?.error ||
           e?.message ||
@@ -583,26 +316,21 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
   async function onVerifySubmit() {
     try {
       const email = (verifyEmail || "").trim();
-
       if (!email) {
         setVerifyErr("Email is missing.");
         return;
       }
-
       const codeTrimmed = (code || "").trim();
-
       if (!codeTrimmed) {
         setVerifyErr("Please enter the verification code.");
         return;
       }
-
       setVerifyErr("");
       setVerifyMsg("");
       setVerifying(true);
 
       const storedRegToken =
         verifyRegToken || (await AsyncStorage.getItem(PENDING_REG_TOKEN_KEY));
-
       if (!storedRegToken) {
         setVerifying(false);
         setVerifyErr("Missing verification token. Please tap Resend code.");
@@ -614,7 +342,7 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
         code: codeTrimmed,
       });
 
-      setVerifyMsg("Email verified. Signing you in...");
+      setVerifyMsg("Email verified. Signing you in…");
 
       const { data } = await api.post("/auth/login", {
         email,
@@ -626,7 +354,6 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
 
       setVerifying(false);
       setShowVerify(false);
-
       await routeAfterAuth(data);
     } catch (e) {
       setVerifying(false);
@@ -641,29 +368,23 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
     try {
       const storedRegToken =
         verifyRegToken || (await AsyncStorage.getItem(PENDING_REG_TOKEN_KEY));
-
       if (!storedRegToken) {
-        setVerifyErr("Missing regToken. Please sign up again.");
+        setVerifyErr("Missing token. Please sign up again.");
         return;
       }
-
       setVerifyErr("");
       setVerifyMsg("");
       setResending(true);
-
       const resp = await api.post("/auth/resend-code", {
         regToken: storedRegToken,
       });
-
       const data = resp?.data || {};
-
       if (data?.regToken) {
         const rt = String(data.regToken);
         setVerifyRegToken(rt);
         await AsyncStorage.setItem(PENDING_REG_TOKEN_KEY, rt);
       }
-
-      setVerifyMsg("A new verification code has been sent to your email.");
+      setVerifyMsg("A new code has been sent to your email.");
       setResending(false);
     } catch (e) {
       setResending(false);
@@ -671,9 +392,26 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
     }
   }
 
+  /* ──────────────────────────────────────────────────────────
+     RENDER
+  ────────────────────────────────────────────────────────── */
   return (
     <SafeAreaView style={styles.screen}>
-      <GridBG />
+      {/* Soft ambient gradient blobs in the background */}
+      <View pointerEvents="none" style={styles.bgWrap}>
+        <LinearGradient
+          colors={[colors.mintSoft, "transparent"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.blob, { top: -60, left: -40 }]}
+        />
+        <LinearGradient
+          colors={[colors.lilacSoft, "transparent"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.blob, { bottom: 40, right: -50 }]}
+        />
+      </View>
 
       <KeyboardAvoidingView
         style={styles.flex}
@@ -684,246 +422,218 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.headerCard}>
-            <Brackets color={MINT} size={12} thick={1.5} />
-            <View style={[styles.headerHairline, { backgroundColor: MINT }]} />
-
-            <View style={styles.topBar}>
-              <View style={styles.logoRow}>
-                <View style={[styles.statusDot, { backgroundColor: MINT }]} />
-                <Text style={styles.logoTxt}>AUTH</Text>
-                <View
-                  style={[
-                    styles.livePill,
-                    {
-                      borderColor: "rgba(0,255,135,0.25)",
-                      backgroundColor: "rgba(0,255,135,0.12)",
-                    },
-                  ]}
-                >
-                  <Text style={[styles.livePillTxt, { color: MINT }]}>
-                    LOGIN MODULE
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.homeBtn}>
-                <Image source={logo} style={styles.homeBtnImg} />
-                <Brackets color={MINT} size={7} thick={1} />
-              </View>
+          {/* Hero */}
+          <View style={styles.hero}>
+            <View style={styles.logoBubble}>
+              <Image source={logo} style={styles.logoImg} />
             </View>
-
-            <Text style={styles.heroTitle}>Access{"\n"}Nummoria</Text>
+            <Text style={styles.heroTitle}>Welcome back</Text>
             <Text style={styles.heroSub}>
-              Sign in to your account and return to your financial command
-              center.
+              Sign in to pick up where you left off.
             </Text>
+          </View>
 
-            <ScanLine
-              color={MINT}
-              style={{ marginTop: 12, marginBottom: 14 }}
-            />
-
-            <View style={styles.controlsRow}>
-              <ChipButton
-                label="LOGIN"
-                accent={MINT}
-                disabled={loginLoading || socialLoading}
-              />
-              <ChipButton
-                label="SECURE"
-                accent={CYAN}
-                disabled={loginLoading || socialLoading}
-              />
-            </View>
-
+          {/* Form card */}
+          <View style={styles.card}>
             {loginErr ? (
-              <StatusCard
-                title={
-                  loginReason === "UNVERIFIED" ? "UNVERIFIED" : "AUTH ERROR"
-                }
-                body={loginErr}
-                accent={DANGER}
-              />
+              <View style={styles.notice}>
+                <Feather name="alert-circle" size={14} color={colors.rose} />
+                <Text style={styles.noticeTxt}>{loginErr}</Text>
+              </View>
             ) : null}
 
             {socialErr ? (
-              <StatusCard
-                title="SOCIAL AUTH"
-                body={socialErr}
-                accent={VIOLET}
-              />
+              <View style={styles.notice}>
+                <Feather name="alert-circle" size={14} color={colors.rose} />
+                <Text style={styles.noticeTxt}>{socialErr}</Text>
+              </View>
             ) : null}
 
-            <View style={styles.formBlock}>
-              <Text style={styles.fieldLabel}>EMAIL ADDRESS</Text>
-              <View style={styles.inputWrap}>
-                <View style={[styles.inputDot, { backgroundColor: MINT }]} />
-                <TextInput
-                  style={styles.input}
-                  value={loginEmail}
-                  onChangeText={setLoginEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  placeholder="you@nummoria.com"
-                  placeholderTextColor={T_DIM}
-                  editable={!loginLoading}
-                />
-              </View>
+            {/* Email */}
+            <Text style={styles.label}>Email</Text>
+            <View style={styles.inputWrap}>
+              <Feather
+                name="mail"
+                size={16}
+                color={colors.textLow}
+                style={styles.inputIcon}
+              />
+              <TextInput
+                style={styles.input}
+                value={loginEmail}
+                onChangeText={setLoginEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholder="you@nummoria.com"
+                placeholderTextColor={colors.textLow}
+                editable={!loginLoading}
+              />
+            </View>
 
-              <Text style={styles.fieldLabel}>PASSWORD</Text>
-              <View style={styles.inputWrap}>
-                <View style={[styles.inputDot, { backgroundColor: VIOLET }]} />
-                <TextInput
-                  style={styles.input}
-                  value={loginPassword}
-                  onChangeText={setLoginPassword}
-                  secureTextEntry
-                  placeholder="••••••••"
-                  placeholderTextColor={T_DIM}
-                  editable={!loginLoading}
-                />
-              </View>
-
+            {/* Password */}
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>Password</Text>
               <TouchableOpacity
                 onPress={() =>
                   Alert.alert(
                     "Forgot password",
-                    "Password reset flow coming soon.",
+                    "Password reset is coming very soon.",
                   )
                 }
-                activeOpacity={0.75}
+                hitSlop={8}
               >
-                <Text style={styles.forgotText}>FORGOT PASSWORD?</Text>
+                <Text style={styles.linkTxt}>Forgot?</Text>
               </TouchableOpacity>
-
+            </View>
+            <View style={styles.inputWrap}>
+              <Feather
+                name="lock"
+                size={16}
+                color={colors.textLow}
+                style={styles.inputIcon}
+              />
+              <TextInput
+                style={styles.input}
+                value={loginPassword}
+                onChangeText={setLoginPassword}
+                secureTextEntry={!showPwd}
+                placeholder="••••••••"
+                placeholderTextColor={colors.textLow}
+                editable={!loginLoading}
+              />
               <TouchableOpacity
-                style={[
-                  styles.primaryBtn,
-                  loginLoading && styles.buttonDisabled,
-                ]}
-                onPress={onLogin}
-                disabled={loginLoading}
-                activeOpacity={0.8}
+                onPress={() => setShowPwd((v) => !v)}
+                hitSlop={8}
+                style={styles.inputTrail}
               >
-                <Brackets color={BG} size={8} thick={1} />
-                {loginLoading ? (
-                  <ActivityIndicator color={BG} />
-                ) : (
-                  <Text style={styles.primaryBtnTxt}>ENTER SYSTEM</Text>
-                )}
+                <Feather
+                  name={showPwd ? "eye-off" : "eye"}
+                  size={16}
+                  color={colors.textLow}
+                />
               </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.stayRow}
-                onPress={() => setStayLoggedIn((v) => !v)}
-                activeOpacity={0.75}
-                disabled={loginLoading}
-              >
-                <View
-                  style={[
-                    styles.stayBox,
-                    stayLoggedIn && styles.stayBoxActive,
-                  ]}
-                >
-                  {stayLoggedIn && <View style={styles.stayCheck} />}
-                </View>
-                <Text
-                  style={[
-                    styles.stayLabel,
-                    stayLoggedIn && { color: MINT },
-                  ]}
-                >
-                  STAY LOGGED IN
-                </Text>
-              </TouchableOpacity>
-
-              {loginReason === "UNVERIFIED" ? (
-                <View style={styles.inlineActions}>
-                  <TouchableOpacity
-                    style={styles.inlineBtn}
-                    onPress={onResendCode}
-                    disabled={resending}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.inlineBtnTxt, { color: CYAN }]}>
-                      {resending ? "RESENDING..." : "RESEND CODE"}
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.inlineBtn,
-                      { borderColor: "rgba(0,255,135,0.22)" },
-                    ]}
-                    onPress={() => setShowVerify(true)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.inlineBtnTxt, { color: MINT }]}>
-                      ENTER CODE
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              ) : null}
             </View>
 
-            <ScanLine
-              color={CYAN}
-              style={{ marginTop: 18, marginBottom: 14 }}
-            />
-
-            <View style={styles.sectionRow}>
-              <Text style={styles.sectionEyebrow}>SOCIAL ACCESS</Text>
-              <Text style={styles.sectionHint}>Browser / native providers</Text>
-            </View>
-
+            {/* Stay logged in */}
             <TouchableOpacity
-              style={[styles.socialBtn, socialLoading && styles.buttonDisabled]}
-              onPress={startGoogleMobile}
-              disabled={socialLoading}
-              activeOpacity={0.8}
+              style={styles.stayRow}
+              onPress={() => setStayLoggedIn((v) => !v)}
+              activeOpacity={0.7}
+              disabled={loginLoading}
             >
               <View
-                style={[styles.socialIconBox, { borderColor: `${CYAN}44` }]}
+                style={[
+                  styles.checkbox,
+                  stayLoggedIn && {
+                    backgroundColor: colors.mint,
+                    borderColor: colors.mint,
+                  },
+                ]}
               >
-                <AntDesign name="google" size={16} color={CYAN} />
+                {stayLoggedIn ? (
+                  <Feather name="check" size={12} color={colors.textInverse} />
+                ) : null}
               </View>
-              <Text style={styles.socialText}>
-                {socialLoading ? "REDIRECTING..." : "SIGN IN WITH GOOGLE"}
+              <Text style={styles.stayTxt}>Keep me signed in</Text>
+            </TouchableOpacity>
+
+            {/* Primary CTA */}
+            <TouchableOpacity
+              style={[
+                styles.primaryBtn,
+                loginLoading && { opacity: 0.6 },
+              ]}
+              onPress={onLogin}
+              disabled={loginLoading}
+              activeOpacity={0.85}
+            >
+              {loginLoading ? (
+                <ActivityIndicator color={colors.textInverse} />
+              ) : (
+                <Text style={styles.primaryBtnTxt}>Sign In</Text>
+              )}
+            </TouchableOpacity>
+
+            {loginReason === "UNVERIFIED" ? (
+              <View style={styles.unverifiedRow}>
+                <TouchableOpacity
+                  onPress={onResendCode}
+                  disabled={resending}
+                  style={styles.ghostBtn}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.ghostBtnTxt}>
+                    {resending ? "Resending…" : "Resend code"}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setShowVerify(true)}
+                  style={[styles.ghostBtn, { borderColor: colors.mintBorder }]}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.ghostBtnTxt, { color: colors.mint }]}>
+                    Enter code
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+
+            {/* Divider */}
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerTxt}>or continue with</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* Social */}
+            <TouchableOpacity
+              style={[
+                styles.socialBtn,
+                socialLoading && { opacity: 0.6 },
+              ]}
+              onPress={startGoogleMobile}
+              disabled={socialLoading}
+              activeOpacity={0.85}
+            >
+              <AntDesign name="google" size={18} color={colors.sky} />
+              <Text style={styles.socialTxt}>
+                {socialLoading ? "Redirecting…" : "Continue with Google"}
               </Text>
             </TouchableOpacity>
 
             {Platform.OS === "ios" ? (
-              <View style={{ marginTop: 10 }}>
-                <AppleAuthentication.AppleAuthenticationButton
-                  buttonType={
-                    AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN
-                  }
-                  buttonStyle={
-                    AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
-                  }
-                  cornerRadius={4}
-                  style={{ width: "100%", height: 48 }}
-                  onPress={signInWithAppleNative}
-                  disabled={socialLoading}
-                />
-              </View>
+              <AppleAuthentication.AppleAuthenticationButton
+                buttonType={
+                  AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN
+                }
+                buttonStyle={
+                  isDark
+                    ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+                    : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+                }
+                cornerRadius={14}
+                style={{ width: "100%", height: 50, marginTop: 10 }}
+                onPress={signInWithAppleNative}
+                disabled={socialLoading}
+              />
             ) : null}
+          </View>
 
-            <View style={styles.footerRow}>
-              <Text style={styles.footerHint}>NEW AROUND HERE?</Text>
-              <TouchableOpacity
-                onPress={() => navigation.navigate("SignUp")}
-                activeOpacity={0.75}
-              >
-                <Text style={styles.footerLink}>CREATE ACCOUNT</Text>
-              </TouchableOpacity>
-            </View>
+          {/* Footer */}
+          <View style={styles.footer}>
+            <Text style={styles.footerTxt}>New to Nummoria? </Text>
+            <TouchableOpacity
+              onPress={() => navigation.navigate("SignUp")}
+              hitSlop={8}
+            >
+              <Text style={styles.footerLink}>Create an account</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
+      {/* Verify modal */}
       <Modal
         visible={showVerify}
         transparent
@@ -935,87 +645,91 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
           <View style={styles.modalCard}>
-            <Brackets color={VIOLET} size={10} thick={1.5} />
-            <View style={[styles.modalHairline, { backgroundColor: VIOLET }]} />
-
             <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>VERIFY EMAIL</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Verify your email</Text>
                 <Text style={styles.modalSub}>
-                  We sent a six-digit code to{" "}
+                  We sent a 6-digit code to{" "}
                   <Text style={styles.modalEmail}>{maskedEmail}</Text>
                 </Text>
               </View>
-
-              <TouchableOpacity onPress={() => setShowVerify(false)}>
-                <Text style={styles.modalClose}>×</Text>
+              <TouchableOpacity
+                onPress={() => setShowVerify(false)}
+                hitSlop={10}
+                style={styles.modalCloseBtn}
+              >
+                <Feather name="x" size={18} color={colors.textMid} />
               </TouchableOpacity>
             </View>
 
             {verifyErr ? (
-              <StatusCard
-                title="VERIFY ERROR"
-                body={verifyErr}
-                accent={DANGER}
-              />
+              <View style={styles.notice}>
+                <Feather name="alert-circle" size={14} color={colors.rose} />
+                <Text style={styles.noticeTxt}>{verifyErr}</Text>
+              </View>
             ) : null}
-
             {verifyMsg ? (
-              <StatusCard
-                title="VERIFY STATUS"
-                body={verifyMsg}
-                accent={MINT}
-              />
+              <View
+                style={[
+                  styles.notice,
+                  {
+                    backgroundColor: colors.mintSoft,
+                    borderColor: colors.mintBorder,
+                  },
+                ]}
+              >
+                <Feather name="check-circle" size={14} color={colors.mint} />
+                <Text style={[styles.noticeTxt, { color: colors.textHi }]}>
+                  {verifyMsg}
+                </Text>
+              </View>
             ) : null}
 
-            <Text style={styles.fieldLabel}>VERIFICATION CODE</Text>
+            <Text style={styles.label}>Verification code</Text>
             <View style={styles.inputWrap}>
-              <View style={[styles.inputDot, { backgroundColor: VIOLET }]} />
+              <Feather
+                name="hash"
+                size={16}
+                color={colors.textLow}
+                style={styles.inputIcon}
+              />
               <TextInput
-                style={styles.input}
+                style={[styles.input, { letterSpacing: 8 }]}
                 keyboardType="number-pad"
                 maxLength={6}
                 value={code}
                 onChangeText={(t) => setCode(t.replace(/\D/g, ""))}
-                placeholder="Enter 6-digit code"
-                placeholderTextColor={T_DIM}
+                placeholder="000000"
+                placeholderTextColor={colors.textLow}
                 editable={!verifying}
               />
             </View>
-
-            <Text style={styles.modalHint}>
-              Code expires 15 minutes after request.
+            <Text style={styles.hint}>
+              The code expires 15 minutes after request.
             </Text>
-
-            <ScanLine
-              color={VIOLET}
-              style={{ marginTop: 16, marginBottom: 14 }}
-            />
 
             <View style={styles.modalActions}>
               <TouchableOpacity
-                style={styles.modalBtnCancel}
+                style={styles.modalBtnGhost}
                 onPress={() => setShowVerify(false)}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.modalBtnTxt, { color: T_MID }]}>
-                  CANCEL
-                </Text>
+                <Text style={styles.modalBtnGhostTxt}>Cancel</Text>
               </TouchableOpacity>
-
               <TouchableOpacity
                 style={[
-                  styles.modalBtnPrimary,
-                  verifying && styles.buttonDisabled,
+                  styles.primaryBtn,
+                  { flex: 1, marginTop: 0 },
+                  verifying && { opacity: 0.6 },
                 ]}
                 onPress={onVerifySubmit}
                 disabled={verifying}
-                activeOpacity={0.8}
+                activeOpacity={0.85}
               >
                 {verifying ? (
-                  <ActivityIndicator color={BG} />
+                  <ActivityIndicator color={colors.textInverse} />
                 ) : (
-                  <Text style={styles.modalPrimaryTxt}>VERIFY & CONTINUE</Text>
+                  <Text style={styles.primaryBtnTxt}>Verify & Continue</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -1024,10 +738,10 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
               onPress={onResendCode}
               disabled={resending}
               activeOpacity={0.75}
-              style={{ marginTop: 12 }}
+              style={{ marginTop: 14, alignSelf: "center" }}
             >
-              <Text style={styles.resendLink}>
-                {resending ? "RESENDING..." : "RESEND CODE"}
+              <Text style={styles.linkTxt}>
+                {resending ? "Resending…" : "Resend code"}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1037,387 +751,282 @@ export default function LoginScreen({ navigation, onLoggedIn }) {
   );
 }
 
-const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  screen: { flex: 1, backgroundColor: BG },
+/* ──────────────────────────────────────────────────────────
+   STYLES (theme-aware)
+────────────────────────────────────────────────────────── */
+function makeStyles(c, isDark) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: c.bg },
+    flex: { flex: 1 },
+    bgWrap: { ...StyleSheet.absoluteFillObject, overflow: "hidden" },
+    blob: {
+      position: "absolute",
+      width: 320,
+      height: 320,
+      borderRadius: 999,
+      opacity: 0.9,
+    },
+    scrollContent: {
+      paddingHorizontal: 22,
+      paddingTop: 18,
+      paddingBottom: 40,
+    },
 
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: "center",
-    paddingHorizontal: 14,
-    paddingTop: 26,
-    paddingBottom: 32,
-  },
+    /* hero */
+    hero: { alignItems: "center", marginTop: 28, marginBottom: 28 },
+    logoBubble: {
+      width: 84,
+      height: 84,
+      borderRadius: 22,
+      backgroundColor: c.cardSoft,
+      borderWidth: 1,
+      borderColor: c.border,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 18,
+      shadowColor: c.mint,
+      shadowOpacity: isDark ? 0.3 : 0.15,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 8 },
+    },
+    logoImg: { width: 52, height: 52, resizeMode: "contain" },
+    heroTitle: {
+      fontSize: 28,
+      fontWeight: "700",
+      color: c.textHi,
+      letterSpacing: -0.4,
+    },
+    heroSub: {
+      fontSize: 15,
+      color: c.textMid,
+      marginTop: 6,
+      textAlign: "center",
+    },
 
-  headerCard: {
-    marginVertical: 8,
-    padding: 16,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: "rgba(0,255,135,0.20)",
-    backgroundColor: "rgba(0,255,135,0.035)",
-    overflow: "hidden",
-    position: "relative",
-  },
-  headerHairline: {
-    position: "absolute",
-    top: 0,
-    left: "10%",
-    right: "10%",
-    height: 1.5,
-    opacity: 0.65,
-  },
+    /* card */
+    card: {
+      backgroundColor: c.card,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: c.border,
+      padding: 20,
+      shadowColor: "#000",
+      shadowOpacity: isDark ? 0.25 : 0.06,
+      shadowRadius: 24,
+      shadowOffset: { width: 0, height: 10 },
+    },
 
-  topBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
-  logoRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  statusDot: { width: 6, height: 6, borderRadius: 999 },
-  logoTxt: { fontSize: 13, fontWeight: "800", color: T_HI, letterSpacing: 3 },
-  livePill: {
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 2,
-    borderWidth: 1,
-  },
-  livePillTxt: { fontSize: 8, fontWeight: "800", letterSpacing: 1.3 },
+    /* notice */
+    notice: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: 12,
+      backgroundColor: c.roseSoft,
+      borderWidth: 1,
+      borderColor: c.roseBorder,
+      marginBottom: 12,
+    },
+    noticeTxt: { flex: 1, fontSize: 13, color: c.textHi, lineHeight: 18 },
 
-  homeBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 2,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(0,255,135,0.20)",
-    backgroundColor: "rgba(255,255,255,0.04)",
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-  },
-  homeBtnImg: { width: "100%", height: "100%", resizeMode: "cover" },
+    /* labels & inputs */
+    label: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: c.textMid,
+      marginBottom: 8,
+    },
+    labelRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 8,
+      marginTop: 14,
+    },
+    linkTxt: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: c.sky,
+    },
+    inputWrap: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: c.cardSoft,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      paddingHorizontal: 12,
+      height: 50,
+      marginBottom: 4,
+    },
+    inputIcon: { marginRight: 8 },
+    inputTrail: { paddingLeft: 8 },
+    input: {
+      flex: 1,
+      color: c.textHi,
+      fontSize: 15,
+      paddingVertical: 0,
+    },
+    hint: {
+      fontSize: 12,
+      color: c.textLow,
+      marginTop: 6,
+    },
 
-  heroTitle: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: T_HI,
-    letterSpacing: -0.7,
-    lineHeight: 32,
-    marginBottom: 6,
-  },
-  heroSub: { fontSize: 13, color: T_MID, lineHeight: 18 },
+    /* stay logged */
+    stayRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      marginTop: 16,
+      marginBottom: 4,
+    },
+    checkbox: {
+      width: 20,
+      height: 20,
+      borderRadius: 6,
+      borderWidth: 1.5,
+      borderColor: c.borderStrong,
+      backgroundColor: "transparent",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    stayTxt: { fontSize: 14, color: c.textMid, fontWeight: "500" },
 
-  controlsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 12,
-  },
-  ctrlPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 2,
-    borderWidth: 1,
-    backgroundColor: "rgba(255,255,255,0.025)",
-  },
-  ctrlDot: { width: 5, height: 5, borderRadius: 999 },
-  ctrlTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 1.2 },
+    /* primary cta */
+    primaryBtn: {
+      marginTop: 18,
+      height: 52,
+      borderRadius: 14,
+      backgroundColor: c.mint,
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: c.mint,
+      shadowOpacity: isDark ? 0.35 : 0.18,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 8 },
+    },
+    primaryBtnTxt: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: c.textInverse,
+      letterSpacing: 0.2,
+    },
 
-  infoCard: {
-    position: "relative",
-    borderRadius: 4,
-    borderWidth: 1,
-    padding: 12,
-    marginBottom: 10,
-    overflow: "hidden",
-  },
-  infoTitle: {
-    fontSize: 9,
-    fontWeight: "800",
-    letterSpacing: 1.6,
-    marginBottom: 6,
-  },
-  infoBody: {
-    fontSize: 12,
-    color: T_HI,
-    lineHeight: 17,
-    paddingRight: 6,
-  },
+    /* unverified inline actions */
+    unverifiedRow: {
+      flexDirection: "row",
+      gap: 10,
+      marginTop: 12,
+    },
+    ghostBtn: {
+      flex: 1,
+      height: 42,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.skyBorder,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: c.skySoft,
+    },
+    ghostBtnTxt: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: c.sky,
+    },
 
-  formBlock: { marginTop: 2 },
+    /* divider */
+    dividerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      marginTop: 22,
+      marginBottom: 14,
+    },
+    dividerLine: { flex: 1, height: 1, backgroundColor: c.divider },
+    dividerTxt: { fontSize: 12, color: c.textLow, fontWeight: "500" },
 
-  fieldLabel: {
-    fontSize: 8,
-    fontWeight: "800",
-    color: T_DIM,
-    letterSpacing: 2,
-    marginBottom: 6,
-    marginTop: 10,
-  },
-  inputWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: CARD_BD,
-    borderRadius: 2,
-    paddingHorizontal: 10,
-    paddingVertical: 2,
-    backgroundColor: "rgba(255,255,255,0.025)",
-  },
-  inputDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 999,
-    marginRight: 8,
-    opacity: 0.75,
-  },
-  input: {
-    flex: 1,
-    fontSize: 13,
-    color: T_HI,
-    paddingVertical: 10,
-  },
+    /* social */
+    socialBtn: {
+      height: 50,
+      borderRadius: 14,
+      backgroundColor: c.cardSoft,
+      borderWidth: 1,
+      borderColor: c.border,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 10,
+    },
+    socialTxt: { fontSize: 15, fontWeight: "600", color: c.textHi },
 
-  forgotText: {
-    marginTop: 10,
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 1.2,
-    color: CYAN,
-    textAlign: "right",
-  },
+    /* footer */
+    footer: {
+      flexDirection: "row",
+      justifyContent: "center",
+      marginTop: 22,
+    },
+    footerTxt: { fontSize: 14, color: c.textMid },
+    footerLink: { fontSize: 14, fontWeight: "700", color: c.mint },
 
-  primaryBtn: {
-    marginTop: 18,
-    height: 52,
-    borderRadius: 2,
-    backgroundColor: MINT,
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-  },
-  primaryBtnTxt: {
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 1.6,
-    color: BG,
-  },
-
-  buttonDisabled: { opacity: 0.65 },
-
-  stayRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 14,
-  },
-  stayBox: {
-    width: 16,
-    height: 16,
-    borderRadius: 2,
-    borderWidth: 1,
-    borderColor: "rgba(0,255,135,0.35)",
-    backgroundColor: "rgba(255,255,255,0.025)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  stayBoxActive: {
-    borderColor: MINT,
-    backgroundColor: "rgba(0,255,135,0.15)",
-  },
-  stayCheck: {
-    width: 8,
-    height: 8,
-    borderRadius: 1,
-    backgroundColor: MINT,
-  },
-  stayLabel: {
-    fontSize: 9,
-    fontWeight: "800",
-    letterSpacing: 1.4,
-    color: T_MID,
-  },
-
-  inlineActions: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 10,
-    flexWrap: "wrap",
-  },
-  inlineBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    borderRadius: 2,
-    borderWidth: 1,
-    borderColor: "rgba(0,212,255,0.22)",
-    backgroundColor: "rgba(255,255,255,0.025)",
-  },
-  inlineBtnTxt: {
-    fontSize: 9,
-    fontWeight: "800",
-    letterSpacing: 1.1,
-  },
-
-  sectionRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  sectionEyebrow: {
-    fontSize: 8,
-    fontWeight: "800",
-    color: T_DIM,
-    letterSpacing: 2,
-  },
-  sectionHint: {
-    fontSize: 9,
-    color: T_DIM,
-    letterSpacing: 0.6,
-  },
-
-  socialBtn: {
-    marginTop: 10,
-    paddingVertical: 13,
-    paddingHorizontal: 14,
-    borderRadius: 2,
-    borderWidth: 1,
-    borderColor: CARD_BD,
-    backgroundColor: CARD_BG,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-  },
-  socialIconBox: {
-    width: 28,
-    height: 28,
-    borderRadius: 2,
-    borderWidth: 1,
-    backgroundColor: "rgba(255,255,255,0.025)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  socialText: {
-    fontSize: 11,
-    color: T_HI,
-    fontWeight: "800",
-    letterSpacing: 1.1,
-  },
-
-  footerRow: {
-    marginTop: 20,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 6,
-  },
-  footerHint: {
-    fontSize: 11,
-    color: T_DIM,
-    letterSpacing: 0.8,
-  },
-  footerLink: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: MINT,
-    letterSpacing: 1,
-  },
-
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(3,5,8,0.92)",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 16,
-  },
-  modalCard: {
-    width: "100%",
-    maxWidth: 420,
-    borderRadius: 4,
-    padding: 18,
-    backgroundColor: BG,
-    borderWidth: 1,
-    borderColor: CARD_BD,
-    overflow: "hidden",
-    position: "relative",
-  },
-  modalHairline: {
-    position: "absolute",
-    top: 0,
-    left: "10%",
-    right: "10%",
-    height: 1.5,
-    opacity: 0.65,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 12,
-    marginBottom: 4,
-  },
-  modalTitle: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: T_HI,
-    letterSpacing: 2.4,
-    marginBottom: 6,
-    marginTop: 4,
-  },
-  modalSub: { fontSize: 12, color: T_MID, lineHeight: 18, maxWidth: "92%" },
-  modalEmail: { color: T_HI, fontWeight: "700" },
-  modalClose: {
-    fontSize: 26,
-    lineHeight: 26,
-    color: T_DIM,
-    marginTop: 2,
-  },
-  modalHint: {
-    marginTop: 5,
-    fontSize: 10,
-    color: T_DIM,
-    lineHeight: 15,
-    letterSpacing: 0.3,
-  },
-  modalActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 8,
-  },
-  modalBtnCancel: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 2,
-    borderWidth: 1,
-    borderColor: CARD_BD,
-    backgroundColor: "rgba(255,255,255,0.025)",
-  },
-  modalBtnPrimary: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 2,
-    backgroundColor: VIOLET,
-    alignItems: "center",
-    justifyContent: "center",
-    minWidth: 138,
-  },
-  modalBtnTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 1 },
-  modalPrimaryTxt: {
-    fontSize: 9,
-    fontWeight: "800",
-    letterSpacing: 1,
-    color: BG,
-  },
-  resendLink: {
-    textAlign: "center",
-    fontSize: 10,
-    color: CYAN,
-    fontWeight: "800",
-    letterSpacing: 1,
-  },
-});
+    /* modal */
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: c.overlay,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 22,
+    },
+    modalCard: {
+      width: "100%",
+      backgroundColor: c.card,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: c.border,
+      padding: 22,
+    },
+    modalHeader: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      marginBottom: 16,
+    },
+    modalTitle: {
+      fontSize: 19,
+      fontWeight: "700",
+      color: c.textHi,
+      marginBottom: 4,
+    },
+    modalSub: { fontSize: 13, color: c.textMid, lineHeight: 18 },
+    modalEmail: { color: c.textHi, fontWeight: "600" },
+    modalCloseBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: c.cardSoft,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    modalActions: {
+      flexDirection: "row",
+      gap: 10,
+      marginTop: 18,
+    },
+    modalBtnGhost: {
+      flex: 1,
+      height: 50,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: c.cardSoft,
+    },
+    modalBtnGhostTxt: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: c.textMid,
+    },
+  });
+}

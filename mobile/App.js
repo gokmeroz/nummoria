@@ -23,6 +23,8 @@ import {
   attachNotificationListeners,
 } from "./src/notifications/notifications";
 
+import { ThemeProvider } from "./src/theme/ThemeContext";
+
 const Stack = createNativeStackNavigator();
 
 // Local consent gate
@@ -174,6 +176,7 @@ export default function App() {
   // NEW: while booting, still show SplashGate; it will wait 2s and then
   // navigate to whatever initialRoute we computed (or "Login" by default).
   return (
+    <ThemeProvider>
     <NavigationContainer ref={navigationRef}>
       <Stack.Navigator
         screenOptions={{ headerShown: false }}
@@ -313,6 +316,7 @@ export default function App() {
         />
       </Stack.Navigator>
     </NavigationContainer>
+    </ThemeProvider>
   );
 }
 
