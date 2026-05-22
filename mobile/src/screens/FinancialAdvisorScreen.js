@@ -30,18 +30,18 @@ import DashboardMenuFab from "../components/DashboardMenuFab";
 /* ──────────────────────────────────────────────────────────
    THEME
 ────────────────────────────────────────────────────────── */
-const BG = "#030508";
-const MINT = "#00ff87";
-const CYAN = "#00d4ff";
-const VIOLET = "#a78bfa";
-const ORANGE = "#f97316";
-const GOLD = "#fbbf24";
+const BG = "#0E1424";
+const MINT = "#86EFAC";
+const CYAN = "#7DD3FC";
+const VIOLET = "#C4B5FD";
+const ORANGE = "#FDBA74";
+const GOLD = "#FCD34D";
 
-const CARD_BG = "rgba(255,255,255,0.025)";
-const CARD_BD = "rgba(255,255,255,0.07)";
-const T_HI = "#e2e8f0";
-const T_MID = "rgba(226,232,240,0.55)";
-const T_DIM = "rgba(226,232,240,0.32)";
+const CARD_BG = "rgba(255,255,255,0.035)";
+const CARD_BD = "rgba(255,255,255,0.08)";
+const T_HI = "#F1F5F9";
+const T_MID = "rgba(241,245,249,0.65)";
+const T_DIM = "rgba(241,245,249,0.38)";
 
 /* ──────────────────────────────────────────────────────────
    INSTRUCTIONS DATA

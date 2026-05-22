@@ -22,22 +22,24 @@ import * as ImagePicker from "expo-image-picker";
 
 import api from "../lib/api";
 import logo from "../../assets/nummoria_logo.png";
+import { useTheme } from "../theme/ThemeContext";
+import { Feather } from "@expo/vector-icons";
 
 /* ──────────────────────────────────────────────────────────
-   THEME — synced with Dashboard / Income / Investment HUD
+   THEME — Soft Aurora palette (dark variant defaults)
 ────────────────────────────────────────────────────────── */
-const BG = "#030508";
-const MINT = "#00ff87";
-const CYAN = "#00d4ff";
-const VIOLET = "#a78bfa";
-const ORANGE = "#f97316";
-const GOLD = "#fbbf24";
+const BG = "#0E1424";
+const MINT = "#86EFAC";
+const CYAN = "#7DD3FC";
+const VIOLET = "#C4B5FD";
+const ORANGE = "#FDBA74";
+const GOLD = "#FCD34D";
 
-const CARD_BG = "rgba(255,255,255,0.025)";
-const CARD_BD = "rgba(255,255,255,0.07)";
-const T_HI = "#e2e8f0";
-const T_MID = "rgba(226,232,240,0.55)";
-const T_DIM = "rgba(226,232,240,0.32)";
+const CARD_BG = "rgba(255,255,255,0.035)";
+const CARD_BD = "rgba(255,255,255,0.08)";
+const T_HI = "#F1F5F9";
+const T_MID = "rgba(241,245,249,0.65)";
+const T_DIM = "rgba(241,245,249,0.38)";
 
 const SUPPORT_EMAIL = "nummoria@gmail.com";
 const WEB_ORIGIN = "https://nummoria.com";
@@ -490,6 +492,7 @@ function CurrencyPickerModal({
 ══════════════════════════════════════════════════════════ */
 export default function UserScreen() {
   const navigation = useNavigation();
+  const { preference, setPreference, mode } = useTheme();
 
   const [me, setMe] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1092,6 +1095,65 @@ export default function UserScreen() {
     );
   }
 
+  function AppearancePanel() {
+    const options = [
+      { value: "light", label: "Light", icon: "sun" },
+      { value: "dark", label: "Dark", icon: "moon" },
+      { value: "auto", label: "Auto", icon: "smartphone" },
+    ];
+    return (
+      <View style={s.sectionCard}>
+        <Brackets color={CYAN} size={10} thick={1} />
+        <View style={[s.sectionHairline, { backgroundColor: CYAN }]} />
+        <View style={s.sectionHeaderRow}>
+          <View>
+            <Text style={s.sectionEyebrow}>APPEARANCE</Text>
+            <Text style={s.sectionTitle}>Theme</Text>
+          </View>
+          <Text style={[s.sectionHint, { color: T_MID }]}>
+            Currently {mode === "light" ? "Light" : "Dark"}
+          </Text>
+        </View>
+        <View style={s.themeRow}>
+          {options.map((opt) => {
+            const active = preference === opt.value;
+            return (
+              <TouchableOpacity
+                key={opt.value}
+                style={[
+                  s.themeOpt,
+                  active && {
+                    borderColor: CYAN,
+                    backgroundColor: "rgba(125,211,252,0.10)",
+                  },
+                ]}
+                onPress={() => setPreference(opt.value)}
+                activeOpacity={0.85}
+              >
+                <Feather
+                  name={opt.icon}
+                  size={18}
+                  color={active ? CYAN : T_MID}
+                />
+                <Text
+                  style={[
+                    s.themeOptTxt,
+                    { color: active ? CYAN : T_MID },
+                  ]}
+                >
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        <Text style={s.themeHint}>
+          Auto follows your device's appearance setting.
+        </Text>
+      </View>
+    );
+  }
+
   function AccountsPanel() {
     return (
       <View style={s.sectionCard}>
@@ -1295,6 +1357,7 @@ export default function UserScreen() {
         {Header()}
         {IdentityPanel()}
         {SettingsPanel()}
+        {AppearancePanel()}
         {AccountsPanel()}
         {SupportPanel()}
       </ScrollView>
@@ -1662,6 +1725,41 @@ const s = StyleSheet.create({
     fontWeight: "800",
     color: T_HI,
     letterSpacing: -0.3,
+  },
+  sectionHint: {
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 0.3,
+  },
+
+  /* Appearance theme picker */
+  themeRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 8,
+  },
+  themeOpt: {
+    flex: 1,
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: CARD_BD,
+    backgroundColor: CARD_BG,
+  },
+  themeOptTxt: {
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+  },
+  themeHint: {
+    fontSize: 11,
+    color: T_DIM,
+    marginTop: 10,
+    lineHeight: 16,
   },
 
   profileBlock: {

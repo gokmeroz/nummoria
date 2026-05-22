@@ -22,13 +22,13 @@ import api from "../lib/api";
 import logo from "../../assets/nummoria_logo.png";
 import DashboardMenuFab from "../components/DashboardMenuFab";
 
-const main = "#22c55e";
-const BG_DARK = "#020617";
-const CARD_DARK = "#020819";
-const BORDER_DARK = "#0f172a";
-const TEXT_SOFT = "rgba(148,163,184,0.85)";
-const TEXT_MUTED = "rgba(148,163,184,0.7)";
-const TEXT_HEADING = "#e5e7eb";
+const main = "#86EFAC";
+const BG_DARK = "#0E1424";
+const CARD_DARK = "#181F33";
+const BORDER_DARK = "rgba(255,255,255,0.08)";
+const TEXT_SOFT = "rgba(241,245,249,0.85)";
+const TEXT_MUTED = "rgba(241,245,249,0.65)";
+const TEXT_HEADING = "#F1F5F9";
 
 /* --------------------------- Money helpers --------------------------- */
 function decimalsForCurrency(code) {
