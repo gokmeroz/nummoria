@@ -2265,8 +2265,8 @@ export default function ExpensesScreen({ route }) {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <HeaderSection />
-        <UpcomingPanel />
+        {HeaderSection()}
+        {UpcomingPanel()}
 
         {!!err && (
           <View style={s.errorCard}>
@@ -2469,7 +2469,7 @@ export default function ExpensesScreen({ route }) {
       </View>
 
       {/* EXPENSE MODAL */}
-      <ExpenseModal />
+      {ExpenseModal()}
 
       {/* AUTO-ADD MODAL */}
       <Modal
