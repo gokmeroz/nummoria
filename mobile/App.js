@@ -17,7 +17,7 @@ import MainStack from "./src/navigation/MainStack";
 import UserScreen from "./src/screens/UserScreen";
 import InvestmentPerformanceScreen from "./src/screens/InvestmentPerformance";
 import TermsScreen from "./src/screens/TermsScreen";
-import api from "./src/lib/api";
+import api, { setUnauthorizedHandler } from "./src/lib/api";
 
 import {
   registerForPushTokenAsync,
@@ -89,7 +89,24 @@ export default function App() {
     };
   }, []);
 
-  // ✅ Boot: onboarding + restore token + validate session + consent gate
+  // Force-logout when any authenticated request returns 401
+  useEffect(() => {
+    setUnauthorizedHandler(async () => {
+      await AsyncStorage.multiRemove([
+        "token",
+        "defaultId",
+        "userEmail",
+        "userName",
+      ]);
+      delete api.defaults.headers.Authorization;
+      setIsLoggedIn(false);
+      navigationRef.current?.navigate("Login");
+    });
+  }, []);
+
+  // ✅ Boot: onboarding check + restore token — NO network call
+  // Users stay logged in as long as a token exists in storage.
+  // The 401 interceptor above handles the only valid logout trigger.
   useEffect(() => {
     async function bootstrap() {
       try {
@@ -100,29 +117,19 @@ export default function App() {
         const seen = raw === "true";
         setHasSeenOnboarding(seen);
 
-        // Set auth header early
         if (token) {
           api.defaults.headers.Authorization = `Bearer ${token}`;
         } else {
           delete api.defaults.headers.Authorization;
         }
 
-        // If onboarding not seen, go onboarding
         if (!seen) {
           setIsLoggedIn(false);
           setInitialRoute("Onboarding");
           return;
         }
 
-        // Validate session
-        let logged = false;
-        try {
-          const resp = await api.get("/me");
-          if (resp?.data?.user) logged = true;
-        } catch (e) {
-          logged = false;
-        }
-
+        const logged = !!token;
         setIsLoggedIn(logged);
 
         if (!logged) {
@@ -135,12 +142,10 @@ export default function App() {
         setInitialRoute(accepted ? "Main" : "Terms");
 
         // Register push token ONLY when authenticated
-        if (logged && token) {
-          try {
-            await registerDeviceOnBackend();
-          } catch (e) {
-            console.warn("[push] device register failed:", e?.message || e);
-          }
+        try {
+          await registerDeviceOnBackend();
+        } catch (e) {
+          console.warn("[push] device register failed:", e?.message || e);
         }
       } catch (e) {
         console.warn("Failed to read flags:", e);

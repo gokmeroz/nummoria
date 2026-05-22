@@ -62,6 +62,12 @@ const api = axios.create({
 
 console.log("[API] baseURL =", api.defaults.baseURL);
 
+// Registered by App.js — called when a 401 arrives on an authenticated request
+let onUnauthorizedCallback = null;
+export function setUnauthorizedHandler(fn) {
+  onUnauthorizedCallback = fn;
+}
+
 api.interceptors.request.use((config) => {
   console.log(
     "[API] ->",
@@ -81,6 +87,17 @@ api.interceptors.response.use(
       err?.response?.status,
       err?.response?.data,
     );
+
+    // Force-logout only when a 401 arrives on an already-authenticated request.
+    // Skips unauthenticated calls (login/register) which have no Authorization header.
+    if (
+      err?.response?.status === 401 &&
+      api.defaults.headers.Authorization &&
+      onUnauthorizedCallback
+    ) {
+      onUnauthorizedCallback();
+    }
+
     return Promise.reject(err);
   },
 );
