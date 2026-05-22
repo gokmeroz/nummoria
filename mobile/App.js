@@ -12,8 +12,7 @@ import SplashGateScreen from "./src/screens/SplashGateScreen";
 import OnboardingScreen from "./src/screens/OnboardingScreen";
 import LoginScreen from "./src/screens/LoginScreen";
 import SignUpScreen from "./src/screens/SignUpScreen";
-// import AppTabs from "./src/navigation/AppTabs";
-import MainStack from "./src/navigation/MainStack";
+import AppTabs from "./src/navigation/AppTabs";
 import UserScreen from "./src/screens/UserScreen";
 import InvestmentPerformanceScreen from "./src/screens/InvestmentPerformance";
 import TermsScreen from "./src/screens/TermsScreen";
@@ -279,8 +278,8 @@ export default function App() {
           options={{ headerShown: false, gestureEnabled: false }}
         />
 
-        {/* Main */}
-        <Stack.Screen name="Main" component={MainStack} />
+        {/* Main — tab navigator */}
+        <Stack.Screen name="Main" component={AppTabs} />
 
         {/* User profile */}
         <Stack.Screen

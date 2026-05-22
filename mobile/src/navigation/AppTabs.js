@@ -4,7 +4,6 @@ import { Text } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 
 import DashboardScreen from "../screens/DashboardScreen";
-import UserScreen from "../screens/UserScreen";
 import ExpensesScreen from "../screens/ExpenseScreen";
 import IncomeScreen from "../screens/IncomeScreen";
 import InvestmentScreen from "../screens/InvestmentScreen";
@@ -35,16 +34,13 @@ export default function AppTabs() {
   return (
     <Tab.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: BRAND_CARD },
-        headerTintColor: "#e5e7eb",
-        headerTitleStyle: { fontWeight: "700" },
+        headerShown: false,
         tabBarStyle: {
           backgroundColor: BRAND_CARD,
           borderTopColor: "rgba(148,163,184,0.2)",
         },
         tabBarActiveTintColor: BRAND_GREEN,
         tabBarInactiveTintColor: TEXT_MUTED,
-        // ⬇️ explicitly booleans, no magic
         tabBarShowLabel: true,
       }}
     >
