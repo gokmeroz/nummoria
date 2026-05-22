@@ -34,6 +34,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import api from "../lib/api";
 import logo from "../../assets/nummoria_logo.png";
+import DashboardMenuFab from "../components/DashboardMenuFab";
 
 /* ─────────────────────────────────────────────────────────────
    CONSTANTS & THEME
@@ -2234,6 +2235,7 @@ export default function IncomeScreen({ route }) {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+      <DashboardMenuFab />
     </SafeAreaView>
   );
 }

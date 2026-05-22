@@ -25,6 +25,7 @@ import * as DocumentPicker from "expo-document-picker";
 import { useNavigation } from "@react-navigation/native";
 import api from "../lib/api";
 import logo from "../../assets/nummoria_logo.png";
+import DashboardMenuFab from "../components/DashboardMenuFab";
 
 /* ──────────────────────────────────────────────────────────
    THEME
@@ -860,6 +861,7 @@ export default function FinancialAdvisorScreen() {
         {SetupBar()}
         {ChatPanel()}
       </View>
+      <DashboardMenuFab />
     </SafeAreaView>
   );
 }

@@ -20,6 +20,7 @@ import * as ImagePicker from "expo-image-picker";
 import TextRecognition from "@react-native-ml-kit/text-recognition";
 import api from "../lib/api";
 import logo from "../../assets/nummoria_logo.png";
+import DashboardMenuFab from "../components/DashboardMenuFab";
 
 const main = "#22c55e";
 const BG_DARK = "#020617";
@@ -424,7 +425,7 @@ export default function ScanReceiptScreen() {
     <SafeAreaView style={styles.screen}>
       <ScrollView
         style={styles.content}
-        contentContainerStyle={{ paddingBottom: 28 }}
+        contentContainerStyle={{ paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.headerCard}>
@@ -860,6 +861,7 @@ export default function ScanReceiptScreen() {
           </View>
         </View>
       </Modal>
+      <DashboardMenuFab />
     </SafeAreaView>
   );
 }
