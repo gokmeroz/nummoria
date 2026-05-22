@@ -672,6 +672,8 @@ export default function IncomeScreen({ route }) {
   /* ── modal ── */
   const [modalOpen, setModalOpen] = useState(false);
   const [editingData, setEditingData] = useState(null);
+  const amountDraftRef = useRef("");
+  const [amountInputKey, setAmountInputKey] = useState(0);
   const [form, setForm] = useState({
     amount: "",
     currency: "USD",
@@ -1048,6 +1050,8 @@ export default function IncomeScreen({ route }) {
     const aId = accountId || accounts[0]?._id || "";
     const cur = accounts.find((a) => a._id === aId)?.currency || "USD";
     setEditingData(null);
+    amountDraftRef.current = "";
+    setAmountInputKey((k) => k + 1);
     setForm({
       amount: "",
       currency: cur,
@@ -1063,9 +1067,12 @@ export default function IncomeScreen({ route }) {
   }
 
   function openEdit(tx) {
+    const initialAmount = minorToMajor(tx.amountMinor, tx.currency);
     setEditingData(tx);
+    amountDraftRef.current = initialAmount;
+    setAmountInputKey((k) => k + 1);
     setForm({
-      amount: minorToMajor(tx.amountMinor, tx.currency),
+      amount: initialAmount,
       currency: tx.currency,
       date: new Date(tx.date).toISOString().slice(0, 10),
       frequency: tx.frequency || "",
@@ -1647,7 +1654,7 @@ export default function IncomeScreen({ route }) {
     const submit = async () => {
       const cur = (form.currency || "USD").toString().toUpperCase();
       const pickedAccId = form.accountId || accountId || accounts[0]?._id || "";
-      const amountMinor = majorToMinor(form.amount, cur);
+      const amountMinor = majorToMinor(amountDraftRef.current || form.amount, cur);
       if (Number.isNaN(amountMinor)) {
         Alert.alert("Invalid amount", "Enter a valid number.");
         return;
@@ -1714,7 +1721,7 @@ export default function IncomeScreen({ route }) {
             <Brackets color={MINT} size={10} thick={1.5} />
             <View style={[s.modalHairline, { backgroundColor: MINT }]} />
             <ScrollView
-              keyboardShouldPersistTaps="handled"
+              keyboardShouldPersistTaps="always"
               showsVerticalScrollIndicator={false}
             >
               <Text style={[s.modalTitle, { color: MINT }]}>
@@ -1726,7 +1733,7 @@ export default function IncomeScreen({ route }) {
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
+                keyboardShouldPersistTaps="always"
                 style={{ marginBottom: 10 }}
               >
                 {accounts.map((a) => (
@@ -1750,12 +1757,15 @@ export default function IncomeScreen({ route }) {
                 <View style={{ flex: 1 }}>
                   <Text style={s.modalLabel}>AMOUNT</Text>
                   <TextInput
-                    value={form.amount}
-                    onChangeText={(v) => setForm((f) => ({ ...f, amount: v }))}
-                    keyboardType="numeric"
+                    key={amountInputKey}
+                    defaultValue={amountDraftRef.current}
+                    onChangeText={(v) => { amountDraftRef.current = v; }}
+                    keyboardType="decimal-pad"
                     placeholder="0.00"
                     placeholderTextColor={T_DIM}
                     style={s.modalInput}
+                    autoCorrect={false}
+                    blurOnSubmit={false}
                   />
                 </View>
                 <View style={{ width: 80 }}>
@@ -1929,8 +1939,8 @@ export default function IncomeScreen({ route }) {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <HeaderSection />
-        <UpcomingPanel />
+        {HeaderSection()}
+        {UpcomingPanel()}
 
         {!!err && (
           <View style={s.errorCard}>
@@ -2133,7 +2143,7 @@ export default function IncomeScreen({ route }) {
       </View>
 
       {/* INCOME MODAL */}
-      <IncomeModal />
+      {IncomeModal()}
 
       {/* AUTO-ADD MODAL */}
       <Modal
