@@ -22,11 +22,18 @@ const MONO = Platform.OS === "ios" ? "Courier New" : "monospace";
 /* ─── NAV ITEMS ─── */
 const ITEMS = [
   {
+    key: "home",
+    label: "Home",
+    glyph: "⌂",
+    routeName: "Dashboard",
+    accent: MINT,
+  },
+  {
     key: "ai",
     label: "AI",
     glyph: "✦",
     routeName: "Financial Helper",
-    accent: MINT,
+    accent: CYAN,
   },
   {
     key: "income",
@@ -49,13 +56,6 @@ const ITEMS = [
     routeName: "Investments",
     accent: VIOLET,
   },
-  // {
-  //   key: "reports",
-  //   label: "Reports",
-  //   glyph: "≡",
-  //   routeName: "Reports",
-  //   accent: CYAN,
-  // },
 ];
 
 /* ─── hex → rgba helper ─── */

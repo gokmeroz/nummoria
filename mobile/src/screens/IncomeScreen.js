@@ -2802,9 +2802,10 @@ const s = StyleSheet.create({
   fabContainer: {
     position: "absolute",
     right: 20,
-    bottom: 30,
+    bottom: 120,
     alignItems: "center",
     gap: 16,
+    zIndex: 100,
   },
   pulseWrap: {
     width: 60,
