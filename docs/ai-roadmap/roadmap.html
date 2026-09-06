@@ -1,0 +1,799 @@
+<title>Nummoria AI Engineering Roadmap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  /* ============ TOKENS ============ */
+  :root {
+    --bg:        #EFF3F1;
+    --surface:   #FBFCFB;
+    --surface-2: #E4EAE7;
+    --ink:       #15201C;
+    --ink-soft:  #48564F;
+    --ink-faint: #7A8882;
+    --rule:      #D3DBD6;
+    --rule-firm: #BEC8C3;
+    --accent:    #0C7A63;
+    --accent-ink:#0A5F4D;
+    --accent-wash:#E2EFEA;
+    --risk:      #A2571F;
+    --risk-wash: #F1E6DA;
+    --shadow:    0 1px 2px rgba(20,40,34,.05), 0 8px 24px -12px rgba(20,40,34,.14);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:        #0D1512;
+      --surface:   #141F1B;
+      --surface-2: #1B2823;
+      --ink:       #E3EAE6;
+      --ink-soft:  #A5B2AD;
+      --ink-faint: #6F7E79;
+      --rule:      #26332E;
+      --rule-firm: #33423C;
+      --accent:    #3EBE9B;
+      --accent-ink:#63D0B2;
+      --accent-wash:#122420;
+      --risk:      #D28C52;
+      --risk-wash: #241C13;
+      --shadow:    0 1px 2px rgba(0,0,0,.3), 0 10px 30px -14px rgba(0,0,0,.55);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg:        #0D1512;
+    --surface:   #141F1B;
+    --surface-2: #1B2823;
+    --ink:       #E3EAE6;
+    --ink-soft:  #A5B2AD;
+    --ink-faint: #6F7E79;
+    --rule:      #26332E;
+    --rule-firm: #33423C;
+    --accent:    #3EBE9B;
+    --accent-ink:#63D0B2;
+    --accent-wash:#122420;
+    --risk:      #D28C52;
+    --risk-wash: #241C13;
+    --shadow:    0 1px 2px rgba(0,0,0,.3), 0 10px 30px -14px rgba(0,0,0,.55);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Hanken Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 16px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: clamp(28px, 6vw, 72px) clamp(20px, 5vw, 40px) 96px;
+  }
+
+  .measure { max-width: 660px; }
+
+  /* ============ TYPE ============ */
+  h1, h2, h3 { text-wrap: balance; margin: 0; font-weight: 700; letter-spacing: -0.015em; }
+  h1 { font-size: clamp(2rem, 5.2vw, 2.9rem); line-height: 1.08; font-weight: 800; }
+  h2 { font-size: clamp(1.32rem, 3vw, 1.6rem); line-height: 1.2; }
+  h3 { font-size: 1.12rem; line-height: 1.3; }
+  p  { margin: 0; }
+
+  .mono {
+    font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--accent-ink);
+    font-weight: 600;
+  }
+
+  /* ============ HERO ============ */
+  header { margin-bottom: 56px; }
+  header .eyebrow { display: block; margin-bottom: 18px; }
+  header p.lede {
+    margin-top: 20px;
+    font-size: 1.12rem;
+    color: var(--ink-soft);
+    max-width: 620px;
+  }
+
+  .priorities {
+    display: grid;
+    gap: 12px;
+    margin-top: 34px;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  }
+  .pri {
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent);
+    border-radius: 3px;
+    padding: 14px 16px;
+    background: var(--surface);
+  }
+  .pri .tag {
+    font-family: "IBM Plex Mono", Menlo, monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+  }
+  .pri strong { display: block; margin-top: 4px; font-size: 0.98rem; }
+
+  /* ============ SECTION SHELL ============ */
+  section { margin-top: 64px; }
+  section > .eyebrow { display: block; margin-bottom: 14px; }
+  section > h2 + p { margin-top: 12px; color: var(--ink-soft); }
+
+  /* ============ TIMELINE BAND ============ */
+  .band {
+    margin-top: 28px;
+    display: flex;
+    gap: 0;
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--surface);
+  }
+  .band .seg {
+    flex: 1;
+    padding: 14px 12px 16px;
+    border-right: 1px solid var(--rule);
+    position: relative;
+  }
+  .band .seg:last-child { border-right: 0; }
+  .band .seg .id {
+    font-family: "IBM Plex Mono", Menlo, monospace;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--accent-ink);
+  }
+  .band .seg .wk {
+    font-family: "IBM Plex Mono", Menlo, monospace;
+    font-size: 0.68rem;
+    color: var(--ink-faint);
+    display: block;
+    margin-top: 2px;
+  }
+  .band .seg .nm {
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    margin-top: 8px;
+    line-height: 1.32;
+  }
+  .band .seg .bar {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 3px;
+    background: var(--accent);
+    opacity: 0.32;
+  }
+  .band .seg[data-w="1"] .bar { opacity: 0.30; }
+  .band .seg[data-w="2"] .bar { opacity: 0.55; }
+  .band .seg[data-w="3"] .bar { opacity: 0.85; }
+
+  /* ============ AT A GLANCE TABLE ============ */
+  .scroll { overflow-x: auto; margin-top: 24px; border: 1px solid var(--rule); border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 0.9rem; }
+  thead th {
+    text-align: left;
+    padding: 12px 16px;
+    background: var(--surface-2);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-soft);
+    font-family: "IBM Plex Mono", Menlo, monospace;
+    font-weight: 600;
+    border-bottom: 1px solid var(--rule-firm);
+  }
+  tbody td { padding: 13px 16px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody td:first-child {
+    font-family: "IBM Plex Mono", Menlo, monospace;
+    font-weight: 600;
+    color: var(--accent-ink);
+    white-space: nowrap;
+  }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ============ PHASE BLOCKS ============ */
+  .phases { margin-top: 32px; display: flex; flex-direction: column; gap: 20px; }
+
+  .phase {
+    display: grid;
+    grid-template-columns: 168px 1fr;
+    gap: 28px;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    padding: 26px 28px;
+    box-shadow: var(--shadow);
+  }
+  .phase .rail { border-right: 1px solid var(--rule); padding-right: 24px; }
+  .phase .rail .pid {
+    font-family: "IBM Plex Mono", Menlo, monospace;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: -0.02em;
+  }
+  .phase .rail .pname { margin-top: 4px; font-weight: 700; font-size: 0.98rem; line-height: 1.28; }
+  .phase .rail dl { margin: 16px 0 0; display: flex; flex-direction: column; gap: 10px; }
+  .phase .rail dt {
+    font-family: "IBM Plex Mono", Menlo, monospace;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--ink-faint);
+  }
+  .phase .rail dd {
+    margin: 2px 0 0;
+    font-size: 0.82rem;
+    color: var(--ink-soft);
+    font-variant-numeric: tabular-nums;
+  }
+  .pri-pill {
+    display: inline-block;
+    font-family: "IBM Plex Mono", Menlo, monospace;
+    font-size: 0.64rem;
+    letter-spacing: 0.06em;
+    padding: 2px 7px;
+    border-radius: 3px;
+    background: var(--accent-wash);
+    color: var(--accent-ink);
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+    margin-right: 4px;
+  }
+
+  .phase .body > .goal { font-size: 1.02rem; color: var(--ink); margin-bottom: 20px; }
+  .phase .body h4 {
+    margin: 0 0 8px;
+    font-family: "IBM Plex Mono", Menlo, monospace;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--ink-faint);
+    font-weight: 600;
+  }
+  .phase .body h4:not(:first-of-type) { margin-top: 20px; }
+  .phase ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 7px; }
+  .phase ul li { position: relative; padding-left: 18px; font-size: 0.93rem; color: var(--ink-soft); }
+  .phase ul li::before {
+    content: "";
+    position: absolute;
+    left: 2px; top: 0.62em;
+    width: 5px; height: 5px;
+    background: var(--accent);
+    border-radius: 1px;
+  }
+  .phase ul.exit li::before { background: var(--ink-faint); transform: rotate(45deg); }
+
+  .unlock {
+    margin-top: 22px;
+    background: var(--accent-wash);
+    border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
+    border-radius: 4px;
+    padding: 14px 16px;
+  }
+  .unlock .lbl {
+    font-family: "IBM Plex Mono", Menlo, monospace;
+    font-size: 0.64rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--accent-ink);
+    font-weight: 600;
+    display: block;
+    margin-bottom: 6px;
+  }
+  .unlock p { font-size: 0.92rem; color: var(--ink); line-height: 1.5; }
+  .unlock.none { background: var(--surface-2); border-color: var(--rule); }
+  .unlock.none .lbl { color: var(--ink-faint); }
+  .unlock.none p { color: var(--ink-soft); }
+
+  /* ============ RESUME BULLETS ============ */
+  .bullets { margin-top: 28px; display: flex; flex-direction: column; gap: 14px; }
+  .bullet {
+    display: grid;
+    grid-template-columns: 64px 1fr;
+    gap: 18px;
+    padding: 16px 18px;
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    background: var(--surface);
+    align-items: start;
+  }
+  .bullet .after {
+    font-family: "IBM Plex Mono", Menlo, monospace;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--accent-ink);
+  }
+  .bullet p { font-size: 0.94rem; color: var(--ink-soft); }
+  .bullet p em { color: var(--ink); font-style: normal; font-weight: 600; }
+
+  /* ============ SCOPE ============ */
+  .scope {
+    margin-top: 28px;
+    border: 1px solid color-mix(in srgb, var(--risk) 35%, var(--rule));
+    border-left: 3px solid var(--risk);
+    border-radius: 4px;
+    background: var(--risk-wash);
+    padding: 22px 24px;
+  }
+  .scope h3 { color: var(--risk); font-size: 0.96rem; }
+  .scope ul { margin: 14px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  .scope ul li { position: relative; padding-left: 20px; font-size: 0.92rem; color: var(--ink-soft); }
+  .scope ul li::before {
+    content: "\00d7";
+    position: absolute; left: 2px; top: -0.05em;
+    color: var(--risk);
+    font-weight: 700;
+  }
+
+  .note {
+    margin-top: 40px;
+    font-size: 0.84rem;
+    color: var(--ink-faint);
+    border-top: 1px solid var(--rule);
+    padding-top: 18px;
+    max-width: 640px;
+  }
+
+  a { color: var(--accent-ink); text-underline-offset: 2px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+  @media (max-width: 620px) {
+    .phase { grid-template-columns: 1fr; gap: 20px; }
+    .phase .rail { border-right: 0; border-bottom: 1px solid var(--rule); padding-right: 0; padding-bottom: 18px; }
+    .phase .rail dl { flex-flow: row wrap; gap: 16px; }
+    .band { flex-direction: column; }
+    .band .seg { border-right: 0; border-bottom: 1px solid var(--rule); }
+    .band .seg:last-child { border-bottom: 0; }
+    .bullet { grid-template-columns: 1fr; gap: 6px; }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .phase { animation: rise .5s cubic-bezier(.2,.7,.3,1) both; }
+    .phase:nth-child(2) { animation-delay: .04s; }
+    .phase:nth-child(3) { animation-delay: .08s; }
+    .phase:nth-child(4) { animation-delay: .12s; }
+    .phase:nth-child(5) { animation-delay: .16s; }
+    .phase:nth-child(6) { animation-delay: .2s; }
+    @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <span class="eyebrow">Nummoria &nbsp;/&nbsp; from LLM wrapper to AI system</span>
+    <h1>A phased roadmap for the three priorities</h1>
+    <p class="lede">
+      Eleven weeks, solo and part-time, sequenced so each phase leaves behind a
+      measurable artifact and a resume bullet you can defend in an interview. The
+      product surface barely changes &mdash; the engineering underneath it does.
+    </p>
+
+    <div class="priorities">
+      <div class="pri">
+        <span class="tag">Priority ①</span>
+        <strong>Extraction &amp; categorization pipeline</strong>
+      </div>
+      <div class="pri">
+        <span class="tag">Priority ②</span>
+        <strong>Agentic analyst with numeric grounding</strong>
+      </div>
+      <div class="pri">
+        <span class="tag">Priority ③</span>
+        <strong>Eval &amp; observability harness</strong>
+      </div>
+    </div>
+  </header>
+
+  <section>
+    <span class="eyebrow">Sequencing logic</span>
+    <h2>Why this order</h2>
+    <div class="measure">
+      <p style="margin-top:14px;color:var(--ink-soft)">
+        The full eval harness (③) is not phase one, but its two hardest-to-retrofit
+        pieces &mdash; request tracing and a labeled golden set &mdash; are. Those
+        come first, in P0, because bolting instrumentation onto a running system
+        later is miserable.
+      </p>
+      <p style="margin-top:14px;color:var(--ink-soft)">
+        Extraction (①) precedes the agent (②) because the agent's whole value
+        proposition &mdash; never inventing a number &mdash; depends on a clean,
+        typed transaction store to ground against. Learned categorization comes
+        after extraction because it needs the labeled corpus that the extraction
+        correction UI produces. The agent comes last because it consumes
+        everything built before it.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Timeline &mdash; 11 weeks</span>
+    <h2>The six phases</h2>
+    <div class="band">
+      <div class="seg" data-w="1">
+        <span class="id">P0</span><span class="wk">wk 1&ndash;2</span>
+        <div class="nm">Foundations &amp; instrumentation</div>
+        <div class="bar"></div>
+      </div>
+      <div class="seg" data-w="3">
+        <span class="id">P1</span><span class="wk">wk 2&ndash;5</span>
+        <div class="nm">Extraction pipeline</div>
+        <div class="bar"></div>
+      </div>
+      <div class="seg" data-w="2">
+        <span class="id">P2</span><span class="wk">wk 3&ndash;6</span>
+        <div class="nm">Eval &amp; observability harness</div>
+        <div class="bar"></div>
+      </div>
+      <div class="seg" data-w="2">
+        <span class="id">P3</span><span class="wk">wk 6&ndash;8</span>
+        <div class="nm">Learned categorization</div>
+        <div class="bar"></div>
+      </div>
+      <div class="seg" data-w="3">
+        <span class="id">P4</span><span class="wk">wk 7&ndash;11</span>
+        <div class="nm">Agentic analyst + grounding</div>
+        <div class="bar"></div>
+      </div>
+      <div class="seg" data-w="1">
+        <span class="id">P5</span><span class="wk">wk 10&ndash;11</span>
+        <div class="nm">Hardening &amp; portfolio</div>
+        <div class="bar"></div>
+      </div>
+    </div>
+    <p style="margin-top:16px;font-size:0.86rem;color:var(--ink-faint);max-width:640px">
+      Phases overlap heavily &mdash; P1&thinsp;/&thinsp;P2 and P3&thinsp;/&thinsp;P4 run in parallel, and P5 folds into P4&rsquo;s last week.
+      This is the compressed track; see &ldquo;what the compression costs&rdquo; below.
+    </p>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Phase</th><th>Effort</th><th>Headline outcome</th><th>Advances</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>P0</td><td class="num">wk 1&ndash;2</td>
+            <td>Every model call is traced; a synthetic-data generator and a 60-case golden set exist; <span class="mono">eval</span> runs and prints a scorecard.</td>
+            <td>① ② ③</td>
+          </tr>
+          <tr>
+            <td>P1</td><td class="num">wk 2&ndash;5</td>
+            <td>Multi-format extraction with a two-tier confidence-gated cascade; field-level F1 reported per bank layout across ~15 layouts; correction UI feeds labeled data back.</td>
+            <td>①</td>
+          </tr>
+          <tr>
+            <td>P2</td><td class="num">wk 3&ndash;6</td>
+            <td>Judge + assertion evals gate CI; a minimal cost / latency / quality dashboard is live; thumbs feedback becomes new golden cases.</td>
+            <td>③</td>
+          </tr>
+          <tr>
+            <td>P3</td><td class="num">wk 6&ndash;8</td>
+            <td>An embeddings + gradient-boosting classifier beats the LLM categorizer on accuracy, cost and latency; the large model is demoted to label generation.</td>
+            <td>①</td>
+          </tr>
+          <tr>
+            <td>P4</td><td class="num">wk 7&ndash;11</td>
+            <td>A 4-tool agent answers financial questions with zero fabricated figures on a 150-case eval, versus a measured prompt-only baseline.</td>
+            <td>②</td>
+          </tr>
+          <tr>
+            <td>P5</td><td class="num">wk 10&ndash;11</td>
+            <td>PII redaction and prompt-injection defense ship; the repo leads with eval numbers, ADRs and a public benchmark. Model router deferred.</td>
+            <td>① ② ③</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Phase detail</span>
+    <h2>What each phase contains</h2>
+
+    <div class="phases">
+
+      <!-- P0 -->
+      <article class="phase">
+        <div class="rail">
+          <div class="pid">P0</div>
+          <div class="pname">Foundations &amp; instrumentation</div>
+          <dl>
+            <div><dt>Effort</dt><dd>~2 weeks</dd></div>
+            <div><dt>Depends on</dt><dd>&mdash;</dd></div>
+            <div><dt>Priority</dt><dd><span class="pri-pill">① ② ③</span></dd></div>
+          </dl>
+        </div>
+        <div class="body">
+          <p class="goal">Build the runway. Nothing here ships to users, but everything after it depends on this being in place.</p>
+
+          <h4>Workstreams</h4>
+          <ul>
+            <li>Synthetic generator for bank statements and transaction histories &mdash; multiple bank templates, PDF / CSV / image output, controllable noise and edge cases</li>
+            <li>Golden eval set v1: ~60 hand-labeled cases covering extraction fields and advisor Q&amp;A, stored as versioned fixtures</li>
+            <li>Tracing wrapper around every model call: prompt version, tokens, cost, latency, tool calls, raw output &rarr; a queryable store</li>
+            <li>Freeze the normalized transaction schema and the confidence-score representation used downstream</li>
+          </ul>
+
+          <h4>Exit criteria</h4>
+          <ul class="exit">
+            <li>Every AI request in the app emits a trace row</li>
+            <li><span class="mono">npm run eval</span> executes end-to-end and prints a scorecard &mdash; even if the scores are poor</li>
+            <li>Generator can produce 100 labeled statements in one command</li>
+          </ul>
+
+          <div class="unlock none">
+            <span class="lbl">Resume claim unlocked</span>
+            <p>None yet &mdash; this is scaffolding. It becomes citable once P1 and P2 produce numbers on top of it.</p>
+          </div>
+        </div>
+      </article>
+
+      <!-- P1 -->
+      <article class="phase">
+        <div class="rail">
+          <div class="pid">P1</div>
+          <div class="pname">Extraction pipeline</div>
+          <dl>
+            <div><dt>Effort</dt><dd>~3 weeks (wk 2&ndash;5)</dd></div>
+            <div><dt>Depends on</dt><dd>P0 tail</dd></div>
+            <div><dt>Priority</dt><dd><span class="pri-pill">①</span></dd></div>
+          </dl>
+        </div>
+        <div class="body">
+          <p class="goal">Turn document ingest from a single parse call into a layered pipeline with a cost story and a measured accuracy story.</p>
+
+          <h4>Workstreams</h4>
+          <ul>
+            <li>Deterministic layer: format detection plus per-format CSV / PDF parsers, extending the existing ingest code</li>
+            <li>Model extraction with structured output (function calling / constrained JSON) and per-field confidence scores</li>
+            <li>Two-tier cascade: deterministic parser &rarr; large model, escalating only when parser confidence falls below threshold (a small-model middle tier is a later add)</li>
+            <li>Human-in-the-loop correction UI; each correction is written back as a labeled training example</li>
+            <li>Field-level precision / recall / F1 on the P0 eval set, broken out by bank layout</li>
+          </ul>
+
+          <h4>Exit criteria</h4>
+          <ul class="exit">
+            <li>Field-level F1 &ge; 0.93 aggregate, with a per-layout breakdown</li>
+            <li>Cost per document and cascade escalation rate reported on the dashboard</li>
+            <li>&ge; 15 distinct layouts represented in the eval set</li>
+          </ul>
+
+          <div class="unlock">
+            <span class="lbl">Resume claim unlocked</span>
+            <p>Built a multimodal bank-statement extraction pipeline (PDF / image / CSV) with a confidence-gated cascade &mdash; <strong>~95% field-level F1 across 15+ layouts</strong>, with the deterministic tier handling the majority of documents at near-zero model cost.</p>
+          </div>
+        </div>
+      </article>
+
+      <!-- P2 -->
+      <article class="phase">
+        <div class="rail">
+          <div class="pid">P2</div>
+          <div class="pname">Eval &amp; observability harness</div>
+          <dl>
+            <div><dt>Effort</dt><dd>~3 weeks (wk 3&ndash;6)</dd></div>
+            <div><dt>Depends on</dt><dd>P0; runs parallel to P1</dd></div>
+            <div><dt>Priority</dt><dd><span class="pri-pill">③</span></dd></div>
+          </dl>
+        </div>
+        <div class="body">
+          <p class="goal">Make quality a number that a pull request can fail on. This is the phase that makes every other claim credible.</p>
+
+          <h4>Workstreams</h4>
+          <ul>
+            <li>LLM-as-judge scoring plus deterministic assertion checks; grow the golden set past 100 cases</li>
+            <li>CI integration: a prompt or model change that regresses the score against baseline blocks the merge</li>
+            <li>Minimal dashboard: p50 / p95 latency, cost per active user, groundedness, hallucinated-number rate, PII-leak checks</li>
+            <li>Online loop: thumbs feedback &rarr; triage queue &rarr; promotion of real cases into the golden set</li>
+          </ul>
+
+          <h4>Exit criteria</h4>
+          <ul class="exit">
+            <li>A deliberately worse prompt fails CI in a demo run</li>
+            <li>Dashboard is live and populated from real traffic</li>
+            <li>Quality report generated on demand from the trace store</li>
+          </ul>
+
+          <div class="unlock">
+            <span class="lbl">Resume claim unlocked</span>
+            <p>Built an LLM eval harness (<strong>100+ golden cases</strong>, judge + deterministic assertions) wired into CI; it <strong>blocked silent quality regressions</strong> from model and prompt changes before release.</p>
+          </div>
+        </div>
+      </article>
+
+      <!-- P3 -->
+      <article class="phase">
+        <div class="rail">
+          <div class="pid">P3</div>
+          <div class="pname">Learned categorization</div>
+          <dl>
+            <div><dt>Effort</dt><dd>~2 weeks (wk 6&ndash;8)</dd></div>
+            <div><dt>Depends on</dt><dd>P1, P2</dd></div>
+            <div><dt>Priority</dt><dd><span class="pri-pill">①</span></dd></div>
+          </dl>
+        </div>
+        <div class="body">
+          <p class="goal">Replace an LLM call with a real trained model &mdash; the clearest signal that you can do classical ML, not just prompt engineering.</p>
+
+          <h4>Workstreams</h4>
+          <ul>
+            <li>Baseline: measure the current LLM zero-shot categorizer on accuracy, latency and cost</li>
+            <li>Train one classifier on merchant strings &mdash; sentence embeddings + gradient boosting (commit to this; skip the transformer bake-off for now)</li>
+            <li>Head-to-head benchmark across all three axes on a held-out set</li>
+            <li>Personalization: user corrections shift predictions via a per-user few-shot / prior layer</li>
+            <li>Handle cold start and new merchants</li>
+          </ul>
+
+          <h4>Exit criteria</h4>
+          <ul class="exit">
+            <li>Learned model beats the LLM baseline on at least two of three axes</li>
+            <li>Large model retained only to generate training labels</li>
+            <li>Personalization measurably improves per-user accuracy</li>
+          </ul>
+
+          <div class="unlock">
+            <span class="lbl">Resume claim unlocked</span>
+            <p>Replaced an LLM transaction categorizer with a distilled transformer: <strong>+6 pts accuracy, ~40&times; cheaper, 210 ms &rarr; 9 ms p95</strong>; the large model was kept only for training-label generation.</p>
+          </div>
+        </div>
+      </article>
+
+      <!-- P4 -->
+      <article class="phase">
+        <div class="rail">
+          <div class="pid">P4</div>
+          <div class="pname">Agentic analyst + grounding</div>
+          <dl>
+            <div><dt>Effort</dt><dd>~4 weeks (wk 7&ndash;11)</dd></div>
+            <div><dt>Depends on</dt><dd>P0, P2 (P1, P3 feed it)</dd></div>
+            <div><dt>Priority</dt><dd><span class="pri-pill">②</span></dd></div>
+          </dl>
+        </div>
+        <div class="body">
+          <p class="goal">The flagship demo: an agent that reasons over the user's finances and cites a source for every figure it states.</p>
+
+          <h4>Workstreams</h4>
+          <ul>
+            <li>Semantic layer: natural language &rarr; structured query over the transaction store (text-to-analytics), not raw rows in context</li>
+            <li>Four tools: <span class="mono">query_transactions</span>, <span class="mono">cashflow_forecast</span>, <span class="mono">detect_recurring</span>, <span class="mono">simulate_scenario</span> (market-data and cohort tools are a later add)</li>
+            <li>Planner / executor loop with tool-selection evals and full-trajectory evals</li>
+            <li>Numeric-grounding guard: a post-generation pass rejects any number not traceable to a tool result</li>
+            <li>Retrieval over transaction summaries and a small knowledge base; answers cite specific transactions</li>
+          </ul>
+
+          <h4>Exit criteria</h4>
+          <ul class="exit">
+            <li>Zero fabricated figures across a 150-case eval; the prompt-only baseline is measured for contrast</li>
+            <li>Groundedness score meets target; trajectory eval pass rate reported</li>
+            <li>Every numeric answer links to its source rows in the UI</li>
+          </ul>
+
+          <div class="unlock">
+            <span class="lbl">Resume claim unlocked</span>
+            <p>Designed a <strong>4-tool financial analysis agent</strong> with a deterministic numeric-grounding guard &mdash; <strong>0 fabricated figures across a 150-case eval</strong> versus a measured double-digit rate in the prompt-only baseline.</p>
+          </div>
+        </div>
+      </article>
+
+      <!-- P5 -->
+      <article class="phase">
+        <div class="rail">
+          <div class="pid">P5</div>
+          <div class="pname">Hardening &amp; portfolio</div>
+          <dl>
+            <div><dt>Effort</dt><dd>~1.5 weeks (wk 10&ndash;11)</dd></div>
+            <div><dt>Depends on</dt><dd>P4; folds into its last week</dd></div>
+            <div><dt>Priority</dt><dd><span class="pri-pill">① ② ③</span></dd></div>
+          </dl>
+        </div>
+        <div class="body">
+          <p class="goal">Close the safety gaps and make the work legible to someone reviewing the repo in ten minutes.</p>
+
+          <h4>Workstreams</h4>
+          <ul>
+            <li>Safety layer: PII redaction before any model call, prompt-injection defense on ingested documents, a &ldquo;not financial advice&rdquo; policy check</li>
+            <li>Portfolio artifacts: public eval dashboard / model card, ADRs for the cascade and the grounding guarantee, a benchmark repo of synthetic statements, and a writeup &mdash; &ldquo;driving hallucinated numbers to zero&rdquo;</li>
+            <li>README rewrite: lead with eval numbers and a trace-visible demo</li>
+          </ul>
+          <p style="margin-top:10px;font-size:0.85rem;color:var(--ink-faint)">Deferred to a later pass: semantic cache, query-complexity model router, claim-verification model.</p>
+
+          <h4>Exit criteria</h4>
+          <ul class="exit">
+            <li>An injected-instruction test document does not alter agent behavior</li>
+            <li>No PII reaches the model provider in a 50-request sample</li>
+            <li>A stranger can understand the system from the README alone</li>
+          </ul>
+
+          <div class="unlock">
+            <span class="lbl">Resume claim unlocked</span>
+            <p>Shipped a pre-inference <strong>PII-redaction and prompt-injection defense layer</strong> for an LLM finance product, verified against an adversarial document test set &mdash; and published the benchmark, ADRs and writeup.</p>
+          </div>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">The payoff</span>
+    <h2>Resume bullets, and when you can claim them</h2>
+    <p class="measure">Each is written to survive follow-up questions &mdash; the numbers come from an eval set you can show, not a vibe.</p>
+
+    <div class="bullets">
+      <div class="bullet">
+        <span class="after">after P1</span>
+        <p>Built a <em>multimodal bank-statement extraction pipeline</em> with a confidence-gated cascade &mdash; ~95% field-level F1 across 15+ layouts, majority of docs handled at near-zero model cost.</p>
+      </div>
+      <div class="bullet">
+        <span class="after">after P2</span>
+        <p>Stood up an <em>LLM eval harness wired into CI</em> (100+ golden cases, judge + assertions) that blocked silent quality regressions before release.</p>
+      </div>
+      <div class="bullet">
+        <span class="after">after P3</span>
+        <p>Replaced an LLM categorizer with an <em>embeddings + gradient-boosting classifier</em>: higher accuracy, ~40&times; cheaper, sub-10 ms p95; big model kept only for labeling.</p>
+      </div>
+      <div class="bullet">
+        <span class="after">after P4</span>
+        <p>Designed a <em>4-tool financial agent with deterministic numeric grounding</em> &mdash; 0 fabricated figures across a 150-case eval vs. a measured double-digit baseline.</p>
+      </div>
+      <div class="bullet">
+        <span class="after">after P5</span>
+        <p>Shipped a <em>PII-redaction + prompt-injection defense layer</em> for an LLM finance product, verified against an adversarial document test set.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">The tradeoff</span>
+    <h2>What the compression costs</h2>
+    <p class="measure">Eleven weeks instead of eighteen is bought with parallelism and narrower scope, not by cutting a phase. What shrinks:</p>
+    <div class="scope" style="border-left-color:var(--accent);border-color:color-mix(in srgb, var(--accent) 35%, var(--rule));background:var(--accent-wash)">
+      <h3 style="color:var(--accent-ink)">Deliberately smaller in the 11-week track</h3>
+      <ul style="list-style:none">
+        <li style="padding-left:0">Extraction covers ~15 bank layouts, not 30+; the cascade is two tiers, not three (no small-model middle).</li>
+        <li style="padding-left:0">Golden set lands near 100 cases, not 120+; the dashboard is functional, not polished.</li>
+        <li style="padding-left:0">Categorization commits to one model family (embeddings + GBM) instead of running a transformer bake-off.</li>
+        <li style="padding-left:0">The agent ships 4 tools, not 7 &mdash; market-data and cohort comparison come later.</li>
+        <li style="padding-left:0">Cost engineering (semantic cache, model router) is deferred entirely to a follow-up pass.</li>
+      </ul>
+    </div>
+    <p class="measure" style="margin-top:16px">The core story is intact: every phase still ends in a measured artifact, and the numeric-grounding claim &mdash; the flagship &mdash; is untouched.</p>
+  </section>
+
+  <section>
+    <span class="eyebrow">Discipline</span>
+    <h2>Explicitly out of scope</h2>
+    <div class="scope">
+      <h3>Not in this roadmap &mdash; on purpose</h3>
+      <ul>
+        <li>Pre-training or full fine-tuning of a large model from scratch &mdash; distillation of a small model in P3 is the ceiling</li>
+        <li>Multi-tenant infra scaling, sharding, or a data-platform rebuild &mdash; unrelated to the AI-engineering story</li>
+        <li>New product surfaces that don't serve one of the three priorities</li>
+        <li>Chasing every model release &mdash; model upgrades are gated through the P2 eval harness like any other change</li>
+        <li>Reworking the mobile receipt OCR until P1's pipeline is stable and can absorb it</li>
+      </ul>
+    </div>
+  </section>
+
+  <p class="note">
+    Effort ranges assume ~10&ndash;15 hours per week and shift with real data quality.
+    All metric targets (F1, cost multiples, latency, fabrication rate) are goals to
+    hit and report honestly &mdash; the defensible claim is the eval methodology and
+    the measured before/after, whatever the final numbers are.
+  </p>
+
+</div>

@@ -1,0 +1,445 @@
+<title>Nummoria: Before &amp; After</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --bg:#EFF3F1; --surface:#FBFCFB; --surface-2:#E4EAE7;
+    --ink:#15201C; --ink-soft:#48564F; --ink-faint:#7A8882;
+    --rule:#D3DBD6; --rule-firm:#BEC8C3;
+    --accent:#0C7A63; --accent-ink:#0A5F4D; --accent-wash:#E2EFEA;
+    --risk:#A2571F; --risk-ink:#A2571F; --risk-wash:#F2E7DB;
+    --shadow:0 1px 2px rgba(20,40,34,.05), 0 8px 24px -12px rgba(20,40,34,.14);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:#0D1512; --surface:#141F1B; --surface-2:#1B2823;
+      --ink:#E3EAE6; --ink-soft:#A5B2AD; --ink-faint:#6F7E79;
+      --rule:#26332E; --rule-firm:#33423C;
+      --accent:#3EBE9B; --accent-ink:#63D0B2; --accent-wash:#122420;
+      --risk:#D28C52; --risk-ink:#E0A06E; --risk-wash:#241C13;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px -14px rgba(0,0,0,.55);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg:#0D1512; --surface:#141F1B; --surface-2:#1B2823;
+    --ink:#E3EAE6; --ink-soft:#A5B2AD; --ink-faint:#6F7E79;
+    --rule:#26332E; --rule-firm:#33423C;
+    --accent:#3EBE9B; --accent-ink:#63D0B2; --accent-wash:#122420;
+    --risk:#D28C52; --risk-ink:#E0A06E; --risk-wash:#241C13;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px -14px rgba(0,0,0,.55);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"Hanken Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size:16px; line-height:1.62; -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:940px; margin:0 auto; padding:clamp(28px,6vw,68px) clamp(18px,5vw,40px) 100px; }
+  .measure { max-width:640px; }
+
+  h1,h2,h3 { text-wrap:balance; margin:0; font-weight:700; letter-spacing:-0.015em; }
+  h1 { font-size:clamp(2rem,5.4vw,2.95rem); line-height:1.07; font-weight:800; }
+  h2 { font-size:clamp(1.32rem,3vw,1.62rem); line-height:1.2; }
+  h3 { font-size:1.05rem; }
+  p { margin:0; }
+  .mono { font-family:"IBM Plex Mono", ui-monospace, Menlo, monospace; }
+  .eyebrow {
+    font-family:"IBM Plex Mono", Menlo, monospace; font-size:0.72rem;
+    text-transform:uppercase; letter-spacing:0.18em; color:var(--accent-ink); font-weight:600;
+  }
+
+  header { margin-bottom:8px; }
+  header .eyebrow { display:block; margin-bottom:18px; }
+  header p.lede { margin-top:20px; font-size:1.12rem; color:var(--ink-soft); max-width:620px; }
+
+  section { margin-top:64px; }
+  section > .eyebrow { display:block; margin-bottom:12px; }
+  section > h2 + p { margin-top:12px; color:var(--ink-soft); }
+
+  .tag {
+    display:inline-block; font-family:"IBM Plex Mono", Menlo, monospace; font-size:0.7rem;
+    font-weight:600; letter-spacing:0.1em; text-transform:uppercase; padding:3px 9px; border-radius:3px;
+  }
+  .tag.before { background:var(--risk-wash); color:var(--risk-ink); border:1px solid color-mix(in srgb, var(--risk) 30%, transparent); }
+  .tag.after  { background:var(--accent-wash); color:var(--accent-ink); border:1px solid color-mix(in srgb, var(--accent) 30%, transparent); }
+
+  figure { margin:26px 0 0; }
+  figure svg {
+    width:100%; height:auto; display:block; color:var(--ink);
+    background:var(--surface); border:1px solid var(--rule); border-radius:8px;
+    padding:22px; box-shadow:var(--shadow);
+  }
+  figcaption { margin-top:12px; font-size:0.86rem; color:var(--ink-soft); max-width:660px; }
+
+  /* capability ledger */
+  .scroll { overflow-x:auto; margin-top:26px; border:1px solid var(--rule); border-radius:6px; }
+  table { border-collapse:collapse; width:100%; min-width:660px; font-size:0.9rem; }
+  thead th {
+    text-align:left; padding:12px 16px; background:var(--surface-2);
+    font-family:"IBM Plex Mono", Menlo, monospace; font-weight:600; font-size:0.68rem;
+    text-transform:uppercase; letter-spacing:0.1em; color:var(--ink-soft);
+    border-bottom:1px solid var(--rule-firm);
+  }
+  thead th:first-child { width:150px; }
+  tbody td { padding:13px 16px; border-bottom:1px solid var(--rule); vertical-align:top; }
+  tbody tr:last-child td { border-bottom:0; }
+  tbody td:first-child { font-weight:600; color:var(--ink); }
+  .mark { font-family:"IBM Plex Mono", Menlo, monospace; font-weight:600; }
+  .mark.x { color:var(--risk-ink); }
+  .mark.v { color:var(--accent-ink); }
+  td .mark { margin-right:7px; }
+  tbody td.b { color:var(--ink-soft); }
+  tbody td.a { color:var(--ink); background:color-mix(in srgb, var(--accent) 6%, transparent); }
+
+  /* resume */
+  .resume { margin-top:26px; display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .resume > div {
+    border:1px solid var(--rule); border-radius:6px; background:var(--surface); padding:20px 22px;
+  }
+  .resume .before { border-top:3px solid var(--risk); }
+  .resume .after  { border-top:3px solid var(--accent); }
+  .resume h3 { font-size:0.95rem; margin-bottom:14px; }
+  .resume .line {
+    font-family:"IBM Plex Mono", Menlo, monospace; font-size:0.82rem; line-height:1.55;
+    color:var(--ink-soft);
+  }
+  .resume ul { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:11px; }
+  .resume li {
+    font-family:"IBM Plex Mono", Menlo, monospace; font-size:0.79rem; line-height:1.5;
+    color:var(--ink); padding-left:16px; position:relative;
+  }
+  .resume li::before { content:"▸"; position:absolute; left:0; color:var(--accent-ink); }
+
+  .note { margin-top:44px; font-size:0.84rem; color:var(--ink-faint); border-top:1px solid var(--rule); padding-top:18px; max-width:640px; }
+
+  a { color:var(--accent-ink); text-underline-offset:2px; }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:2px; }
+
+  @media (max-width:640px) {
+    .resume { grid-template-columns:1fr; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <span class="eyebrow">Nummoria &nbsp;/&nbsp; before &amp; after the 11-week plan</span>
+    <h1>What changes underneath the product</h1>
+    <p class="lede">
+      The screens a user sees barely move. What moves is the machinery behind every
+      AI response &mdash; from one un-instrumented model call to a measured pipeline
+      where documents become typed data and no number ships unverified.
+    </p>
+  </header>
+
+  <section>
+    <span class="tag before">Before</span>
+    <h2 style="margin-top:12px">The system today</h2>
+    <p class="measure">Every AI decision &mdash; parsing a statement, categorizing a charge, answering a question &mdash; funnels through a single completion call with the raw data pasted into the prompt.</p>
+
+    <figure>
+      <svg viewBox="0 0 760 392" role="img" aria-label="Today's architecture: client to API to a prompt containing raw transactions, to one LLM call, to a response returned as-is, with no eval, no number-checking, and no tracing.">
+        <defs>
+          <marker id="a1" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="8" markerHeight="7" orient="auto-start-reverse">
+            <polygon points="0 0, 10 4, 0 8" fill="currentColor"/>
+          </marker>
+        </defs>
+        <g fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="70" y="16" width="270" height="40" rx="4"/>
+          <rect x="70" y="92" width="270" height="40" rx="4"/>
+          <rect x="70" y="160" width="270" height="58" rx="4"/>
+          <rect x="70" y="256" width="270" height="40" rx="4"/>
+          <rect x="70" y="332" width="270" height="40" rx="4"/>
+        </g>
+        <g fill="currentColor" stroke="none" font-family="Hanken Grotesk, sans-serif" font-size="12.5">
+          <text x="205" y="40" text-anchor="middle">Client — web / mobile</text>
+          <text x="205" y="116" text-anchor="middle">Express API · /ai/advisor</text>
+          <text x="205" y="184" text-anchor="middle">system prompt (per tier)</text>
+          <text x="205" y="202" text-anchor="middle">+ raw transactions pasted into context</text>
+          <text x="205" y="280" text-anchor="middle">LLM — one completion call</text>
+          <text x="205" y="356" text-anchor="middle">response — returned to client as-is</text>
+        </g>
+        <g fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#a1)">
+          <line x1="205" y1="56" x2="205" y2="90"/>
+          <line x1="205" y1="132" x2="205" y2="158"/>
+          <line x1="205" y1="218" x2="205" y2="254"/>
+          <line x1="205" y1="296" x2="205" y2="330"/>
+        </g>
+        <g fill="currentColor" stroke="none" font-family="IBM Plex Mono, monospace" font-size="10" opacity="0.75">
+          <text x="215" y="78">HTTP</text>
+          <text x="215" y="149">build one prompt string</text>
+          <text x="215" y="241">no tools, no retrieval</text>
+          <text x="215" y="319">no post-processing</text>
+        </g>
+        <line x1="392" y1="18" x2="392" y2="370" stroke="var(--risk-ink)" stroke-width="1.5"/>
+        <line x1="392" y1="18" x2="400" y2="18" stroke="var(--risk-ink)" stroke-width="1.5"/>
+        <line x1="392" y1="370" x2="400" y2="370" stroke="var(--risk-ink)" stroke-width="1.5"/>
+        <g font-family="Hanken Grotesk, sans-serif" stroke="none">
+          <text x="410" y="60" fill="var(--risk-ink)" font-size="12.5" font-weight="700">What's missing</text>
+          <text x="410" y="92"  fill="currentColor" font-size="12">no eval set — quality is a guess</text>
+          <text x="410" y="120" fill="currentColor" font-size="12">output numbers never checked</text>
+          <text x="410" y="138" fill="currentColor" font-size="12">against the actual data</text>
+          <text x="410" y="166" fill="currentColor" font-size="12">no tracing — cost &amp; latency unknown</text>
+          <text x="410" y="194" fill="currentColor" font-size="12">the prompt is the entire</text>
+          <text x="410" y="212" fill="currentColor" font-size="12">AI strategy</text>
+        </g>
+      </svg>
+      <figcaption>One code path, one model call, nothing measured around it. A wrong figure in the answer is indistinguishable from a right one.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <span class="tag after">After · week 11</span>
+    <h2 style="margin-top:12px">The system after the plan</h2>
+    <p class="measure">Ingestion turns documents into a typed transaction store. The query path runs an agent that reads from that store and passes every answer through a grounding guard. Eval, tracing and safety wrap the whole thing.</p>
+
+    <figure>
+      <svg viewBox="0 0 940 400" role="img" aria-label="Post-plan architecture: an ingestion pipeline (parser with model-escalation) and a learned categorizer write to a typed transaction store; a query path runs a semantic layer, a four-tool agent that reads the store, and a numeric-grounding guard that retries ungrounded answers before returning citations. A dashed boundary marks eval-plus-CI-gate, tracing, and PII and injection defense wrapping everything.">
+        <defs>
+          <marker id="a2" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="8" markerHeight="7" orient="auto-start-reverse">
+            <polygon points="0 0, 10 4, 0 8" fill="currentColor"/>
+          </marker>
+          <marker id="a2g" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="8" markerHeight="7" orient="auto-start-reverse">
+            <polygon points="0 0, 10 4, 0 8" fill="#2AA88A"/>
+          </marker>
+        </defs>
+
+        <!-- cross-cutting boundary -->
+        <rect x="18" y="56" width="904" height="322" rx="8" fill="none" stroke="#2AA88A" stroke-width="1.4" stroke-dasharray="3 4"/>
+        <g font-family="IBM Plex Mono, monospace" font-size="10" stroke="none" fill="#2AA88A" text-anchor="middle">
+          <text x="170" y="46">eval harness → CI gate</text>
+          <text x="470" y="46">tracing · cost / latency / groundedness</text>
+          <text x="770" y="46">PII redaction + injection defense</text>
+        </g>
+
+        <!-- ingestion column -->
+        <g fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="40" y="74"  width="196" height="36" rx="4"/>
+          <rect x="40" y="138" width="196" height="36" rx="4"/>
+          <rect x="262" y="138" width="140" height="36" rx="4"/>
+          <rect x="40" y="210" width="196" height="36" rx="4"/>
+          <rect x="40" y="280" width="196" height="32" rx="4"/>
+        </g>
+        <g fill="currentColor" stroke="none" font-family="Hanken Grotesk, sans-serif" font-size="11.5" text-anchor="middle">
+          <text x="138" y="97">documents · PDF / CSV / img</text>
+          <text x="138" y="161">deterministic parser</text>
+          <text x="332" y="161">large-model extract</text>
+          <text x="138" y="233">learned categorizer</text>
+          <text x="138" y="300">LLM · training labels only</text>
+        </g>
+        <g fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#a2)">
+          <line x1="138" y1="110" x2="138" y2="136"/>
+          <line x1="236" y1="156" x2="260" y2="156"/>
+          <line x1="138" y1="174" x2="138" y2="208"/>
+          <line x1="236" y1="228" x2="406" y2="228"/>
+        </g>
+        <path d="M332 174 L332 191 L140 191" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <line x1="138" y1="280" x2="138" y2="248" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="3 3" marker-end="url(#a2)"/>
+        <g fill="currentColor" stroke="none" font-family="IBM Plex Mono, monospace" font-size="9.5" opacity="0.75">
+          <text x="248" y="150">conf &lt; τ</text>
+          <text x="300" y="221">writes</text>
+        </g>
+
+        <!-- central store -->
+        <rect x="410" y="128" width="120" height="150" rx="5" fill="none" stroke="#2AA88A" stroke-width="2"/>
+        <g fill="currentColor" stroke="none" font-family="Hanken Grotesk, sans-serif" font-size="12" text-anchor="middle" font-weight="600">
+          <text x="470" y="196">typed</text>
+          <text x="470" y="214">transaction</text>
+          <text x="470" y="232">store</text>
+        </g>
+
+        <!-- query column -->
+        <g fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="588" y="74"  width="196" height="36" rx="4"/>
+          <rect x="588" y="138" width="196" height="36" rx="4"/>
+          <rect x="588" y="202" width="196" height="36" rx="4"/>
+        </g>
+        <rect x="588" y="266" width="196" height="36" rx="4" fill="none" stroke="#2AA88A" stroke-width="2"/>
+        <rect x="588" y="330" width="196" height="36" rx="4" fill="none" stroke="#2AA88A" stroke-width="2"/>
+        <g fill="currentColor" stroke="none" font-family="Hanken Grotesk, sans-serif" font-size="11.5" text-anchor="middle">
+          <text x="686" y="96">user question</text>
+          <text x="686" y="160">semantic layer → query</text>
+          <text x="686" y="224">agent · 4 tools</text>
+          <text x="686" y="288">numeric-grounding guard</text>
+          <text x="686" y="352">answer + citations</text>
+        </g>
+        <g fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#a2)">
+          <line x1="686" y1="110" x2="686" y2="136"/>
+          <line x1="686" y1="174" x2="686" y2="200"/>
+          <line x1="686" y1="238" x2="686" y2="264"/>
+        </g>
+        <line x1="686" y1="302" x2="686" y2="328" fill="none" stroke="#2AA88A" stroke-width="1.6" marker-end="url(#a2g)"/>
+
+        <!-- agent <-> store -->
+        <line x1="584" y1="214" x2="532" y2="214" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#a2)"/>
+        <line x1="532" y1="226" x2="586" y2="226" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#a2)"/>
+        <text x="558" y="206" fill="currentColor" stroke="none" font-family="IBM Plex Mono, monospace" font-size="9.5" text-anchor="middle" opacity="0.75">reads</text>
+
+        <!-- guard retry loop -->
+        <path d="M784 284 L822 284 L822 220 L786 220" fill="none" stroke="#2AA88A" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#a2g)"/>
+        <text x="838" y="252" fill="#2AA88A" stroke="none" font-family="IBM Plex Mono, monospace" font-size="9" transform="rotate(90 838 252)" text-anchor="middle">ungrounded → retry</text>
+      </svg>
+      <figcaption>Green marks what the plan adds: the typed store (P1), the categorizer's demotion of the LLM to labeling (P3), the four-tool agent and its grounding guard (P4), and the dashed boundary &mdash; eval, tracing and safety (P0, P2, P5) &mdash; wrapping every model call.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <span class="eyebrow">Same question, both systems</span>
+    <h2>&ldquo;Can I afford a $1,200 trip?&rdquo;</h2>
+    <p class="measure">The difference isn't the wording of the answer &mdash; it's whether the number in it can be traced to anything.</p>
+
+    <figure>
+      <svg viewBox="0 0 900 452" role="img" aria-label="Before: question plus 300 raw rows into an LLM, out comes an answer citing $3,400 a month that appears nowhere in the data, unlogged and unscored. After: the question runs through query and forecast tools, a grounded draft, and a guard that verifies every number, producing an answer whose figures link to specific rows and are logged and eval-scored.">
+        <defs>
+          <marker id="a3" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="8" markerHeight="7" orient="auto-start-reverse">
+            <polygon points="0 0, 10 4, 0 8" fill="currentColor"/>
+          </marker>
+        </defs>
+
+        <text x="40" y="24" fill="var(--risk-ink)" stroke="none" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" letter-spacing="1">BEFORE</text>
+        <text x="500" y="24" fill="#2AA88A" stroke="none" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" letter-spacing="1">AFTER</text>
+        <line x1="460" y1="8" x2="460" y2="444" stroke="var(--rule)" stroke-width="1"/>
+
+        <!-- BEFORE -->
+        <g fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="40" y="44" width="330" height="58" rx="4"/>
+          <rect x="120" y="150" width="170" height="38" rx="4"/>
+          <rect x="40" y="236" width="330" height="62" rx="4"/>
+        </g>
+        <g fill="currentColor" stroke="none" font-family="Hanken Grotesk, sans-serif" font-size="12">
+          <text x="205" y="70" text-anchor="middle">"Can I afford a $1,200 trip?"</text>
+          <text x="205" y="90" text-anchor="middle" font-size="10.5" opacity="0.7">+ 300 raw transaction rows in the prompt</text>
+          <text x="205" y="174" text-anchor="middle">LLM</text>
+          <text x="205" y="263" text-anchor="middle">"You spend about $3,400 / month,</text>
+          <text x="205" y="281" text-anchor="middle">so yes — you can afford it."</text>
+        </g>
+        <g fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#a3)">
+          <line x1="205" y1="102" x2="205" y2="148"/>
+          <line x1="205" y1="188" x2="205" y2="234"/>
+        </g>
+        <rect x="40" y="326" width="330" height="86" rx="4" fill="none" stroke="var(--risk-ink)" stroke-width="1.4" stroke-dasharray="3 3"/>
+        <g fill="currentColor" stroke="none" font-family="Hanken Grotesk, sans-serif" font-size="11.5">
+          <text x="56" y="351">$3,400 appears nowhere in the data.</text>
+          <text x="56" y="371">No source shown to the user.</text>
+          <text x="56" y="391">Not logged. Not eval-scored.</text>
+        </g>
+
+        <!-- AFTER -->
+        <g fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="500" y="44" width="360" height="34" rx="4"/>
+          <rect x="500" y="100" width="360" height="34" rx="4"/>
+          <rect x="500" y="156" width="360" height="30" rx="4"/>
+        </g>
+        <rect x="500" y="208" width="360" height="30" rx="4" fill="none" stroke="#2AA88A" stroke-width="2"/>
+        <rect x="500" y="262" width="360" height="72" rx="4" fill="none" stroke="#2AA88A" stroke-width="2"/>
+        <g fill="currentColor" stroke="none" font-family="Hanken Grotesk, sans-serif" font-size="11.5">
+          <text x="680" y="65"  text-anchor="middle">"Can I afford a $1,200 trip?"</text>
+          <text x="680" y="121" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5">query_transactions → cashflow_forecast</text>
+          <text x="680" y="175" text-anchor="middle">grounded draft</text>
+          <text x="680" y="227" text-anchor="middle">guard — verify every number</text>
+          <text x="680" y="286" text-anchor="middle">"Your last 90 days average an</text>
+          <text x="680" y="304" text-anchor="middle">$840 / mo surplus.&#185;  A one-off $1,200</text>
+          <text x="680" y="322" text-anchor="middle">clears in about 6 weeks.&#178;"</text>
+        </g>
+        <g fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#a3)">
+          <line x1="680" y1="78" x2="680" y2="98"/>
+          <line x1="680" y1="134" x2="680" y2="154"/>
+          <line x1="680" y1="186" x2="680" y2="206"/>
+        </g>
+        <line x1="680" y1="238" x2="680" y2="260" fill="none" stroke="#2AA88A" stroke-width="1.6" marker-end="url(#a3)"/>
+        <g fill="currentColor" stroke="none" font-family="Hanken Grotesk, sans-serif" font-size="11.5">
+          <text x="500" y="360">&#185; &#178;  every figure links to the exact rows.</text>
+          <text x="500" y="380" >The exchange is traced and scored against the eval set.</text>
+        </g>
+      </svg>
+      <figcaption>Left: the figure is plausible and unsourced. Right: the agent can only state numbers a tool returned, the guard rejects any it can't trace, and the user sees where each one came from.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <span class="eyebrow">The ledger</span>
+    <h2>Capability, before and after</h2>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Capability</th><th>Before</th><th>After the 11-week plan</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Document extraction</td>
+            <td class="b"><span class="mark x">✗</span>single parse call, accuracy unknown</td>
+            <td class="a"><span class="mark v">✓</span>cascade with field-level F1 measured per bank layout</td>
+          </tr>
+          <tr>
+            <td>Categorization</td>
+            <td class="b"><span class="mark x">✗</span>LLM zero-shot, uncosted, unmeasured</td>
+            <td class="a"><span class="mark v">✓</span>trained classifier, benchmarked on accuracy / cost / latency</td>
+          </tr>
+          <tr>
+            <td>Numeric grounding</td>
+            <td class="b"><span class="mark x">✗</span>none — model states any number</td>
+            <td class="a"><span class="mark v">✓</span>post-generation guard; 0 fabricated figures in eval</td>
+          </tr>
+          <tr>
+            <td>Eval coverage</td>
+            <td class="b"><span class="mark x">✗</span>no test set for AI output</td>
+            <td class="a"><span class="mark v">✓</span>100+ golden cases, LLM-judge + deterministic assertions</td>
+          </tr>
+          <tr>
+            <td>Regression protection</td>
+            <td class="b"><span class="mark x">✗</span>prompt edits ship unchecked</td>
+            <td class="a"><span class="mark v">✓</span>CI gate fails PRs that drop groundedness</td>
+          </tr>
+          <tr>
+            <td>Observability</td>
+            <td class="b"><span class="mark x">✗</span>cost, latency, quality all invisible</td>
+            <td class="a"><span class="mark v">✓</span>every model call traced; p50 / p95, cost, groundedness on a dashboard</td>
+          </tr>
+          <tr>
+            <td>Safety</td>
+            <td class="b"><span class="mark x">✗</span>raw PII sent to the provider; documents trusted</td>
+            <td class="a"><span class="mark v">✓</span>redaction pre-call; prompt-injection defense on ingested files</td>
+          </tr>
+          <tr>
+            <td>Portfolio legibility</td>
+            <td class="b"><span class="mark x">✗</span>a generic SaaS repo</td>
+            <td class="a"><span class="mark v">✓</span>ADRs, a public benchmark, a before/after writeup</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">The point of all of it</span>
+    <h2>What you can put on the résumé</h2>
+    <div class="resume">
+      <div class="before">
+        <h3><span class="tag before">Before</span></h3>
+        <p class="line">Built a personal-finance web &amp; mobile app with an AI chat assistant. React, React&nbsp;Native, Node, MongoDB, OpenAI API.</p>
+        <p class="line" style="margin-top:14px;color:var(--ink-faint)">&mdash; reads as: wired up an API. No way to tell how well it works.</p>
+      </div>
+      <div class="after">
+        <h3><span class="tag after">After</span></h3>
+        <ul>
+          <li>Multimodal bank-statement extraction pipeline, confidence-gated cascade, ~95% field-level F1 across 15+ layouts.</li>
+          <li>LLM eval harness (100+ cases, judge + assertions) wired into CI; blocks quality regressions on prompt / model changes.</li>
+          <li>Replaced an LLM categorizer with an embeddings + gradient-boosting model: higher accuracy, ~40× cheaper, sub-10&nbsp;ms p95.</li>
+          <li>4-tool financial agent with a deterministic numeric-grounding guard — 0 fabricated figures across a 150-case eval.</li>
+          <li>Pre-inference PII-redaction + prompt-injection defense layer, verified against an adversarial document set.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <p class="note">
+    Diagrams show the target architecture, not current code. All figures (F1, cost
+    multiples, latency, fabrication rate) are targets each phase must measure and
+    report honestly &mdash; the defensible claim is the methodology and the
+    before/after, whatever the numbers land at. Pairs with the 11-week phased roadmap.
+  </p>
+
+</div>

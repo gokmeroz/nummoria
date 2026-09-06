@@ -1,0 +1,364 @@
+<title>AI Feature Footprint</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --bg:#EFF3F1; --surface:#FBFCFB; --surface-2:#E4EAE7; --tree-bg:#F6F8F7;
+    --ink:#15201C; --ink-soft:#48564F; --ink-faint:#8A968F;
+    --rule:#D3DBD6; --rule-firm:#BEC8C3;
+    --accent:#0C7A63; --accent-ink:#0A5F4D; --accent-wash:#E1EFE9;
+    --risk:#A2571F; --risk-ink:#A2571F; --risk-wash:#F2E7DB;
+    --shadow:0 1px 2px rgba(20,40,34,.05), 0 8px 24px -12px rgba(20,40,34,.14);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:#0D1512; --surface:#141F1B; --surface-2:#1B2823; --tree-bg:#101A16;
+      --ink:#E3EAE6; --ink-soft:#A5B2AD; --ink-faint:#6B7A74;
+      --rule:#26332E; --rule-firm:#33423C;
+      --accent:#3EBE9B; --accent-ink:#69D2B5; --accent-wash:#122824;
+      --risk:#D28C52; --risk-ink:#E0A06E; --risk-wash:#241C13;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px -14px rgba(0,0,0,.55);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg:#0D1512; --surface:#141F1B; --surface-2:#1B2823; --tree-bg:#101A16;
+    --ink:#E3EAE6; --ink-soft:#A5B2AD; --ink-faint:#6B7A74;
+    --rule:#26332E; --rule-firm:#33423C;
+    --accent:#3EBE9B; --accent-ink:#69D2B5; --accent-wash:#122824;
+    --risk:#D28C52; --risk-ink:#E0A06E; --risk-wash:#241C13;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px -14px rgba(0,0,0,.55);
+  }
+
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"Hanken Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size:16px; line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:1000px; margin:0 auto; padding:clamp(28px,6vw,64px) clamp(16px,4vw,36px) 100px; }
+  .measure { max-width:620px; }
+
+  h1,h2,h3 { text-wrap:balance; margin:0; font-weight:700; letter-spacing:-0.015em; }
+  h1 { font-size:clamp(1.9rem,5vw,2.8rem); line-height:1.08; font-weight:800; }
+  h2 { font-size:clamp(1.28rem,3vw,1.55rem); }
+  h3 { font-size:1rem; }
+  p { margin:0; }
+  .eyebrow {
+    font-family:"IBM Plex Mono", Menlo, monospace; font-size:0.72rem;
+    text-transform:uppercase; letter-spacing:0.18em; color:var(--accent-ink); font-weight:600;
+  }
+
+  header { margin-bottom:14px; }
+  header .eyebrow { display:block; margin-bottom:18px; }
+  header p.lede { margin-top:20px; font-size:1.1rem; color:var(--ink-soft); max-width:600px; }
+
+  section { margin-top:56px; }
+  section > .eyebrow { display:block; margin-bottom:12px; }
+  section > h2 + p { margin-top:10px; color:var(--ink-soft); }
+
+  /* legend */
+  .legend {
+    margin-top:26px; display:flex; flex-wrap:wrap; gap:10px 20px; align-items:center;
+    font-family:"IBM Plex Mono", Menlo, monospace; font-size:0.76rem; color:var(--ink-soft);
+    padding:14px 16px; border:1px solid var(--rule); border-radius:6px; background:var(--surface);
+  }
+  .legend b { color:var(--ink); font-weight:600; }
+  .legend .sw { display:inline-block; width:11px; height:11px; border-radius:2px; vertical-align:middle; margin-right:6px; }
+  .sw.add { background:var(--accent); }
+  .sw.mod { background:var(--risk); }
+  .ph {
+    font-family:"IBM Plex Mono", Menlo, monospace; font-size:0.82em;
+    color:var(--accent-ink); font-weight:600;
+  }
+
+  /* comparison */
+  .compare { margin-top:24px; display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
+  .pane { border:1px solid var(--rule); border-radius:8px; overflow:hidden; background:var(--surface); box-shadow:var(--shadow); }
+  .pane > .cap {
+    font-family:"IBM Plex Mono", Menlo, monospace; font-size:0.68rem; font-weight:600;
+    text-transform:uppercase; letter-spacing:0.12em; padding:10px 14px; border-bottom:1px solid var(--rule);
+  }
+  .pane.before > .cap { color:var(--risk-ink); background:var(--risk-wash); }
+  .pane.after  > .cap { color:var(--accent-ink); background:var(--accent-wash); }
+
+  pre {
+    margin:0; padding:16px 14px; overflow-x:auto; background:var(--tree-bg);
+    font-family:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+    font-size:12px; line-height:1.75; color:var(--ink-soft); tab-size:2;
+  }
+  pre .d { color:var(--ink-faint); }
+  pre .n { color:var(--ink); }
+  pre .add {
+    display:block; color:var(--ink); background:var(--accent-wash);
+    box-shadow:inset 2px 0 0 var(--accent); margin:0 -14px; padding:0 14px 0 12px;
+  }
+  pre .mod {
+    display:block; color:var(--ink); background:var(--risk-wash);
+    box-shadow:inset 2px 0 0 var(--risk); margin:0 -14px; padding:0 14px 0 12px;
+  }
+  pre .add .ph { color:var(--accent-ink); }
+  pre .mod .ph { color:var(--risk-ink); }
+  pre .cm { color:var(--ink-faint); font-style:italic; }
+
+  .full { margin-top:24px; border:1px solid var(--rule); border-radius:8px; overflow:hidden; box-shadow:var(--shadow); }
+  .full > .cap {
+    font-family:"IBM Plex Mono", Menlo, monospace; font-size:0.68rem; font-weight:600;
+    text-transform:uppercase; letter-spacing:0.12em; padding:10px 14px;
+    border-bottom:1px solid var(--rule); color:var(--accent-ink); background:var(--accent-wash);
+  }
+
+  /* stats */
+  .stats { margin-top:24px; display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; }
+  .stat { border:1px solid var(--rule); border-radius:6px; padding:16px; background:var(--surface); }
+  .stat .v { font-family:"IBM Plex Mono", Menlo, monospace; font-size:1.5rem; font-weight:600; color:var(--accent); letter-spacing:-0.02em; }
+  .stat .k { font-size:0.82rem; color:var(--ink-soft); margin-top:4px; }
+
+  .subsystems { margin-top:24px; display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; }
+  .subsystems > div { border:1px solid var(--rule); border-left:3px solid var(--accent); border-radius:4px; padding:14px 16px; background:var(--surface); }
+  .subsystems code {
+    font-family:"IBM Plex Mono", Menlo, monospace; font-size:0.82rem; color:var(--ink);
+    font-weight:600; display:block; margin-bottom:5px;
+  }
+  .subsystems .ph { float:right; font-weight:600; }
+  .subsystems p { font-size:0.88rem; color:var(--ink-soft); }
+
+  .note { margin-top:42px; font-size:0.84rem; color:var(--ink-faint); border-top:1px solid var(--rule); padding-top:18px; max-width:620px; }
+  a { color:var(--accent-ink); }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:2px; }
+
+  @media (max-width:760px) {
+    .compare { grid-template-columns:1fr; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <span class="eyebrow">Nummoria &nbsp;/&nbsp; repo before &amp; after the 11-week plan</span>
+    <h1>Where the AI code lands</h1>
+    <p class="lede">
+      The feature work concentrates in two places &mdash; a new <code>backend/src/ai/</code>
+      that grows from two files to eight subsystems, and a new <code>backend/src/eval/</code>
+      that didn&rsquo;t exist. Everything else is a handful of models, routes and UI files.
+    </p>
+
+    <div class="legend">
+      <span><span class="sw add"></span><b>new</b> &mdash; added by a phase</span>
+      <span><span class="sw mod"></span><b>modified</b> &mdash; existing file changed</span>
+      <span><span class="ph">[P0]</span>&hairsp;&ndash;&hairsp;<span class="ph">[P5]</span> the phase that introduces it</span>
+    </div>
+  </header>
+
+  <section>
+    <span class="eyebrow">Zoom 1</span>
+    <h2>The <code>backend/src/</code> listing</h2>
+    <p class="measure">One new directory, one directory that fills in, and new files scattered across four existing folders.</p>
+
+    <div class="compare">
+      <div class="pane before">
+        <div class="cap">Today</div>
+<pre><span class="d">backend/src/</span>
+<span class="d">├──</span> <span class="n">ai/</span>            <span class="cm">financialMetrics + prompts/</span>
+<span class="d">├──</span> config/
+<span class="d">├──</span> controllers/   <span class="cm">4 files</span>
+<span class="d">├──</span> db/
+<span class="d">├──</span> jobs/
+<span class="d">├──</span> middlewares/   <span class="cm">4 files</span>
+<span class="d">├──</span> models/        <span class="cm">12 files</span>
+<span class="d">├──</span> queues/
+<span class="d">├──</span> routes/        <span class="cm">18 files</span>
+<span class="d">├──</span> services/      <span class="cm">(empty)</span>
+<span class="d">├──</span> utils/
+<span class="d">├──</span> workers/
+<span class="d">└──</span> server.js
+</pre>
+      </div>
+      <div class="pane after">
+        <div class="cap">After</div>
+<pre><span class="d">backend/src/</span>
+<span class="mod"><span class="d">├── </span>ai/            <span class="cm">+ 6 subsystems</span>        <span class="ph">P0–P5</span></span>
+<span class="add"><span class="d">├── </span>eval/          <span class="cm">NEW · the harness</span>       <span class="ph">P2</span></span>
+<span class="d">├──</span> config/
+<span class="mod"><span class="d">├── </span>controllers/   <span class="cm">+ ingest, agent, eval…</span>   <span class="ph">P1 P2 P4</span></span>
+<span class="d">├──</span> db/
+<span class="d">├──</span> jobs/
+<span class="mod"><span class="d">├── </span>middlewares/   <span class="cm">+ aiQuota.js</span>            <span class="ph">P4</span></span>
+<span class="mod"><span class="d">├── </span>models/        <span class="cm">+ 6 models</span>              <span class="ph">P0–P4</span></span>
+<span class="d">├──</span> queues/
+<span class="mod"><span class="d">├── </span>routes/        <span class="cm">+ agentRoutes, evalRoutes</span> <span class="ph">P2 P4</span></span>
+<span class="mod"><span class="d">├── </span>services/      <span class="cm">+ vectorStore.js</span>        <span class="ph">P4</span></span>
+<span class="d">├──</span> utils/
+<span class="d">├──</span> workers/
+<span class="d">└──</span> server.js
+</pre>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Zoom 2</span>
+    <h2>Inside <code>backend/src/ai/</code></h2>
+    <p class="measure">This is the whole story: two files become eight subsystems, one per capability the plan adds.</p>
+
+    <div class="compare">
+      <div class="pane before">
+        <div class="cap">Today</div>
+<pre><span class="d">ai/</span>
+<span class="d">├──</span> financialMetrics.js
+<span class="d">└──</span> prompts/
+<span class="d">    └──</span> index.js
+</pre>
+      </div>
+      <div class="pane after">
+        <div class="cap">After</div>
+<pre><span class="d">ai/</span>
+<span class="d">├──</span> financialMetrics.js       <span class="cm">(unchanged)</span>
+<span class="mod"><span class="d">├── </span>prompts/  <span class="cm">+ advisor, extraction, judge, registry</span></span>
+<span class="add"><span class="d">├── </span>tracing/                  <span class="ph">P0</span></span>
+<span class="add"><span class="d">│   </span>  traceModelCall · traceStore · costTable</span>
+<span class="add"><span class="d">├── </span>extraction/               <span class="ph">P1</span></span>
+<span class="add"><span class="d">│   </span>  cascade · modelExtract · parsers/ · layouts/</span>
+<span class="add"><span class="d">├── </span>categorization/           <span class="ph">P3</span></span>
+<span class="add"><span class="d">│   </span>  features · personalization · model/*.onnx</span>
+<span class="add"><span class="d">├── </span>agent/                    <span class="ph">P4</span></span>
+<span class="add"><span class="d">│   </span>  semanticLayer · retrieval · tools/ · knowledgeBase/</span>
+<span class="add"><span class="d">├── </span>grounding/                <span class="ph">P4</span>  <span class="cm">← flagship</span></span>
+<span class="add"><span class="d">│   </span>  guard · extractNumbers · allowlist · regenerate</span>
+<span class="add"><span class="d">└── </span>safety/                   <span class="ph">P5</span></span>
+<span class="add"><span class="d">    </span>  redactPII · promptInjectionScan · policyCheck</span>
+</pre>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">The full picture</span>
+    <h2>Projected tree, everything the plan adds</h2>
+    <p class="measure">Existing files collapsed. <span class="ph">[Px]</span> marks the phase; <code>~</code> is a modified file.</p>
+
+    <div class="full">
+      <div class="cap">nummoria-main/ &nbsp;·&nbsp; after P0–P5</div>
+<pre><span class="d">nummoria-main/</span>
+<span class="d">│</span>
+<span class="d">├──</span> backend/
+<span class="d">│   ├──</span> src/
+<span class="d">│   │   ├──</span> ai/
+<span class="d">│   │   │   ├──</span> financialMetrics.js            <span class="cm">… existing</span>
+<span class="d">│   │   │   ├──</span> prompts/
+<span class="add"><span class="d">│   │   │   │   ├── </span>advisor.js                 <span class="ph">P4</span></span>
+<span class="add"><span class="d">│   │   │   │   ├── </span>extraction.js              <span class="ph">P1</span></span>
+<span class="add"><span class="d">│   │   │   │   ├── </span>judge.js                   <span class="ph">P2</span></span>
+<span class="add"><span class="d">│   │   │   │   └── </span>registry.js                <span class="ph">P0</span></span>
+<span class="add"><span class="d">│   │   │   ├── </span>tracing/                       <span class="ph">P0</span></span>
+<span class="add"><span class="d">│   │   │   │   ├── </span>traceModelCall.js</span>
+<span class="add"><span class="d">│   │   │   │   ├── </span>traceStore.js</span>
+<span class="add"><span class="d">│   │   │   │   └── </span>costTable.js</span>
+<span class="add"><span class="d">│   │   │   ├── </span>extraction/                    <span class="ph">P1</span></span>
+<span class="add"><span class="d">│   │   │   │   ├── </span>index.js · detectFormat.js · cascade.js</span>
+<span class="add"><span class="d">│   │   │   │   ├── </span>modelExtract.js · normalize.js</span>
+<span class="add"><span class="d">│   │   │   │   └── </span>parsers/  csvParser · pdfParser · layouts/*.json</span>
+<span class="add"><span class="d">│   │   │   ├── </span>categorization/                <span class="ph">P3</span></span>
+<span class="add"><span class="d">│   │   │   │   ├── </span>index.js · llmCategorizer.js · features.js</span>
+<span class="add"><span class="d">│   │   │   │   ├── </span>personalization.js</span>
+<span class="add"><span class="d">│   │   │   │   └── </span>model/  classifier.onnx · taxonomy.json</span>
+<span class="add"><span class="d">│   │   │   ├── </span>agent/                         <span class="ph">P4</span></span>
+<span class="add"><span class="d">│   │   │   │   ├── </span>index.js · semanticLayer.js · retrieval.js</span>
+<span class="add"><span class="d">│   │   │   │   ├── </span>tools/  queryTransactions · cashflowForecast</span>
+<span class="add"><span class="d">│   │   │   │   │        </span>detectRecurring · simulateScenario</span>
+<span class="add"><span class="d">│   │   │   │   └── </span>knowledgeBase/</span>
+<span class="add"><span class="d">│   │   │   ├── </span>grounding/                     <span class="ph">P4</span></span>
+<span class="add"><span class="d">│   │   │   │   └── </span>guard · extractNumbers · allowlist · regenerate</span>
+<span class="add"><span class="d">│   │   │   └── </span>safety/                        <span class="ph">P5</span></span>
+<span class="add"><span class="d">│   │   │       └── </span>redactPII · promptInjectionScan · policyCheck</span>
+<span class="d">│   │   │</span>
+<span class="add"><span class="d">│   │   ├── </span>eval/                              <span class="ph">P2</span></span>
+<span class="add"><span class="d">│   │   │   ├── </span>run.js · ci.js · scorecard.js · judge.js</span>
+<span class="add"><span class="d">│   │   │   ├── </span>baseline.json</span>
+<span class="add"><span class="d">│   │   │   ├── </span>assertions/  numericGrounding · extractionFields · tone</span>
+<span class="add"><span class="d">│   │   │   ├── </span>datasets/</span>
+<span class="add"><span class="d">│   │   │   │   ├── </span>golden/  advisor/ · extraction/ · categorization/</span>
+<span class="add"><span class="d">│   │   │   │   └── </span>synthetic/  generateProfiles · generateStatements   <span class="ph">P0</span></span>
+<span class="add"><span class="d">│   │   │   └── </span>reports/  <span class="cm">(gitignored)</span></span>
+<span class="d">│   │   │</span>
+<span class="d">│   │   ├──</span> models/
+<span class="d">│   │   │   ├──</span> … existing (user, transaction, account, …)
+<span class="mod"><span class="d">│   │   │   ├── </span>transaction.js         <span class="cm">~ + source, + confidence</span>   <span class="ph">P1</span></span>
+<span class="add"><span class="d">│   │   │   ├── </span>ModelTrace.js                              <span class="ph">P0</span></span>
+<span class="add"><span class="d">│   │   │   ├── </span>ExtractionJob.js · ExtractionCorrection.js  <span class="ph">P1</span></span>
+<span class="add"><span class="d">│   │   │   ├── </span>CategoryFeedback.js                        <span class="ph">P3</span></span>
+<span class="add"><span class="d">│   │   │   ├── </span>AgentRun.js                                <span class="ph">P4</span></span>
+<span class="add"><span class="d">│   │   │   └── </span>EvalResult.js                              <span class="ph">P2</span></span>
+<span class="d">│   │   │</span>
+<span class="d">│   │   ├──</span> controllers/
+<span class="add"><span class="d">│   │   │   ├── </span>ingestController.js · extractionController.js  <span class="ph">P1</span></span>
+<span class="add"><span class="d">│   │   │   ├── </span>agentController.js                            <span class="ph">P4</span></span>
+<span class="add"><span class="d">│   │   │   └── </span>evalController.js                             <span class="ph">P2</span></span>
+<span class="d">│   │   ├──</span> routes/
+<span class="mod"><span class="d">│   │   │   ├── </span>financialHelperRoutes.js · ingestRoutes.js  <span class="cm">~</span></span>
+<span class="add"><span class="d">│   │   │   ├── </span>agentRoutes.js                              <span class="ph">P4</span></span>
+<span class="add"><span class="d">│   │   │   └── </span>evalRoutes.js                               <span class="ph">P2</span></span>
+<span class="d">│   │   ├──</span> middlewares/
+<span class="add"><span class="d">│   │   │   └── </span>aiQuota.js                                  <span class="ph">P4</span></span>
+<span class="d">│   │   └──</span> services/
+<span class="add"><span class="d">│   │       └── </span>vectorStore.js                              <span class="ph">P4</span></span>
+<span class="d">│   │</span>
+<span class="add"><span class="d">│   ├── </span>ml/                                <span class="ph">P3</span>  <span class="cm">offline training</span></span>
+<span class="add"><span class="d">│   │   ├── </span>train_categorizer.py · benchmark.py · distill.js</span>
+<span class="add"><span class="d">│   │   └── </span>notebooks/  categorizer-eda.ipynb</span>
+<span class="mod"><span class="d">│   ├── </span>package.json   <span class="cm">~ + openai, onnxruntime-node, @xenova/transformers,</span></span>
+<span class="mod"><span class="d">│   │                </span><span class="cm">tiktoken · scripts: eval, eval:ci, gen:synthetic</span></span>
+<span class="mod"><span class="d">│   └── </span>.env.example   <span class="cm">~ + JUDGE_MODEL, EMBEDDING_MODEL, VECTOR_DB_URL, PII_REDACTION</span></span>
+<span class="d">│</span>
+<span class="d">├──</span> frontend/
+<span class="d">│   └──</span> src/
+<span class="add"><span class="d">│       ├── </span>pages/Advisor.jsx                          <span class="ph">P4</span></span>
+<span class="add"><span class="d">│       ├── </span>components/  ExtractionReview.jsx           <span class="ph">P1</span></span>
+<span class="add"><span class="d">│       │              </span>GroundedAnswer.jsx  <span class="ph">P4</span> · CategoryChip.jsx  <span class="ph">P3</span></span>
+<span class="add"><span class="d">│       ├── </span>admin/pages/AiQuality.jsx                   <span class="ph">P2</span></span>
+<span class="add"><span class="d">│       └── </span>lib/  agentApi.js  <span class="ph">P4</span> · extractionApi.js  <span class="ph">P1</span></span>
+<span class="d">│</span>
+<span class="d">├──</span> mobile/                                <span class="cm">… unchanged (receipt OCR revisited post-P1)</span>
+<span class="d">│</span>
+<span class="add"><span class="d">├── </span>.github/workflows/ai-eval.yml          <span class="ph">P2</span>  <span class="cm">gates PRs touching ai/ or prompts/</span></span>
+<span class="d">│</span>
+<span class="d">└──</span> docs/
+<span class="d">    ├──</span> ai-roadmap/   <span class="cm">README · PLAN · FILE-STRUCTURE · *.html</span>
+<span class="add"><span class="d">    ├── </span>adr/          <span class="ph">P5</span>  0001-extraction-cascade · 0002-numeric-grounding …</span>
+<span class="add"><span class="d">    ├── </span>benchmarks/   <span class="ph">P5</span>  README · statements/ · results.md</span>
+<span class="add"><span class="d">    ├── </span>model-card.md                          <span class="ph">P5</span></span>
+<span class="add"><span class="d">    └── </span>writeups/driving-hallucinated-numbers-to-zero.md   <span class="ph">P5</span></span>
+</pre>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Scale</span>
+    <h2>What that adds up to</h2>
+    <div class="stats">
+      <div class="stat"><div class="v">9</div><div class="k">new directories</div></div>
+      <div class="stat"><div class="v">~90</div><div class="k">new files (~40 are data)</div></div>
+      <div class="stat"><div class="v">~50</div><div class="k">load-bearing modules under <code>ai/</code> &amp; <code>eval/</code></div></div>
+      <div class="stat"><div class="v">7</div><div class="k">existing files modified</div></div>
+    </div>
+
+    <div class="subsystems">
+      <div><code>ai/tracing/<span class="ph">P0</span></code><p>Wraps every model call — tokens, cost, latency, prompt version — into a queryable store.</p></div>
+      <div><code>ai/extraction/<span class="ph">P1</span></code><p>Format detection, per-bank parsers, and the confidence-gated parser→model cascade.</p></div>
+      <div><code>eval/<span class="ph">P2</span></code><p>The judge + assertion runner, the golden datasets, and the CI entrypoint that gates merges.</p></div>
+      <div><code>ai/categorization/<span class="ph">P3</span></code><p>Serving path for the trained classifier plus per-user personalization; LLM kept for labels.</p></div>
+      <div><code>ai/agent/<span class="ph">P4</span></code><p>Planner/executor loop, the four tools, the semantic query layer and retrieval.</p></div>
+      <div><code>ai/grounding/<span class="ph">P4</span></code><p>The guard: pulls numbers from output, checks each against an allowlist, retries or strips.</p></div>
+      <div><code>ai/safety/<span class="ph">P5</span></code><p>Pre-call PII redaction, prompt-injection scanning of ingested documents, policy checks.</p></div>
+      <div><code>backend/ml/<span class="ph">P3</span></code><p>Offline: trains the categorizer, benchmarks it against the LLM, exports the ONNX artifact.</p></div>
+    </div>
+  </section>
+
+  <p class="note">
+    Projected layout, not current code — names and boundaries will shift in
+    implementation. Pairs with the 11-week roadmap and the before/after walkthrough;
+    the plain-text version lives at <code>docs/ai-roadmap/FILE-STRUCTURE.md</code>.
+  </p>
+
+</div>
