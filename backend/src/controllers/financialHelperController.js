@@ -16,6 +16,8 @@ import { Transaction } from "../models/transaction.js";
 import { computeMetrics } from "../ai/financialMetrics.js";
 import { parseTransactionsFromText } from "../ai/pdfParser.js";
 import { getPromptForSubscription } from "../ai/prompts/index.js";
+import { startTrace, noopTrace } from "../observability/trace.js";
+import { describePrompt } from "../observability/promptRegistry.js";
 
 // ----------------------------------------------------
 // AGENT CONFIGURATION
@@ -44,8 +46,10 @@ async function callLLM(
   tonePreference,
   message,
   modelType,
+  trace = noopTrace,
 ) {
   const safeTone = tonePreference === "buddy" ? "buddy" : "formal";
+  const prompt = describePrompt("advisor.system", systemPrompt);
 
   const allTxs = Array.isArray(context?.parsedTransactions)
     ? context.parsedTransactions
@@ -95,21 +99,33 @@ async function callLLM(
       systemInstruction: systemPrompt,
     });
 
-    const response = await model.generateContent({
-      contents: [
-        {
-          role: "user",
-          parts: [
+    const response = await trace.llmCall(
+      {
+        operation: "advisor.llm",
+        provider: "gemini",
+        model: GEMINI_MODEL,
+        adapter: "gemini.generative-ai",
+        prompt,
+        params: { temperature: 0.3 },
+        input: userPayload,
+      },
+      () =>
+        model.generateContent({
+          contents: [
             {
-              text: JSON.stringify(userPayload, null, 2),
+              role: "user",
+              parts: [
+                {
+                  text: JSON.stringify(userPayload, null, 2),
+                },
+              ],
             },
           ],
-        },
-      ],
-      generationConfig: {
-        temperature: 0.3,
-      },
-    });
+          generationConfig: {
+            temperature: 0.3,
+          },
+        }),
+    );
 
     const text =
       typeof response?.response?.text === "function"
@@ -123,12 +139,25 @@ async function callLLM(
 
   if (modelType === "openai" && openai) {
     try {
-      const completion = await openai.responses.create({
-        model: OPENAI_MODEL,
-        temperature: 0.3,
-        instructions: systemPrompt,
-        input: JSON.stringify(userPayload, null, 2),
-      });
+      const completion = await trace.llmCall(
+        {
+          operation: "advisor.llm",
+          provider: "openai",
+          model: OPENAI_MODEL,
+          adapter: "openai.responses",
+          prompt,
+          params: { temperature: 0.3 },
+          attempt: 1,
+          input: userPayload,
+        },
+        () =>
+          openai.responses.create({
+            model: OPENAI_MODEL,
+            temperature: 0.3,
+            instructions: systemPrompt,
+            input: JSON.stringify(userPayload, null, 2),
+          }),
+      );
 
       return (
         completion.output_text?.trim() ||
@@ -136,17 +165,30 @@ async function callLLM(
         "Sorry, I couldn’t generate a response."
       );
     } catch {
-      const completion = await openai.chat.completions.create({
-        model: OPENAI_MODEL,
-        temperature: 0.3,
-        messages: [
-          { role: "system", content: systemPrompt },
-          {
-            role: "user",
-            content: JSON.stringify(userPayload, null, 2),
-          },
-        ],
-      });
+      const completion = await trace.llmCall(
+        {
+          operation: "advisor.llm",
+          provider: "openai",
+          model: OPENAI_MODEL,
+          adapter: "openai.chat",
+          prompt,
+          params: { temperature: 0.3 },
+          attempt: 2,
+          input: userPayload,
+        },
+        () =>
+          openai.chat.completions.create({
+            model: OPENAI_MODEL,
+            temperature: 0.3,
+            messages: [
+              { role: "system", content: systemPrompt },
+              {
+                role: "user",
+                content: JSON.stringify(userPayload, null, 2),
+              },
+            ],
+          }),
+      );
 
       return (
         completion.choices?.[0]?.message?.content?.trim() ||
@@ -986,6 +1028,16 @@ async function buildContextFromUserTransactions(userId) {
 /* -------------------------------------------------------------------------- */
 
 export async function ingestPdf(req, res) {
+  const trace = startTrace({ req, operation: "ingest.document" });
+  if (trace.id) res.setHeader("X-Trace-Id", trace.id);
+  // ingestPdf has many early-return branches; finalize once when the response
+  // is flushed rather than threading finalize() through each exit.
+  res.on("finish", () => {
+    const status =
+      res.statusCode >= 500 ? "error" : res.statusCode >= 400 ? "partial" : "ok";
+    trace.finalize(status);
+  });
+
   try {
     const ct = String(req.headers["content-type"] || "").toLowerCase();
     if (!ct.includes("multipart/form-data")) {
@@ -1058,7 +1110,9 @@ export async function ingestPdf(req, res) {
         useLLMFallback: Boolean(
           process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY,
         ),
+        trace,
       });
+      trace.setAttributes({ format: "pdf", textLength: contentText.length });
 
       if (!parsedTransactions.length) {
         return res.status(422).json({
@@ -1133,11 +1187,15 @@ export async function ingestPdf(req, res) {
 /* -------------------------------------------------------------------------- */
 
 export async function aiAdvisor(req, res) {
+  const trace = startTrace({ req, operation: "advisor.chat" });
+  if (trace.id) res.setHeader("X-Trace-Id", trace.id);
+
   try {
     const userId = req.user?._id || req.user?.id || null;
     const { message, tonePreference, fileId } = req.body;
 
     if (!message || !String(message).trim()) {
+      await trace.finalize("error");
       return res.status(400).json({ error: "Missing message" });
     }
 
@@ -1147,8 +1205,18 @@ export async function aiAdvisor(req, res) {
     const context = buildContextFromFile(fileDoc);
     const safeTone = tonePreference === "buddy" ? "buddy" : "formal";
 
+    trace.setAttributes({
+      route: "aiAdvisor",
+      subscription,
+      tone: safeTone,
+      hasFile: Boolean(fileDoc),
+      txCount: context?.parsedTransactions?.length || 0,
+    });
+
     if (!openai && !gemini) {
       const reply = buildRuleBasedReply(context, safeTone, message);
+      trace.markFallback();
+      await trace.finalize("partial");
       return res.json({
         reply,
         quota: req.aiQuota || null,
@@ -1164,8 +1232,10 @@ export async function aiAdvisor(req, res) {
         safeTone,
         message,
         agentToUse,
+        trace,
       );
 
+      await trace.finalize("ok");
       return res.json({
         reply,
         quota: req.aiQuota || null,
@@ -1181,6 +1251,8 @@ export async function aiAdvisor(req, res) {
 
       const reply = buildRuleBasedReply(context, safeTone, message);
 
+      trace.markFallback();
+      await trace.finalize("partial");
       return res.json({
         reply: isDev
           ? `${reply}\n\n(Dev note: AI call to ${agentToUse} failed; served rule-based reply.)`
@@ -1189,6 +1261,7 @@ export async function aiAdvisor(req, res) {
       });
     }
   } catch (err) {
+    await trace.finalize("error");
     console.error("aiAdvisor error:", err);
     return res.status(500).json({ error: "AI advisor failed" });
   }
@@ -1199,11 +1272,15 @@ export async function aiAdvisor(req, res) {
 /* -------------------------------------------------------------------------- */
 
 export async function chat(req, res) {
+  const trace = startTrace({ req, operation: "advisor.chat" });
+  if (trace.id) res.setHeader("X-Trace-Id", trace.id);
+
   try {
     const userId = req.user?._id || req.user?.id || req.userId || null;
     const { message, tonePreference, fileId } = req.body;
 
     if (!message || !String(message).trim()) {
+      await trace.finalize("error");
       return res.status(400).json({ error: "Missing message" });
     }
 
@@ -1215,12 +1292,22 @@ export async function chat(req, res) {
       : await buildContextFromUserTransactions(userId);
     const safeTone = tonePreference === "buddy" ? "buddy" : "formal";
 
+    trace.setAttributes({
+      route: "chat",
+      subscription,
+      tone: safeTone,
+      hasFile: Boolean(fileDoc),
+      txCount: context?.parsedTransactions?.length || 0,
+    });
+
     // IMPORTANT:
     // No more hardcoded "upload CSV/PDF" early-return.
     // The model or fallback should still answer even with empty context.
 
     if (!openai && !gemini) {
       const reply = buildRuleBasedReply(context, safeTone, message);
+      trace.markFallback();
+      await trace.finalize("partial");
       return res.json({ reply });
     }
 
@@ -1233,8 +1320,10 @@ export async function chat(req, res) {
         safeTone,
         message,
         agentToUse,
+        trace,
       );
 
+      await trace.finalize("ok");
       return res.json({ reply });
     } catch (e) {
       console.error(
@@ -1244,11 +1333,13 @@ export async function chat(req, res) {
         e?.stack,
       );
 
+      await trace.finalize("error");
       return res.status(502).json({
         error: "AI agent failed to respond. Check server logs for details.",
       });
     }
   } catch (err) {
+    await trace.finalize("error");
     console.error("chat error:", err);
     return res.status(500).json({ error: "Chat failed" });
   }

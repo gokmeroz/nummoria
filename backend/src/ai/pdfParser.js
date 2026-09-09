@@ -1,6 +1,8 @@
 /* eslint-disable */
 import OpenAI from "openai";
 import { GoogleGenAI } from "@google/genai"; // <-- ADDED
+import { noopTrace } from "../observability/trace.js";
+import { describePrompt } from "../observability/promptRegistry.js";
 
 // Make key optional; fall back gracefully to regex-only
 const openai2 = process.env.OPENAI_API_KEY
@@ -18,7 +20,7 @@ const AMOUNT_RGX =
 
 export async function parseTransactionsFromText(
   text,
-  { useLLMFallback = false } = {}
+  { useLLMFallback = false, trace = noopTrace } = {}
 ) {
   const lines = text
     .split(/\r?\n/)
@@ -85,49 +87,89 @@ ${text.slice(0, 12000)}
     try {
       let payloadText = null;
 
+      const promptMeta = describePrompt("extract.transactions", prompt);
+
       if (gemini2) {
         // <-- NEW: Prioritize Gemini with JSON Schema
-        const resp = await gemini2.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents: prompt,
-          config: {
-            temperature: 0,
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  date: { type: "string", description: "YYYY-MM-DD" },
-                  description: { type: "string" },
-                  amount: {
-                    type: "number",
-                    description: "Negative for expenses",
+        const resp = await trace.llmCall(
+          {
+            operation: "extract.llm",
+            provider: "gemini",
+            model: "gemini-2.5-flash",
+            adapter: "gemini.genai",
+            prompt: promptMeta,
+            params: { temperature: 0, responseMimeType: "application/json" },
+            input: prompt,
+          },
+          () =>
+            gemini2.models.generateContent({
+              model: "gemini-2.5-flash",
+              contents: prompt,
+              config: {
+                temperature: 0,
+                responseMimeType: "application/json",
+                responseSchema: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      date: { type: "string", description: "YYYY-MM-DD" },
+                      description: { type: "string" },
+                      amount: {
+                        type: "number",
+                        description: "Negative for expenses",
+                      },
+                    },
+                    required: ["date", "description", "amount"],
                   },
                 },
-                required: ["date", "description", "amount"],
               },
-            },
-          },
-        });
+            }),
+        );
         payloadText = resp.text.trim();
       } else if (openai2) {
         // <-- EXISTING: OpenAI Fallback
         // Prefer Responses API if available, but keep chat.completions as a backup for compatibility
         try {
-          const resp = await openai2.responses.create({
-            model: "gpt-4o-mini",
-            temperature: 0,
-            input: prompt,
-          });
+          const resp = await trace.llmCall(
+            {
+              operation: "extract.llm",
+              provider: "openai",
+              model: "gpt-4o-mini",
+              adapter: "openai.responses",
+              prompt: promptMeta,
+              params: { temperature: 0 },
+              attempt: 1,
+              input: prompt,
+            },
+            () =>
+              openai2.responses.create({
+                model: "gpt-4o-mini",
+                temperature: 0,
+                input: prompt,
+              }),
+          );
           payloadText =
             resp.output_text?.trim() || resp.content?.[0]?.text?.trim() || null;
         } catch {
-          const resp2 = await openai2.chat.completions.create({
-            model: "gpt-4o-mini",
-            temperature: 0,
-            messages: [{ role: "user", content: prompt }],
-          });
+          const resp2 = await trace.llmCall(
+            {
+              operation: "extract.llm",
+              provider: "openai",
+              model: "gpt-4o-mini",
+              adapter: "openai.chat",
+              prompt: promptMeta,
+              params: { temperature: 0 },
+              attempt: 2,
+              input: prompt,
+            },
+            () =>
+              openai2.chat.completions.create({
+                model: "gpt-4o-mini",
+                temperature: 0,
+                messages: [{ role: "user", content: prompt }],
+              }),
+          );
           payloadText = resp2.choices?.[0]?.message?.content?.trim() || null;
         }
       }
