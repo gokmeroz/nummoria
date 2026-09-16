@@ -1,0 +1,584 @@
+{
+  "id": "case-049",
+  "layout": "us-credit-debit",
+  "format": "pdf-text",
+  "rawText": "US export with split Credit/Debit columns instead of a signed Amount. — Statement\nPeriod: 2025-01-01 to 2025-03-31\n\n01/01/2025\n6621.97\nEMPLOYER DIRECT DEP\n01/02/2025   LANDLORD ACH DEBIT   -1504.63\n03/01/2025  AT&T INTERNET BILL  -18.98\n01/03/2025   DOORDASH DELIVERY   -12.43\n03/01/2025  TAXI SERVICE  -17.78\n03/01/2025  EXXON GAS STATION  -36.79\n05/01/2025   EXXON GAS STATION   -44.76\n01/06/2025  EXXON GAS STATION  -23.95\n01/07/2025  ALDI GROCERY  -107.18\n08/01/2025  COSTCO WHOLESALE  -85.08\n01/08/2025   COSTCO WHOLESALE   -105.02\n08/01/2025  DOORDASH DELIVERY  -43.60\n01/08/2025  EXXON GAS STATION  -7.02\n01/09/2025  STARBUCKS STORE  -57.22\n01/11/2025  UBER RIDE  -26.77\n01/11/2025  COINBASE BTC BUY  -101.45\n01/12/2025  UBER RIDE  -53.88\n01/12/2025  TAXI SERVICE  -22.24\n01/15/2025  COSTCO WHOLESALE  -118.54\n01/15/2025  KROGER #4471  -50.02\n01/15/2025  FIDELITY ETF PURCHASE  -93.56\n01/16/2025  DOORDASH DELIVERY  -56.70\n01/16/2025    -22.83\n01/17/2025   ALDI GROCERY   -36.34\n01/17/2025  DOORDASH DELIVERY  -8.01\n01/17/2025  STARBUCKS STORE  -31.22\n01/18/2025  COSTCO WHOLESALE  -51.92\n01/23/2025  STARBUCKS STORE  -27.83\n01/24/2025   COSTCO WHOLESALE   -30.93\n01/25/2025  COINBASE BTC BUY  -216.85\n01/26/2025  CHIPOTLE ONLINE  -29.95\n01/27/2025  TAXI SERVICE  -26.03\n01/28/2025  STARBUCKS STORE  -10.22\n01/28/2025\n-32.66\nEXXON GAS STATION\n01/29/2025  TAXI SERVICE  -67.86\n01/30/2025  KROGER #4471  -31.05\n02/01/2025  PAYROLL ACH CREDIT  6621.97\n01/02/2025  KROGER #4471  -78.01\n02/01/2025  COSTCO WHOLESALE  -89.00\n01/02/2025   CHIPOTLE ONLINE   -52.64\n02/01/2025   CHIPOTLE ONLINE   -35.08\n02/02/2025  LANDLORD ACH DEBIT  -1504.63\n03/02/2025   AT&T INTERNET BILL   -9.51\n02/03/2025  STARBUCKS STORE  -44.23\n02/05/2025\n-13.62\nDOORDASH DELIVERY\n02/05/2025  DOORDASH DELIVERY  -53.28\n02/05/2025  EXXON GAS STATION  -37.23\n02/06/2025  UBER RIDE  -9.11\n08/02/2025  TAXI SERVICE  -32.92\n02/09/2025   EXXON GAS STATION   -51.93\n09/02/2025  TAXI SERVICE  -9.30\n12/02/2025  ALDI GROCERY  -55.31\n02/14/2025  STARBUCKS STORE  -29.65\n02/15/2025  UBER RIDE  -5.74\n02/15/2025\n-305.48\nFIDELITY ETF PURCHASE\n02/16/2025  KROGER #4471  -38.90\n02/18/2025  TAXI SERVICE  -49.72\n02/20/2025  UBER RIDE  -64.19\n02/21/2025  DOORDASH DELIVERY  -48.84\n02/21/2025  STARBUCKS STORE  -38.83\n02/22/2025  UBER RIDE  -54.11\n02/22/2025  TAXI SERVICE  -60.54\n02/22/2025  UBER RIDE  -56.80\n02/23/2025  DOORDASH DELIVERY  -45.30\n02/23/2025   DOORDASH DELIVERY   -43.26\n02/23/2025  UBER RIDE  -17.85\n02/25/2025  STARBUCKS STORE  -39.63\n02/26/2025  KROGER #4471  -40.59\n02/27/2025  CHIPOTLE ONLINE  -56.16\n02/27/2025  UBER RIDE  -42.78\n02/28/2025  COSTCO WHOLESALE  -33.26\n02/28/2025  COSTCO WHOLESALE  -38.53\n03/01/2025  EMPLOYER DIRECT DEP  6621.97\n03/02/2025  LANDLORD ACH DEBIT  -1504.63\n03/02/2025  COSTCO WHOLESALE  -20.44\n03/05/2025  EXXON GAS STATION  -19.27\n03/06/2025  COSTCO WHOLESALE  -106.27\n03/06/2025  COINBASE BTC BUY  -163.27\n03/07/2025  COSTCO WHOLESALE  -117.56\n07/03/2025\n-52.35\nDOORDASH DELIVERY\n11/03/2025  UBER RIDE  -36.11\n03/12/2025  COSTCO WHOLESALE  -104.08\n03/13/2025  COSTCO WHOLESALE  -105.31\n03/15/2025  TAXI SERVICE  -13.39\n03/16/2025  TAXI SERVICE  -53.82\n03/17/2025  STARBUCKS STORE  -11.52\n03/18/2025  AT&T INTERNET BILL  -10.73\n03/20/2025  FIDELITY ETF PURCHASE  -957.02\n03/21/2025\n-16.33\nALDI GROCERY\n03/21/2025  STARBUCKS STORE  -47.55\n03/22/2025   UBER RIDE   -38.50\n03/23/2025\n-56.91\nCOSTCO WHOLESALE\n03/23/2025    -30.84\n03/23/2025  STARBUCKS STORE  -45.74\n03/24/2025  KROGER #4471  -41.56\n03/31/2025  EXXON GAS STATION  -41.14",
+  "groundTruth": [
+    {
+      "date": "2025-01-01",
+      "amount": 6621.97,
+      "description": "EMPLOYER DIRECT DEP",
+      "category": "Salary"
+    },
+    {
+      "date": "2025-01-02",
+      "amount": -1504.63,
+      "description": "LANDLORD ACH DEBIT",
+      "category": "Rent"
+    },
+    {
+      "date": "2025-01-03",
+      "amount": -18.98,
+      "description": "AT&T INTERNET BILL",
+      "category": "Utilities"
+    },
+    {
+      "date": "2025-01-03",
+      "amount": -12.43,
+      "description": "DOORDASH DELIVERY",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-03",
+      "amount": -17.78,
+      "description": "TAXI SERVICE",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-03",
+      "amount": -36.79,
+      "description": "EXXON GAS STATION",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-05",
+      "amount": -44.76,
+      "description": "EXXON GAS STATION",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-06",
+      "amount": -23.95,
+      "description": "EXXON GAS STATION",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-07",
+      "amount": -107.18,
+      "description": "ALDI GROCERY",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-08",
+      "amount": -85.08,
+      "description": "COSTCO WHOLESALE",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-08",
+      "amount": -105.02,
+      "description": "COSTCO WHOLESALE",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-08",
+      "amount": -43.6,
+      "description": "DOORDASH DELIVERY",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-08",
+      "amount": -7.02,
+      "description": "EXXON GAS STATION",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-09",
+      "amount": -57.22,
+      "description": "STARBUCKS STORE",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-11",
+      "amount": -26.77,
+      "description": "UBER RIDE",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-11",
+      "amount": -101.45,
+      "description": "COINBASE BTC BUY",
+      "category": "Investments"
+    },
+    {
+      "date": "2025-01-12",
+      "amount": -53.88,
+      "description": "UBER RIDE",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-12",
+      "amount": -22.24,
+      "description": "TAXI SERVICE",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-15",
+      "amount": -118.64,
+      "description": "COSTCO WHOLESALE",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-15",
+      "amount": -50.02,
+      "description": "KROGER #4471",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-15",
+      "amount": -93.56,
+      "description": "FIDELITY ETF PURCHASE",
+      "category": "Investments"
+    },
+    {
+      "date": "2025-01-16",
+      "amount": -56.7,
+      "description": "DOORDASH DELIVERY",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-16",
+      "amount": -22.83,
+      "description": "STARBUCKS STORE",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-17",
+      "amount": -36.34,
+      "description": "ALDI GROCERY",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-17",
+      "amount": -8.01,
+      "description": "DOORDASH DELIVERY",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-17",
+      "amount": -31.22,
+      "description": "STARBUCKS STORE",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-18",
+      "amount": -71.92,
+      "description": "COSTCO WHOLESALE",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-23",
+      "amount": -27.83,
+      "description": "STARBUCKS STORE",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-24",
+      "amount": -30.93,
+      "description": "COSTCO WHOLESALE",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-25",
+      "amount": -216.85,
+      "description": "COINBASE BTC BUY",
+      "category": "Investments"
+    },
+    {
+      "date": "2025-01-26",
+      "amount": -29.95,
+      "description": "CHIPOTLE ONLINE",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-27",
+      "amount": -26.03,
+      "description": "TAXI SERVICE",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-28",
+      "amount": -10.22,
+      "description": "STARBUCKS STORE",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-28",
+      "amount": -32.66,
+      "description": "EXXON GAS STATION",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-29",
+      "amount": -67.86,
+      "description": "TAXI SERVICE",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-30",
+      "amount": -31.05,
+      "description": "KROGER #4471",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-02-01",
+      "amount": 6621.97,
+      "description": "PAYROLL ACH CREDIT",
+      "category": "Salary"
+    },
+    {
+      "date": "2025-02-01",
+      "amount": -78.01,
+      "description": "KROGER #4471",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-02-01",
+      "amount": -89,
+      "description": "COSTCO WHOLESALE",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-02-01",
+      "amount": -52.64,
+      "description": "CHIPOTLE ONLINE",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-02-01",
+      "amount": -35.08,
+      "description": "CHIPOTLE ONLINE",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-02-02",
+      "amount": -1504.63,
+      "description": "LANDLORD ACH DEBIT",
+      "category": "Rent"
+    },
+    {
+      "date": "2025-02-03",
+      "amount": -9.51,
+      "description": "AT&T INTERNET BILL",
+      "category": "Utilities"
+    },
+    {
+      "date": "2025-02-03",
+      "amount": -44.23,
+      "description": "STARBUCKS STORE",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-02-05",
+      "amount": -13.62,
+      "description": "DOORDASH DELIVERY",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-02-05",
+      "amount": -53.28,
+      "description": "DOORDASH DELIVERY",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-02-05",
+      "amount": -37.23,
+      "description": "EXXON GAS STATION",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-06",
+      "amount": -9.11,
+      "description": "UBER RIDE",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-08",
+      "amount": -32.92,
+      "description": "TAXI SERVICE",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-09",
+      "amount": -51.93,
+      "description": "EXXON GAS STATION",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-09",
+      "amount": -9.3,
+      "description": "TAXI SERVICE",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-12",
+      "amount": -55.31,
+      "description": "ALDI GROCERY",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-02-14",
+      "amount": -29.65,
+      "description": "STARBUCKS STORE",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-02-15",
+      "amount": -5.74,
+      "description": "UBER RIDE",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-15",
+      "amount": -305.48,
+      "description": "FIDELITY ETF PURCHASE",
+      "category": "Investments"
+    },
+    {
+      "date": "2025-02-16",
+      "amount": -38.9,
+      "description": "KROGER #4471",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-02-18",
+      "amount": -49.72,
+      "description": "TAXI SERVICE",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-20",
+      "amount": -64.19,
+      "description": "UBER RIDE",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-21",
+      "amount": -48.84,
+      "description": "DOORDASH DELIVERY",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-02-21",
+      "amount": -38.83,
+      "description": "STARBUCKS STORE",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-02-22",
+      "amount": -54.11,
+      "description": "UBER RIDE",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-22",
+      "amount": -60.54,
+      "description": "TAXI SERVICE",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-22",
+      "amount": -56.8,
+      "description": "UBER RIDE",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-23",
+      "amount": -45.3,
+      "description": "DOORDASH DELIVERY",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-02-23",
+      "amount": -43.26,
+      "description": "DOORDASH DELIVERY",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-02-23",
+      "amount": -17.85,
+      "description": "UBER RIDE",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-25",
+      "amount": -39.63,
+      "description": "STARBUCKS STORE",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-02-26",
+      "amount": -40.59,
+      "description": "KROGER #4471",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-02-27",
+      "amount": -56.16,
+      "description": "CHIPOTLE ONLINE",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-02-27",
+      "amount": -42.78,
+      "description": "UBER RIDE",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-28",
+      "amount": -33.26,
+      "description": "COSTCO WHOLESALE",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-02-28",
+      "amount": -38.53,
+      "description": "COSTCO WHOLESALE",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-03-01",
+      "amount": 6621.97,
+      "description": "EMPLOYER DIRECT DEP",
+      "category": "Salary"
+    },
+    {
+      "date": "2025-03-02",
+      "amount": -1504.63,
+      "description": "LANDLORD ACH DEBIT",
+      "category": "Rent"
+    },
+    {
+      "date": "2025-03-02",
+      "amount": -20.44,
+      "description": "COSTCO WHOLESALE",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-03-05",
+      "amount": -19.27,
+      "description": "EXXON GAS STATION",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-03-06",
+      "amount": -106.27,
+      "description": "COSTCO WHOLESALE",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-03-06",
+      "amount": -163.27,
+      "description": "COINBASE BTC BUY",
+      "category": "Investments"
+    },
+    {
+      "date": "2025-03-07",
+      "amount": -117.56,
+      "description": "COSTCO WHOLESALE",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-03-07",
+      "amount": -52.35,
+      "description": "DOORDASH DELIVERY",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-03-11",
+      "amount": -36.11,
+      "description": "UBER RIDE",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-03-12",
+      "amount": -104.08,
+      "description": "COSTCO WHOLESALE",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-03-13",
+      "amount": -105.31,
+      "description": "COSTCO WHOLESALE",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-03-15",
+      "amount": -13.39,
+      "description": "TAXI SERVICE",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-03-16",
+      "amount": -53.82,
+      "description": "TAXI SERVICE",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-03-17",
+      "amount": -11.52,
+      "description": "STARBUCKS STORE",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-03-18",
+      "amount": -10.23,
+      "description": "AT&T INTERNET BILL",
+      "category": "Utilities"
+    },
+    {
+      "date": "2025-03-20",
+      "amount": -257.02,
+      "description": "FIDELITY ETF PURCHASE",
+      "category": "Investments"
+    },
+    {
+      "date": "2025-03-21",
+      "amount": -16.33,
+      "description": "ALDI GROCERY",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-03-21",
+      "amount": -47.55,
+      "description": "STARBUCKS STORE",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-03-22",
+      "amount": -38.5,
+      "description": "UBER RIDE",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-03-23",
+      "amount": -56.91,
+      "description": "COSTCO WHOLESALE",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-03-23",
+      "amount": -30.84,
+      "description": "DOORDASH DELIVERY",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-03-23",
+      "amount": -45.74,
+      "description": "STARBUCKS STORE",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-03-24",
+      "amount": -41.56,
+      "description": "KROGER #4471",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-03-31",
+      "amount": -41.14,
+      "description": "EXXON GAS STATION",
+      "category": "Transport"
+    }
+  ]
+}

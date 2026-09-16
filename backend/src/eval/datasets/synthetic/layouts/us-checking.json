@@ -1,0 +1,30 @@
+{
+  "id": "us-checking",
+  "description": "US checking account export — single Amount column, English merchant names.",
+  "locale": "en-US",
+  "currency": "USD",
+  "dateFormat": "MM/DD/YYYY",
+  "decimalStyle": "dot",
+  "csv": {
+    "dateHeader": "Date",
+    "descriptionHeader": "Description",
+    "amountMode": "single",
+    "amountHeader": "Amount"
+  },
+  "merchants": {
+    "Salary": ["ACME CORP PAYROLL", "DIRECT DEPOSIT SALARY"],
+    "Rent": ["SUNSET APARTMENTS RENT"],
+    "Groceries": ["WHOLE FOODS #1123", "TRADER JOES #204", "SAFEWAY GROCERY"],
+    "Dining": ["STARBUCKS #5521", "CHIPOTLE MEXICAN GRILL", "LOCAL CAFE"],
+    "Transport": ["UBER TRIP", "SHELL GAS STATION", "METRO TRANSIT"],
+    "Investments": ["VANGUARD ETF BUY", "ROBINHOOD BTC BUY"],
+    "Utilities": ["NETFLIX SUBSCRIPTION", "CITY ELECTRIC BILL", "COMCAST INTERNET BILL"]
+  },
+  "noise": {
+    "multilineProb": 0.12,
+    "missingDescriptionProb": 0.04,
+    "ambiguousDateProb": 0.5,
+    "ocrTypoProb": 0.06,
+    "extraWhitespaceProb": 0.1
+  }
+}

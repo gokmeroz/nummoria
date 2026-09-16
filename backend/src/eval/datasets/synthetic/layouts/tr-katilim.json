@@ -1,0 +1,30 @@
+{
+  "id": "tr-katilim",
+  "description": "Turkish participation-bank export — Turkish headers, comma decimal, DD.MM.YYYY.",
+  "locale": "tr-TR",
+  "currency": "TRY",
+  "dateFormat": "DD.MM.YYYY",
+  "decimalStyle": "comma",
+  "csv": {
+    "dateHeader": "Tarih",
+    "descriptionHeader": "Açıklama",
+    "amountMode": "single",
+    "amountHeader": "Tutar"
+  },
+  "merchants": {
+    "Salary": ["MAAS ODEMESI", "MAAŞ ÖDEMESİ ISVEREN A.S."],
+    "Rent": ["KIRA ODEMESI"],
+    "Groceries": ["MIGROS TICARET", "CARREFOURSA MARKET", "BIM MARKET", "A101 MARKET"],
+    "Dining": ["YEMEKSEPETI SIPARIS", "GETIR YEMEK", "TRENDYOL YEMEK"],
+    "Transport": ["TAKSI ODEMESI", "IETT OTOBUS", "METRO ISTANBUL"],
+    "Investments": ["BIST HISSE ALIM", "BINANCE BTC ALIM"],
+    "Utilities": ["ELEKTRIK FATURASI", "INTERNET FATURASI", "DOGALGAZ FATURASI"]
+  },
+  "noise": {
+    "multilineProb": 0.15,
+    "missingDescriptionProb": 0.05,
+    "ambiguousDateProb": 0.6,
+    "ocrTypoProb": 0.06,
+    "extraWhitespaceProb": 0.08
+  }
+}

@@ -459,7 +459,7 @@ function normalizeDate(s) {
   return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
-function csvToTxRows(buf) {
+export function csvToTxRows(buf) {
   const text = buf.toString("utf8");
   const delimiters = [",", ";", "\t", "|"];
   let rows = [];

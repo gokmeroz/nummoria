@@ -1,0 +1,8 @@
+{
+  "id": "case-003",
+  "profileId": "profile-a",
+  "question": "How would you rate my financial risk?",
+  "expectedMetric": "riskScore",
+  "expectedValue": 38,
+  "tolerance": 0.01
+}

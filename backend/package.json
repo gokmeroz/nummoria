@@ -8,7 +8,9 @@
     "worker:dev": "node --watch src/workers/pushWorkerEntry.js",
     "dev:all": "concurrently -k \"npm run dev\" \"npm run worker:dev\"",
     "start": "cross-env ENABLE_QUOTES=true node src/server.js",
-    "worker": "node src/workers/pushWorkerEntry.js"
+    "worker": "node src/workers/pushWorkerEntry.js",
+    "eval": "node src/eval/run.js",
+    "gen:synthetic": "node src/eval/datasets/synthetic/generateStatements.js"
   },
   "dependencies": {
     "@google-cloud/vision": "^5.3.4",

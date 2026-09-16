@@ -1,0 +1,800 @@
+{
+  "id": "profile-a",
+  "seed": 101,
+  "startDate": "2025-01-01",
+  "endDate": "2025-05-01",
+  "transactions": [
+    {
+      "date": "2025-01-01",
+      "amount": -68.25,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-02",
+      "amount": -1556.85,
+      "category": "Rent",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-04",
+      "amount": 3542.59,
+      "category": "Salary",
+      "type": "income"
+    },
+    {
+      "date": "2025-01-04",
+      "amount": -12.54,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-06",
+      "amount": -76.99,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-06",
+      "amount": -58.1,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-07",
+      "amount": -8.93,
+      "category": "Utilities",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-07",
+      "amount": -82.96,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-07",
+      "amount": -60.75,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-07",
+      "amount": -35.15,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-08",
+      "amount": -68.72,
+      "category": "Utilities",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-10",
+      "amount": -27.98,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-10",
+      "amount": -31.48,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-12",
+      "amount": -26.49,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-13",
+      "amount": -52.63,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-13",
+      "amount": -54.67,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-15",
+      "amount": -102.36,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-18",
+      "amount": -95.83,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-20",
+      "amount": -30.3,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-20",
+      "amount": -50.35,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-20",
+      "amount": -16.88,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-20",
+      "amount": -47.28,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-21",
+      "amount": -19.3,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-23",
+      "amount": -107.93,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-24",
+      "amount": -26.2,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-24",
+      "amount": -31.47,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-26",
+      "amount": -64.84,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-26",
+      "amount": -51.99,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-30",
+      "amount": -48.74,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-30",
+      "amount": -177.56,
+      "category": "Investments",
+      "type": "expense"
+    },
+    {
+      "date": "2025-01-31",
+      "amount": -28.66,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-01",
+      "amount": -31.28,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-02",
+      "amount": -1556.85,
+      "category": "Rent",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-02",
+      "amount": -30.21,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-02",
+      "amount": -143.07,
+      "category": "Investments",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-03",
+      "amount": -78.49,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-04",
+      "amount": 3542.59,
+      "category": "Salary",
+      "type": "income"
+    },
+    {
+      "date": "2025-02-04",
+      "amount": -45.22,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-04",
+      "amount": -35.64,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-05",
+      "amount": -23.86,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-05",
+      "amount": -58.99,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-05",
+      "amount": -39.46,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-05",
+      "amount": -40.98,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-07",
+      "amount": -62.79,
+      "category": "Utilities",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-07",
+      "amount": -21.79,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-08",
+      "amount": -22.05,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-10",
+      "amount": -94.03,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-10",
+      "amount": -27.83,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-11",
+      "amount": -18.5,
+      "category": "Utilities",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-13",
+      "amount": -38.06,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-14",
+      "amount": -95.04,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-14",
+      "amount": -23.43,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-18",
+      "amount": -38.1,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-18",
+      "amount": -141.14,
+      "category": "Investments",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-19",
+      "amount": -32.56,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-21",
+      "amount": -45.15,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-21",
+      "amount": -41.53,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-22",
+      "amount": -28.33,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-23",
+      "amount": -359.22,
+      "category": "Investments",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-24",
+      "amount": -107.05,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-25",
+      "amount": -10.69,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-26",
+      "amount": -38.52,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-02-26",
+      "amount": -323.69,
+      "category": "Investments",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-01",
+      "amount": -44.3,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-02",
+      "amount": -1556.85,
+      "category": "Rent",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-02",
+      "amount": -13.01,
+      "category": "Utilities",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-02",
+      "amount": -16.75,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-03",
+      "amount": -15.1,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-03",
+      "amount": -27.31,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-03",
+      "amount": -9.01,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-04",
+      "amount": 3542.59,
+      "category": "Salary",
+      "type": "income"
+    },
+    {
+      "date": "2025-03-04",
+      "amount": -12.33,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-05",
+      "amount": -23.53,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-05",
+      "amount": -15.32,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-06",
+      "amount": -15.44,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-07",
+      "amount": -38.85,
+      "category": "Utilities",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-07",
+      "amount": -57.93,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-07",
+      "amount": -33.92,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-10",
+      "amount": -65.15,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-11",
+      "amount": -12.09,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-13",
+      "amount": -41.17,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-13",
+      "amount": -50.48,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-13",
+      "amount": -23.7,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-13",
+      "amount": -15.07,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-14",
+      "amount": -62.5,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-15",
+      "amount": -87.63,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-15",
+      "amount": -10.06,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-16",
+      "amount": -36.95,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-16",
+      "amount": -65.54,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-17",
+      "amount": -22.17,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-17",
+      "amount": -75.29,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-17",
+      "amount": -49.08,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-18",
+      "amount": -33.22,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-18",
+      "amount": -42.07,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-18",
+      "amount": -27.16,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-19",
+      "amount": -27.88,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-19",
+      "amount": -82.56,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-19",
+      "amount": -5.06,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-21",
+      "amount": -53.99,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-21",
+      "amount": -44.18,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-22",
+      "amount": -59.58,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-22",
+      "amount": -59.23,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-23",
+      "amount": -34.53,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-25",
+      "amount": -102.48,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-25",
+      "amount": -12.91,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-28",
+      "amount": -41.99,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-29",
+      "amount": -84.12,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-31",
+      "amount": -111.66,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-03-31",
+      "amount": -20.33,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-04-01",
+      "amount": -407.15,
+      "category": "Investments",
+      "type": "expense"
+    },
+    {
+      "date": "2025-04-02",
+      "amount": -1556.85,
+      "category": "Rent",
+      "type": "expense"
+    },
+    {
+      "date": "2025-04-02",
+      "amount": -185.92,
+      "category": "Investments",
+      "type": "expense"
+    },
+    {
+      "date": "2025-04-04",
+      "amount": 3542.59,
+      "category": "Salary",
+      "type": "income"
+    },
+    {
+      "date": "2025-04-04",
+      "amount": -28.07,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-04-05",
+      "amount": -41.84,
+      "category": "Utilities",
+      "type": "expense"
+    },
+    {
+      "date": "2025-04-05",
+      "amount": -206.4,
+      "category": "Investments",
+      "type": "expense"
+    },
+    {
+      "date": "2025-04-08",
+      "amount": -36.55,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-04-08",
+      "amount": -30.14,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-04-11",
+      "amount": -81.17,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-04-11",
+      "amount": -52.92,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-04-14",
+      "amount": -60.7,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-04-17",
+      "amount": -45.4,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-04-18",
+      "amount": -52.44,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-04-18",
+      "amount": -64.61,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-04-18",
+      "amount": -35.46,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-04-19",
+      "amount": -39.74,
+      "category": "Transport",
+      "type": "expense"
+    },
+    {
+      "date": "2025-04-22",
+      "amount": -11.25,
+      "category": "Utilities",
+      "type": "expense"
+    },
+    {
+      "date": "2025-04-22",
+      "amount": -30.14,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-04-24",
+      "amount": -60.8,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-04-25",
+      "amount": -60.39,
+      "category": "Groceries",
+      "type": "expense"
+    },
+    {
+      "date": "2025-04-27",
+      "amount": -48.98,
+      "category": "Dining",
+      "type": "expense"
+    },
+    {
+      "date": "2025-04-28",
+      "amount": -26.88,
+      "category": "Transport",
+      "type": "expense"
+    }
+  ]
+}

@@ -1,0 +1,602 @@
+{
+  "id": "case-020",
+  "layout": "us-checking",
+  "format": "pdf-text",
+  "rawText": "US checking account export — Statement\nPeriod: 2025-01-01 to 2025-03-31\n\n01/01/2025  SUNSET APARTMENTS RENT  -1627.21\n01/01/2025  CHIPOTLE MEXICAN GRILL  -35.05\n01/01/2025   SHELL GAS STATION   -24.48\n02/01/2025  CHIPOTLE MEXICAN GRILL  -47.82\n01/02/2025  UBER TRIP  -26.26\n01/04/2025  DIRECT DEPOSIT SALARY  3766.88\n01/04/2025  LOCAL CAFE  -10.52\n05/01/2025  WHOLE FOODS #1123  -107.22\n05/01/2025   METRO TRANSIT   -47.36\n01/06/2025   CITY ELECTRIC BILL   -51.34\n01/06/2025  SAFEWAY GROCERY  -61.77\n01/06/2025  SAFEWAY GROCERY  -31.91\n10/01/2025  CHIPOTLE MEXICAN GRILL  -22.39\n01/11/2025  SHELL GAS STATION  -24.39\n12/01/2025  TRADER JOES #204  -39.16\n12/01/2025  STARBUCKS #5521  -16.55\n01/14/2025  CHIPOTLE MEXICAN GRILL  -28.76\n01/15/2025  STARBUCKS #5521  -57.81\n01/15/2025\n-58.21\nLOCAL CAFE\n01/16/2025\n-52.28\nSAFEWAY GROCERY\n01/16/2025  STARBUCKS #5521  -36.69\n01/17/2025  LOCAL CAFE  -38.41\n01/19/2025  UBER TRIP  -35.86\n01/22/2025  SHELL GAS STATION  -25.81\n01/24/2025  SAFEWAY GROCERY  -61.19\n01/24/2025  ROBINHOOD BTC BUY  -143.90\n01/25/2025  COMCAST INTERNET BILL  -17.35\n01/27/2025  TRADER JOES #204  -19.97\n01/29/2025  WHOLE FOODS #1123  -80.48\n01/29/2025  SAFEWAY GROCERY  -28.97\n01/30/2025  METRO TRANSIT  -46.73\n01/31/2025      -7.70\n01/02/2025  SUNSET APARTMENTS RENT  -1627.21\n02/01/2025  METRO TRANSIT  -38.37\n02/01/2025   METRO TRANSIT   -22.81\n02/03/2025   WHOLE FOODS #1123   -18.44\n02/03/2025  WHOLE FOODS #1123  -93.36\n04/02/2025  ACME CORP PAYROLL  3766.88\n04/02/2025  UBER TRIP  -12.96\n02/06/2025  NETFLIX SUBSCRIPTION  -68.96\n06/02/2025\n-184.73\nROBINHOOD BTC BUY\n08/02/2025  CHIPOTLE MEXICAN GRILL  -44.77\n09/02/2025   LOCAL CAFE   -48.97\n02/10/2025  COMCAST INTERNET BILL  -10.69\n10/02/2025   STARBUCKS #5521   -22.06\n02/10/2025\n-48.05\nMETRO TRANSIT\n02/11/2025  UBER TRIP  -42.80\n02/12/2025  LOCAL CAFE  -25.92\n02/13/2025  SHELL GAS STATION  -24.03\n02/15/2025  UBER TRIP  -19.48\n02/16/2025  CHIPOTLE MEXICAN GRILL  -59.58\n02/17/2025  UBER TRIP  -34.06\n02/18/2025\n-86.58\nTRADER JOES #204\n02/18/2025  LOCAL CAFE  -18.00\n02/19/2025  WHOLE FOODS #1123  -97.54\n02/19/2025  UBER TRIP  -26.60\n02/19/2025  ROBINHOOD BTC BUY  -96.10\n02/21/2025  SAFEWAY GROCERY  -98.10\n02/22/2025  SAFEWAY GROCERY  -47.02\n02/22/2025\n-23.49\n\n02/23/2025   WHOLE FOODS #1123   -52.13\n02/25/2025    -50.84\n02/26/2025  WHOLE FOODS #1123  -64.87\n03/01/2025  SUNSET APARTMENTS RENT  -1627.21\n01/03/2025  TRADER JOES #204  -90.60\n02/03/2025  TRADER JOES #204  -54.72\n03/03/2025  LOCAL CAFE  -16.07\n03/03/2025  METRO TRANSIT  -63.25\n03/03/2025  ROBINHOOD BTC BUY  -197.95\n04/03/2025  ACME CORP PAYROLL  3766.88\n03/05/2025  SHELL GAS STATION  -41.93\n06/03/2025  SHELL GAS STATION  -57.43\n08/03/2025  STARBUCKS #5521  -48.21\n09/03/2025  UBER TRIP  -29.44\n03/10/2025  COMCAST INTERNET BILL  -48.47\n03/11/2025  UBER TRIP  -53.17\n03/12/2025  TRADER JOES #204  -81.15\n03/13/2025\n-10.14\nCITY ELECTRIC BILL\n03/13/2025\n-71.00\nTRADER JOES #204\n03/13/2025  STARBUCKS #5521  -15.72\n03/14/2025\n-34.18\nSTARBUCKS #5521\n03/14/2025  SHELL GAS STATION  -36.88\n03/15/2025  STARBUCKS #5521  -58.76\n03/15/2025  SHELL GAS STATION  -8.81\n03/15/2025    -42.93\n03/16/2025  LOCAL CAFE  -9.10\n03/17/2025  UBER TRIP  -19.86\n03/18/2025  TRADER JOES #204  -33.00\n03/18/2025  CHIPOTLE MEXICAN GRILL  -57.51\n03/19/2025  METRO TRANSIT  -61.72\n03/21/2025  TRADER JOES #204  -45.57\n03/21/2025  CHIPOTLE MEXICAN GRILL  -59.88\n03/22/2025  CHIPOTLE MEXICAN GRILL  -32.45\n03/22/2025  ROBINHOOD BTC BUY  -291.43\n03/25/2025  UBER TRIP  -39.51\n03/26/2025\n-52.16\nSTARBUCKS #5521\n03/28/2025    -5.76\n03/28/2025  VANGUARD ETF BUY  -168.48\n03/31/2025  UBER TRIP  -17.03",
+  "groundTruth": [
+    {
+      "date": "2025-01-01",
+      "amount": -1627.21,
+      "description": "SUNSET APARTMENTS RENT",
+      "category": "Rent"
+    },
+    {
+      "date": "2025-01-01",
+      "amount": -35.05,
+      "description": "CHIPOTLE MEXICAN GRILL",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-01",
+      "amount": -24.48,
+      "description": "SHELL GAS STATION",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-02",
+      "amount": -47.82,
+      "description": "CHIPOTLE MEXICAN GRILL",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-02",
+      "amount": -26.26,
+      "description": "UBER TRIP",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-04",
+      "amount": 3766.88,
+      "description": "DIRECT DEPOSIT SALARY",
+      "category": "Salary"
+    },
+    {
+      "date": "2025-01-04",
+      "amount": -10.52,
+      "description": "LOCAL CAFE",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-05",
+      "amount": -107.22,
+      "description": "WHOLE FOODS #1123",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-05",
+      "amount": -47.36,
+      "description": "METRO TRANSIT",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-06",
+      "amount": -51.34,
+      "description": "CITY ELECTRIC BILL",
+      "category": "Utilities"
+    },
+    {
+      "date": "2025-01-06",
+      "amount": -61.77,
+      "description": "SAFEWAY GROCERY",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-06",
+      "amount": -31.91,
+      "description": "SAFEWAY GROCERY",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-10",
+      "amount": -22.39,
+      "description": "CHIPOTLE MEXICAN GRILL",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-11",
+      "amount": -24.39,
+      "description": "SHELL GAS STATION",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-12",
+      "amount": -39.16,
+      "description": "TRADER JOES #204",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-12",
+      "amount": -16.55,
+      "description": "STARBUCKS #5521",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-14",
+      "amount": -28.76,
+      "description": "CHIPOTLE MEXICAN GRILL",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-15",
+      "amount": -57.81,
+      "description": "STARBUCKS #5521",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-15",
+      "amount": -58.21,
+      "description": "LOCAL CAFE",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-16",
+      "amount": -52.28,
+      "description": "SAFEWAY GROCERY",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-16",
+      "amount": -36.69,
+      "description": "STARBUCKS #5521",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-17",
+      "amount": -38.41,
+      "description": "LOCAL CAFE",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-19",
+      "amount": -35.86,
+      "description": "UBER TRIP",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-22",
+      "amount": -25.81,
+      "description": "SHELL GAS STATION",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-24",
+      "amount": -61.19,
+      "description": "SAFEWAY GROCERY",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-24",
+      "amount": -143.9,
+      "description": "ROBINHOOD BTC BUY",
+      "category": "Investments"
+    },
+    {
+      "date": "2025-01-25",
+      "amount": -17.35,
+      "description": "COMCAST INTERNET BILL",
+      "category": "Utilities"
+    },
+    {
+      "date": "2025-01-27",
+      "amount": -19.97,
+      "description": "TRADER JOES #204",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-29",
+      "amount": -80.48,
+      "description": "WHOLE FOODS #1123",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-29",
+      "amount": -28.97,
+      "description": "SAFEWAY GROCERY",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-30",
+      "amount": -46.73,
+      "description": "METRO TRANSIT",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-31",
+      "amount": -7.7,
+      "description": "UBER TRIP",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-01",
+      "amount": -1627.21,
+      "description": "SUNSET APARTMENTS RENT",
+      "category": "Rent"
+    },
+    {
+      "date": "2025-02-01",
+      "amount": -38.37,
+      "description": "METRO TRANSIT",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-01",
+      "amount": -22.81,
+      "description": "METRO TRANSIT",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-03",
+      "amount": -18.44,
+      "description": "WHOLE FOODS #1123",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-02-03",
+      "amount": -93.36,
+      "description": "WHOLE FOODS #1123",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-02-04",
+      "amount": 3766.88,
+      "description": "ACME CORP PAYROLL",
+      "category": "Salary"
+    },
+    {
+      "date": "2025-02-04",
+      "amount": -12.96,
+      "description": "UBER TRIP",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-06",
+      "amount": -68.96,
+      "description": "NETFLIX SUBSCRIPTION",
+      "category": "Utilities"
+    },
+    {
+      "date": "2025-02-06",
+      "amount": -184.73,
+      "description": "ROBINHOOD BTC BUY",
+      "category": "Investments"
+    },
+    {
+      "date": "2025-02-08",
+      "amount": -44.77,
+      "description": "CHIPOTLE MEXICAN GRILL",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-02-09",
+      "amount": -48.97,
+      "description": "LOCAL CAFE",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-02-10",
+      "amount": -10.69,
+      "description": "COMCAST INTERNET BILL",
+      "category": "Utilities"
+    },
+    {
+      "date": "2025-02-10",
+      "amount": -22.06,
+      "description": "STARBUCKS #5521",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-02-10",
+      "amount": -48.05,
+      "description": "METRO TRANSIT",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-11",
+      "amount": -42.8,
+      "description": "UBER TRIP",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-12",
+      "amount": -25.92,
+      "description": "LOCAL CAFE",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-02-13",
+      "amount": -24.03,
+      "description": "SHELL GAS STATION",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-15",
+      "amount": -19.48,
+      "description": "UBER TRIP",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-16",
+      "amount": -59.58,
+      "description": "CHIPOTLE MEXICAN GRILL",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-02-17",
+      "amount": -34.06,
+      "description": "UBER TRIP",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-18",
+      "amount": -86.58,
+      "description": "TRADER JOES #204",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-02-18",
+      "amount": -18,
+      "description": "LOCAL CAFE",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-02-19",
+      "amount": -97.54,
+      "description": "WHOLE FOODS #1123",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-02-19",
+      "amount": -26.6,
+      "description": "UBER TRIP",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-19",
+      "amount": -96.1,
+      "description": "ROBINHOOD BTC BUY",
+      "category": "Investments"
+    },
+    {
+      "date": "2025-02-21",
+      "amount": -98.1,
+      "description": "SAFEWAY GROCERY",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-02-22",
+      "amount": -47.02,
+      "description": "SAFEWAY GROCERY",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-02-22",
+      "amount": -23.49,
+      "description": "STARBUCKS #5521",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-02-23",
+      "amount": -52.13,
+      "description": "WHOLE FOODS #1123",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-02-25",
+      "amount": -50.84,
+      "description": "SAFEWAY GROCERY",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-02-26",
+      "amount": -64.87,
+      "description": "WHOLE FOODS #1123",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-03-01",
+      "amount": -1627.21,
+      "description": "SUNSET APARTMENTS RENT",
+      "category": "Rent"
+    },
+    {
+      "date": "2025-03-01",
+      "amount": -90.6,
+      "description": "TRADER JOES #204",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-03-02",
+      "amount": -54.72,
+      "description": "TRADER JOES #204",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-03-03",
+      "amount": -16.07,
+      "description": "LOCAL CAFE",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-03-03",
+      "amount": -63.25,
+      "description": "METRO TRANSIT",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-03-03",
+      "amount": -197.95,
+      "description": "ROBINHOOD BTC BUY",
+      "category": "Investments"
+    },
+    {
+      "date": "2025-03-04",
+      "amount": 3766.88,
+      "description": "ACME CORP PAYROLL",
+      "category": "Salary"
+    },
+    {
+      "date": "2025-03-05",
+      "amount": -41.93,
+      "description": "SHELL GAS STATION",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-03-06",
+      "amount": -57.43,
+      "description": "SHELL GAS STATION",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-03-08",
+      "amount": -48.21,
+      "description": "STARBUCKS #5521",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-03-09",
+      "amount": -29.44,
+      "description": "UBER TRIP",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-03-10",
+      "amount": -48.47,
+      "description": "COMCAST INTERNET BILL",
+      "category": "Utilities"
+    },
+    {
+      "date": "2025-03-11",
+      "amount": -53.17,
+      "description": "UBER TRIP",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-03-12",
+      "amount": -81.15,
+      "description": "TRADER JOES #204",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-03-13",
+      "amount": -10.14,
+      "description": "CITY ELECTRIC BILL",
+      "category": "Utilities"
+    },
+    {
+      "date": "2025-03-13",
+      "amount": -71,
+      "description": "TRADER JOES #204",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-03-13",
+      "amount": -15.72,
+      "description": "STARBUCKS #5521",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-03-14",
+      "amount": -34.18,
+      "description": "STARBUCKS #5521",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-03-14",
+      "amount": -36.88,
+      "description": "SHELL GAS STATION",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-03-15",
+      "amount": -58.76,
+      "description": "STARBUCKS #5521",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-03-15",
+      "amount": -8.81,
+      "description": "SHELL GAS STATION",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-03-15",
+      "amount": -42.93,
+      "description": "UBER TRIP",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-03-16",
+      "amount": -9.1,
+      "description": "LOCAL CAFE",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-03-17",
+      "amount": -19.86,
+      "description": "UBER TRIP",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-03-18",
+      "amount": -33,
+      "description": "TRADER JOES #204",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-03-18",
+      "amount": -57.51,
+      "description": "CHIPOTLE MEXICAN GRILL",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-03-19",
+      "amount": -61.72,
+      "description": "METRO TRANSIT",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-03-21",
+      "amount": -45.57,
+      "description": "TRADER JOES #204",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-03-21",
+      "amount": -59.88,
+      "description": "CHIPOTLE MEXICAN GRILL",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-03-22",
+      "amount": -32.45,
+      "description": "CHIPOTLE MEXICAN GRILL",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-03-22",
+      "amount": -291.43,
+      "description": "ROBINHOOD BTC BUY",
+      "category": "Investments"
+    },
+    {
+      "date": "2025-03-25",
+      "amount": -39.51,
+      "description": "UBER TRIP",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-03-26",
+      "amount": -52.16,
+      "description": "STARBUCKS #5521",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-03-28",
+      "amount": -5.76,
+      "description": "SHELL GAS STATION",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-03-28",
+      "amount": -168.48,
+      "description": "VANGUARD ETF BUY",
+      "category": "Investments"
+    },
+    {
+      "date": "2025-03-31",
+      "amount": -17.03,
+      "description": "UBER TRIP",
+      "category": "Transport"
+    }
+  ]
+}

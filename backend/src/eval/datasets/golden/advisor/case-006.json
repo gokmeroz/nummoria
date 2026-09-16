@@ -1,0 +1,8 @@
+{
+  "id": "case-006",
+  "profileId": "profile-b",
+  "question": "How much do I spend per month?",
+  "expectedMetric": "monthlyBurn",
+  "expectedValue": 2759.59,
+  "tolerance": 0.01
+}

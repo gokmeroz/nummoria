@@ -1,0 +1,602 @@
+{
+  "id": "case-008",
+  "layout": "tr-katilim",
+  "format": "csv",
+  "rawText": "Tarih;Açıklama;Tutar\n01.01.2025;\"METRO ISTANBUL\";-36,42\n02.01.2025;\"KIRA ODEMESI\";-1205,28\n02.01.2025;\"BINANCE BTC ALIM\";-267,05\n03.01.2025;\"MAAŞ ÖDEMESİ ISVEREN A.S.\";5363,14\n01.03.2025;\"BIM MARKET\";-63,31\n01.04.2025;\"YEMEKSEPETI SIPARIS\";-17,28\n04.01.2025;\"GETIR YEMEK\";-37,89\n04.01.2025;\"METRO ISTANBUL\";-43,19\n06.01.2025;\"INTERNET FATURASI\";-36,93\n06.01.2025;\"MIGROS TICARET\";-117,77\n01.07.2025;\"BIM MARKET\";-76,17\n10.01.2025;\"MIGROS TICARET\";-99,86\n10.01.2025;\"YEMEKSEPETI SIPARIS\";-42,50\n01.11.2025;\"YEMEKSEPETI SIPARIS\";-15,06\n11.01.2025;\"METRO ISTANBUL\";-65,16\n14.01.2025;\"TAKSI ODEMESI\";-34,71\n15.01.2025;\"DOGALGAZ FATURASI\";-13,26\n16.01.2025;\"TRENDYOL YEMEK\";-24,59\n17.01.2025;\"A101 MARKET\";-40,58\n17.01.2025;\"GETIR YEMEK\";-37,95\n17.01.2025;\"IETT OTOBUS\";-58,98\n18.01.2025;\"CARREFOURSA MARKET\";-115,27\n18.01.2025;\"A101 MARKET\";-69,77\n18.01.2025;\"TRENDYOL YEMEK\";-49,31\n21.01.2025;\"IETT OTOBUS\";-23,06\n21.01.2025;\"TAKSI ODEMESI\";-50,27\n22.01.2025;\"MIGROS TICARET\";-93,04\n23.01.2025;\"CARREFOURSA MARKET\";-96,92\n23.01.2025;\"IETT OTOBUS\";-15,50\n24.01.2025;\"TRENDYOL YEMEK\";-24,78\n24.01.2025;\"YEMEKSEPETI SIPARIS\";-43,90\n26.01.2025;\"A101 MARKET\";-85,30\n27.01.2025;\"TAKSI ODEMESI\";-44,02\n28.01.2025;\"GETIR YEMEK\";-44,63\n28.01.2025;;-37,25\n31.01.2025;\"METRO ISTANBUL\";-49,03\n01.02.2025;\"BIM MARKET\";-79,42\n02.01.2025;\"YEMEKSEPETI SIPARIS\";-51,10\n02.02.2025;\"KIRA ODEMESI\";-1205,28\n02.02.2025;\"CARREFOURSA MARKET\";-118,24\n02.02.2025;\"GETIR YEMEK\";-29,14\n02.02.2025;\"METRO ISTANBUL\";-37,95\n02.03.2025;\"MAAS ODEMESI\";5363,14\n02.04.2025;\"TAKSI ODEMESI\";-18,20\n02.05.2025;\"BIST HISSE ALIM\";-236,42\n02.07.2025;\"YEMEKSEPETI SIPARIS\";-33,11\n02.07.2025;\"BINANCE BTC ALIM\";-392,80\n08.02.2025;\"BIM MARKET\";-90,44\n02.09.2025;\"BIM MARKET\";-76,34\n02.09.2025;\"TAKSI ODEMESI\";-54,80\n02.09.2025;\"BIST HISSE ALIM\";-329,96\n10.02.2025;\"INTERNET FATURASI\";-49,65\n10.02.2025;\"MIGROS TICARET\";-47,70\n10.02.2025;\"IETT OTOBUS\";-20,88\n02.12.2025;\"METRO ISTANBUL\";-8,52\n14.02.2025;\"GETIR YEMEK\";-12,79\n15.02.2025;\"MIGROS TICARET\";-94,85\n15.02.2025;\"MIGROS TICARET\";-82,13\n17.02.2025;\"CARREFOURSA MARKET\";-16,29\n18.02.2025;\"A101 MARKET\";-85,69\n20.02.2025;\"YEMEKSEPETI SIPARIS\";-47,75\n20.02.2025;\"IETT OTOBUS\";-30,28\n21.02.2025;\"ELEKTRIK FATURASI\";-17,56\n21.02.2025;\"IETT OTOBUS\";-51,90\n22.02.2025;\"YEMEKSEPETI SIPARIS\";-59,82\n23.02.2025;\"IETT OTOBUS\";-18,98\n23.02.2025;\"METRO ISTANBUL\";-14,77\n26.02.2025;\"CARREFOURSA MARKET\";-53,52\n02.03.2025;\"KIRA ODEMESI\";-1205,28\n03.02.2025;\"BIM MARKET\";-26,90\n03.02.2025;\"IETT OTOBUS\";-30,39\n03.03.2025;\"MAAS ODEMESI\";5363,14\n03.03.2025;\"TAKSI ODEMESI\";-46,10\n03.04.2025;;-59,60\n03.04.2025;\"TAKSI ODEMESI\";-38,16\n05.03.2025;\"TRENDYOL YEMEK\";-10,01\n07.03.2025;\"YEMEKSEPETI SIPARIS\";-23,51\n03.08.2025;\"DOGALGAZ FATURASI\";-66,46\n03.11.2025;\"A101 MARKET\";-118,63\n03.11.2025;\"METRO ISTANBUL\";-19,40\n03.12.2025;\"YEMEKSEPETI SIPARIS\";-18,51\n13.03.2025;\"GETIR YEMEK\";-55,30\n13.03.2025;\"TAKSI ODEMESI\";-60,13\n14.03.2025;\"BIM MARKET\";-47,54\n14.03.2025;\"YEMEKSEPETI SIPARIS\";-55,40\n14.03.2025;\"IETT OTOBUS\";-58,99\n15.03.2025;\"BIST HISSE ALIM\";-282,81\n16.03.2025;\"BIM MARKET\";-20,07\n18.03.2025;\"IETT OTOBUS\";-55,86\n19.03.2025;\"YEMEKSEPETI SIPARIS\";-16,67\n21.03.2025;\"INTERNET FATURASI\";-13,89\n22.03.2025;\"YEMEKSEPETI SIPARIS\";-48,24\n24.03.2025;\"GETIR YEMEK\";-42,54\n24.03.2025;\"YEMEKSEPETI SIPARIS\";-38,90\n24.03.2025;\"METRO ISTANBUL\";-37,16\n27.03.2025;\"GETIR YEMEK\";-17,66\n29.03.2025;\"GETIR YEMEK\";-59,39\n29.03.2025;\"BIST HISSE ALIM\";-263,17\n31.03.2025;\"TAKSI ODEMESI\";-57,14",
+  "groundTruth": [
+    {
+      "date": "2025-01-01",
+      "amount": -36.42,
+      "description": "METRO ISTANBUL",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-02",
+      "amount": -1205.28,
+      "description": "KIRA ODEMESI",
+      "category": "Rent"
+    },
+    {
+      "date": "2025-01-02",
+      "amount": -267.05,
+      "description": "BINANCE BTC ALIM",
+      "category": "Investments"
+    },
+    {
+      "date": "2025-01-03",
+      "amount": 5363.14,
+      "description": "MAAŞ ÖDEMESİ ISVEREN A.S.",
+      "category": "Salary"
+    },
+    {
+      "date": "2025-01-03",
+      "amount": -63.31,
+      "description": "BIM MARKET",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-04",
+      "amount": -17.28,
+      "description": "YEMEKSEPETI SIPARIS",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-04",
+      "amount": -37.89,
+      "description": "GETIR YEMEK",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-04",
+      "amount": -43.19,
+      "description": "METRO ISTANBUL",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-06",
+      "amount": -36.93,
+      "description": "INTERNET FATURASI",
+      "category": "Utilities"
+    },
+    {
+      "date": "2025-01-06",
+      "amount": -117.77,
+      "description": "MIGROS TICARET",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-07",
+      "amount": -76.17,
+      "description": "BIM MARKET",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-10",
+      "amount": -99.86,
+      "description": "MIGROS TICARET",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-10",
+      "amount": -42.5,
+      "description": "YEMEKSEPETI SIPARIS",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-11",
+      "amount": -15.06,
+      "description": "YEMEKSEPETI SIPARIS",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-11",
+      "amount": -65.16,
+      "description": "METRO ISTANBUL",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-14",
+      "amount": -34.71,
+      "description": "TAKSI ODEMESI",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-15",
+      "amount": -13.26,
+      "description": "DOGALGAZ FATURASI",
+      "category": "Utilities"
+    },
+    {
+      "date": "2025-01-16",
+      "amount": -24.59,
+      "description": "TRENDYOL YEMEK",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-17",
+      "amount": -40.58,
+      "description": "A101 MARKET",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-17",
+      "amount": -37.95,
+      "description": "GETIR YEMEK",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-17",
+      "amount": -58.98,
+      "description": "IETT OTOBUS",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-18",
+      "amount": -115.27,
+      "description": "CARREFOURSA MARKET",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-18",
+      "amount": -69.77,
+      "description": "A101 MARKET",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-18",
+      "amount": -49.31,
+      "description": "TRENDYOL YEMEK",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-21",
+      "amount": -23.06,
+      "description": "IETT OTOBUS",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-21",
+      "amount": -50.27,
+      "description": "TAKSI ODEMESI",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-22",
+      "amount": -93.04,
+      "description": "MIGROS TICARET",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-23",
+      "amount": -96.92,
+      "description": "CARREFOURSA MARKET",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-23",
+      "amount": -15.5,
+      "description": "IETT OTOBUS",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-24",
+      "amount": -24.78,
+      "description": "TRENDYOL YEMEK",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-24",
+      "amount": -43.9,
+      "description": "YEMEKSEPETI SIPARIS",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-26",
+      "amount": -85.3,
+      "description": "A101 MARKET",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-27",
+      "amount": -44.02,
+      "description": "TAKSI ODEMESI",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-28",
+      "amount": -44.63,
+      "description": "GETIR YEMEK",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-28",
+      "amount": -37.25,
+      "description": "IETT OTOBUS",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-31",
+      "amount": -49.03,
+      "description": "METRO ISTANBUL",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-01",
+      "amount": -79.42,
+      "description": "BIM MARKET",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-02-01",
+      "amount": -51.1,
+      "description": "YEMEKSEPETI SIPARIS",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-02-02",
+      "amount": -1205.28,
+      "description": "KIRA ODEMESI",
+      "category": "Rent"
+    },
+    {
+      "date": "2025-02-02",
+      "amount": -118.24,
+      "description": "CARREFOURSA MARKET",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-02-02",
+      "amount": -29.14,
+      "description": "GETIR YEMEK",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-02-02",
+      "amount": -37.95,
+      "description": "METRO ISTANBUL",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-03",
+      "amount": 5363.14,
+      "description": "MAAS ODEMESI",
+      "category": "Salary"
+    },
+    {
+      "date": "2025-02-04",
+      "amount": -18.2,
+      "description": "TAKSI ODEMESI",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-05",
+      "amount": -236.42,
+      "description": "BIST HISSE ALIM",
+      "category": "Investments"
+    },
+    {
+      "date": "2025-02-07",
+      "amount": -33.11,
+      "description": "YEMEKSEPETI SIPARIS",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-02-07",
+      "amount": -392.8,
+      "description": "BINANCE BTC ALIM",
+      "category": "Investments"
+    },
+    {
+      "date": "2025-02-08",
+      "amount": -90.44,
+      "description": "BIM MARKET",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-02-09",
+      "amount": -76.34,
+      "description": "BIM MARKET",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-02-09",
+      "amount": -54.8,
+      "description": "TAKSI ODEMESI",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-09",
+      "amount": -329.96,
+      "description": "BIST HISSE ALIM",
+      "category": "Investments"
+    },
+    {
+      "date": "2025-02-10",
+      "amount": -49.65,
+      "description": "INTERNET FATURASI",
+      "category": "Utilities"
+    },
+    {
+      "date": "2025-02-10",
+      "amount": -47.7,
+      "description": "MIGROS TICARET",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-02-10",
+      "amount": -20.88,
+      "description": "IETT OTOBUS",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-12",
+      "amount": -8.52,
+      "description": "METRO ISTANBUL",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-14",
+      "amount": -12.79,
+      "description": "GETIR YEMEK",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-02-15",
+      "amount": -94.85,
+      "description": "MIGROS TICARET",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-02-15",
+      "amount": -82.13,
+      "description": "MIGROS TICARET",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-02-17",
+      "amount": -16.29,
+      "description": "CARREFOURSA MARKET",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-02-18",
+      "amount": -85.69,
+      "description": "A101 MARKET",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-02-20",
+      "amount": -47.75,
+      "description": "YEMEKSEPETI SIPARIS",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-02-20",
+      "amount": -30.28,
+      "description": "IETT OTOBUS",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-21",
+      "amount": -17.56,
+      "description": "ELEKTRIK FATURASI",
+      "category": "Utilities"
+    },
+    {
+      "date": "2025-02-21",
+      "amount": -51.9,
+      "description": "IETT OTOBUS",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-22",
+      "amount": -59.82,
+      "description": "YEMEKSEPETI SIPARIS",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-02-23",
+      "amount": -18.98,
+      "description": "IETT OTOBUS",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-23",
+      "amount": -14.77,
+      "description": "METRO ISTANBUL",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-02-26",
+      "amount": -53.52,
+      "description": "CARREFOURSA MARKET",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-03-02",
+      "amount": -1205.28,
+      "description": "KIRA ODEMESI",
+      "category": "Rent"
+    },
+    {
+      "date": "2025-03-02",
+      "amount": -26.9,
+      "description": "BIM MARKET",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-03-02",
+      "amount": -30.39,
+      "description": "IETT OTOBUS",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-03-03",
+      "amount": 5363.14,
+      "description": "MAAS ODEMESI",
+      "category": "Salary"
+    },
+    {
+      "date": "2025-03-03",
+      "amount": -46.1,
+      "description": "TAKSI ODEMESI",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-03-04",
+      "amount": -59.6,
+      "description": "TAKSI ODEMESI",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-03-04",
+      "amount": -38.16,
+      "description": "TAKSI ODEMESI",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-03-05",
+      "amount": -10.01,
+      "description": "TRENDYOL YEMEK",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-03-07",
+      "amount": -23.51,
+      "description": "YEMEKSEPETI SIPARIS",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-03-08",
+      "amount": -66.46,
+      "description": "DOGALGAZ FATURASI",
+      "category": "Utilities"
+    },
+    {
+      "date": "2025-03-11",
+      "amount": -118.63,
+      "description": "A101 MARKET",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-03-11",
+      "amount": -19.4,
+      "description": "METRO ISTANBUL",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-03-12",
+      "amount": -18.51,
+      "description": "YEMEKSEPETI SIPARIS",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-03-13",
+      "amount": -55.3,
+      "description": "GETIR YEMEK",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-03-13",
+      "amount": -60.13,
+      "description": "TAKSI ODEMESI",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-03-14",
+      "amount": -47.54,
+      "description": "BIM MARKET",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-03-14",
+      "amount": -55.4,
+      "description": "YEMEKSEPETI SIPARIS",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-03-14",
+      "amount": -58.99,
+      "description": "IETT OTOBUS",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-03-15",
+      "amount": -282.81,
+      "description": "BIST HISSE ALIM",
+      "category": "Investments"
+    },
+    {
+      "date": "2025-03-16",
+      "amount": -20.07,
+      "description": "BIM MARKET",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-03-18",
+      "amount": -55.86,
+      "description": "IETT OTOBUS",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-03-19",
+      "amount": -16.67,
+      "description": "YEMEKSEPETI SIPARIS",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-03-21",
+      "amount": -13.89,
+      "description": "INTERNET FATURASI",
+      "category": "Utilities"
+    },
+    {
+      "date": "2025-03-22",
+      "amount": -48.24,
+      "description": "YEMEKSEPETI SIPARIS",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-03-24",
+      "amount": -42.54,
+      "description": "GETIR YEMEK",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-03-24",
+      "amount": -38.9,
+      "description": "YEMEKSEPETI SIPARIS",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-03-24",
+      "amount": -37.16,
+      "description": "METRO ISTANBUL",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-03-27",
+      "amount": -17.66,
+      "description": "GETIR YEMEK",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-03-29",
+      "amount": -59.39,
+      "description": "GETIR YEMEK",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-03-29",
+      "amount": -263.17,
+      "description": "BIST HISSE ALIM",
+      "category": "Investments"
+    },
+    {
+      "date": "2025-03-31",
+      "amount": -57.14,
+      "description": "TAKSI ODEMESI",
+      "category": "Transport"
+    }
+  ]
+}

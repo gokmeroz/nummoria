@@ -1,0 +1,31 @@
+{
+  "id": "us-credit-debit",
+  "description": "US export with split Credit/Debit columns instead of a signed Amount.",
+  "locale": "en-US",
+  "currency": "USD",
+  "dateFormat": "MM/DD/YYYY",
+  "decimalStyle": "dot",
+  "csv": {
+    "dateHeader": "Date",
+    "descriptionHeader": "Description",
+    "amountMode": "credit-debit",
+    "creditHeader": "Credit Amount",
+    "debitHeader": "Debit Amount"
+  },
+  "merchants": {
+    "Salary": ["EMPLOYER DIRECT DEP", "PAYROLL ACH CREDIT"],
+    "Rent": ["LANDLORD ACH DEBIT"],
+    "Groceries": ["KROGER #4471", "COSTCO WHOLESALE", "ALDI GROCERY"],
+    "Dining": ["CHIPOTLE ONLINE", "STARBUCKS STORE", "DOORDASH DELIVERY"],
+    "Transport": ["UBER RIDE", "EXXON GAS STATION", "TAXI SERVICE"],
+    "Investments": ["FIDELITY ETF PURCHASE", "COINBASE BTC BUY"],
+    "Utilities": ["SPOTIFY SUBSCRIPTION", "WATER UTILITY BILL", "AT&T INTERNET BILL"]
+  },
+  "noise": {
+    "multilineProb": 0.08,
+    "missingDescriptionProb": 0.03,
+    "ambiguousDateProb": 0.4,
+    "ocrTypoProb": 0.05,
+    "extraWhitespaceProb": 0.12
+  }
+}

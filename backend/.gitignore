@@ -19,6 +19,11 @@ dist/
 build/
 coverage/
 
+# eval — regenerated per run; golden fixtures under src/eval/datasets/golden/
+# are committed on purpose, this is not
+src/eval/datasets/synthetic/output/
+src/eval/reports/
+
 # OS / editor
 .DS_Store
 .idea/

@@ -3,6 +3,13 @@ import OpenAI from "openai";
 import { GoogleGenAI } from "@google/genai"; // <-- ADDED
 import { noopTrace } from "../observability/trace.js";
 import { describePrompt } from "../observability/promptRegistry.js";
+import { scoreParserSelf, scoreAgreement, scoreModelOnly } from "./confidence.js";
+
+// Below this average parser-self confidence, escalate to the model even if
+// the deterministic tier found >=5 transactions (see docs/ai-roadmap/SCHEMA.md
+// for why this can't be based on parser/model agreement — agreement needs
+// the model to have already run).
+const ESCALATION_CONFIDENCE_THRESHOLD = 0.6;
 
 // Make key optional; fall back gracefully to regex-only
 const openai2 = process.env.OPENAI_API_KEY
@@ -31,7 +38,13 @@ export async function parseTransactionsFromText(
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const dateM = line.match(DATE_RGX);
-    const amtM = line.match(AMOUNT_RGX);
+    // Search for the amount *after* the date match, not the raw line — an
+    // unanchored AMOUNT_RGX otherwise matches the date's own digits first
+    // (e.g. the "01" in "01/15/2025") and returns that as the amount.
+    const amountSearchSpace = dateM
+      ? line.slice(dateM.index + dateM[0].length)
+      : line;
+    const amtM = amountSearchSpace.match(AMOUNT_RGX);
 
     if (dateM && amtM) {
       const date = normalizeDate(dateM[1]);
@@ -43,12 +56,20 @@ export async function parseTransactionsFromText(
         .trim();
 
       if (!Number.isNaN(amount)) {
+        const category = guessCategory(description);
         txs.push({
           date,
           description,
-          category: guessCategory(description),
+          category,
           amount,
           type: amount >= 0 ? "income" : "expense",
+          confidence: scoreParserSelf({
+            dateMatch: dateM,
+            amountMatch: amtM,
+            description,
+            category,
+            multiline: false,
+          }),
         });
         continue;
       }
@@ -56,24 +77,43 @@ export async function parseTransactionsFromText(
 
     // Heuristic: date on line i, amount on i+1, description on i+2
     if (DATE_RGX.test(line) && AMOUNT_RGX.test(lines[i + 1] || "")) {
-      const date = normalizeDate(line.match(DATE_RGX)[1]);
-      const amount = normalizeAmount((lines[i + 1].match(AMOUNT_RGX) || [])[1]);
+      const dateMatch = line.match(DATE_RGX);
+      const amountMatch = lines[i + 1].match(AMOUNT_RGX);
+      const date = normalizeDate(dateMatch[1]);
+      const amount = normalizeAmount((amountMatch || [])[1]);
       const desc = (lines[i + 2] || "").slice(0, 120);
       if (!Number.isNaN(amount)) {
+        const category = guessCategory(desc);
         txs.push({
           date,
           description: desc,
-          category: guessCategory(desc),
+          category,
           amount,
           type: amount >= 0 ? "income" : "expense",
+          confidence: scoreParserSelf({
+            dateMatch,
+            amountMatch,
+            description: desc,
+            category,
+            multiline: true,
+          }),
         });
       }
       i += 2;
     }
   }
 
-  // Optional LLM fallback if few txs parsed (CHECK FOR EITHER KEY)
-  if (txs.length < 5 && useLLMFallback && (openai2 || gemini2)) {
+  // Escalate when the deterministic tier found too few rows (coverage) OR
+  // found rows but wasn't confident about them (quality) — see
+  // scoreParserSelf(). Both signals come from the parser alone; no model
+  // call is spent deciding whether to spend a model call.
+  const avgParserConfidence = txs.length
+    ? txs.reduce((sum, t) => sum + t.confidence.overall, 0) / txs.length
+    : 0;
+  const parserNeedsHelp =
+    txs.length < 5 || avgParserConfidence < ESCALATION_CONFIDENCE_THRESHOLD;
+
+  if (parserNeedsHelp && useLLMFallback && (openai2 || gemini2)) {
     const prompt = `Extract bank-like transactions as JSON array with keys:
 - date (YYYY-MM-DD)
 - description (string)
@@ -181,14 +221,37 @@ ${text.slice(0, 12000)}
         const arr = JSON.parse(jsonStr);
 
         if (Array.isArray(arr)) {
+          // The model tier replaces the (low-confidence, or too sparse)
+          // parser tier as the source of truth — but before discarding the
+          // parser's guesses, use them as a cross-check: a model tx that
+          // lines up with a parser tx on date+amount gets "agreement"
+          // confidence; one the parser never found gets "model-only"
+          // confidence, capped lower because nothing corroborates it.
+          const usedParserIdx = new Set();
           return arr
-            .map((t) => ({
-              date: t.date,
-              description: t.description,
-              amount: Number(t.amount),
-              category: guessCategory(t.description),
-              type: Number(t.amount) >= 0 ? "income" : "expense",
-            }))
+            .map((t) => {
+              const category = guessCategory(t.description);
+              const modelTx = {
+                date: t.date,
+                description: t.description,
+                amount: Number(t.amount),
+                category,
+                type: Number(t.amount) >= 0 ? "income" : "expense",
+              };
+              const matchIdx = txs.findIndex(
+                (p, idx) =>
+                  !usedParserIdx.has(idx) &&
+                  p.date === modelTx.date &&
+                  Math.abs(p.amount - modelTx.amount) < 0.01,
+              );
+              if (matchIdx >= 0) {
+                usedParserIdx.add(matchIdx);
+                modelTx.confidence = scoreAgreement(txs[matchIdx], modelTx);
+              } else {
+                modelTx.confidence = scoreModelOnly();
+              }
+              return modelTx;
+            })
             .filter((t) => t.date && !Number.isNaN(t.amount));
         }
       }
