@@ -44,6 +44,7 @@ export async function parseTransactionsFromText(
     .filter(Boolean);
   const txs = [];
   const dateOrder = detectDateOrder(lines);
+  const period = detectStatementPeriod(lines);
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -60,7 +61,7 @@ export async function parseTransactionsFromText(
     const amtM = [...amountSearchSpace.matchAll(AMOUNT_RGX_ALL)].at(-1) ?? null;
 
     if (dateM && amtM) {
-      const date = normalizeDate(dateM[1], dateOrder);
+      const date = fitDateToPeriod(dateM[1], dateOrder, period);
       const amount = normalizeAmount(amtM[1]);
       // Cut out exactly the matched date and amount by position — a
       // replace() by value would remove the first equal text instead
@@ -98,7 +99,7 @@ export async function parseTransactionsFromText(
     if (DATE_RGX.test(line) && AMOUNT_RGX.test(lines[i + 1] || "")) {
       const dateMatch = line.match(DATE_RGX);
       const amountMatch = lines[i + 1].match(AMOUNT_RGX);
-      const date = normalizeDate(dateMatch[1], dateOrder);
+      const date = fitDateToPeriod(dateMatch[1], dateOrder, period);
       const amount = normalizeAmount((amountMatch || [])[1]);
       const desc = (lines[i + 2] || "").slice(0, 120);
       if (!Number.isNaN(amount)) {
@@ -306,6 +307,30 @@ function detectDateOrder(lines) {
   if (dayFirst && !monthFirst) return "DMY";
   if (monthFirst && !dayFirst) return "MDY";
   return null;
+}
+
+// Statement period from a header like "Period: 2025-01-01 to 2025-03-30".
+// Only ISO dates are trusted here: they have no day/month ambiguity, so the
+// period can be used to check the ambiguous transaction dates.
+function detectStatementPeriod(lines) {
+  for (const line of lines) {
+    const m = line.match(
+      /(\d{4}-\d{2}-\d{2})\s*(?:to|-|–|—)\s*(\d{4}-\d{2}-\d{2})/i,
+    );
+    if (m && m[1] <= m[2]) return { start: m[1], end: m[2] };
+  }
+  return null;
+}
+
+// Some statements swap DD/MM on individual rows, which a document-wide
+// order can't catch. If a row's date falls outside the statement period
+// and its other reading falls inside, the other reading is the row's date.
+// Dates where both readings fit (01/02 vs 02/01 in Jan-Mar) stay as read.
+function fitDateToPeriod(raw, order, period) {
+  const date = normalizeDate(raw, order);
+  if (!period || (date >= period.start && date <= period.end)) return date;
+  const other = normalizeDate(raw, order === "DMY" ? "MDY" : "DMY");
+  return other >= period.start && other <= period.end ? other : date;
 }
 
 function normalizeDate(s, order = null) {
