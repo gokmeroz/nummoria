@@ -1,10 +1,6 @@
 /* eslint-disable */
 
 // ---------- IMPORTS ----------
-import { createRequire } from "module";
-const require = createRequire(import.meta.url);
-const pdf = require("pdf-parse");
-
 import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import mongoose from "mongoose";
@@ -15,6 +11,7 @@ import { User } from "../models/user.js";
 import { Transaction } from "../models/transaction.js";
 import { computeMetrics } from "../ai/financialMetrics.js";
 import { parseTransactionsFromText } from "../ai/pdfParser.js";
+import { extractPdfText } from "../ai/pdfText.js";
 import { getPromptForSubscription } from "../ai/prompts/index.js";
 import { startTrace, noopTrace } from "../observability/trace.js";
 import { describePrompt } from "../observability/promptRegistry.js";
@@ -1094,8 +1091,7 @@ export async function ingestPdf(req, res) {
         });
       }
     } else {
-      const data = await pdf(req.file.buffer);
-      const contentText = (data.text || "").replace(/\u0000/g, "");
+      const contentText = await extractPdfText(req.file.buffer);
 
       if (!contentText.trim()) {
         return res.status(400).json({

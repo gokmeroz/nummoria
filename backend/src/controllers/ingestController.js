@@ -1,5 +1,5 @@
 // backend/src/controllers/ingestController.js
-// Node 22, "type":"module" — PDF ingest via pdfjs-dist, no new folders.
+// Node 22, "type":"module" — PDF ingest via ai/pdfText.js, no new folders.
 //
 // ✅ FIX SUMMARY
 // - NEW: Correctly extract authenticated userId from requireAuth middleware (req.user.id / req.userId)
@@ -31,44 +31,8 @@ import { Transaction } from "../models/transaction.js";
 import AiAdvisorFile from "../models/AiAdvisorFile.js";
 import { computeMetrics } from "../ai/financialMetrics.js";
 
-// ---- PDF text extraction via pdfjs-dist (ESM) ----
-import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
-
-/**
- * Extract text from PDF buffer using pdfjs-dist (works in Node)
- */
-async function extractPdfText(pdfBuffer) {
-  // ✅ pdfjs-dist refuses Buffer; make a real Uint8Array copy
-  const data = Buffer.isBuffer(pdfBuffer)
-    ? new Uint8Array(pdfBuffer) // copies buffer into Uint8Array
-    : pdfBuffer instanceof Uint8Array
-    ? pdfBuffer
-    : new Uint8Array(pdfBuffer);
-
-  const loadingTask = getDocument({
-    data,
-    disableWorker: true,
-    isEvalSupported: false,
-    useSystemFonts: true,
-    disableFontFace: true,
-  });
-
-  const pdf = await loadingTask.promise;
-  let text = "";
-
-  try {
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      const line = content.items.map((it) => it.str ?? "").join(" ");
-      text += line + "\n";
-    }
-  } finally {
-    await pdf.destroy();
-  }
-
-  return text;
-}
+// ---- PDF text extraction (shared, line-preserving) ----
+import { extractPdfText } from "../ai/pdfText.js";
 
 /* ------------------------------ Upload middleware ------------------------------ */
 /**
