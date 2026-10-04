@@ -12,7 +12,7 @@
 // as a false positive for every field; a ground-truth row nothing matched
 // counts as a false negative for every field.
 
-const FIELDS = ["date", "amount", "description", "category"];
+export const FIELDS = ["date", "amount", "description", "category"];
 
 function tokenOverlap(a, b) {
   const ta = new Set(String(a || "").toLowerCase().split(/\s+/).filter(Boolean));
@@ -23,7 +23,7 @@ function tokenOverlap(a, b) {
   return shared / Math.max(ta.size, tb.size);
 }
 
-function matchRows(extracted, groundTruth) {
+export function matchRows(extracted, groundTruth) {
   const usedGT = new Set();
   const pairs = [];
   const falsePositives = [];
@@ -54,7 +54,7 @@ function matchRows(extracted, groundTruth) {
   return { pairs, falsePositives, falseNegatives };
 }
 
-function fieldsAgree(field, exVal, gtVal) {
+export function fieldsAgree(field, exVal, gtVal) {
   if (field === "amount") return Math.abs(Number(exVal) - Number(gtVal)) < 0.005;
   if (field === "date") return exVal === gtVal;
   return String(exVal || "").trim().toLowerCase() === String(gtVal || "").trim().toLowerCase();
