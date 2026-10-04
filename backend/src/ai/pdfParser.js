@@ -43,6 +43,7 @@ export async function parseTransactionsFromText(
     .map((s) => s.trim())
     .filter(Boolean);
   const txs = [];
+  const dateOrder = detectDateOrder(lines);
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -59,7 +60,7 @@ export async function parseTransactionsFromText(
     const amtM = [...amountSearchSpace.matchAll(AMOUNT_RGX_ALL)].at(-1) ?? null;
 
     if (dateM && amtM) {
-      const date = normalizeDate(dateM[1]);
+      const date = normalizeDate(dateM[1], dateOrder);
       const amount = normalizeAmount(amtM[1]);
       // Cut out exactly the matched date and amount by position — a
       // replace() by value would remove the first equal text instead
@@ -97,7 +98,7 @@ export async function parseTransactionsFromText(
     if (DATE_RGX.test(line) && AMOUNT_RGX.test(lines[i + 1] || "")) {
       const dateMatch = line.match(DATE_RGX);
       const amountMatch = lines[i + 1].match(AMOUNT_RGX);
-      const date = normalizeDate(dateMatch[1]);
+      const date = normalizeDate(dateMatch[1], dateOrder);
       const amount = normalizeAmount((amountMatch || [])[1]);
       const desc = (lines[i + 2] || "").slice(0, 120);
       if (!Number.isNaN(amount)) {
@@ -286,9 +287,31 @@ ${text.slice(0, 12000)}
   return txs;
 }
 
-function normalizeDate(s) {
-  // ... (normalizeDate function remains the same) ...
-  // supports DD.MM.YYYY, MM/DD/YYYY, etc. Returns YYYY-MM-DD
+// Day/month order for the whole statement. One line alone can't tell
+// whether 05/01 is May 1st or January 5th, but a statement uses one format
+// throughout, and any date with a part > 12 can only be read one way:
+// 25/01 is DD/MM, 01/25 is MM/DD. Returns "DMY", "MDY", or null when the
+// document has no such date, or has both kinds (contradicting evidence) —
+// then each line keeps normalizeDate's own guess.
+function detectDateOrder(lines) {
+  let dayFirst = 0;
+  let monthFirst = 0;
+  for (const line of lines) {
+    const m = line.match(DATE_RGX);
+    if (!m) continue;
+    const [a, b] = m[1].split(/[\/\.\-]/).map(Number);
+    if (a > 12 && b <= 12) dayFirst++;
+    else if (b > 12 && a <= 12) monthFirst++;
+  }
+  if (dayFirst && !monthFirst) return "DMY";
+  if (monthFirst && !dayFirst) return "MDY";
+  return null;
+}
+
+function normalizeDate(s, order = null) {
+  // supports DD.MM.YYYY, MM/DD/YYYY, etc. Returns YYYY-MM-DD. `order` (from
+  // detectDateOrder) only decides dates where both parts are <= 12; a part
+  // > 12 always settles that date by itself.
   const parts = s
     .replace(/-/g, "/")
     .replace(/\./g, "/")
@@ -304,6 +327,9 @@ function normalizeDate(s) {
     } else if (b > 12) {
       d = b;
       m = a;
+    } else if (order === "DMY") {
+      d = a;
+      m = b;
     } else {
       m = a;
       d = b;
@@ -313,7 +339,7 @@ function normalizeDate(s) {
     y = String(2000 + Number(parts[2] || "0"));
     const a = Number(parts[0]);
     const b = Number(parts[1]);
-    if (a > 12) {
+    if (a > 12 || (b <= 12 && order === "DMY")) {
       d = a;
       m = b;
     } else {
