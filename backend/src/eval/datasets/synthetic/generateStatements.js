@@ -7,10 +7,9 @@
 //   committed JSON fixtures under datasets/golden/extraction/ (fixed seed,
 //   text-only — see docs/ai-roadmap/SCHEMA.md for why no binary PDFs there)
 //
-// KNOWN CAVEAT: the PDF files this script writes in bulk mode are valid
-// PDFs, but backend/src/controllers/financialHelperController.js's ingestPdf
-// currently cannot read *any* PDF — see the P0 session notes. They're
-// produced for when that's fixed, and to eyeball the generator's output.
+// The PDF files this script writes in bulk mode are real PDFs, readable by
+// backend/src/ai/pdfText.js — use them to exercise the full upload path
+// (extraction + cascade), which the text-only golden fixtures skip.
 
 import fs from "fs";
 import path from "path";

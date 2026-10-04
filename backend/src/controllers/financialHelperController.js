@@ -3,15 +3,12 @@
 // ---------- IMPORTS ----------
 import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import mongoose from "mongoose";
 import { parse as parseCSV } from "csv-parse/sync";
 
 import AiAdvisorFile from "../models/AiAdvisorFile.js";
 import { User } from "../models/user.js";
 import { Transaction } from "../models/transaction.js";
 import { computeMetrics } from "../ai/financialMetrics.js";
-import { parseTransactionsFromText } from "../ai/pdfParser.js";
-import { extractPdfText } from "../ai/pdfText.js";
 import { getPromptForSubscription } from "../ai/prompts/index.js";
 import { startTrace, noopTrace } from "../observability/trace.js";
 import { describePrompt } from "../observability/promptRegistry.js";
@@ -1021,164 +1018,6 @@ async function buildContextFromUserTransactions(userId) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                            FILE INGEST FOR ADVISOR                          */
-/* -------------------------------------------------------------------------- */
-
-export async function ingestPdf(req, res) {
-  const trace = startTrace({ req, operation: "ingest.document" });
-  if (trace.id) res.setHeader("X-Trace-Id", trace.id);
-  // ingestPdf has many early-return branches; finalize once when the response
-  // is flushed rather than threading finalize() through each exit.
-  res.on("finish", () => {
-    const status =
-      res.statusCode >= 500 ? "error" : res.statusCode >= 400 ? "partial" : "ok";
-    trace.finalize(status);
-  });
-
-  try {
-    const ct = String(req.headers["content-type"] || "").toLowerCase();
-    if (!ct.includes("multipart/form-data")) {
-      return res.status(415).json({
-        ok: false,
-        code: "BAD_CONTENT_TYPE",
-        message:
-          "Upload requires multipart/form-data. If you use Axios, do NOT set Content-Type manually; let the browser set it for FormData.",
-      });
-    }
-
-    if (!req.file || !req.file.buffer) {
-      return res.status(400).json({
-        ok: false,
-        code: "NO_FILE",
-        message:
-          "No file received. Make sure the form field name is 'file' (upload.single('file')).",
-      });
-    }
-
-    const original = String(req.file.originalname || "");
-    const name = original.toLowerCase();
-    const mimetype = String(req.file.mimetype || "").toLowerCase();
-
-    const isCsv =
-      mimetype.includes("csv") ||
-      name.endsWith(".csv") ||
-      mimetype === "application/vnd.ms-excel";
-
-    const isPdf = mimetype === "application/pdf" || name.endsWith(".pdf");
-
-    if (!isCsv && !isPdf) {
-      return res.status(415).json({
-        ok: false,
-        code: "UNSUPPORTED_TYPE",
-        message: "Only PDF or CSV files are allowed.",
-        meta: { mimetype, originalname: original },
-      });
-    }
-
-    let parsedTransactions = [];
-    const note = isCsv ? "csv" : "pdf";
-
-    if (isCsv) {
-      parsedTransactions = csvToTxRows(req.file.buffer);
-
-      if (!parsedTransactions.length) {
-        return res.status(422).json({
-          ok: false,
-          code: "NO_TRANSACTIONS",
-          message:
-            "We couldn't read any transactions from this CSV. Ensure it has headers like Date/Description/Amount or Credit/Debit.",
-          note,
-        });
-      }
-    } else {
-      const contentText = await extractPdfText(req.file.buffer);
-
-      if (!contentText.trim()) {
-        return res.status(400).json({
-          ok: false,
-          code: "PDF_NO_TEXT",
-          message:
-            "PDF has no extractable text. Upload a text-based PDF or CSV.",
-        });
-      }
-
-      parsedTransactions = await parseTransactionsFromText(contentText, {
-        useLLMFallback: Boolean(
-          process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY,
-        ),
-        trace,
-      });
-      trace.setAttributes({ format: "pdf", textLength: contentText.length });
-
-      if (!parsedTransactions.length) {
-        return res.status(422).json({
-          ok: false,
-          code: "NO_TRANSACTIONS",
-          message:
-            "We couldn't read any transactions from this PDF. Try your bank’s CSV export or another statement format.",
-          note,
-        });
-      }
-    }
-
-    const computedMetrics = computeMetrics(parsedTransactions);
-
-    let fileId = null;
-    try {
-      if (mongoose.connection.readyState === 1) {
-        const doc = await AiAdvisorFile.create({
-          userId:
-            req.user?._id ||
-            req.user?.id ||
-            req.userId ||
-            req.body.userId ||
-            null,
-          fileName: req.file.originalname,
-          contentText: undefined,
-          parsedTransactions,
-          computedMetrics,
-        });
-        fileId = doc._id;
-      } else if (isDev) {
-        console.warn(
-          "Mongo not connected (readyState:",
-          mongoose.connection.readyState,
-          ")",
-        );
-      }
-    } catch (e) {
-      if (isDev) console.warn("Mongo save skipped:", e.message);
-    }
-
-    const totals = {
-      txCount: parsedTransactions.length,
-      income: parsedTransactions
-        .filter((t) => Number(t.amount) > 0)
-        .reduce((a, b) => a + Number(b.amount || 0), 0),
-      expense: parsedTransactions
-        .filter((t) => Number(t.amount) < 0)
-        .reduce((a, b) => a + Number(b.amount || 0), 0),
-    };
-
-    return res.json({
-      ok: true,
-      fileId,
-      totals,
-      computedMetrics,
-      note,
-    });
-  } catch (err) {
-    console.error("ingestPdf error:", err);
-    return res.status(500).json({
-      ok: false,
-      code: "INGEST_FAILED",
-      message: "Failed to ingest file",
-      details: isDev ? String(err.message || err) : undefined,
-    });
-  }
-}
-
-/* -------------------------------------------------------------------------- */
 /*                              AI ADVISOR ROUTE                              */
 /* -------------------------------------------------------------------------- */
 
@@ -1341,4 +1180,4 @@ export async function chat(req, res) {
   }
 }
 
-export default { ingestPdf, aiAdvisor, chat };
+export default { aiAdvisor, chat };

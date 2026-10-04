@@ -85,7 +85,7 @@ confidence shape.
 ## Where this doesn't reach yet
 
 `TransactionDraft.confidence` stays a scalar for now — nothing in the current
-PDF/CSV ingest path (`ingestPdf`) creates a `TransactionDraft` at all; it
+PDF/CSV ingest path (`ingestController.ingestFile`) creates a `TransactionDraft` at all; it
 saves parsed rows to `AiAdvisorFile` and returns them straight to the client.
 Wiring per-field confidence onto a Mongoose field nothing populates yet would
 be dead schema. When P1 builds the correction UI and starts persisting

@@ -27,7 +27,15 @@ const AMOUNT_RGX =
 
 export async function parseTransactionsFromText(
   text,
-  { useLLMFallback = false, trace = noopTrace } = {}
+  {
+    useLLMFallback = false,
+    trace = noopTrace,
+    // Asked only when the parser needs help AND a model is configured — i.e.
+    // at the exact point a model call would be spent. Resolve false to stay
+    // on the deterministic result. The parser knows nothing about users or
+    // quotas; the caller decides (and records) what "budget" means.
+    allowEscalation = async () => true,
+  } = {}
 ) {
   const lines = text
     .split(/\r?\n/)
@@ -113,7 +121,12 @@ export async function parseTransactionsFromText(
   const parserNeedsHelp =
     txs.length < 5 || avgParserConfidence < ESCALATION_CONFIDENCE_THRESHOLD;
 
-  if (parserNeedsHelp && useLLMFallback && (openai2 || gemini2)) {
+  if (
+    parserNeedsHelp &&
+    useLLMFallback &&
+    (openai2 || gemini2) &&
+    (await allowEscalation())
+  ) {
     const prompt = `Extract bank-like transactions as JSON array with keys:
 - date (YYYY-MM-DD)
 - description (string)

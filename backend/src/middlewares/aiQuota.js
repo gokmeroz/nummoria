@@ -101,6 +101,75 @@ function memIncr(key) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  COUNTER                                                            */
+/* ------------------------------------------------------------------ */
+/*
+Spend one unit from a per-user, per-tier, 24h bucket. Each bucket is its own
+counter ("aiq" = advisor requests, "aix" = extraction escalations), so one
+feature can't eat another's budget.
+
+Usable outside middleware: callers that only learn mid-request whether they
+need to spend (e.g. the extraction cascade) call this at the point of spend.
+Throws if the counter store errors — each caller picks fail-open or -closed.
+*/
+export async function consumeQuota(bucket, userId, rawSubscription) {
+  // 🔑 authoritative source: User.subscription
+  const subscription = normalizeSubscription(rawSubscription);
+  const limit = tierLimit(subscription);
+
+  // Premium → unlimited, skip Redis entirely
+  if (!Number.isFinite(limit)) {
+    return {
+      allowed: true,
+      subscription,
+      limit: Infinity,
+      used: 0,
+      remaining: Infinity,
+      resetInSeconds: 0,
+      source: "none",
+    };
+  }
+
+  const key = `${bucket}:${String(userId)}`;
+  let count;
+  let ttl;
+  let source;
+
+  /* ---------------------- Redis path ---------------------- */
+  const r = getRedis();
+
+  if (r && redisReady) {
+    const lua = `
+      local v = redis.call("INCR", KEYS[1])
+      if v == 1 then
+        redis.call("EXPIRE", KEYS[1], ARGV[1])
+      end
+      local ttl = redis.call("TTL", KEYS[1])
+      return {v, ttl}
+    `;
+
+    const [countRaw, ttlRaw] = await r.eval(lua, 1, key, WINDOW_SECONDS);
+    count = Number(countRaw || 0);
+    ttl = Math.max(0, Number(ttlRaw || 0));
+    source = "redis";
+  } else {
+    /* ------------------ Memory fallback ------------------ */
+    ({ count, ttl } = memIncr(key));
+    source = "memory";
+  }
+
+  return {
+    allowed: count <= limit,
+    subscription,
+    limit,
+    used: count,
+    remaining: Math.max(0, limit - count),
+    resetInSeconds: ttl,
+    source,
+  };
+}
+
+/* ------------------------------------------------------------------ */
 /*  MIDDLEWARE                                                         */
 /* ------------------------------------------------------------------ */
 export async function aiQuota(req, res, next) {
@@ -110,86 +179,23 @@ export async function aiQuota(req, res, next) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    // 🔑 authoritative source: User.subscription
-    const subscription = normalizeSubscription(req.user?.subscription);
-    const limit = tierLimit(subscription);
+    const { allowed, ...quota } = await consumeQuota(
+      "aiq",
+      userId,
+      req.user?.subscription,
+    );
 
-    // Premium → unlimited, skip Redis entirely
-    if (!Number.isFinite(limit)) {
-      req.aiQuota = {
-        subscription,
-        limit: Infinity,
-        used: 0,
-        remaining: Infinity,
-        resetInSeconds: 0,
-        source: "none",
-      };
-      return next();
-    }
-
-    const key = `aiq:${String(userId)}`;
-
-    /* ---------------------- Redis path ---------------------- */
-    const r = getRedis();
-
-    if (r && redisReady) {
-      const lua = `
-        local v = redis.call("INCR", KEYS[1])
-        if v == 1 then
-          redis.call("EXPIRE", KEYS[1], ARGV[1])
-        end
-        local ttl = redis.call("TTL", KEYS[1])
-        return {v, ttl}
-      `;
-
-      const [countRaw, ttlRaw] = await r.eval(lua, 1, key, WINDOW_SECONDS);
-
-      const count = Number(countRaw || 0);
-      const ttl = Math.max(0, Number(ttlRaw || 0));
-
-      if (count > limit) {
-        return res.status(429).json({
-          error: "AI quota exceeded",
-          subscription,
-          limit,
-          remaining: 0,
-          resetInSeconds: ttl,
-        });
-      }
-
-      req.aiQuota = {
-        subscription,
-        limit,
-        used: count,
-        remaining: Math.max(0, limit - count),
-        resetInSeconds: ttl,
-        source: "redis",
-      };
-      return next();
-    }
-
-    /* ------------------ Memory fallback ------------------ */
-    const { count, ttl } = memIncr(key);
-
-    if (count > limit) {
+    if (!allowed) {
       return res.status(429).json({
         error: "AI quota exceeded",
-        subscription,
-        limit,
+        subscription: quota.subscription,
+        limit: quota.limit,
         remaining: 0,
-        resetInSeconds: ttl,
+        resetInSeconds: quota.resetInSeconds,
       });
     }
 
-    req.aiQuota = {
-      subscription,
-      limit,
-      used: count,
-      remaining: Math.max(0, limit - count),
-      resetInSeconds: ttl,
-      source: "memory",
-    };
-
+    req.aiQuota = quota;
     return next();
   } catch (err) {
     // fail-open: AI still works if quota infra explodes

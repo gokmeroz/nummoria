@@ -31,8 +31,11 @@ import { Transaction } from "../models/transaction.js";
 import AiAdvisorFile from "../models/AiAdvisorFile.js";
 import { computeMetrics } from "../ai/financialMetrics.js";
 
-// ---- PDF text extraction (shared, line-preserving) ----
+// ---- PDF text extraction (shared, line-preserving) + advisor cascade ----
 import { extractPdfText } from "../ai/pdfText.js";
+import { parseTransactionsFromText } from "../ai/pdfParser.js";
+import { consumeQuota } from "../middlewares/aiQuota.js";
+import { startTrace } from "../observability/trace.js";
 
 /* ------------------------------ Upload middleware ------------------------------ */
 /**
@@ -233,7 +236,7 @@ async function ingestCsvBuffer(buffer, req) {
 }
 
 /* =============================== PDF Ingest =============================== */
-async function ingestPdfBuffer(buffer, req) {
+async function extractPdfTextOrThrow(buffer) {
   const rawText = await extractPdfText(buffer);
 
   if (!rawText || rawText.trim().length < 20) {
@@ -241,6 +244,14 @@ async function ingestPdfBuffer(buffer, req) {
     err.code = "PDF_NO_TEXT";
     throw err;
   }
+  return rawText;
+}
+
+// Ledger path (/ingest/pdf writes these into Transaction): deterministic
+// regex only. Model-extracted rows must not reach the ledger until there is
+// a human review step in between.
+async function ingestPdfBuffer(buffer, req) {
+  const rawText = await extractPdfTextOrThrow(buffer);
 
   const lines = rawText
     .split(/\r?\n/)
@@ -291,6 +302,57 @@ async function ingestPdfBuffer(buffer, req) {
   return { docs, skipped, kind: "PDF" };
 }
 
+// Advisor path: the confidence-gated cascade (parser first, model only when
+// the parser is unsure AND allowEscalation() grants budget). Results land in
+// AiAdvisorFile, a scratch copy for analysis — never the ledger.
+async function ingestPdfBufferWithCascade(
+  buffer,
+  req,
+  { trace, allowEscalation },
+) {
+  const rawText = await extractPdfTextOrThrow(buffer);
+  trace.setAttributes({ format: "pdf", textLength: rawText.length });
+
+  const rows = await parseTransactionsFromText(rawText, {
+    // Off unless EXTRACTION_ESCALATION=on. The escalation gate isn't
+    // calibrated yet: confidence.overall is min(fields) and includes
+    // category, so an unknown merchant (0.35) escalates an otherwise clean
+    // statement — 33/54 synthetic PDFs would — and the model can't fix
+    // category anyway. Turn on once the gate is recalibrated (P1).
+    useLLMFallback:
+      process.env.EXTRACTION_ESCALATION === "on" &&
+      Boolean(process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY),
+    trace,
+    allowEscalation,
+  });
+
+  // The cascade speaks signed MAJOR-unit floats (-7.33); convert to the
+  // internal integer-minor form (733 + type) at this boundary, like the CSV
+  // and regex paths do, so money is never summed as floats downstream.
+  const currency = req.query.currency || "USD";
+  const docs = [];
+  let skipped = 0;
+  for (const row of rows) {
+    const amountMajor = Number(row.amount);
+    // Model-tier rows are unvalidated JSON; an unparseable date would throw
+    // later in toISOString() and fail the whole upload.
+    if (!row.date || isNaN(Date.parse(row.date)) || !isFinite(amountMajor)) {
+      skipped++;
+      continue;
+    }
+    docs.push({
+      date: row.date,
+      description: String(row.description || "").slice(0, 512),
+      amountMinor: majorToMinor(Math.abs(amountMajor), currency),
+      currency,
+      type: amountMajor >= 0 ? "income" : "expense",
+      category: row.category,
+    });
+  }
+
+  return { docs, skipped, kind: "PDF" };
+}
+
 /* =============================== Unified Ingest for AI Advisor =============================== */
 /**
  * IMPORTANT:
@@ -299,6 +361,15 @@ async function ingestPdfBuffer(buffer, req) {
  * It saves into AiAdvisorFile and returns a fileId for session linking.
  */
 export async function ingestFile(req, res) {
+  const trace = startTrace({ req, operation: "ingest.document" });
+  if (trace.id) res.setHeader("X-Trace-Id", trace.id);
+  // Many early returns below; finalize once when the response is flushed.
+  res.on("finish", () => {
+    const status =
+      res.statusCode >= 500 ? "error" : res.statusCode >= 400 ? "partial" : "ok";
+    trace.finalize(status);
+  });
+
   try {
     if (!req.file) {
       return safeJsonError(res, 400, {
@@ -347,11 +418,31 @@ export async function ingestFile(req, res) {
       });
     }
 
+    // Model spend is budgeted per escalation, not per upload: most documents
+    // never reach the model, so they cost nothing and shouldn't use quota.
+    // "not_attempted" = the parser was confident, or no model is configured.
+    let escalation = "not_attempted";
+    const allowEscalation = async () => {
+      try {
+        const q = await consumeQuota("aix", userId, req.user?.subscription);
+        escalation = q.allowed ? "granted" : "over_budget";
+      } catch {
+        // Fail closed: a broken counter must not mean unlimited model spend.
+        // The user still gets the deterministic result.
+        escalation = "quota_error";
+      }
+      trace.setAttributes({ escalation });
+      return escalation === "granted";
+    };
+
     // Parse into docs (internal normalized form)
     const parsed =
       kind === "CSV"
         ? await ingestCsvBuffer(buffer, req)
-        : await ingestPdfBuffer(buffer, req);
+        : await ingestPdfBufferWithCascade(buffer, req, {
+            trace,
+            allowEscalation,
+          });
 
     const { docs, skipped } = parsed;
 
@@ -373,7 +464,8 @@ export async function ingestFile(req, res) {
       return {
         date: new Date(d.date).toISOString().slice(0, 10),
         description: d.description || "",
-        category: "Other",
+        // Only the PDF cascade guesses a category today; CSV rows stay "Other".
+        category: d.category || "Other",
         amount: signedMajor,
         type: d.type,
       };
@@ -397,6 +489,9 @@ export async function ingestFile(req, res) {
       skipped,
       kind,
       filename: req.file.originalname,
+      // Additive field (clients ignore unknown keys): lets the UI say "this
+      // was a hard statement; results may be incomplete" when over_budget.
+      escalation,
     });
   } catch (e) {
     if (
