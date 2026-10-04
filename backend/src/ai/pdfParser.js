@@ -24,6 +24,7 @@ const gemini2 = process.env.GEMINI_API_KEY // <-- ADDED
 const DATE_RGX = /\b(\d{1,2}[\/\.\-]\d{1,2}[\/\.\-]\d{2,4})\b/; // 01/15/2025 or 15.01.2025
 const AMOUNT_RGX =
   /([-+]?\d{1,3}(?:[\.,]\d{3})*(?:[\.,]\d{2})|[-+]?\d+(?:[\.,]\d{2})?)/;
+const AMOUNT_RGX_ALL = new RegExp(AMOUNT_RGX.source, "g");
 
 export async function parseTransactionsFromText(
   text,
@@ -49,17 +50,26 @@ export async function parseTransactionsFromText(
     // Search for the amount *after* the date match, not the raw line — an
     // unanchored AMOUNT_RGX otherwise matches the date's own digits first
     // (e.g. the "01" in "01/15/2025") and returns that as the amount.
-    const amountSearchSpace = dateM
-      ? line.slice(dateM.index + dateM[0].length)
-      : line;
-    const amtM = amountSearchSpace.match(AMOUNT_RGX);
+    const searchStart = dateM ? dateM.index + dateM[0].length : 0;
+    const amountSearchSpace = line.slice(searchStart);
+    // The amount is the LAST number on the line: merchant names carry digits
+    // of their own ("STARBUCKS #5521", "A101 MARKET") and the first number
+    // after the date is often one of those. Known failure: a layout with a
+    // running-balance column after the amount — last number is the balance.
+    const amtM = [...amountSearchSpace.matchAll(AMOUNT_RGX_ALL)].at(-1) ?? null;
 
     if (dateM && amtM) {
       const date = normalizeDate(dateM[1]);
       const amount = normalizeAmount(amtM[1]);
-      const description = line
-        .replace(dateM[0], "")
-        .replace(amtM[0], "")
+      // Cut out exactly the matched date and amount by position — a
+      // replace() by value would remove the first equal text instead
+      // (e.g. "5521" inside "#5521" when the amount is also 5521).
+      const amountStart = searchStart + amtM.index;
+      const description = (
+        line.slice(0, dateM.index) +
+        line.slice(searchStart, amountStart) +
+        line.slice(amountStart + amtM[0].length)
+      )
         .replace(/\s{2,}/g, " ")
         .trim();
 
