@@ -9,6 +9,7 @@
     "dev:all": "concurrently -k \"npm run dev\" \"npm run worker:dev\"",
     "start": "cross-env ENABLE_QUOTES=true node src/server.js",
     "worker": "node src/workers/pushWorkerEntry.js",
+    "test": "node --test src/**/*.test.js",
     "eval": "node src/eval/run.js",
     "eval:calibrate": "node src/eval/calibrate.js",
     "gen:synthetic": "node src/eval/datasets/synthetic/generateStatements.js"

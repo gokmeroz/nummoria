@@ -91,6 +91,83 @@ function isInvSymbol(sym) {
 /* ─────────────────────────────────────────────────────────────
    UI PRIMITIVES
 ───────────────────────────────────────────────────────────── */
+// Third-party analyst consensus (FMP). Display only — Nummoria makes no call itself.
+function AnalystCell({ item }) {
+  if (!item) return <span className="text-white/30">…</span>;
+
+  if (item.status === "no_coverage") {
+    return (
+      <span
+        className="text-[11px] tracking-wider text-white/40 uppercase"
+        title="No analyst ratings or price targets are available for this symbol on our data plan."
+      >
+        No coverage
+      </span>
+    );
+  }
+
+  if (item.status !== "covered") {
+    return (
+      <span className="text-[11px] tracking-wider text-white/40 uppercase">
+        Unavailable
+      </span>
+    );
+  }
+
+  const { counts, target, upsidePct, providerConsensus, stale } = item;
+  const pct = (n) => (counts.total ? (n / counts.total) * 100 : 0);
+  const fmtTarget = (v) =>
+    v == null
+      ? "—"
+      : new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: item.targetCurrency || "USD",
+          maximumFractionDigits: 2,
+        }).format(v);
+
+  return (
+    <div
+      className="flex min-w-[180px] flex-col items-end gap-1"
+      title={`12-month target range ${fmtTarget(target?.low)} – ${fmtTarget(target?.high)}${
+        stale ? " · data may be out of date" : ""
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        {providerConsensus ? (
+          <span className="border border-white/15 bg-white/5 px-2 py-0.5 text-[10px] font-bold tracking-wider text-white/85 uppercase">
+            {providerConsensus}
+          </span>
+        ) : null}
+        <span className="font-mono text-white">{fmtTarget(target?.mean)}</span>
+        {upsidePct != null ? (
+          <span
+            className={`font-mono text-xs ${
+              upsidePct >= 0 ? "text-emerald-400" : "text-red-400"
+            }`}
+          >
+            {upsidePct >= 0 ? "+" : ""}
+            {upsidePct.toFixed(1)}%
+          </span>
+        ) : null}
+      </div>
+
+      {counts.total > 0 ? (
+        <>
+          <div className="flex h-1.5 w-full overflow-hidden bg-white/10">
+            <div className="bg-emerald-400" style={{ width: `${pct(counts.buy)}%` }} />
+            <div className="bg-amber-300" style={{ width: `${pct(counts.hold)}%` }} />
+            <div className="bg-red-400" style={{ width: `${pct(counts.sell)}%` }} />
+          </div>
+          <div className="text-[10px] tracking-wider text-white/55 uppercase">
+            Buy {counts.buy} · Hold {counts.hold} · Sell {counts.sell}
+            {stale ? " · stale" : ""}
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 const Brackets = React.memo(
   ({ color = MINT, size = "10px", thick = "1.5px" }) => (
     <>
@@ -479,6 +556,7 @@ export default function InvestmentPerformance() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [lastRefreshed, setLastRefreshed] = useState(null);
+  const [analyst, setAnalyst] = useState({ items: {}, disclaimer: "" });
 
   const [sort, setSort] = useState({ key: "symbol", dir: "asc" });
   const [listMode, setListMode] = useState("HOLDINGS");
@@ -603,6 +681,30 @@ export default function InvestmentPerformance() {
     () => holdingsSorted.filter((h) => !isInvSymbol(h.symbol)),
     [holdingsSorted],
   );
+
+  const analystSymbols = useMemo(
+    () =>
+      [...new Set(holdingsFiltered.map((h) => h.symbol))].sort().slice(0, 25),
+    [holdingsFiltered],
+  );
+  const analystKey = analystSymbols.join(",");
+
+  useEffect(() => {
+    if (!analystKey) return;
+    let cancelled = false;
+    api
+      .get("/investments/analyst", { params: { symbols: analystKey } })
+      .then(({ data }) => {
+        if (!cancelled) setAnalyst(data || { items: {}, disclaimer: "" });
+      })
+      .catch(() => {
+        // Analyst data is supplementary; the holdings table stays usable without it.
+        if (!cancelled) setAnalyst((a) => ({ ...a, failed: true }));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [analystKey]);
 
   const favoritesSet = useMemo(() => new Set(favorites), [favorites]);
 
@@ -901,13 +1003,19 @@ export default function InvestmentPerformance() {
                   <th className="px-4 py-3 text-right whitespace-nowrap">
                     <SortBtn k="plMinor">P/L</SortBtn>
                   </th>
+                  <th
+                    className="px-4 py-3 text-right whitespace-nowrap font-normal text-white/65"
+                    title="Third-party analyst consensus: average 12-month price target and buy/hold/sell rating counts"
+                  >
+                    Analysts
+                  </th>
                 </tr>
               </thead>
 
               <tbody className="divide-y divide-white/8">
                 {!loading && rowsToRender.length === 0 ? (
                   <tr>
-                    <td className="px-4 py-8 text-white/50" colSpan={8}>
+                    <td className="px-4 py-8 text-white/50" colSpan={9}>
                       {listMode === "FAVORITES"
                         ? "No favorites found in your current holdings."
                         : "No holdings found. Add some investment transactions with an assetSymbol."}
@@ -998,12 +1106,27 @@ export default function InvestmentPerformance() {
                         >
                           {formatMoneyMinor(h.plMinor, h.currency)}
                         </td>
+
+                        <td className="px-4 py-4 text-right whitespace-nowrap">
+                          {analyst.failed && !analyst.items[h.symbol] ? (
+                            <span className="text-[11px] tracking-wider text-white/40 uppercase">
+                              Unavailable
+                            </span>
+                          ) : (
+                            <AnalystCell item={analyst.items[h.symbol]} />
+                          )}
+                        </td>
                       </tr>
                     );
                   })}
               </tbody>
             </table>
           </div>
+          {analyst.disclaimer ? (
+            <p className="mt-3 text-[11px] leading-relaxed text-white/45">
+              {analyst.disclaimer}
+            </p>
+          ) : null}
         </SectionCard>
       </div>
     </div>
