@@ -1,0 +1,33 @@
+{
+  "id": "reg-011",
+  "layout": "regression-tr-csv",
+  "format": "csv",
+  "notes": "Turkish column names with dotted/dotless i (İşlem Tarihi, İşlem Açıklaması, İşlem Tutarı), thousands separators, and a Bakiye (balance) column to ignore.",
+  "rawText": "İşlem Tarihi;İşlem Açıklaması;İşlem Tutarı;Bakiye\n03.03.2025;MAAŞ ÖDEMESİ;45.250,00;47.000,00\n05.03.2025;KİRA;-17.500,00;29.500,00\n14.03.2025;A101 MARKET;-1.032,85;28.467,15\n28.03.2025;TÜRK TELEKOM İNTERNET FATURASI;-449,90;28.017,25",
+  "groundTruth": [
+    {
+      "date": "2025-03-03",
+      "amount": 45250,
+      "description": "MAAŞ ÖDEMESİ",
+      "category": "Salary"
+    },
+    {
+      "date": "2025-03-05",
+      "amount": -17500,
+      "description": "KİRA",
+      "category": "Rent"
+    },
+    {
+      "date": "2025-03-14",
+      "amount": -1032.85,
+      "description": "A101 MARKET",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-03-28",
+      "amount": -449.9,
+      "description": "TÜRK TELEKOM İNTERNET FATURASI",
+      "category": "Utilities"
+    }
+  ]
+}

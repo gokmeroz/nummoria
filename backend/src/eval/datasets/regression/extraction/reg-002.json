@@ -1,0 +1,39 @@
+{
+  "id": "reg-002",
+  "layout": "regression-balance-signed",
+  "format": "pdf-text",
+  "notes": "Signed amount column followed by a running balance; the balance must never be read as the amount. Includes a refund and a store number in the description.",
+  "rawText": "Example Bank Checking — Statement\nDate         Description                  Amount      Balance\n01/02/2025   ACME CORP PAYROLL          2,500.00     3,700.00\n01/03/2025   SAFEWAY GROCERY #1123        -64.15     3,635.85\n01/06/2025   STARBUCKS #5521               -4.75     3,631.10\n01/14/2025   CITY WATER BILL              -41.30     3,589.80\n01/20/2025   REFUND - SAFEWAY GROCERY      12.50     3,602.30",
+  "groundTruth": [
+    {
+      "date": "2025-01-02",
+      "amount": 2500,
+      "description": "ACME CORP PAYROLL",
+      "category": "Salary"
+    },
+    {
+      "date": "2025-01-03",
+      "amount": -64.15,
+      "description": "SAFEWAY GROCERY #1123",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-06",
+      "amount": -4.75,
+      "description": "STARBUCKS #5521",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-01-14",
+      "amount": -41.3,
+      "description": "CITY WATER BILL",
+      "category": "Utilities"
+    },
+    {
+      "date": "2025-01-20",
+      "amount": 12.5,
+      "description": "REFUND - SAFEWAY GROCERY",
+      "category": "Groceries"
+    }
+  ]
+}

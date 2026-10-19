@@ -1,0 +1,3286 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-19T13:41:57.757Z",
+  "modes": {
+    "extraction": "deterministic-text-to-transactions",
+    "extractionModeDetail": "deterministic (offline; model tier disabled)",
+    "pdfBinaryTextExtraction": "synthetic-text-layer-pdfs (jsPDF-generated; pdf-parse)",
+    "ocr": "not-tested",
+    "advisor": "deterministic-arithmetic-self-consistency",
+    "advisorResponseQuality": "not-tested"
+  },
+  "datasets": {
+    "golden": {
+      "cases": 50,
+      "rows": 4866,
+      "byFormat": {
+        "csv": 26,
+        "pdf-text": 24
+      },
+      "byLayout": {
+        "us-credit-debit": 13,
+        "tr-katilim": 21,
+        "us-checking": 16
+      },
+      "fingerprint": "1856b49cc1e5f7031f20b8fe0ff8ed663574b3e1b6ecb746e47068190f96ebb5"
+    },
+    "regression": {
+      "cases": 15,
+      "rows": 63,
+      "byFormat": {
+        "pdf-text": 8,
+        "csv": 7
+      },
+      "byLayout": {
+        "regression-iso-period": 1,
+        "regression-balance-signed": 1,
+        "regression-balance-unsigned": 1,
+        "regression-tr-pdf": 1,
+        "regression-sign-conventions": 1,
+        "regression-multipage": 1,
+        "regression-repeats": 1,
+        "regression-csv-preamble": 1,
+        "regression-year-boundary": 1,
+        "regression-dirty-csv": 1,
+        "regression-tr-csv": 1,
+        "regression-unknown-merchants": 1,
+        "regression-fx": 1,
+        "regression-no-date-evidence-slash": 1,
+        "regression-no-date-evidence-dot": 1
+      },
+      "fingerprint": "9713686f9f01ce31dae5e2ad860494c36946c39738dcff03b132f83ca602eaa1"
+    },
+    "advisor": {
+      "cases": 12
+    }
+  },
+  "extraction": {
+    "golden": {
+      "caseCount": 50,
+      "rows": {
+        "groundTruth": 4866,
+        "extracted": 4866,
+        "matched": 4849,
+        "financialExact": 4438,
+        "financialExactRecall": 0.9120427455815865
+      },
+      "aggregate": {
+        "date": {
+          "precision": 0.9965063707357172,
+          "recall": 0.9965063707357172,
+          "f1": 0.9965063707357172,
+          "tp": 4849,
+          "fp": 17,
+          "fn": 17
+        },
+        "amount": {
+          "precision": 0.9556103575832305,
+          "recall": 0.9556103575832305,
+          "f1": 0.9556103575832307,
+          "tp": 4650,
+          "fp": 216,
+          "fn": 216
+        },
+        "description": {
+          "precision": 0.9529387587340732,
+          "recall": 0.9529387587340732,
+          "f1": 0.9529387587340732,
+          "tp": 4637,
+          "fp": 229,
+          "fn": 229
+        },
+        "category": {
+          "precision": 0.7203041512535964,
+          "recall": 0.7203041512535964,
+          "f1": 0.7203041512535964,
+          "tp": 3505,
+          "fp": 1361,
+          "fn": 1361
+        }
+      },
+      "layoutBreakdown": {
+        "us-credit-debit": {
+          "date": {
+            "precision": 0.9976525821596244,
+            "recall": 0.9976525821596244,
+            "f1": 0.9976525821596244,
+            "tp": 1275,
+            "fp": 3,
+            "fn": 3
+          },
+          "amount": {
+            "precision": 0.9608763693270735,
+            "recall": 0.9608763693270735,
+            "f1": 0.9608763693270735,
+            "tp": 1228,
+            "fp": 50,
+            "fn": 50
+          },
+          "description": {
+            "precision": 0.9671361502347418,
+            "recall": 0.9671361502347418,
+            "f1": 0.9671361502347418,
+            "tp": 1236,
+            "fp": 42,
+            "fn": 42
+          },
+          "category": {
+            "precision": 0.49295774647887325,
+            "recall": 0.49295774647887325,
+            "f1": 0.49295774647887325,
+            "tp": 630,
+            "fp": 648,
+            "fn": 648
+          }
+        },
+        "tr-katilim": {
+          "date": {
+            "precision": 0.9950835791543756,
+            "recall": 0.9950835791543756,
+            "f1": 0.9950835791543756,
+            "tp": 2024,
+            "fp": 10,
+            "fn": 10
+          },
+          "amount": {
+            "precision": 0.9542772861356932,
+            "recall": 0.9542772861356932,
+            "f1": 0.9542772861356932,
+            "tp": 1941,
+            "fp": 93,
+            "fn": 93
+          },
+          "description": {
+            "precision": 0.9464110127826942,
+            "recall": 0.9464110127826942,
+            "f1": 0.9464110127826941,
+            "tp": 1925,
+            "fp": 109,
+            "fn": 109
+          },
+          "category": {
+            "precision": 0.9464110127826942,
+            "recall": 0.9464110127826942,
+            "f1": 0.9464110127826941,
+            "tp": 1925,
+            "fp": 109,
+            "fn": 109
+          }
+        },
+        "us-checking": {
+          "date": {
+            "precision": 0.9974259974259975,
+            "recall": 0.9974259974259975,
+            "f1": 0.9974259974259975,
+            "tp": 1550,
+            "fp": 4,
+            "fn": 4
+          },
+          "amount": {
+            "precision": 0.953024453024453,
+            "recall": 0.953024453024453,
+            "f1": 0.953024453024453,
+            "tp": 1481,
+            "fp": 73,
+            "fn": 73
+          },
+          "description": {
+            "precision": 0.9498069498069498,
+            "recall": 0.9498069498069498,
+            "f1": 0.9498069498069498,
+            "tp": 1476,
+            "fp": 78,
+            "fn": 78
+          },
+          "category": {
+            "precision": 0.6113256113256114,
+            "recall": 0.6113256113256114,
+            "f1": 0.6113256113256114,
+            "tp": 950,
+            "fp": 604,
+            "fn": 604
+          }
+        }
+      },
+      "formatBreakdown": {
+        "csv": {
+          "date": {
+            "precision": 0.9968253968253968,
+            "recall": 0.9968253968253968,
+            "f1": 0.9968253968253968,
+            "tp": 2512,
+            "fp": 8,
+            "fn": 8
+          },
+          "amount": {
+            "precision": 0.9535714285714286,
+            "recall": 0.9535714285714286,
+            "f1": 0.9535714285714286,
+            "tp": 2403,
+            "fp": 117,
+            "fn": 117
+          },
+          "description": {
+            "precision": 0.9547619047619048,
+            "recall": 0.9547619047619048,
+            "f1": 0.9547619047619048,
+            "tp": 2406,
+            "fp": 114,
+            "fn": 114
+          },
+          "category": {
+            "precision": 0.7384920634920635,
+            "recall": 0.7384920634920635,
+            "f1": 0.7384920634920635,
+            "tp": 1861,
+            "fp": 659,
+            "fn": 659
+          }
+        },
+        "pdf-text": {
+          "date": {
+            "precision": 0.9961636828644501,
+            "recall": 0.9961636828644501,
+            "f1": 0.9961636828644501,
+            "tp": 2337,
+            "fp": 9,
+            "fn": 9
+          },
+          "amount": {
+            "precision": 0.9578005115089514,
+            "recall": 0.9578005115089514,
+            "f1": 0.9578005115089514,
+            "tp": 2247,
+            "fp": 99,
+            "fn": 99
+          },
+          "description": {
+            "precision": 0.9509803921568627,
+            "recall": 0.9509803921568627,
+            "f1": 0.9509803921568627,
+            "tp": 2231,
+            "fp": 115,
+            "fn": 115
+          },
+          "category": {
+            "precision": 0.7007672634271099,
+            "recall": 0.7007672634271099,
+            "f1": 0.7007672634271099,
+            "tp": 1644,
+            "fp": 702,
+            "fn": 702
+          }
+        }
+      },
+      "perCase": [
+        {
+          "id": "case-001",
+          "layout": "us-credit-debit",
+          "format": "csv",
+          "groundTruthRows": 96,
+          "extractedRows": 96,
+          "matched": 96,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 87,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 5,
+            "description": 4,
+            "category": 51
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "case-002",
+          "layout": "tr-katilim",
+          "format": "pdf-text",
+          "groundTruthRows": 93,
+          "extractedRows": 93,
+          "matched": 93,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 81,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 11,
+            "description": 1,
+            "category": 1
+          },
+          "meanConfidence": 0.7403225806451614,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.772
+          }
+        },
+        {
+          "id": "case-003",
+          "layout": "us-credit-debit",
+          "format": "csv",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 91,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 5,
+            "description": 3,
+            "category": 50
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "case-004",
+          "layout": "tr-katilim",
+          "format": "csv",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 89,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 3,
+            "description": 7,
+            "category": 7
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "case-005",
+          "layout": "us-credit-debit",
+          "format": "pdf-text",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 94,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 3,
+            "description": 2,
+            "category": 55
+          },
+          "meanConfidence": 0.5262626262626267,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7742
+          }
+        },
+        {
+          "id": "case-006",
+          "layout": "tr-katilim",
+          "format": "pdf-text",
+          "groundTruthRows": 96,
+          "extractedRows": 96,
+          "matched": 95,
+          "falsePositives": 1,
+          "falseNegatives": 1,
+          "financialExactRows": 89,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 2,
+            "description": 4,
+            "category": 4
+          },
+          "meanConfidence": 0.7197916666666667,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7484
+          }
+        },
+        {
+          "id": "case-007",
+          "layout": "us-credit-debit",
+          "format": "pdf-text",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 98,
+          "falsePositives": 1,
+          "falseNegatives": 1,
+          "financialExactRows": 92,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 3,
+            "description": 3,
+            "category": 48
+          },
+          "meanConfidence": 0.5505050505050509,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7667
+          }
+        },
+        {
+          "id": "case-008",
+          "layout": "tr-katilim",
+          "format": "csv",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 97,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 0,
+            "description": 2,
+            "category": 2
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "case-009",
+          "layout": "tr-katilim",
+          "format": "pdf-text",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 93,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 1,
+            "description": 5,
+            "category": 5
+          },
+          "meanConfidence": 0.721717171717172,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.748
+          }
+        },
+        {
+          "id": "case-010",
+          "layout": "us-credit-debit",
+          "format": "pdf-text",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 94,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 2,
+            "description": 3,
+            "category": 48
+          },
+          "meanConfidence": 0.553535353535354,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7652
+          }
+        },
+        {
+          "id": "case-011",
+          "layout": "tr-katilim",
+          "format": "pdf-text",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 94,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 2,
+            "description": 3,
+            "category": 3
+          },
+          "meanConfidence": 0.7292929292929293,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7591
+          }
+        },
+        {
+          "id": "case-012",
+          "layout": "tr-katilim",
+          "format": "csv",
+          "groundTruthRows": 93,
+          "extractedRows": 93,
+          "matched": 93,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 82,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 6,
+            "description": 5,
+            "category": 5
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "case-013",
+          "layout": "us-credit-debit",
+          "format": "csv",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 95,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 2,
+            "description": 2,
+            "category": 48
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "case-014",
+          "layout": "us-checking",
+          "format": "csv",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 89,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 6,
+            "description": 4,
+            "category": 41
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "case-015",
+          "layout": "us-credit-debit",
+          "format": "csv",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 97,
+          "falsePositives": 2,
+          "falseNegatives": 2,
+          "financialExactRows": 88,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 6,
+            "description": 3,
+            "category": 49
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "case-016",
+          "layout": "us-checking",
+          "format": "pdf-text",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 90,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 2,
+            "description": 7,
+            "category": 41
+          },
+          "meanConfidence": 0.5797979797979803,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7515
+          }
+        },
+        {
+          "id": "case-017",
+          "layout": "us-checking",
+          "format": "pdf-text",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 97,
+          "falsePositives": 2,
+          "falseNegatives": 2,
+          "financialExactRows": 83,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 5,
+            "description": 9,
+            "category": 39
+          },
+          "meanConfidence": 0.5803030303030309,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7323
+          }
+        },
+        {
+          "id": "case-018",
+          "layout": "us-credit-debit",
+          "format": "pdf-text",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 91,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 3,
+            "description": 5,
+            "category": 51
+          },
+          "meanConfidence": 0.5434343434343439,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7687
+          }
+        },
+        {
+          "id": "case-019",
+          "layout": "tr-katilim",
+          "format": "csv",
+          "groundTruthRows": 93,
+          "extractedRows": 93,
+          "matched": 93,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 81,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 6,
+            "description": 6,
+            "category": 6
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "case-020",
+          "layout": "us-checking",
+          "format": "pdf-text",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 90,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 0,
+            "description": 9,
+            "category": 40
+          },
+          "meanConfidence": 0.5858585858585863,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7449
+          }
+        },
+        {
+          "id": "case-021",
+          "layout": "tr-katilim",
+          "format": "csv",
+          "groundTruthRows": 96,
+          "extractedRows": 96,
+          "matched": 96,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 83,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 6,
+            "description": 7,
+            "category": 7
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "case-022",
+          "layout": "tr-katilim",
+          "format": "csv",
+          "groundTruthRows": 96,
+          "extractedRows": 96,
+          "matched": 96,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 86,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 4,
+            "description": 6,
+            "category": 6
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "case-023",
+          "layout": "us-checking",
+          "format": "csv",
+          "groundTruthRows": 96,
+          "extractedRows": 96,
+          "matched": 96,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 85,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 6,
+            "description": 5,
+            "category": 37
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "case-024",
+          "layout": "tr-katilim",
+          "format": "csv",
+          "groundTruthRows": 96,
+          "extractedRows": 96,
+          "matched": 96,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 84,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 6,
+            "description": 6,
+            "category": 6
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "case-025",
+          "layout": "us-checking",
+          "format": "csv",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 92,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 5,
+            "description": 2,
+            "category": 28
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "case-026",
+          "layout": "tr-katilim",
+          "format": "pdf-text",
+          "groundTruthRows": 96,
+          "extractedRows": 96,
+          "matched": 96,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 90,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 3,
+            "description": 3,
+            "category": 3
+          },
+          "meanConfidence": 0.7302083333333336,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.762
+          }
+        },
+        {
+          "id": "case-027",
+          "layout": "us-credit-debit",
+          "format": "csv",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 96,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 1,
+            "description": 2,
+            "category": 51
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "case-028",
+          "layout": "tr-katilim",
+          "format": "csv",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 97,
+          "falsePositives": 2,
+          "falseNegatives": 2,
+          "financialExactRows": 89,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 4,
+            "description": 4,
+            "category": 4
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "case-029",
+          "layout": "us-checking",
+          "format": "csv",
+          "groundTruthRows": 96,
+          "extractedRows": 96,
+          "matched": 96,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 88,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 7,
+            "description": 1,
+            "category": 35
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "case-030",
+          "layout": "tr-katilim",
+          "format": "pdf-text",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 89,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 4,
+            "description": 6,
+            "category": 6
+          },
+          "meanConfidence": 0.7181818181818186,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7465
+          }
+        },
+        {
+          "id": "case-031",
+          "layout": "us-credit-debit",
+          "format": "pdf-text",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 93,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 4,
+            "description": 2,
+            "category": 45
+          },
+          "meanConfidence": 0.566666666666667,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7793
+          }
+        },
+        {
+          "id": "case-032",
+          "layout": "us-checking",
+          "format": "csv",
+          "groundTruthRows": 93,
+          "extractedRows": 93,
+          "matched": 93,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 90,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 2,
+            "description": 1,
+            "category": 37
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "case-033",
+          "layout": "tr-katilim",
+          "format": "pdf-text",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 98,
+          "falsePositives": 1,
+          "falseNegatives": 1,
+          "financialExactRows": 91,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 3,
+            "description": 4,
+            "category": 4
+          },
+          "meanConfidence": 0.7222222222222225,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7545
+          }
+        },
+        {
+          "id": "case-034",
+          "layout": "us-checking",
+          "format": "csv",
+          "groundTruthRows": 96,
+          "extractedRows": 96,
+          "matched": 96,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 89,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 3,
+            "description": 4,
+            "category": 40
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "case-035",
+          "layout": "tr-katilim",
+          "format": "csv",
+          "groundTruthRows": 96,
+          "extractedRows": 96,
+          "matched": 96,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 86,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 4,
+            "description": 6,
+            "category": 6
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "case-036",
+          "layout": "tr-katilim",
+          "format": "csv",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 98,
+          "falsePositives": 1,
+          "falseNegatives": 1,
+          "financialExactRows": 88,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 4,
+            "description": 6,
+            "category": 6
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "case-037",
+          "layout": "tr-katilim",
+          "format": "csv",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 97,
+          "falsePositives": 2,
+          "falseNegatives": 2,
+          "financialExactRows": 89,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 4,
+            "description": 4,
+            "category": 4
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "case-038",
+          "layout": "us-credit-debit",
+          "format": "pdf-text",
+          "groundTruthRows": 96,
+          "extractedRows": 96,
+          "matched": 96,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 90,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 3,
+            "description": 3,
+            "category": 46
+          },
+          "meanConfidence": 0.5567708333333338,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.774
+          }
+        },
+        {
+          "id": "case-039",
+          "layout": "tr-katilim",
+          "format": "csv",
+          "groundTruthRows": 96,
+          "extractedRows": 96,
+          "matched": 96,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 87,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 3,
+            "description": 6,
+            "category": 6
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "case-040",
+          "layout": "us-checking",
+          "format": "csv",
+          "groundTruthRows": 93,
+          "extractedRows": 93,
+          "matched": 93,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 86,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 2,
+            "description": 5,
+            "category": 36
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "case-041",
+          "layout": "tr-katilim",
+          "format": "pdf-text",
+          "groundTruthRows": 93,
+          "extractedRows": 93,
+          "matched": 90,
+          "falsePositives": 3,
+          "falseNegatives": 3,
+          "financialExactRows": 84,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 4,
+            "description": 2,
+            "category": 2
+          },
+          "meanConfidence": 0.7204301075268821,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7473
+          }
+        },
+        {
+          "id": "case-042",
+          "layout": "tr-katilim",
+          "format": "pdf-text",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 90,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 3,
+            "description": 6,
+            "category": 6
+          },
+          "meanConfidence": 0.7166666666666668,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7419
+          }
+        },
+        {
+          "id": "case-043",
+          "layout": "us-credit-debit",
+          "format": "pdf-text",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 88,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 6,
+            "description": 5,
+            "category": 51
+          },
+          "meanConfidence": 0.5409090909090916,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7591
+          }
+        },
+        {
+          "id": "case-044",
+          "layout": "us-checking",
+          "format": "csv",
+          "groundTruthRows": 96,
+          "extractedRows": 96,
+          "matched": 96,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 90,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 3,
+            "description": 3,
+            "category": 42
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "case-045",
+          "layout": "us-checking",
+          "format": "pdf-text",
+          "groundTruthRows": 96,
+          "extractedRows": 96,
+          "matched": 95,
+          "falsePositives": 1,
+          "falseNegatives": 1,
+          "financialExactRows": 81,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 9,
+            "description": 5,
+            "category": 36
+          },
+          "meanConfidence": 0.5921875000000004,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7536
+          }
+        },
+        {
+          "id": "case-046",
+          "layout": "us-checking",
+          "format": "pdf-text",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 91,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 3,
+            "description": 5,
+            "category": 33
+          },
+          "meanConfidence": 0.6116161616161621,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7581
+          }
+        },
+        {
+          "id": "case-047",
+          "layout": "us-checking",
+          "format": "csv",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 98,
+          "falsePositives": 1,
+          "falseNegatives": 1,
+          "financialExactRows": 90,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 6,
+            "description": 2,
+            "category": 41
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "case-048",
+          "layout": "us-checking",
+          "format": "pdf-text",
+          "groundTruthRows": 96,
+          "extractedRows": 96,
+          "matched": 96,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 86,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 4,
+            "description": 6,
+            "category": 39
+          },
+          "meanConfidence": 0.5807291666666671,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7484
+          }
+        },
+        {
+          "id": "case-049",
+          "layout": "us-credit-debit",
+          "format": "pdf-text",
+          "groundTruthRows": 96,
+          "extractedRows": 96,
+          "matched": 96,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 90,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 4,
+            "description": 2,
+            "category": 52
+          },
+          "meanConfidence": 0.5317708333333339,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7766
+          }
+        },
+        {
+          "id": "case-050",
+          "layout": "us-checking",
+          "format": "pdf-text",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 87,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 6,
+            "description": 6,
+            "category": 35
+          },
+          "meanConfidence": 0.6060606060606063,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7576
+          }
+        }
+      ],
+      "cascade": {
+        "mode": "deterministic (offline; model tier disabled)",
+        "reason": "not requested",
+        "cases": 24,
+        "wouldEscalate": 0,
+        "decisions": {
+          "not-needed": 24
+        },
+        "modelCallsAttempted": 0
+      }
+    },
+    "regression": {
+      "caseCount": 15,
+      "rows": {
+        "groundTruth": 63,
+        "extracted": 63,
+        "matched": 63,
+        "financialExact": 63,
+        "financialExactRecall": 1
+      },
+      "aggregate": {
+        "date": {
+          "precision": 1,
+          "recall": 1,
+          "f1": 1,
+          "tp": 63,
+          "fp": 0,
+          "fn": 0
+        },
+        "amount": {
+          "precision": 1,
+          "recall": 1,
+          "f1": 1,
+          "tp": 63,
+          "fp": 0,
+          "fn": 0
+        },
+        "description": {
+          "precision": 1,
+          "recall": 1,
+          "f1": 1,
+          "tp": 63,
+          "fp": 0,
+          "fn": 0
+        },
+        "category": {
+          "precision": 0.6984126984126984,
+          "recall": 0.6984126984126984,
+          "f1": 0.6984126984126984,
+          "tp": 44,
+          "fp": 19,
+          "fn": 19
+        }
+      },
+      "layoutBreakdown": {
+        "regression-iso-period": {
+          "date": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          },
+          "amount": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          },
+          "description": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          },
+          "category": {
+            "precision": 0.75,
+            "recall": 0.75,
+            "f1": 0.75,
+            "tp": 3,
+            "fp": 1,
+            "fn": 1
+          }
+        },
+        "regression-balance-signed": {
+          "date": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 5,
+            "fp": 0,
+            "fn": 0
+          },
+          "amount": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 5,
+            "fp": 0,
+            "fn": 0
+          },
+          "description": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 5,
+            "fp": 0,
+            "fn": 0
+          },
+          "category": {
+            "precision": 0.8,
+            "recall": 0.8,
+            "f1": 0.8000000000000002,
+            "tp": 4,
+            "fp": 1,
+            "fn": 1
+          }
+        },
+        "regression-balance-unsigned": {
+          "date": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          },
+          "amount": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          },
+          "description": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          },
+          "category": {
+            "precision": 0.75,
+            "recall": 0.75,
+            "f1": 0.75,
+            "tp": 3,
+            "fp": 1,
+            "fn": 1
+          }
+        },
+        "regression-tr-pdf": {
+          "date": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 5,
+            "fp": 0,
+            "fn": 0
+          },
+          "amount": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 5,
+            "fp": 0,
+            "fn": 0
+          },
+          "description": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 5,
+            "fp": 0,
+            "fn": 0
+          },
+          "category": {
+            "precision": 0.8,
+            "recall": 0.8,
+            "f1": 0.8000000000000002,
+            "tp": 4,
+            "fp": 1,
+            "fn": 1
+          }
+        },
+        "regression-sign-conventions": {
+          "date": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 5,
+            "fp": 0,
+            "fn": 0
+          },
+          "amount": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 5,
+            "fp": 0,
+            "fn": 0
+          },
+          "description": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 5,
+            "fp": 0,
+            "fn": 0
+          },
+          "category": {
+            "precision": 0,
+            "recall": 0,
+            "f1": 0,
+            "tp": 0,
+            "fp": 5,
+            "fn": 5
+          }
+        },
+        "regression-multipage": {
+          "date": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          },
+          "amount": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          },
+          "description": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          },
+          "category": {
+            "precision": 0.75,
+            "recall": 0.75,
+            "f1": 0.75,
+            "tp": 3,
+            "fp": 1,
+            "fn": 1
+          }
+        },
+        "regression-repeats": {
+          "date": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 6,
+            "fp": 0,
+            "fn": 0
+          },
+          "amount": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 6,
+            "fp": 0,
+            "fn": 0
+          },
+          "description": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 6,
+            "fp": 0,
+            "fn": 0
+          },
+          "category": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 6,
+            "fp": 0,
+            "fn": 0
+          }
+        },
+        "regression-csv-preamble": {
+          "date": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          },
+          "amount": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          },
+          "description": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          },
+          "category": {
+            "precision": 0.75,
+            "recall": 0.75,
+            "f1": 0.75,
+            "tp": 3,
+            "fp": 1,
+            "fn": 1
+          }
+        },
+        "regression-year-boundary": {
+          "date": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          },
+          "amount": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          },
+          "description": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          },
+          "category": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          }
+        },
+        "regression-dirty-csv": {
+          "date": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          },
+          "amount": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          },
+          "description": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          },
+          "category": {
+            "precision": 0.75,
+            "recall": 0.75,
+            "f1": 0.75,
+            "tp": 3,
+            "fp": 1,
+            "fn": 1
+          }
+        },
+        "regression-tr-csv": {
+          "date": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          },
+          "amount": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          },
+          "description": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          },
+          "category": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          }
+        },
+        "regression-unknown-merchants": {
+          "date": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          },
+          "amount": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          },
+          "description": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          },
+          "category": {
+            "precision": 0,
+            "recall": 0,
+            "f1": 0,
+            "tp": 0,
+            "fp": 4,
+            "fn": 4
+          }
+        },
+        "regression-fx": {
+          "date": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 3,
+            "fp": 0,
+            "fn": 0
+          },
+          "amount": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 3,
+            "fp": 0,
+            "fn": 0
+          },
+          "description": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 3,
+            "fp": 0,
+            "fn": 0
+          },
+          "category": {
+            "precision": 0,
+            "recall": 0,
+            "f1": 0,
+            "tp": 0,
+            "fp": 3,
+            "fn": 3
+          }
+        },
+        "regression-no-date-evidence-slash": {
+          "date": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          },
+          "amount": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          },
+          "description": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          },
+          "category": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 4,
+            "fp": 0,
+            "fn": 0
+          }
+        },
+        "regression-no-date-evidence-dot": {
+          "date": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 3,
+            "fp": 0,
+            "fn": 0
+          },
+          "amount": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 3,
+            "fp": 0,
+            "fn": 0
+          },
+          "description": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 3,
+            "fp": 0,
+            "fn": 0
+          },
+          "category": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 3,
+            "fp": 0,
+            "fn": 0
+          }
+        }
+      },
+      "formatBreakdown": {
+        "pdf-text": {
+          "date": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 33,
+            "fp": 0,
+            "fn": 0
+          },
+          "amount": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 33,
+            "fp": 0,
+            "fn": 0
+          },
+          "description": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 33,
+            "fp": 0,
+            "fn": 0
+          },
+          "category": {
+            "precision": 0.6060606060606061,
+            "recall": 0.6060606060606061,
+            "f1": 0.6060606060606061,
+            "tp": 20,
+            "fp": 13,
+            "fn": 13
+          }
+        },
+        "csv": {
+          "date": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 30,
+            "fp": 0,
+            "fn": 0
+          },
+          "amount": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 30,
+            "fp": 0,
+            "fn": 0
+          },
+          "description": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "tp": 30,
+            "fp": 0,
+            "fn": 0
+          },
+          "category": {
+            "precision": 0.8,
+            "recall": 0.8,
+            "f1": 0.8000000000000002,
+            "tp": 24,
+            "fp": 6,
+            "fn": 6
+          }
+        }
+      },
+      "perCase": [
+        {
+          "id": "reg-001",
+          "layout": "regression-iso-period",
+          "format": "pdf-text",
+          "groundTruthRows": 4,
+          "extractedRows": 4,
+          "matched": 4,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 4,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 0,
+            "description": 0,
+            "category": 1
+          },
+          "meanConfidence": 0.65,
+          "cascade": {
+            "wouldEscalate": true,
+            "reasons": [
+              "fewer than 5 rows"
+            ],
+            "decision": "skipped:llm-disabled",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.8
+          }
+        },
+        {
+          "id": "reg-002",
+          "layout": "regression-balance-signed",
+          "format": "pdf-text",
+          "groundTruthRows": 5,
+          "extractedRows": 5,
+          "matched": 5,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 5,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 0,
+            "description": 0,
+            "category": 1
+          },
+          "meanConfidence": 0.67,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.8
+          }
+        },
+        {
+          "id": "reg-003",
+          "layout": "regression-balance-unsigned",
+          "format": "pdf-text",
+          "groundTruthRows": 4,
+          "extractedRows": 4,
+          "matched": 4,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 4,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 0,
+            "description": 0,
+            "category": 1
+          },
+          "meanConfidence": 0.65,
+          "cascade": {
+            "wouldEscalate": true,
+            "reasons": [
+              "fewer than 5 rows"
+            ],
+            "decision": "skipped:llm-disabled",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.8
+          }
+        },
+        {
+          "id": "reg-004",
+          "layout": "regression-tr-pdf",
+          "format": "pdf-text",
+          "groundTruthRows": 5,
+          "extractedRows": 5,
+          "matched": 5,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 5,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 0,
+            "description": 0,
+            "category": 1
+          },
+          "meanConfidence": 0.67,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.8
+          }
+        },
+        {
+          "id": "reg-005",
+          "layout": "regression-sign-conventions",
+          "format": "pdf-text",
+          "groundTruthRows": 5,
+          "extractedRows": 5,
+          "matched": 5,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 5,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 0,
+            "description": 0,
+            "category": 5
+          },
+          "meanConfidence": 0.35,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.8
+          }
+        },
+        {
+          "id": "reg-006",
+          "layout": "regression-multipage",
+          "format": "pdf-text",
+          "groundTruthRows": 4,
+          "extractedRows": 4,
+          "matched": 4,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 4,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 0,
+            "description": 0,
+            "category": 1
+          },
+          "meanConfidence": 0.75,
+          "cascade": {
+            "wouldEscalate": true,
+            "reasons": [
+              "fewer than 5 rows"
+            ],
+            "decision": "skipped:llm-disabled",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.8
+          }
+        },
+        {
+          "id": "reg-007",
+          "layout": "regression-repeats",
+          "format": "csv",
+          "groundTruthRows": 6,
+          "extractedRows": 6,
+          "matched": 6,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 6,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 0,
+            "description": 0,
+            "category": 0
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "reg-008",
+          "layout": "regression-csv-preamble",
+          "format": "csv",
+          "groundTruthRows": 4,
+          "extractedRows": 4,
+          "matched": 4,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 4,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 0,
+            "description": 0,
+            "category": 1
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "reg-009",
+          "layout": "regression-year-boundary",
+          "format": "csv",
+          "groundTruthRows": 4,
+          "extractedRows": 4,
+          "matched": 4,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 4,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 0,
+            "description": 0,
+            "category": 0
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "reg-010",
+          "layout": "regression-dirty-csv",
+          "format": "csv",
+          "groundTruthRows": 4,
+          "extractedRows": 4,
+          "matched": 4,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 4,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 0,
+            "description": 0,
+            "category": 1
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "reg-011",
+          "layout": "regression-tr-csv",
+          "format": "csv",
+          "groundTruthRows": 4,
+          "extractedRows": 4,
+          "matched": 4,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 4,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 0,
+            "description": 0,
+            "category": 0
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "reg-012",
+          "layout": "regression-unknown-merchants",
+          "format": "csv",
+          "groundTruthRows": 4,
+          "extractedRows": 4,
+          "matched": 4,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 4,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 0,
+            "description": 0,
+            "category": 4
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "reg-013",
+          "layout": "regression-fx",
+          "format": "pdf-text",
+          "groundTruthRows": 3,
+          "extractedRows": 3,
+          "matched": 3,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 3,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 0,
+            "description": 0,
+            "category": 3
+          },
+          "meanConfidence": 0.4833333333333334,
+          "cascade": {
+            "wouldEscalate": true,
+            "reasons": [
+              "fewer than 5 rows"
+            ],
+            "decision": "skipped:llm-disabled",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.8
+          }
+        },
+        {
+          "id": "reg-014",
+          "layout": "regression-no-date-evidence-slash",
+          "format": "csv",
+          "groundTruthRows": 4,
+          "extractedRows": 4,
+          "matched": 4,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 4,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 0,
+            "description": 0,
+            "category": 0
+          },
+          "meanConfidence": null,
+          "cascade": null
+        },
+        {
+          "id": "reg-015",
+          "layout": "regression-no-date-evidence-dot",
+          "format": "pdf-text",
+          "groundTruthRows": 3,
+          "extractedRows": 3,
+          "matched": 3,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 3,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 0,
+            "description": 0,
+            "category": 0
+          },
+          "meanConfidence": 0.5,
+          "cascade": {
+            "wouldEscalate": true,
+            "reasons": [
+              "fewer than 5 rows",
+              "mean financial confidence 0.50 < 0.6"
+            ],
+            "decision": "skipped:llm-disabled",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.5
+          }
+        }
+      ],
+      "cascade": {
+        "mode": "deterministic (offline; model tier disabled)",
+        "reason": "not requested",
+        "cases": 8,
+        "wouldEscalate": 5,
+        "decisions": {
+          "skipped:llm-disabled": 5,
+          "not-needed": 3
+        },
+        "modelCallsAttempted": 0
+      }
+    },
+    "pdfBinary": {
+      "caseCount": 24,
+      "rows": {
+        "groundTruth": 2346,
+        "extracted": 2338,
+        "matched": 2329,
+        "financialExact": 2131,
+        "financialExactRecall": 0.9083546462063086
+      },
+      "aggregate": {
+        "date": {
+          "precision": 0.9961505560307955,
+          "recall": 0.9927536231884058,
+          "f1": 0.9944491887275833,
+          "tp": 2329,
+          "fp": 9,
+          "fn": 17
+        },
+        "amount": {
+          "precision": 0.957656116338751,
+          "recall": 0.954390451832907,
+          "f1": 0.9560204953031597,
+          "tp": 2239,
+          "fp": 99,
+          "fn": 107
+        },
+        "description": {
+          "precision": 0.9499572284003421,
+          "recall": 0.9467178175618073,
+          "f1": 0.9483347566182749,
+          "tp": 2221,
+          "fp": 117,
+          "fn": 125
+        },
+        "category": {
+          "precision": 0.6988879384088965,
+          "recall": 0.6965046888320545,
+          "f1": 0.6976942783945346,
+          "tp": 1634,
+          "fp": 704,
+          "fn": 712
+        }
+      },
+      "layoutBreakdown": {
+        "tr-katilim": {
+          "date": {
+            "precision": 0.9942196531791907,
+            "recall": 0.9851088201603666,
+            "f1": 0.9896432681242807,
+            "tp": 860,
+            "fp": 5,
+            "fn": 13
+          },
+          "amount": {
+            "precision": 0.9560693641618497,
+            "recall": 0.9473081328751431,
+            "f1": 0.951668584579977,
+            "tp": 827,
+            "fp": 38,
+            "fn": 46
+          },
+          "description": {
+            "precision": 0.9526011560693641,
+            "recall": 0.9438717067583047,
+            "f1": 0.9482163406214039,
+            "tp": 824,
+            "fp": 41,
+            "fn": 49
+          },
+          "category": {
+            "precision": 0.9526011560693641,
+            "recall": 0.9438717067583047,
+            "f1": 0.9482163406214039,
+            "tp": 824,
+            "fp": 41,
+            "fn": 49
+          }
+        },
+        "us-credit-debit": {
+          "date": {
+            "precision": 0.9987277353689568,
+            "recall": 0.9987277353689568,
+            "f1": 0.9987277353689568,
+            "tp": 785,
+            "fp": 1,
+            "fn": 1
+          },
+          "amount": {
+            "precision": 0.9631043256997456,
+            "recall": 0.9631043256997456,
+            "f1": 0.9631043256997456,
+            "tp": 757,
+            "fp": 29,
+            "fn": 29
+          },
+          "description": {
+            "precision": 0.9669211195928753,
+            "recall": 0.9669211195928753,
+            "f1": 0.9669211195928753,
+            "tp": 760,
+            "fp": 26,
+            "fn": 26
+          },
+          "category": {
+            "precision": 0.494910941475827,
+            "recall": 0.494910941475827,
+            "f1": 0.494910941475827,
+            "tp": 389,
+            "fp": 397,
+            "fn": 397
+          }
+        },
+        "us-checking": {
+          "date": {
+            "precision": 0.9956331877729258,
+            "recall": 0.9956331877729258,
+            "f1": 0.9956331877729258,
+            "tp": 684,
+            "fp": 3,
+            "fn": 3
+          },
+          "amount": {
+            "precision": 0.9534206695778749,
+            "recall": 0.9534206695778749,
+            "f1": 0.9534206695778749,
+            "tp": 655,
+            "fp": 32,
+            "fn": 32
+          },
+          "description": {
+            "precision": 0.9272197962154294,
+            "recall": 0.9272197962154294,
+            "f1": 0.9272197962154294,
+            "tp": 637,
+            "fp": 50,
+            "fn": 50
+          },
+          "category": {
+            "precision": 0.6128093158660844,
+            "recall": 0.6128093158660844,
+            "f1": 0.6128093158660844,
+            "tp": 421,
+            "fp": 266,
+            "fn": 266
+          }
+        }
+      },
+      "formatBreakdown": {
+        "pdf-binary": {
+          "date": {
+            "precision": 0.9961505560307955,
+            "recall": 0.9927536231884058,
+            "f1": 0.9944491887275833,
+            "tp": 2329,
+            "fp": 9,
+            "fn": 17
+          },
+          "amount": {
+            "precision": 0.957656116338751,
+            "recall": 0.954390451832907,
+            "f1": 0.9560204953031597,
+            "tp": 2239,
+            "fp": 99,
+            "fn": 107
+          },
+          "description": {
+            "precision": 0.9499572284003421,
+            "recall": 0.9467178175618073,
+            "f1": 0.9483347566182749,
+            "tp": 2221,
+            "fp": 117,
+            "fn": 125
+          },
+          "category": {
+            "precision": 0.6988879384088965,
+            "recall": 0.6965046888320545,
+            "f1": 0.6976942783945346,
+            "tp": 1634,
+            "fp": 704,
+            "fn": 712
+          }
+        }
+      },
+      "perCase": [
+        {
+          "id": "case-002",
+          "layout": "tr-katilim",
+          "format": "pdf-binary",
+          "groundTruthRows": 93,
+          "extractedRows": 91,
+          "matched": 91,
+          "falsePositives": 0,
+          "falseNegatives": 2,
+          "financialExactRows": 79,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 11,
+            "description": 1,
+            "category": 1
+          },
+          "meanConfidence": 0.7401098901098904,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7725
+          }
+        },
+        {
+          "id": "case-005",
+          "layout": "us-credit-debit",
+          "format": "pdf-binary",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 94,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 3,
+            "description": 2,
+            "category": 55
+          },
+          "meanConfidence": 0.5262626262626267,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7742
+          }
+        },
+        {
+          "id": "case-006",
+          "layout": "tr-katilim",
+          "format": "pdf-binary",
+          "groundTruthRows": 96,
+          "extractedRows": 95,
+          "matched": 94,
+          "falsePositives": 1,
+          "falseNegatives": 2,
+          "financialExactRows": 87,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 2,
+            "description": 5,
+            "category": 5
+          },
+          "meanConfidence": 0.7157894736842106,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7447
+          }
+        },
+        {
+          "id": "case-007",
+          "layout": "us-credit-debit",
+          "format": "pdf-binary",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 98,
+          "falsePositives": 1,
+          "falseNegatives": 1,
+          "financialExactRows": 92,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 3,
+            "description": 3,
+            "category": 48
+          },
+          "meanConfidence": 0.5505050505050509,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7667
+          }
+        },
+        {
+          "id": "case-009",
+          "layout": "tr-katilim",
+          "format": "pdf-binary",
+          "groundTruthRows": 99,
+          "extractedRows": 98,
+          "matched": 98,
+          "falsePositives": 0,
+          "falseNegatives": 1,
+          "financialExactRows": 92,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 1,
+            "description": 5,
+            "category": 5
+          },
+          "meanConfidence": 0.7214285714285718,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.748
+          }
+        },
+        {
+          "id": "case-010",
+          "layout": "us-credit-debit",
+          "format": "pdf-binary",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 94,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 2,
+            "description": 3,
+            "category": 48
+          },
+          "meanConfidence": 0.553535353535354,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7652
+          }
+        },
+        {
+          "id": "case-011",
+          "layout": "tr-katilim",
+          "format": "pdf-binary",
+          "groundTruthRows": 99,
+          "extractedRows": 98,
+          "matched": 98,
+          "falsePositives": 0,
+          "falseNegatives": 1,
+          "financialExactRows": 93,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 2,
+            "description": 3,
+            "category": 3
+          },
+          "meanConfidence": 0.7290816326530613,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7587
+          }
+        },
+        {
+          "id": "case-016",
+          "layout": "us-checking",
+          "format": "pdf-binary",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 90,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 2,
+            "description": 7,
+            "category": 41
+          },
+          "meanConfidence": 0.5797979797979803,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7515
+          }
+        },
+        {
+          "id": "case-017",
+          "layout": "us-checking",
+          "format": "pdf-binary",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 97,
+          "falsePositives": 2,
+          "falseNegatives": 2,
+          "financialExactRows": 83,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 5,
+            "description": 9,
+            "category": 39
+          },
+          "meanConfidence": 0.5803030303030309,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7323
+          }
+        },
+        {
+          "id": "case-018",
+          "layout": "us-credit-debit",
+          "format": "pdf-binary",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 91,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 3,
+            "description": 5,
+            "category": 51
+          },
+          "meanConfidence": 0.5434343434343439,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7687
+          }
+        },
+        {
+          "id": "case-020",
+          "layout": "us-checking",
+          "format": "pdf-binary",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 90,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 0,
+            "description": 9,
+            "category": 40
+          },
+          "meanConfidence": 0.5858585858585863,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7449
+          }
+        },
+        {
+          "id": "case-026",
+          "layout": "tr-katilim",
+          "format": "pdf-binary",
+          "groundTruthRows": 96,
+          "extractedRows": 96,
+          "matched": 96,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 90,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 3,
+            "description": 3,
+            "category": 3
+          },
+          "meanConfidence": 0.7302083333333336,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.762
+          }
+        },
+        {
+          "id": "case-030",
+          "layout": "tr-katilim",
+          "format": "pdf-binary",
+          "groundTruthRows": 99,
+          "extractedRows": 98,
+          "matched": 98,
+          "falsePositives": 0,
+          "falseNegatives": 1,
+          "financialExactRows": 88,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 4,
+            "description": 6,
+            "category": 6
+          },
+          "meanConfidence": 0.7178571428571432,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7459
+          }
+        },
+        {
+          "id": "case-031",
+          "layout": "us-credit-debit",
+          "format": "pdf-binary",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 93,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 4,
+            "description": 2,
+            "category": 45
+          },
+          "meanConfidence": 0.566666666666667,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7793
+          }
+        },
+        {
+          "id": "case-033",
+          "layout": "tr-katilim",
+          "format": "pdf-binary",
+          "groundTruthRows": 99,
+          "extractedRows": 98,
+          "matched": 97,
+          "falsePositives": 1,
+          "falseNegatives": 2,
+          "financialExactRows": 90,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 3,
+            "description": 4,
+            "category": 4
+          },
+          "meanConfidence": 0.7219387755102044,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7546
+          }
+        },
+        {
+          "id": "case-038",
+          "layout": "us-credit-debit",
+          "format": "pdf-binary",
+          "groundTruthRows": 96,
+          "extractedRows": 96,
+          "matched": 96,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 90,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 3,
+            "description": 3,
+            "category": 46
+          },
+          "meanConfidence": 0.5567708333333338,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.774
+          }
+        },
+        {
+          "id": "case-041",
+          "layout": "tr-katilim",
+          "format": "pdf-binary",
+          "groundTruthRows": 93,
+          "extractedRows": 93,
+          "matched": 90,
+          "falsePositives": 3,
+          "falseNegatives": 3,
+          "financialExactRows": 84,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 4,
+            "description": 2,
+            "category": 2
+          },
+          "meanConfidence": 0.7204301075268821,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7473
+          }
+        },
+        {
+          "id": "case-042",
+          "layout": "tr-katilim",
+          "format": "pdf-binary",
+          "groundTruthRows": 99,
+          "extractedRows": 98,
+          "matched": 98,
+          "falsePositives": 0,
+          "falseNegatives": 1,
+          "financialExactRows": 88,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 3,
+            "description": 7,
+            "category": 7
+          },
+          "meanConfidence": 0.7127551020408166,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7383
+          }
+        },
+        {
+          "id": "case-043",
+          "layout": "us-credit-debit",
+          "format": "pdf-binary",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 88,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 6,
+            "description": 5,
+            "category": 51
+          },
+          "meanConfidence": 0.5409090909090916,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7591
+          }
+        },
+        {
+          "id": "case-045",
+          "layout": "us-checking",
+          "format": "pdf-binary",
+          "groundTruthRows": 96,
+          "extractedRows": 96,
+          "matched": 95,
+          "falsePositives": 1,
+          "falseNegatives": 1,
+          "financialExactRows": 81,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 9,
+            "description": 5,
+            "category": 36
+          },
+          "meanConfidence": 0.5921875000000004,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7536
+          }
+        },
+        {
+          "id": "case-046",
+          "layout": "us-checking",
+          "format": "pdf-binary",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 91,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 3,
+            "description": 5,
+            "category": 33
+          },
+          "meanConfidence": 0.6116161616161621,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7581
+          }
+        },
+        {
+          "id": "case-048",
+          "layout": "us-checking",
+          "format": "pdf-binary",
+          "groundTruthRows": 96,
+          "extractedRows": 96,
+          "matched": 96,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 86,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 4,
+            "description": 6,
+            "category": 39
+          },
+          "meanConfidence": 0.5807291666666671,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7484
+          }
+        },
+        {
+          "id": "case-049",
+          "layout": "us-credit-debit",
+          "format": "pdf-binary",
+          "groundTruthRows": 96,
+          "extractedRows": 96,
+          "matched": 96,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 90,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 4,
+            "description": 2,
+            "category": 52
+          },
+          "meanConfidence": 0.5317708333333339,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7766
+          }
+        },
+        {
+          "id": "case-050",
+          "layout": "us-checking",
+          "format": "pdf-binary",
+          "groundTruthRows": 99,
+          "extractedRows": 99,
+          "matched": 99,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "financialExactRows": 87,
+          "fieldMismatches": {
+            "date": 0,
+            "amount": 6,
+            "description": 6,
+            "category": 35
+          },
+          "meanConfidence": 0.6060606060606063,
+          "cascade": {
+            "wouldEscalate": false,
+            "reasons": [],
+            "decision": "not-needed",
+            "attempts": 0,
+            "meanFinancialConfidence": 0.7576
+          }
+        }
+      ]
+    }
+  },
+  "advisor": {
+    "kind": "deterministic-arithmetic-self-consistency",
+    "passed": 12,
+    "total": 12,
+    "cases": [
+      {
+        "id": "case-001",
+        "profileId": "profile-a",
+        "question": "What's my savings rate?",
+        "expectedMetric": "savingsRate",
+        "expectedValue": 6.3,
+        "tolerance": 0.01,
+        "actualValue": 6.3,
+        "pass": true
+      },
+      {
+        "id": "case-002",
+        "profileId": "profile-a",
+        "question": "How much do I spend per month?",
+        "expectedMetric": "monthlyBurn",
+        "expectedValue": 3163.8,
+        "tolerance": 0.01,
+        "actualValue": 3163.8,
+        "pass": true
+      },
+      {
+        "id": "case-003",
+        "profileId": "profile-a",
+        "question": "How would you rate my financial risk?",
+        "expectedMetric": "riskScore",
+        "expectedValue": 38,
+        "tolerance": 0.01,
+        "actualValue": 38,
+        "pass": true
+      },
+      {
+        "id": "case-004",
+        "profileId": "profile-a",
+        "question": "How much have I spent on groceries recently?",
+        "expectedMetric": "categoryBreakdown.Groceries",
+        "expectedValue": -971.33,
+        "tolerance": 0.01,
+        "actualValue": -971.33,
+        "pass": true
+      },
+      {
+        "id": "case-005",
+        "profileId": "profile-b",
+        "question": "What's my savings rate?",
+        "expectedMetric": "savingsRate",
+        "expectedValue": 15,
+        "tolerance": 0.01,
+        "actualValue": 15,
+        "pass": true
+      },
+      {
+        "id": "case-006",
+        "profileId": "profile-b",
+        "question": "How much do I spend per month?",
+        "expectedMetric": "monthlyBurn",
+        "expectedValue": 2759.59,
+        "tolerance": 0.01,
+        "actualValue": 2759.59,
+        "pass": true
+      },
+      {
+        "id": "case-007",
+        "profileId": "profile-b",
+        "question": "How would you rate my financial risk?",
+        "expectedMetric": "riskScore",
+        "expectedValue": 43,
+        "tolerance": 0.01,
+        "actualValue": 43,
+        "pass": true
+      },
+      {
+        "id": "case-008",
+        "profileId": "profile-b",
+        "question": "How much have I spent on groceries recently?",
+        "expectedMetric": "categoryBreakdown.Groceries",
+        "expectedValue": -1546.31,
+        "tolerance": 0.01,
+        "actualValue": -1546.31,
+        "pass": true
+      },
+      {
+        "id": "case-009",
+        "profileId": "profile-c",
+        "question": "What's my savings rate?",
+        "expectedMetric": "savingsRate",
+        "expectedValue": 52.8,
+        "tolerance": 0.01,
+        "actualValue": 52.8,
+        "pass": true
+      },
+      {
+        "id": "case-010",
+        "profileId": "profile-c",
+        "question": "How much do I spend per month?",
+        "expectedMetric": "monthlyBurn",
+        "expectedValue": 3260.51,
+        "tolerance": 0.01,
+        "actualValue": 3260.51,
+        "pass": true
+      },
+      {
+        "id": "case-011",
+        "profileId": "profile-c",
+        "question": "How would you rate my financial risk?",
+        "expectedMetric": "riskScore",
+        "expectedValue": 64,
+        "tolerance": 0.01,
+        "actualValue": 64,
+        "pass": true
+      },
+      {
+        "id": "case-012",
+        "profileId": "profile-c",
+        "question": "How much have I spent on groceries recently?",
+        "expectedMetric": "categoryBreakdown.Groceries",
+        "expectedValue": -1537.94,
+        "tolerance": 0.01,
+        "actualValue": -1537.94,
+        "pass": true
+      }
+    ]
+  },
+  "gate": {
+    "passed": true,
+    "failures": [],
+    "checked": 28,
+    "skipped": false
+  },
+  "note": "Final report of this change (perCase.examples stripped for size). Compare a new run with: npm run eval -- --compare ../docs/ai-roadmap/eval-evidence/after.json"
+}

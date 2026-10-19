@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "recordedAt": "2026-10-19",
+  "recordedFrom": "deterministic eval of the parser repair on top of 24b854d2 (report: docs/ai-roadmap/eval-evidence/after.json)",
+  "policy": [
+    "Thresholds are measured values minus a stated tolerance — never targets, never lowered to make a run pass.",
+    "The eval is deterministic, so a rerun reproduces the measurement exactly; the tolerance only leaves room for a deliberate trade-off, which must be explained in EVALUATION.md.",
+    "Financial fields (date, amount, description): aggregate -0.5 pt, per layout -1.0 pt, exact-row recall -0.5 pt.",
+    "Category: aggregate only, -2.0 pt — its rules are tuned in-sample and P3 will replace them; it is not gated per layout.",
+    "Regression set: every financial field must be 100% (63 rows; one wrong row is a 1.6 pt drop, so any tolerance would hide a broken behaviour).",
+    "Dataset fingerprints pin the fixtures: editing an expected answer fails the gate until this file is re-recorded on purpose.",
+    "pdfBinary (golden pdf-text cases rendered by jsPDF, then pdf-parse): aggregate financial fields -0.5 pt, exact-row recall -0.5 pt. Its 10 lost/garbled lines are a generator artifact (jsPDF's built-in font cannot encode Ş/İ) — see EVALUATION.md."
+  ],
+  "datasets": {
+    "golden": {
+      "cases": 50,
+      "rows": 4866,
+      "fingerprint": "1856b49cc1e5f7031f20b8fe0ff8ed663574b3e1b6ecb746e47068190f96ebb5"
+    },
+    "regression": {
+      "cases": 15,
+      "rows": 63,
+      "fingerprint": "9713686f9f01ce31dae5e2ad860494c36946c39738dcff03b132f83ca602eaa1"
+    }
+  },
+  "extraction": {
+    "golden": {
+      "aggregateF1Min": {
+        "date": 0.991,
+        "amount": 0.95,
+        "description": 0.947,
+        "category": 0.7
+      },
+      "layoutF1Min": {
+        "us-credit-debit": {
+          "date": 0.987,
+          "amount": 0.95,
+          "description": 0.957
+        },
+        "tr-katilim": {
+          "date": 0.985,
+          "amount": 0.944,
+          "description": 0.936
+        },
+        "us-checking": {
+          "date": 0.987,
+          "amount": 0.943,
+          "description": 0.939
+        }
+      },
+      "financialExactRecallMin": 0.907,
+      "maxFalsePositiveRows": 20
+    },
+    "regression": {
+      "aggregateF1Min": {
+        "date": 1,
+        "amount": 1,
+        "description": 1
+      },
+      "financialExactRecallMin": 1,
+      "maxFalsePositiveRows": 0
+    },
+    "pdfBinary": {
+      "aggregateF1Min": {
+        "date": 0.989,
+        "amount": 0.951,
+        "description": 0.943
+      },
+      "financialExactRecallMin": 0.903,
+      "maxFalsePositiveRows": 12
+    }
+  },
+  "advisor": {
+    "minPassRate": 1
+  }
+}

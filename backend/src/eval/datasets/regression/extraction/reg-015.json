@@ -1,0 +1,27 @@
+{
+  "id": "reg-015",
+  "layout": "regression-no-date-evidence-dot",
+  "format": "pdf-text",
+  "notes": "Every date is ambiguous and there is no period: '.'-separated dates are read day-first by policy.",
+  "rawText": "Hesap Hareketleri\n01.10.2025  MAAS ODEMESI          38000,00\n02.10.2025  BIM MARKET              -210,45\n06.10.2025  IETT OTOBUS              -17,70",
+  "groundTruth": [
+    {
+      "date": "2025-10-01",
+      "amount": 38000,
+      "description": "MAAS ODEMESI",
+      "category": "Salary"
+    },
+    {
+      "date": "2025-10-02",
+      "amount": -210.45,
+      "description": "BIM MARKET",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-10-06",
+      "amount": -17.7,
+      "description": "IETT OTOBUS",
+      "category": "Transport"
+    }
+  ]
+}

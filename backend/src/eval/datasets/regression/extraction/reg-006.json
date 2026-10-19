@@ -1,0 +1,33 @@
+{
+  "id": "reg-006",
+  "layout": "regression-multipage",
+  "format": "pdf-text",
+  "notes": "Descriptions continued on the next line, a page footer, and a repeated page header between rows.",
+  "rawText": "Example Bank — Statement\nDate        Description                         Amount\n04/01/2025  AMAZON MKTPLACE PMTS               -27.49\n            AMZN.COM/BILL WA\n04/03/2025  ACME CORP PAYROLL                 2,500.00\nPage 1 of 2\nExample Bank — Statement (continued)\nDate        Description                         Amount\n04/14/2025  WHOLE FOODS MARKET #10233          -88.12\n04/22/2025  CITY ELECTRIC BILL                 -76.40\n            AUTOPAY",
+  "groundTruth": [
+    {
+      "date": "2025-04-01",
+      "amount": -27.49,
+      "description": "AMAZON MKTPLACE PMTS AMZN.COM/BILL WA",
+      "category": "Shopping"
+    },
+    {
+      "date": "2025-04-03",
+      "amount": 2500,
+      "description": "ACME CORP PAYROLL",
+      "category": "Salary"
+    },
+    {
+      "date": "2025-04-14",
+      "amount": -88.12,
+      "description": "WHOLE FOODS MARKET #10233",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-04-22",
+      "amount": -76.4,
+      "description": "CITY ELECTRIC BILL AUTOPAY",
+      "category": "Utilities"
+    }
+  ]
+}

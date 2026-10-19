@@ -1,0 +1,33 @@
+{
+  "id": "reg-009",
+  "layout": "regression-year-boundary",
+  "format": "csv",
+  "notes": "DD.MM statement crossing a year boundary; 02.01 and 05.01 are ambiguous and must be read day-first from the document's other dates.",
+  "rawText": "Tarih;Açıklama;Tutar\n27.12.2024;MIGROS TICARET;-312,40\n31.12.2024;KIRA ODEMESI;-15000,00\n02.01.2025;MAAS ODEMESI;38000,00\n05.01.2025;ELEKTRIK FATURASI;-845,60",
+  "groundTruth": [
+    {
+      "date": "2024-12-27",
+      "amount": -312.4,
+      "description": "MIGROS TICARET",
+      "category": "Groceries"
+    },
+    {
+      "date": "2024-12-31",
+      "amount": -15000,
+      "description": "KIRA ODEMESI",
+      "category": "Rent"
+    },
+    {
+      "date": "2025-01-02",
+      "amount": 38000,
+      "description": "MAAS ODEMESI",
+      "category": "Salary"
+    },
+    {
+      "date": "2025-01-05",
+      "amount": -845.6,
+      "description": "ELEKTRIK FATURASI",
+      "category": "Utilities"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "id": "reg-003",
+  "layout": "regression-balance-unsigned",
+  "format": "pdf-text",
+  "notes": "Separate Debit/Credit columns flattened to unsigned text; the sign is only recoverable from the running balance (opening balance given).",
+  "rawText": "Date        Description               Debit      Credit     Balance\n            Opening balance                                 1,000.00\n01/05/2025  RENT PAYMENT JANUARY      850.00                  150.00\n01/07/2025  ACME CORP PAYROLL                  2,400.00     2,550.00\n01/09/2025  KROGER #4471               73.42                2,476.58\n01/15/2025  COMCAST INTERNET BILL      59.99                2,416.59",
+  "groundTruth": [
+    {
+      "date": "2025-01-05",
+      "amount": -850,
+      "description": "RENT PAYMENT JANUARY",
+      "category": "Rent"
+    },
+    {
+      "date": "2025-01-07",
+      "amount": 2400,
+      "description": "ACME CORP PAYROLL",
+      "category": "Salary"
+    },
+    {
+      "date": "2025-01-09",
+      "amount": -73.42,
+      "description": "KROGER #4471",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-01-15",
+      "amount": -59.99,
+      "description": "COMCAST INTERNET BILL",
+      "category": "Utilities"
+    }
+  ]
+}

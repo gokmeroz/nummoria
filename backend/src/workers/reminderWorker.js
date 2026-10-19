@@ -1,11 +1,10 @@
 // backend/src/workers/reminderWorker.js
 import { Worker } from "bullmq";
-import { connection } from "../queues/redis.js";
+import { getRedisConnection } from "../queues/redis.js";
 import Notification from "../models/Notification.js";
 import { Transaction } from "../models/transaction.js";
-import { pushQueue } from "../queues/pushQueue.js";
-
-export const REMINDER_QUEUE_NAME = "reminderQueue";
+import { getPushQueue } from "../queues/pushQueue.js";
+import { REMINDER_QUEUE_NAME } from "../queues/reminderQueue.js";
 
 new Worker(
   REMINDER_QUEUE_NAME,
@@ -32,13 +31,13 @@ new Worker(
       status: "queued",
     });
 
-    await pushQueue.add(
+    await getPushQueue().add(
       "sendPush",
       { notificationId: String(notif._id) },
       { removeOnComplete: true, removeOnFail: 50 }
     );
   },
-  { connection }
+  { connection: getRedisConnection() }
 );
 
 console.log("[reminder-worker] worker online");

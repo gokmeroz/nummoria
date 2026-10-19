@@ -1,0 +1,627 @@
+{
+  "label": "HEAD 24b854d2 — production parsers on the new regression set",
+  "note": "Hand-labelled regression cases (written in this change, not a holdout) scored against HEAD's production parsers with the new scorer.",
+  "rows": {
+    "groundTruth": 63,
+    "extracted": 52,
+    "matched": 51,
+    "financialExact": 31,
+    "financialExactRecall": 0.49206349206349204
+  },
+  "aggregate": {
+    "date": {
+      "precision": 0.8846,
+      "recall": 0.7302,
+      "f1": 0.8,
+      "tp": 46,
+      "fp": 6,
+      "fn": 17
+    },
+    "amount": {
+      "precision": 0.75,
+      "recall": 0.619,
+      "f1": 0.6783,
+      "tp": 39,
+      "fp": 13,
+      "fn": 24
+    },
+    "description": {
+      "precision": 0.6923,
+      "recall": 0.5714,
+      "f1": 0.6261,
+      "tp": 36,
+      "fp": 16,
+      "fn": 27
+    },
+    "category": {
+      "precision": 0.3077,
+      "recall": 0.254,
+      "f1": 0.2783,
+      "tp": 16,
+      "fp": 36,
+      "fn": 47
+    }
+  },
+  "layoutBreakdown": {
+    "regression-iso-period": {
+      "date": {
+        "precision": 0,
+        "recall": 0,
+        "f1": 0,
+        "tp": 0,
+        "fp": 0,
+        "fn": 4
+      },
+      "amount": {
+        "precision": 0,
+        "recall": 0,
+        "f1": 0,
+        "tp": 0,
+        "fp": 0,
+        "fn": 4
+      },
+      "description": {
+        "precision": 0,
+        "recall": 0,
+        "f1": 0,
+        "tp": 0,
+        "fp": 0,
+        "fn": 4
+      },
+      "category": {
+        "precision": 0,
+        "recall": 0,
+        "f1": 0,
+        "tp": 0,
+        "fp": 0,
+        "fn": 4
+      }
+    },
+    "regression-balance-signed": {
+      "date": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "tp": 5,
+        "fp": 0,
+        "fn": 0
+      },
+      "amount": {
+        "precision": 0,
+        "recall": 0,
+        "f1": 0,
+        "tp": 0,
+        "fp": 5,
+        "fn": 5
+      },
+      "description": {
+        "precision": 0,
+        "recall": 0,
+        "f1": 0,
+        "tp": 0,
+        "fp": 5,
+        "fn": 5
+      },
+      "category": {
+        "precision": 0.8,
+        "recall": 0.8,
+        "f1": 0.8,
+        "tp": 4,
+        "fp": 1,
+        "fn": 1
+      }
+    },
+    "regression-balance-unsigned": {
+      "date": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "tp": 4,
+        "fp": 0,
+        "fn": 0
+      },
+      "amount": {
+        "precision": 0,
+        "recall": 0,
+        "f1": 0,
+        "tp": 0,
+        "fp": 4,
+        "fn": 4
+      },
+      "description": {
+        "precision": 0,
+        "recall": 0,
+        "f1": 0,
+        "tp": 0,
+        "fp": 4,
+        "fn": 4
+      },
+      "category": {
+        "precision": 0.75,
+        "recall": 0.75,
+        "f1": 0.75,
+        "tp": 3,
+        "fp": 1,
+        "fn": 1
+      }
+    },
+    "regression-tr-pdf": {
+      "date": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "tp": 5,
+        "fp": 0,
+        "fn": 0
+      },
+      "amount": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "tp": 5,
+        "fp": 0,
+        "fn": 0
+      },
+      "description": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "tp": 5,
+        "fp": 0,
+        "fn": 0
+      },
+      "category": {
+        "precision": 0.4,
+        "recall": 0.4,
+        "f1": 0.4,
+        "tp": 2,
+        "fp": 3,
+        "fn": 3
+      }
+    },
+    "regression-sign-conventions": {
+      "date": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "tp": 5,
+        "fp": 0,
+        "fn": 0
+      },
+      "amount": {
+        "precision": 0.4,
+        "recall": 0.4,
+        "f1": 0.4,
+        "tp": 2,
+        "fp": 3,
+        "fn": 3
+      },
+      "description": {
+        "precision": 0.2,
+        "recall": 0.2,
+        "f1": 0.2,
+        "tp": 1,
+        "fp": 4,
+        "fn": 4
+      },
+      "category": {
+        "precision": 0,
+        "recall": 0,
+        "f1": 0,
+        "tp": 0,
+        "fp": 5,
+        "fn": 5
+      }
+    },
+    "regression-multipage": {
+      "date": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "tp": 4,
+        "fp": 0,
+        "fn": 0
+      },
+      "amount": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "tp": 4,
+        "fp": 0,
+        "fn": 0
+      },
+      "description": {
+        "precision": 0.5,
+        "recall": 0.5,
+        "f1": 0.5,
+        "tp": 2,
+        "fp": 2,
+        "fn": 2
+      },
+      "category": {
+        "precision": 0.75,
+        "recall": 0.75,
+        "f1": 0.75,
+        "tp": 3,
+        "fp": 1,
+        "fn": 1
+      }
+    },
+    "regression-repeats": {
+      "date": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "tp": 6,
+        "fp": 0,
+        "fn": 0
+      },
+      "amount": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "tp": 6,
+        "fp": 0,
+        "fn": 0
+      },
+      "description": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "tp": 6,
+        "fp": 0,
+        "fn": 0
+      },
+      "category": {
+        "precision": 0,
+        "recall": 0,
+        "f1": 0,
+        "tp": 0,
+        "fp": 6,
+        "fn": 6
+      }
+    },
+    "regression-csv-preamble": {
+      "date": {
+        "precision": 0,
+        "recall": 0,
+        "f1": 0,
+        "tp": 0,
+        "fp": 0,
+        "fn": 4
+      },
+      "amount": {
+        "precision": 0,
+        "recall": 0,
+        "f1": 0,
+        "tp": 0,
+        "fp": 0,
+        "fn": 4
+      },
+      "description": {
+        "precision": 0,
+        "recall": 0,
+        "f1": 0,
+        "tp": 0,
+        "fp": 0,
+        "fn": 4
+      },
+      "category": {
+        "precision": 0,
+        "recall": 0,
+        "f1": 0,
+        "tp": 0,
+        "fp": 0,
+        "fn": 4
+      }
+    },
+    "regression-year-boundary": {
+      "date": {
+        "precision": 0.5,
+        "recall": 0.5,
+        "f1": 0.5,
+        "tp": 2,
+        "fp": 2,
+        "fn": 2
+      },
+      "amount": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "tp": 4,
+        "fp": 0,
+        "fn": 0
+      },
+      "description": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "tp": 4,
+        "fp": 0,
+        "fn": 0
+      },
+      "category": {
+        "precision": 0,
+        "recall": 0,
+        "f1": 0,
+        "tp": 0,
+        "fp": 4,
+        "fn": 4
+      }
+    },
+    "regression-dirty-csv": {
+      "date": {
+        "precision": 0.8,
+        "recall": 1,
+        "f1": 0.8889,
+        "tp": 4,
+        "fp": 1,
+        "fn": 0
+      },
+      "amount": {
+        "precision": 0.8,
+        "recall": 1,
+        "f1": 0.8889,
+        "tp": 4,
+        "fp": 1,
+        "fn": 0
+      },
+      "description": {
+        "precision": 0.8,
+        "recall": 1,
+        "f1": 0.8889,
+        "tp": 4,
+        "fp": 1,
+        "fn": 0
+      },
+      "category": {
+        "precision": 0.2,
+        "recall": 0.25,
+        "f1": 0.2222,
+        "tp": 1,
+        "fp": 4,
+        "fn": 3
+      }
+    },
+    "regression-tr-csv": {
+      "date": {
+        "precision": 0,
+        "recall": 0,
+        "f1": 0,
+        "tp": 0,
+        "fp": 0,
+        "fn": 4
+      },
+      "amount": {
+        "precision": 0,
+        "recall": 0,
+        "f1": 0,
+        "tp": 0,
+        "fp": 0,
+        "fn": 4
+      },
+      "description": {
+        "precision": 0,
+        "recall": 0,
+        "f1": 0,
+        "tp": 0,
+        "fp": 0,
+        "fn": 4
+      },
+      "category": {
+        "precision": 0,
+        "recall": 0,
+        "f1": 0,
+        "tp": 0,
+        "fp": 0,
+        "fn": 4
+      }
+    },
+    "regression-unknown-merchants": {
+      "date": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "tp": 4,
+        "fp": 0,
+        "fn": 0
+      },
+      "amount": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "tp": 4,
+        "fp": 0,
+        "fn": 0
+      },
+      "description": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "tp": 4,
+        "fp": 0,
+        "fn": 0
+      },
+      "category": {
+        "precision": 0,
+        "recall": 0,
+        "f1": 0,
+        "tp": 0,
+        "fp": 4,
+        "fn": 4
+      }
+    },
+    "regression-fx": {
+      "date": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "tp": 3,
+        "fp": 0,
+        "fn": 0
+      },
+      "amount": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "tp": 3,
+        "fp": 0,
+        "fn": 0
+      },
+      "description": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "tp": 3,
+        "fp": 0,
+        "fn": 0
+      },
+      "category": {
+        "precision": 0,
+        "recall": 0,
+        "f1": 0,
+        "tp": 0,
+        "fp": 3,
+        "fn": 3
+      }
+    },
+    "regression-no-date-evidence-slash": {
+      "date": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "tp": 4,
+        "fp": 0,
+        "fn": 0
+      },
+      "amount": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "tp": 4,
+        "fp": 0,
+        "fn": 0
+      },
+      "description": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "tp": 4,
+        "fp": 0,
+        "fn": 0
+      },
+      "category": {
+        "precision": 0,
+        "recall": 0,
+        "f1": 0,
+        "tp": 0,
+        "fp": 4,
+        "fn": 4
+      }
+    },
+    "regression-no-date-evidence-dot": {
+      "date": {
+        "precision": 0,
+        "recall": 0,
+        "f1": 0,
+        "tp": 0,
+        "fp": 3,
+        "fn": 3
+      },
+      "amount": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "tp": 3,
+        "fp": 0,
+        "fn": 0
+      },
+      "description": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "tp": 3,
+        "fp": 0,
+        "fn": 0
+      },
+      "category": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "tp": 3,
+        "fp": 0,
+        "fn": 0
+      }
+    }
+  },
+  "formatBreakdown": {
+    "pdf-text": {
+      "date": {
+        "precision": 0.8966,
+        "recall": 0.7879,
+        "f1": 0.8387,
+        "tp": 26,
+        "fp": 3,
+        "fn": 7
+      },
+      "amount": {
+        "precision": 0.5862,
+        "recall": 0.5152,
+        "f1": 0.5484,
+        "tp": 17,
+        "fp": 12,
+        "fn": 16
+      },
+      "description": {
+        "precision": 0.4828,
+        "recall": 0.4242,
+        "f1": 0.4516,
+        "tp": 14,
+        "fp": 15,
+        "fn": 19
+      },
+      "category": {
+        "precision": 0.5172,
+        "recall": 0.4545,
+        "f1": 0.4839,
+        "tp": 15,
+        "fp": 14,
+        "fn": 18
+      }
+    },
+    "csv": {
+      "date": {
+        "precision": 0.8696,
+        "recall": 0.6667,
+        "f1": 0.7547,
+        "tp": 20,
+        "fp": 3,
+        "fn": 10
+      },
+      "amount": {
+        "precision": 0.9565,
+        "recall": 0.7333,
+        "f1": 0.8302,
+        "tp": 22,
+        "fp": 1,
+        "fn": 8
+      },
+      "description": {
+        "precision": 0.9565,
+        "recall": 0.7333,
+        "f1": 0.8302,
+        "tp": 22,
+        "fp": 1,
+        "fn": 8
+      },
+      "category": {
+        "precision": 0.0435,
+        "recall": 0.0333,
+        "f1": 0.0377,
+        "tp": 1,
+        "fp": 22,
+        "fn": 29
+      }
+    }
+  }
+}

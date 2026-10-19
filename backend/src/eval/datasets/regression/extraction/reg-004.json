@@ -1,0 +1,39 @@
+{
+  "id": "reg-004",
+  "layout": "regression-tr-pdf",
+  "format": "pdf-text",
+  "notes": "Turkish statement: dot thousands + comma decimals, Turkish characters (İ, Ş, Ğ), DD.MM dates, Turkish period header.",
+  "rawText": "Örnek Katılım Bankası — Hesap Ekstresi\nDönem: 2025-02-01 - 2025-02-28\nTarih       Açıklama                     Tutar\n03.02.2025  MAAŞ ÖDEMESİ İŞVEREN A.Ş.    42.500,00\n04.02.2025  KİRA ÖDEMESİ                -18.750,00\n07.02.2025  MİGROS TİCARET               -1.284,35\n11.02.2025  İGDAŞ DOĞALGAZ FATURASI        -965,10\n19.02.2025  ŞEHİR HATLARI VAPUR             -42,00",
+  "groundTruth": [
+    {
+      "date": "2025-02-03",
+      "amount": 42500,
+      "description": "MAAŞ ÖDEMESİ İŞVEREN A.Ş.",
+      "category": "Salary"
+    },
+    {
+      "date": "2025-02-04",
+      "amount": -18750,
+      "description": "KİRA ÖDEMESİ",
+      "category": "Rent"
+    },
+    {
+      "date": "2025-02-07",
+      "amount": -1284.35,
+      "description": "MİGROS TİCARET",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-02-11",
+      "amount": -965.1,
+      "description": "İGDAŞ DOĞALGAZ FATURASI",
+      "category": "Utilities"
+    },
+    {
+      "date": "2025-02-19",
+      "amount": -42,
+      "description": "ŞEHİR HATLARI VAPUR",
+      "category": "Transport"
+    }
+  ]
+}

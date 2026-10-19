@@ -4,13 +4,16 @@
   "type": "module",
   "scripts": {
     "dev:quotes": "cross-env ENABLE_QUOTES=true node --watch src/server.js",
-    "dev": "cross-env ENABLE_QUOTES=true nodemon src/server.js",
+    "dev": "cross-env ENABLE_QUOTES=true node --watch src/server.js",
     "worker:dev": "node --watch src/workers/pushWorkerEntry.js",
     "dev:all": "concurrently -k \"npm run dev\" \"npm run worker:dev\"",
     "start": "cross-env ENABLE_QUOTES=true node src/server.js",
     "worker": "node src/workers/pushWorkerEntry.js",
-    "test": "node --test src/**/*.test.js",
+    "test": "cross-env NODE_ENV=test node --test \"src/**/*.test.js\"",
+    "pretest:coverage": "node -e \"require('fs').mkdirSync('coverage',{recursive:true})\"",
+    "test:coverage": "cross-env NODE_ENV=test node --test --experimental-test-coverage --test-coverage-include=\"src/**/*.js\" --test-coverage-exclude=\"src/**/*.test.js\" --test-coverage-exclude=\"src/test/**\" --test-coverage-exclude=\"src/eval/datasets/**\" --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info \"src/**/*.test.js\"",
     "eval": "node src/eval/run.js",
+    "eval:live": "cross-env EVAL_ALLOW_PAID_CALLS=true node src/eval/run.js --with-llm",
     "eval:calibrate": "node src/eval/calibrate.js",
     "gen:synthetic": "node src/eval/datasets/synthetic/generateStatements.js"
   },
@@ -47,7 +50,8 @@
     "@express-rate-limit/tsconfig": "^1.0.2",
     "@tsconfig/node18": "^18.2.6",
     "concurrently": "^8.2.2",
-    "cross-env": "^10.0.0"
+    "cross-env": "^10.0.0",
+    "jspdf": "^2.5.2"
   },
   "engines": {
     "node": ">=22 <23"

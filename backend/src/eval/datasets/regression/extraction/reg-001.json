@@ -1,0 +1,33 @@
+{
+  "id": "reg-001",
+  "layout": "regression-iso-period",
+  "format": "pdf-text",
+  "notes": "ISO transaction dates and an ISO period header; header line and column header must not become rows.",
+  "rawText": "Example Bank — Account Statement\nStatement period: 2025-01-01 to 2025-01-31\nDate        Description              Amount\n2025-01-03  ACME CORP PAYROLL        2500.00\n2025-01-05  CITY ELECTRIC BILL       -84.20\n2025-01-09  UBER TRIP                -18.40\n2025-01-15  NEIGHBORHOOD BOOKSHOP    -32.99",
+  "groundTruth": [
+    {
+      "date": "2025-01-03",
+      "amount": 2500,
+      "description": "ACME CORP PAYROLL",
+      "category": "Salary"
+    },
+    {
+      "date": "2025-01-05",
+      "amount": -84.2,
+      "description": "CITY ELECTRIC BILL",
+      "category": "Utilities"
+    },
+    {
+      "date": "2025-01-09",
+      "amount": -18.4,
+      "description": "UBER TRIP",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-01-15",
+      "amount": -32.99,
+      "description": "NEIGHBORHOOD BOOKSHOP",
+      "category": "Shopping"
+    }
+  ]
+}

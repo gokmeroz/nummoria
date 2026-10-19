@@ -1,0 +1,144 @@
+{
+  "label": "HEAD 24b854d2 — production parsers, old scorer",
+  "note": "Same commit and scorer, but the CSV track runs ingestController's CSV path (what /ingest/csv and the advisor upload actually used). PDF-text track unchanged.",
+  "rows": null,
+  "aggregate": {
+    "date": {
+      "precision": 0.8847,
+      "recall": 0.7931,
+      "f1": 0.8364,
+      "tp": 3859,
+      "fp": 503,
+      "fn": 1007
+    },
+    "amount": {
+      "precision": 0.9523,
+      "recall": 0.8537,
+      "f1": 0.9003,
+      "tp": 4154,
+      "fp": 208,
+      "fn": 712
+    },
+    "description": {
+      "precision": 0.9553,
+      "recall": 0.8564,
+      "f1": 0.9031,
+      "tp": 4167,
+      "fp": 195,
+      "fn": 699
+    },
+    "category": {
+      "precision": 0.3425,
+      "recall": 0.307,
+      "f1": 0.3238,
+      "tp": 1494,
+      "fp": 2868,
+      "fn": 3372
+    }
+  },
+  "layoutBreakdown": {
+    "us-credit-debit": {
+      "date": {
+        "precision": 0.9503,
+        "recall": 0.5837,
+        "f1": 0.7232,
+        "tp": 746,
+        "fp": 39,
+        "fn": 532
+      },
+      "amount": {
+        "precision": 0.9618,
+        "recall": 0.5908,
+        "f1": 0.7319,
+        "tp": 755,
+        "fp": 30,
+        "fn": 523
+      },
+      "description": {
+        "precision": 0.9745,
+        "recall": 0.5986,
+        "f1": 0.7416,
+        "tp": 765,
+        "fp": 20,
+        "fn": 513
+      },
+      "category": {
+        "precision": 0.4038,
+        "recall": 0.248,
+        "f1": 0.3073,
+        "tp": 317,
+        "fp": 468,
+        "fn": 961
+      }
+    },
+    "tr-katilim": {
+      "date": {
+        "precision": 0.8798,
+        "recall": 0.8781,
+        "f1": 0.8789,
+        "tp": 1786,
+        "fp": 244,
+        "fn": 248
+      },
+      "amount": {
+        "precision": 0.9532,
+        "recall": 0.9513,
+        "f1": 0.9523,
+        "tp": 1935,
+        "fp": 95,
+        "fn": 99
+      },
+      "description": {
+        "precision": 0.9458,
+        "recall": 0.944,
+        "f1": 0.9449,
+        "tp": 1920,
+        "fp": 110,
+        "fn": 114
+      },
+      "category": {
+        "precision": 0.4099,
+        "recall": 0.409,
+        "f1": 0.4094,
+        "tp": 832,
+        "fp": 1198,
+        "fn": 1202
+      }
+    },
+    "us-checking": {
+      "date": {
+        "precision": 0.8578,
+        "recall": 0.8539,
+        "f1": 0.8559,
+        "tp": 1327,
+        "fp": 220,
+        "fn": 227
+      },
+      "amount": {
+        "precision": 0.9463,
+        "recall": 0.9421,
+        "f1": 0.9442,
+        "tp": 1464,
+        "fp": 83,
+        "fn": 90
+      },
+      "description": {
+        "precision": 0.958,
+        "recall": 0.9537,
+        "f1": 0.9558,
+        "tp": 1482,
+        "fp": 65,
+        "fn": 72
+      },
+      "category": {
+        "precision": 0.223,
+        "recall": 0.222,
+        "f1": 0.2225,
+        "tp": 345,
+        "fp": 1202,
+        "fn": 1209
+      }
+    }
+  },
+  "formatBreakdown": null
+}

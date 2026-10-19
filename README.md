@@ -4,429 +4,164 @@
 
 # Nummoria
 
-**Open-source AI-powered personal finance platform**
+**Open-source personal finance app with AI-assisted statement import and analysis**
 
+[![CI](https://github.com/gokmeroz/nummoria/actions/workflows/ci.yml/badge.svg)](https://github.com/gokmeroz/nummoria/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-22.x-brightgreen)](https://nodejs.org)
-[![React](https://img.shields.io/badge/React-19-blue)](https://react.dev)
-[![Expo](https://img.shields.io/badge/Expo-54-black)](https://expo.dev)
 
-**Live demo → [nummoria.com](https://nummoria.com)**
-
-*Track expenses, income, and investments. Ask your AI advisor anything about your money — and get answers grounded in your actual transactions.*
+**Live site → [nummoria.com](https://nummoria.com)**
 
 </div>
 
 ---
 
-## What is Nummoria?
+## What it does
 
-Nummoria is a full-stack personal finance platform with three layers:
+Track income, expenses and investments across multi-currency accounts; import
+bank statements (CSV or text-based PDF); and ask an AI advisor about your
+own numbers.
 
-- **Web app** (React + Vite) — dashboards, reports, charts, AI chat
-- **Mobile app** (React Native + Expo) — iOS & Android, receipt scanner, push notifications
-- **Backend API** (Node.js + Express + MongoDB) — auth, transactions, AI agent, market data
-
-The design language is "Neural Finance Terminal" — near-black backgrounds, neon mint/cyan/violet accents, data-dense layouts.
-
-Fork it, self-host it, extend it. MIT licensed.
-
----
-
-## Features
-
-| Area | What it does |
+| Area | What works today |
 |---|---|
-| **Auth** | Email/password + Google, GitHub, Twitter/X, Apple (iOS) OAuth |
-| **Accounts** | Checking, savings, credit, cash, investment — multi-currency |
-| **Transactions** | Income, expenses, investments — categories, recurring, reminders |
-| **Reports** | Totals by category/account/currency, pie charts, trend lines, net worth |
-| **Investments** | Stocks, crypto, gold, real estate — units, symbols, P&L |
-| **AI Advisor** | Chat with Gemini or GPT-4o about your actual transactions |
-| **Receipt Scanner** | Scan barcodes or photos — OCR extracts and pre-fills expense forms |
-| **Push Notifications** | Expo-powered — reminders for recurring transactions |
-| **Admin** | User management, activity audit log |
+| Web app (React 19 + Vite) | Dashboards, reports, charts, statement import, AI advisor chat |
+| Mobile (Expo 54 / React Native 0.81) | Same core screens, receipt scanner, push notifications |
+| Auth | Email/password (with email verification), Google, Apple |
+| Ledger | Accounts, categories, income/expense/investment transactions, reminders, soft delete |
+| Statement import | CSV (`,` `;` tab `\|`, Debit/Credit or signed Amount columns, Turkish headers) and text-layer PDFs into an account you choose. Re-uploading the same file into the same account books nothing twice. |
+| AI advisor | Gemini or OpenAI (`FINANCIAL_HELPER_AGENT`); falls back to a rule-based engine without keys |
+| Market data | Quotes (Yahoo Finance chart endpoint) and analyst consensus (Financial Modeling Prep) |
+| Background jobs | BullMQ + Redis: transaction reminders → push notifications |
 
----
+Not available: scanned/image PDF statements (no OCR in the statement path),
+GitHub/Twitter sign-in, and the AI roadmap's later phases — see
+[`docs/ai-roadmap/`](docs/ai-roadmap/README.md#status-as-of-2026-10-19).
 
-## Tech Stack
+## Measured extraction quality
 
-| Layer | Technology |
-|---|---|
-| **Web Frontend** | React 19, Vite, React Router 7 |
-| **Mobile** | React Native 0.81, Expo 54, Expo Camera, ML Kit OCR |
-| **Backend** | Node.js 22, Express, MongoDB + Mongoose |
-| **Auth** | JWT, Google / GitHub / Twitter / Apple OAuth |
-| **AI** | Google Gemini 2.5 Flash (default) or OpenAI GPT-4o-mini |
-| **Market Data** | Financial Modeling Prep (FMP) API |
-| **Email** | Gmail OAuth API (transactional) |
-| **Job Queue** | Bull + Redis (recurring reminders, push worker) |
-| **Deployment** | Vercel (web) · Railway (API) · MongoDB Atlas |
+Offline, deterministic, on **synthetic data only** (50 generated statements /
+4,866 transactions in 3 layouts, plus 15 hand-written edge cases). No real
+bank statements; not an untouched holdout.
 
----
+| field | F1 (golden set) |
+|---|---:|
+| date | 99.7% |
+| amount | 95.6% |
+| description | 95.3% |
+| category | 72.0% |
 
-## Project Structure
+91.2% of transactions come out with date, amount and description all exact;
+the remaining amount/description errors are typos and omissions injected
+into the synthetic source text. Category comes from a keyword dictionary.
+The model-assisted tier exists but is off by default and has not been
+evaluated against a live model. Methodology, before/after numbers and
+limitations: [`docs/ai-roadmap/EVALUATION.md`](docs/ai-roadmap/EVALUATION.md).
 
-```
-nummoria/
-├── backend/
-│   └── src/
-│       ├── ai/                  # Prompts, metrics, PDF parser, financial helper
-│       ├── controllers/         # Auth, transactions, AI advisor, receipts, admin
-│       ├── models/              # Mongoose schemas — User, Account, Transaction, etc.
-│       ├── routes/              # Express routers
-│       ├── utils/               # JWT, consent, registration token helpers
-│       ├── workers/             # Bull push notification worker
-│       └── server.js
-│
-├── frontend/
-│   └── src/
-│       ├── pages/               # Dashboard, Expenses, Income, Investments,
-│       │                        # Reports, FinancialAdvisor, Login, ...
-│       ├── components/          # Charts, nav, modals, shared UI
-│       └── lib/                 # Axios instance
-│
-├── mobile/
-│   └── src/
-│       ├── screens/             # Dashboard, Expenses, Income, Investments,
-│       │                        # FinancialAdvisor, ScanReceipt, Login, ...
-│       ├── components/          # DashboardMenuFab, TutorialOverlay, ...
-│       ├── navigation/          # MainStack (post-auth navigator)
-│       ├── notifications/       # Expo push token registration
-│       └── lib/                 # Axios instance (points to API_URL)
-│
-├── README.md
-└── LICENSE
-```
+## Quick start
 
----
+Prerequisites: **Node.js 22** (`backend/package.json` pins `>=22 <23`),
+**MongoDB** (required), **Redis** (optional for the API, required for the
+worker). `docker compose up -d` starts both locally.
 
-## Self-Hosting Guide
-
-### Prerequisites
-
-| Tool | Version | Notes |
-|---|---|---|
-| Node.js | 22.x | `node -v` to check |
-| MongoDB | Any | Local, Docker, or [MongoDB Atlas](https://cloud.mongodb.com) (free tier works) |
-| Redis | Any | Required for recurring reminders. [Upstash](https://upstash.com) has a free tier |
-| Git | Any | |
-
-Optional (for AI features):
-- [Google Gemini API key](https://aistudio.google.com/app/apikey) — free tier available
-- [OpenAI API key](https://platform.openai.com/api-keys) — pay-as-you-go
-
----
-
-### 1. Clone the repo
+Each app installs on its own — there is no root workspace.
 
 ```bash
 git clone https://github.com/gokmeroz/nummoria.git
 cd nummoria
-```
 
----
-
-### 2. Backend
-
-#### Install & configure
-
-```bash
+# API — http://localhost:4000
 cd backend
+npm ci
+cp .env.example .env      # works as-is against a local MongoDB; see comments inside
+npm run dev               # node --watch; `npm run dev:all` also starts the worker
+
+# Web — http://localhost:5173 (talks to http://localhost:4000)
+cd ../frontend
+npm ci
+npm run dev
+
+# Mobile (Expo Go)
+cd ../mobile
 npm install
-cp .env.example .env
+npx expo start            # optional: cp .env.example .env and set EXPO_PUBLIC_API_URL
 ```
 
-Open `.env` and fill in the values — see the full reference below.
+**Services and failure behaviour**
 
-#### Run
+- **MongoDB missing/unreachable:** the API exits with
+  `MongooseServerSelectionError` after ~8 s; it never serves requests.
+- **Redis missing:** the API starts and serves requests. Reminder scheduling
+  times out after 2 s and is logged (the transaction write still succeeds);
+  the AI quota counter falls back to memory. `npm run worker` needs Redis.
+- **No AI keys:** the advisor answers with its rule-based engine; statement
+  import uses the deterministic parser (it never needs a model).
 
-```bash
-npm run dev          # API on http://localhost:4000
-```
+Optional integrations (Google/Apple OAuth, Gmail verification email, SMTP,
+FMP market data, receipt OCR via `tesseract`) are each disabled when their
+variables are empty; [`backend/.env.example`](backend/.env.example)
+lists every variable the code reads.
 
-To also run the push notification worker in parallel:
+## Commands
 
-```bash
-npm run dev:all
-```
+Run from `backend/` unless noted.
 
----
-
-### 3. Web Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev          # http://localhost:5173
-```
-
-The frontend auto-proxies `/api/*` requests to `localhost:4000` in dev mode (configured in `vite.config.js`). No extra env vars needed for local development.
-
----
-
-### 4. Mobile (iOS / Android)
-
-```bash
-cd mobile
-npm install
-npx expo start --go   # Scan the QR with Expo Go on your phone
-```
-
-Before running, set `API_URL` in `src/lib/api.js` to your backend:
-
-```js
-// src/lib/api.js
-const API_URL = __DEV__
-  ? "http://YOUR_LOCAL_IP:4000/api"   // e.g. 192.168.1.42:4000
-  : "https://your-api-domain.com/api";
-```
-
-> Use your machine's **local network IP** (not `localhost`) so your phone can reach it over Wi-Fi.
-
----
-
-## Backend Environment Variables
-
-Create `backend/.env` from the table below. Only the **Required** ones are needed to get the app running — everything else unlocks specific features.
-
-### Core (Required)
-
-| Variable | Description | Example |
-|---|---|---|
-| `MONGO_URI` | MongoDB connection string | `mongodb://localhost:27017/nummoria` or Atlas URI |
-| `JWT_SECRET` | Secret for signing JWTs — any long random string | `openssl rand -hex 32` |
-| `REGISTRATION_TOKEN_SECRET` | Secret for encrypting registration tokens | `openssl rand -hex 32` |
-| `PORT` | Port the API listens on | `4000` |
-| `NODE_ENV` | Environment | `development` or `production` |
-| `FRONTEND_URL` | Your web app's URL (used for CORS & OAuth redirects) | `http://localhost:5173` |
-| `APP_URL` | Same as FRONTEND_URL | `http://localhost:5173` |
-| `CORS_ORIGINS` | Comma-separated allowed origins | `http://localhost:5173` |
-
-### Google OAuth (for "Sign in with Google")
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com) → **APIs & Services → Credentials**
-2. Create an **OAuth 2.0 Client ID** (Web application)
-3. Add your frontend URL to **Authorized JavaScript origins** and your redirect URI to **Authorized redirect URIs**
-
-| Variable | Description |
+| command | what it does |
 |---|---|
-| `GOOGLE_CLIENT_ID` | OAuth 2.0 Client ID |
-| `GOOGLE_CLIENT_SECRET` | OAuth 2.0 Client Secret |
-| `GOOGLE_REDIRECT_URI` | e.g. `http://localhost:4000/api/auth/google/callback` |
+| `npm run dev` / `npm start` | API with / without file watching |
+| `npm run worker` | reminder + push workers (Mongo + Redis) |
+| `npm test` | unit tests; DB-backed suites skip without `MONGO_TEST_URI` |
+| `MONGO_TEST_URI=mongodb://127.0.0.1:27017 npm test` | + integration tests (ownership, import idempotency, recurring job, tracing); each suite uses and drops its own `nummoria_test_*` database |
+| `npm run test:coverage` | same, with coverage → `coverage/lcov.info` |
+| `npm run eval` | offline extraction + advisor-arithmetic eval; fails on `src/eval/thresholds.json` |
+| `npm run eval:calibrate` | does parser confidence predict correctness? |
+| `npm run eval:live -- --max-llm-cases 5` | **paid**, opt-in: let up to N hard PDFs escalate to the configured model |
+| `npm run gen:synthetic` | 100 labelled synthetic statements (CSV + PDF) → `src/eval/datasets/synthetic/output/` |
+| `npm run build` (in `frontend/`) | production web build |
 
-### GitHub OAuth
-
-1. Go to [GitHub Developer Settings](https://github.com/settings/applications/new) → **New OAuth App**
-2. Set **Authorization callback URL** to your redirect URI
-
-| Variable | Description |
-|---|---|
-| `GITHUB_CLIENT_ID` | GitHub OAuth App Client ID |
-| `GITHUB_CLIENT_SECRET` | GitHub OAuth App Client Secret |
-| `GITHUB_REDIRECT_URI` | e.g. `http://localhost:4000/api/auth/github/callback` |
-
-### Twitter / X OAuth
-
-1. Go to [developer.twitter.com](https://developer.twitter.com) → Create a project and app
-2. Enable **OAuth 2.0** and set the callback URL
-
-| Variable | Description |
-|---|---|
-| `TWITTER_CLIENT_ID` | Twitter OAuth 2.0 Client ID |
-| `TWITTER_CLIENT_SECRET` | Twitter OAuth 2.0 Client Secret |
-| `TWITTER_REDIRECT_URI` | e.g. `http://localhost:4000/api/auth/twitter/callback` |
-| `TWITTER_CLIENT_TYPE` | `confidential` |
-| `X_API_KEY` | Twitter API Key (v1.1) |
-| `X_API_KEY_SECRET` | Twitter API Key Secret (v1.1) |
-
-### Apple Sign-In (iOS only)
-
-1. Go to [Apple Developer Portal](https://developer.apple.com) → **Certificates, IDs & Profiles → Keys**
-2. Create a **Sign in with Apple** key, download the `.p8` file
-
-| Variable | Description |
-|---|---|
-| `APPLE_CLIENT_ID` | Your Services ID (e.g. `com.yourapp.web`) |
-| `APPLE_TEAM_ID` | Your 10-character Apple Team ID |
-| `APPLE_KEY_ID` | The Key ID from the downloaded key |
-| `APPLE_PRIVATE_KEY_BASE64` | Contents of the `.p8` file, base64 encoded: `base64 -i AuthKey_XXXX.p8` |
-| `APPLE_REDIRECT_URI` | e.g. `https://your-api-domain.com/api/auth/apple/callback` |
-| `APPLE_IOS_BUNDLE_ID` | Your iOS bundle ID (e.g. `com.yourapp.ios`) |
-| `APPLE_ALLOWED_AUDIENCES` | Comma-separated — your client ID and bundle ID |
-
-### Email — Gmail OAuth (for verification emails)
-
-Nummoria sends verification emails via Gmail's API using OAuth (more reliable than SMTP app passwords).
-
-1. Go to [Google OAuth Playground](https://developers.google.com/oauthplayground)
-2. Click ⚙️ → **Use your own OAuth credentials** → paste your Google Client ID & Secret
-3. Select scope `https://mail.google.com/` → **Authorize APIs**
-4. Click **Exchange authorization code for tokens** → copy the **Refresh token**
-
-| Variable | Description |
-|---|---|
-| `GMAIL_API_CLIENT_ID` | Same Google Client ID as OAuth above |
-| `GMAIL_API_CLIENT_SECRET` | Same Google Client Secret |
-| `GMAIL_API_REFRESH_TOKEN` | Refresh token from OAuth Playground |
-| `GMAIL_API_REDIRECT_URI` | `https://developers.google.com/oauthplayground` |
-| `GMAIL_SENDER` | The Gmail address that sends emails |
-| `MAIL_FROM` | Display name + address e.g. `Nummoria <you@gmail.com>` |
-| `FORCE_EMAIL_SEND` | Set `true` in production to actually send emails. Leave unset locally — verification codes print to console instead. |
-
-> **Tip:** Gmail refresh tokens expire if unused for 6 months. Regenerate via OAuth Playground if you get `invalid_grant` errors.
-
-### AI Financial Advisor
-
-Pick **one** AI provider (Gemini is free to start):
-
-**Option A — Google Gemini (recommended, free tier)**
-
-1. Get an API key at [aistudio.google.com](https://aistudio.google.com/app/apikey)
-
-| Variable | Value |
-|---|---|
-| `GEMINI_API_KEY` | Your Gemini API key |
-| `FINANCIAL_HELPER_AGENT` | `gemini` |
-
-**Option B — OpenAI GPT-4o-mini**
-
-| Variable | Value |
-|---|---|
-| `OPENAI_API_KEY` | Your OpenAI API key |
-| `FINANCIAL_HELPER_AGENT` | `openai` |
-
-> If neither key is set, the AI advisor falls back to a rule-based response engine — the app still works, just without LLM responses.
-
-### Market Data (for Investment Performance)
-
-1. Sign up free at [financialmodelingprep.com](https://financialmodelingprep.com)
-2. Copy your API key from the dashboard
-
-| Variable | Description |
-|---|---|
-| `FMP_API_KEY` | Financial Modeling Prep API key |
-
-### Redis / Bull (for recurring reminders & push notifications)
-
-| Variable | Description | Example |
-|---|---|---|
-| `REDIS_URL` | Redis connection URL | `redis://localhost:6379` or Upstash URL |
-
-> If Redis is unavailable, set `SKIP_REMINDERS=true` to disable the job queue and run the app without it.
-
-### Rate Limiting (optional, has sensible defaults)
-
-| Variable | Default | Description |
-|---|---|---|
-| `RATE_MAX` | `100` | Requests per window (general) |
-| `RATE_WINDOW_MS` | `900000` | Window duration in ms (15 min) |
-| `RATE_LOGIN_MAX` | `10` | Max login attempts per window |
-| `RATE_AI_MAX` | `20` | Max AI advisor requests per window |
-| `RATE_CONTACT_MAX` | `5` | Max contact form submissions |
-
-### Development Shortcuts
-
-| Variable | Description |
-|---|---|
-| `AUTH_SKIP_EMAIL_VERIFICATION` | Set `true` to bypass email verification in dev |
-| `DEBUG_VERIFY` | Set `true` to print verification codes to console |
-| `DEV_VERIFICATION_CODE` | Fixed code to use instead of random one during dev |
-
----
-
-## Deployment
-
-### Recommended stack (all have free tiers)
-
-| Service | What it hosts | Free tier |
-|---|---|---|
-| [Vercel](https://vercel.com) | Web frontend | Yes |
-| [Railway](https://railway.app) | Backend API | Yes ($5/mo hobby) |
-| [MongoDB Atlas](https://cloud.mongodb.com) | Database | Yes (512 MB) |
-| [Upstash](https://upstash.com) | Redis | Yes |
-| [Expo](https://expo.dev) | Mobile builds & OTA | Yes |
-
-### Deployment checklist
+Representative `npm run eval` output:
 
 ```
-□ Set NODE_ENV=production in Railway
-□ Set MONGO_URI to Atlas connection string
-□ Set REDIS_URL to Upstash URL
-□ Set FRONTEND_URL and CORS_ORIGINS to your Vercel domain
-□ Set FORCE_EMAIL_SEND=true if you want real emails
-□ Set GEMINI_API_KEY (or OPENAI_API_KEY) + FINANCIAL_HELPER_AGENT
-□ Set all OAuth redirect URIs to production URLs
-□ Set JWT_SECRET and REGISTRATION_TOKEN_SECRET to long random strings
+| track      | rows | date F1 | amount F1 | description F1 | category F1 | exact rows |
+| golden     | 4866 |   99.7% |     95.6% |          95.3% |       72.0% |      91.2% |
+| regression |   63 |  100.0% |    100.0% |         100.0% |       69.8% |     100.0% |
+| pdfBinary  | 2346 |   99.4% |     95.6% |          94.8% |       69.8% |      90.8% |
+Advisor arithmetic self-consistency: 12/12 (not a measure of answer quality)
+Quality gate: PASSED (28 checks)
 ```
 
-### Architecture
+## CI
+
+`.github/workflows/ci.yml` runs on pushes to `main` and on pull requests:
+backend `npm ci`, unit + MongoDB integration tests with coverage, the offline
+eval gate, a check that the synthetic generator reproduces the committed
+golden fixtures; web `npm ci`, lint, build. Reports are uploaded as
+artifacts. No secrets, paid APIs or production services are used. Mobile
+builds, live model evaluation and load testing are not part of CI.
+
+## Project structure
 
 ```
-Browser / iOS / Android
-        │
-        ▼
-Vercel (React web)        Expo Go / App Store (React Native)
-        │                           │
-        └───────────┬───────────────┘
-                    ▼
-           Railway (Express API)
-                    │
-          ┌─────────┼─────────┐
-          ▼         ▼         ▼
-    MongoDB Atlas  Redis   Gmail API
-                  (Bull)   (emails)
+backend/   Express API (src/ai: parsers, confidence, metrics; src/eval: eval harness;
+           src/observability: tracing; src/integration: DB-backed tests)
+frontend/  React + Vite web app
+mobile/    Expo / React Native app
+docs/ai-roadmap/  AI engineering plan, schema decisions, evaluation evidence
 ```
 
----
+## Deployment notes
 
-## Running with Docker (local MongoDB + Redis)
-
-If you don't want to install MongoDB and Redis locally:
-
-```bash
-# Start MongoDB + Redis with Docker Compose
-docker compose up -d
-
-# Then set in backend/.env:
-# MONGO_URI=mongodb://localhost:27017/nummoria
-# REDIS_URL=redis://localhost:6379
-```
-
-Create a `docker-compose.yml` in the root:
-
-```yaml
-version: "3.9"
-services:
-  mongo:
-    image: mongo:7
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-volumes:
-  mongo_data:
-```
-
----
+The production stack is Vercel (web), Railway (API), MongoDB Atlas and
+Upstash Redis. `frontend/.env.production` holds the public production API
+URL. The API runs with Mongoose `autoIndex` off in production; the unique
+indexes that import and recurring-job idempotency depend on are created by
+that code on first use.
 
 ## Contributing
 
-Pull requests are welcome. For major changes, open an issue first.
-
-1. Fork the repo
-2. Create a feature branch: `git checkout -b feat/your-feature`
-3. Commit your changes: `git commit -m "feat: add your feature"`
-4. Push and open a PR against `main`
-
----
+Pull requests are welcome; CI must pass. For a change that moves eval
+numbers, explain it in `docs/ai-roadmap/EVALUATION.md` — thresholds are not
+lowered to make a run pass.
 
 ## License
 
 MIT © 2025 [Göktuğ Mert Özdoğan](https://github.com/gokmeroz)
-
-Use it, fork it, ship your own version. That's the point.

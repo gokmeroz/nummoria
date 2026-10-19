@@ -1,0 +1,33 @@
+{
+  "id": "reg-008",
+  "layout": "regression-csv-preamble",
+  "format": "csv",
+  "notes": "UTF-8 BOM, account-info preamble before the header row, quoted description containing a comma, Debit/Credit columns plus a Balance column.",
+  "rawText": "﻿Account Name:,Everyday Checking\nAccount Number:,XXXX1234\nStatement Period:,06/01/2025 - 06/30/2025\n\nDate,Description,Debit,Credit,Balance\n06/02/2025,\"SAFEWAY GROCERY, STORE 1123\",54.20,,1945.80\n06/05/2025,ACME CORP PAYROLL,,2500.00,4445.80\n06/18/2025,\"CITY WATER BILL\",38.75,,4407.05\n06/30/2025,INTEREST PAID,,0.37,4407.42",
+  "groundTruth": [
+    {
+      "date": "2025-06-02",
+      "amount": -54.2,
+      "description": "SAFEWAY GROCERY, STORE 1123",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-06-05",
+      "amount": 2500,
+      "description": "ACME CORP PAYROLL",
+      "category": "Salary"
+    },
+    {
+      "date": "2025-06-18",
+      "amount": -38.75,
+      "description": "CITY WATER BILL",
+      "category": "Utilities"
+    },
+    {
+      "date": "2025-06-30",
+      "amount": 0.37,
+      "description": "INTEREST PAID",
+      "category": "Interest"
+    }
+  ]
+}

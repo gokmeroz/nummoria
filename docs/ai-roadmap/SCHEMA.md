@@ -40,9 +40,14 @@ type ConfidenceEntry = {
 
 type TransactionConfidence = {
   overall: number;                          // min(...fields) — see below
+  financial: number;                        // min(date, amount, description) — added later, see "escalation gate"
   fields: Record<"date"|"amount"|"description"|"category", ConfidenceEntry>;
 };
 ```
+
+`financial` is additive (nothing that reads `overall` changes). Values are
+heuristic ranks, not calibrated probabilities — `npm run eval:calibrate`
+measures how far off they are (see `EVALUATION.md` §6).
 
 `overall = min(field values)`, not an average. A transaction is only as
 trustworthy as its least-confident field — an amount you're 95% sure of next
@@ -63,10 +68,19 @@ circular, agreement requires the model to have already run. `parseTransactionsFr
 now escalates when **either**:
 
 - coverage is bad: `txs.length < 5`, or
-- quality is bad: `avg(overall parser-self confidence) < 0.6`
+- quality is bad: `avg(financial parser-self confidence) < 0.6`
 
 both computed from the deterministic tier alone, zero model calls spent
 deciding whether to spend a model call. See `ai/pdfParser.js`.
+
+*Revised:* the quality signal was `avg(overall)`. Because `overall`
+includes category, an unknown merchant (category 0.35) escalated otherwise
+clean statements — 15 of 24 golden PDFs — although the model tier cannot
+fix category. The gate now reads `financial` (date/amount/description). The
+measurements and the reason escalation stays off by default are in
+`EVALUATION.md` §6. The decision is reported through `onCascade(info)`
+(`not-needed` / `skipped:*` / `completed` / `failed:*`), so a deterministic
+fallback is never mistaken for a model result.
 
 When escalation happens, the model's result becomes the source of truth (this
 was already true before — the old code just returned the model's array
@@ -99,6 +113,19 @@ modeled) says which one you're looking at.
 (scalar, `= overall` at post time) in P1, once the cascade actually writes
 them — not added speculatively now.
 
+What it has gained (for idempotency, not for the cascade):
+
+- `importId` + `importRowKey` on rows written by `/ingest/csv` and
+  `/ingest/pdf` — unique together per user, so a re-uploaded or retried file
+  books nothing twice, while identical rows inside one file stay distinct
+  (`…#0`, `…#1`).
+- `recurrenceParentId` + `recurrenceDate` on occurrences generated from a
+  recurring template — unique together, so a retried or overlapping job run
+  books each occurrence once.
+
+Both are partial unique indexes (manual rows are unaffected) that the
+writing code creates itself, because production runs with `autoIndex` off.
+
 ## Golden-set annotation format
 
 Frozen in `backend/src/eval/datasets/golden/`:
@@ -118,7 +145,9 @@ Deliberate scope cut: fixtures store the *text* a PDF would yield, not a
 binary `.pdf`. `pdfParser.js`'s job — and the thing P1's F1 score is
 measuring — is text→transactions. Whether `pdf-parse` correctly extracts text
 from an arbitrary PDF is a different, third-party concern; testing it would
-mean the eval score conflates two unrelated failure modes.
+mean the eval score conflates two unrelated failure modes. (The PDF stage is
+now measured separately — `extraction.pdfBinary` renders these fixtures to
+real PDFs and runs them through `pdf-parse`; see `EVALUATION.md`.)
 
 **Advisor case** (`golden/advisor/*.json`):
 ```ts

@@ -1,0 +1,39 @@
+{
+  "id": "reg-005",
+  "layout": "regression-sign-conventions",
+  "format": "pdf-text",
+  "notes": "Negative amounts written as (x), trailing minus, DR suffix; CR suffix and bare positive are credits.",
+  "rawText": "Card Statement\nDate        Description                Amount\n03/04/2025  AMAZON MKTPLACE            (45.00)\n03/06/2025  TARGET STORE #221           23.10-\n03/09/2025  PAYMENT THANK YOU          500.00 CR\n03/11/2025  ANNUAL FEE                  95.00 DR\n03/15/2025  REFUND AMAZON MKTPLACE      15.00",
+  "groundTruth": [
+    {
+      "date": "2025-03-04",
+      "amount": -45,
+      "description": "AMAZON MKTPLACE",
+      "category": "Shopping"
+    },
+    {
+      "date": "2025-03-06",
+      "amount": -23.1,
+      "description": "TARGET STORE #221",
+      "category": "Shopping"
+    },
+    {
+      "date": "2025-03-09",
+      "amount": 500,
+      "description": "PAYMENT THANK YOU",
+      "category": "Payment"
+    },
+    {
+      "date": "2025-03-11",
+      "amount": -95,
+      "description": "ANNUAL FEE",
+      "category": "Fees"
+    },
+    {
+      "date": "2025-03-15",
+      "amount": 15,
+      "description": "REFUND AMAZON MKTPLACE",
+      "category": "Shopping"
+    }
+  ]
+}

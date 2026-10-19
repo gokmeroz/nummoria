@@ -10,6 +10,7 @@ import {
 import { createTransactionCore } from "../utils/transactionCreateCore.js"; // NEW
 
 const { ObjectId } = mongoose.Types;
+const TX_DEBUG = process.env.DEBUG_TX_CREATE === "true";
 
 /* ------------------------------ Helpers ----------------------------------- */
 function normalizeCurrency(cur) {
@@ -194,17 +195,18 @@ export async function getTransactionById(req, res) {
 // POST /transactions
 export async function createTransaction(req, res) {
   try {
-    console.log("[TX CREATE] hit", req.body);
+    // Request bodies are financial data: log them only when debugging.
+    if (TX_DEBUG) console.log("[TX CREATE] hit", req.body);
 
     const result = await createTransactionCore({
       userId: req.userId,
       body: req.body,
     });
 
-    console.log("[TX CREATE] success", result?._id || result);
+    if (TX_DEBUG) console.log("[TX CREATE] success", result?.createdCount);
     return res.status(201).json(result);
   } catch (err) {
-    console.error("[TX CREATE] failed", err);
+    console.error("[TX CREATE] failed", err?.message || err);
     return res.status(400).json({ error: err.message || "Create failed" });
   }
 }
@@ -526,8 +528,17 @@ export async function updateTransaction(req, res) {
       }
 
       // ✅ Reschedule / remove job after successful update ONLY if reminder was in payload
+      // The update is already committed: a reminder-queue failure must not
+      // turn it into a 400 (the client would retry an update that happened).
       if (rem !== undefined) {
-        await applyReminderScheduling({ userId: req.userId, tx: updated });
+        try {
+          await applyReminderScheduling({ userId: req.userId, tx: updated });
+        } catch (err) {
+          console.error(
+            "[TX UPDATE] reminder scheduling failed",
+            err?.message || err,
+          );
+        }
       }
 
       return res.status(200).json(updated);

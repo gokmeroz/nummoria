@@ -61,7 +61,13 @@ const AiTraceSchema = new mongoose.Schema(
     // Frozen at write time against a versioned price table (see pricing.js).
     // Storing the number, not recomputing from a mutable price list, keeps
     // historical cost comparisons reproducible.
-    costUsd: { type: Number, default: 0 },
+    // null = unknown (some call had no usage data or no price entry); see
+    // uncostedLlmCallCount. Never read null as "free".
+    costUsd: { type: Number, default: null },
+    uncostedLlmCallCount: { type: Number, default: 0 },
+    // false when some call reported no token usage; the usage totals above
+    // then undercount.
+    usageComplete: { type: Boolean, default: true },
     priceVersion: { type: String, default: null },
 
     // True when the request fell back to a non-primary path (rule-based reply,

@@ -1,0 +1,45 @@
+{
+  "id": "reg-007",
+  "layout": "regression-repeats",
+  "format": "csv",
+  "notes": "Legitimately repeated transactions (same date, amount, merchant). All copies are real and must all be extracted.",
+  "rawText": "Date,Description,Amount\n05/02/2025,METRO TRANSIT FARE,-2.90\n05/02/2025,METRO TRANSIT FARE,-2.90\n05/02/2025,METRO TRANSIT FARE,-2.90\n05/03/2025,LOCAL CAFE,-4.50\n05/03/2025,LOCAL CAFE,-4.50\n05/13/2025,ACME CORP PAYROLL,2500.00",
+  "groundTruth": [
+    {
+      "date": "2025-05-02",
+      "amount": -2.9,
+      "description": "METRO TRANSIT FARE",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-05-02",
+      "amount": -2.9,
+      "description": "METRO TRANSIT FARE",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-05-02",
+      "amount": -2.9,
+      "description": "METRO TRANSIT FARE",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-05-03",
+      "amount": -4.5,
+      "description": "LOCAL CAFE",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-05-03",
+      "amount": -4.5,
+      "description": "LOCAL CAFE",
+      "category": "Dining"
+    },
+    {
+      "date": "2025-05-13",
+      "amount": 2500,
+      "description": "ACME CORP PAYROLL",
+      "category": "Salary"
+    }
+  ]
+}

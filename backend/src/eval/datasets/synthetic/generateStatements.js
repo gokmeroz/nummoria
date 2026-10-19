@@ -14,10 +14,10 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { jsPDF } from "jspdf";
 import { mulberry32, pick } from "./rng.js";
 import { generateProfile } from "./generateProfiles.js";
 import { enrichWithDescriptions, renderCSV, renderPdfText, toGroundTruth } from "./render.js";
+import { pdfBytesFromText } from "./pdfRender.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LAYOUTS_DIR = path.join(__dirname, "layouts");
@@ -39,22 +39,6 @@ function parseArgs(argv) {
     else if (argv[i] === "--golden") args.golden = true;
   }
   return args;
-}
-
-function pdfBytesFromText(text) {
-  const doc = new jsPDF();
-  doc.setFont("courier");
-  doc.setFontSize(10);
-  let y = 10;
-  for (const line of text.split("\n")) {
-    if (y > 280) {
-      doc.addPage();
-      y = 10;
-    }
-    doc.text(line.slice(0, 100), 10, y);
-    y += 6;
-  }
-  return Buffer.from(doc.output("arraybuffer"));
 }
 
 function generateOne(seed, layouts, rng) {

@@ -11,8 +11,9 @@
 //     for documents that already escalated.
 //
 // A ConfidenceEntry is { value: 0..1, source, reasons: string[] }.
-// A transaction's confidence is { overall, fields: Record<field, Entry> },
-// where overall = min(...fields) — the weakest field gates trust in the
+// A transaction's confidence is { overall, financial, fields: Record<field, Entry> },
+// where financial = min(date, amount, description) (additive, see below) and
+// overall = min(...fields) — the weakest field gates trust in the
 // whole row, mirroring the existing auto-post gate in
 // autoTransactionController.js (which scores a *different* input, SMS text,
 // with its own rule-based scalar — that one is untouched by this module).
@@ -33,55 +34,62 @@ function overallOf(fields) {
   return values.length ? Math.min(...values) : 0;
 }
 
+// The fields money depends on. `financial` = min over these — the escalation
+// gate reads it instead of `overall`, because category is never something
+// the model tier fixes (it re-derives category from the same dictionary),
+// so an unknown merchant must not send a clean statement to the model.
+export const FINANCIAL_FIELDS = Object.freeze(["date", "amount", "description"]);
+
+function financialOf(fields) {
+  const values = FINANCIAL_FIELDS.filter((f) => fields[f]).map((f) => fields[f].value);
+  return values.length ? Math.min(...values) : 0;
+}
+
 /**
- * Parser-self confidence for one regex-parsed transaction. No model call —
- * this is what the cascade's escalation gate reads.
+ * Parser-self confidence for one deterministically parsed transaction. No
+ * model call — this is what the cascade's escalation gate reads.
  *
- * @param {{dateMatch: RegExpMatchArray|null, amountMatch: RegExpMatchArray|null,
- *   description: string, category: string, multiline: boolean}} ctx
+ * These values are heuristic ranks, NOT calibrated probabilities. Whether a
+ * 0.9 is right 90% of the time is measured by `npm run eval:calibrate`, and
+ * on the synthetic set it is not (see docs/ai-roadmap/EVALUATION.md).
+ *
+ * @param {{dateRaw: string|null, dateEvidence: "unambiguous"|"document-order"|"period"|"neighbors"|"assumed",
+ *   amountRaw: string|null, description: string, category: string,
+ *   multiline: boolean, signFromBalance?: boolean}} ctx
  */
 export function scoreParserSelf(ctx) {
   const fields = {};
 
-  // date: a 4-digit year and an unambiguous day/month (one side > 12) means
-  // the format couldn't have been guessed wrong; both <=12 means we assumed
-  // an order (e.g. MM/DD vs DD/MM) without real evidence.
-  if (ctx.dateMatch) {
-    const raw = ctx.dateMatch[1];
-    const parts = raw.split(/[\/\.\-]/).map(Number);
-    const hasFourDigitYear = /\d{4}/.test(raw);
-    const unambiguous = parts.length >= 2 && (parts[0] > 12 || parts[1] > 12);
-    if (hasFourDigitYear && unambiguous) {
-      fields.date = entry(0.9, CONFIDENCE_SOURCES.PARSER_SELF, [
-        "4-digit year, day/month order unambiguous",
-      ]);
-    } else if (hasFourDigitYear) {
-      fields.date = entry(0.6, CONFIDENCE_SOURCES.PARSER_SELF, [
-        "4-digit year, but day/month order assumed",
-      ]);
-    } else {
-      fields.date = entry(0.4, CONFIDENCE_SOURCES.PARSER_SELF, [
-        "2-digit year inferred as 2000+YY",
-      ]);
-    }
+  // date: how the day/month order was decided. A part > 12 (or ISO) can't
+  // be read wrong; a document-wide order learned from such dates is strong;
+  // a period/neighbor repair is a deliberate inference; "assumed" is the
+  // fallback policy with no evidence at all.
+  if (ctx.dateRaw) {
+    const byEvidence = {
+      unambiguous: [0.9, "day/month order unambiguous"],
+      "document-order": [0.8, "day/month order taken from unambiguous dates elsewhere in the document"],
+      period: [0.75, "ambiguous date resolved against the statement period"],
+      neighbors: [0.75, "ambiguous date resolved against neighbouring rows' dates"],
+      assumed: [0.5, "day/month order assumed (no evidence in the document)"],
+    };
+    const [value, reason] = byEvidence[ctx.dateEvidence] || byEvidence.assumed;
+    const twoDigitYear = !/\d{4}/.test(ctx.dateRaw);
+    fields.date = twoDigitYear
+      ? entry(Math.min(value, 0.6), CONFIDENCE_SOURCES.PARSER_SELF, [reason, "2-digit year inferred as 2000+YY"])
+      : entry(value, CONFIDENCE_SOURCES.PARSER_SELF, [reason]);
   } else {
     fields.date = entry(0.2, CONFIDENCE_SOURCES.PARSER_SELF, ["no date match"]);
   }
 
   // amount: a decimal marker present means the parser isn't guessing where
   // the fraction boundary is.
-  if (ctx.amountMatch) {
-    const raw = ctx.amountMatch[1];
-    const hasDecimal = /[.,]\d{2}\b/.test(raw);
-    fields.amount = hasDecimal
-      ? entry(0.9, CONFIDENCE_SOURCES.PARSER_SELF, ["decimal marker present"])
-      : entry(0.6, CONFIDENCE_SOURCES.PARSER_SELF, [
-          "integer-only amount, no decimal marker",
-        ]);
+  if (ctx.amountRaw) {
+    const hasDecimal = /[.,]\d{2}\b/.test(ctx.amountRaw);
+    const reasons = [hasDecimal ? "decimal marker present" : "integer-only amount, no decimal marker"];
+    if (ctx.signFromBalance) reasons.push("sign taken from running-balance change");
+    fields.amount = entry(hasDecimal ? 0.9 : 0.6, CONFIDENCE_SOURCES.PARSER_SELF, reasons);
   } else {
-    fields.amount = entry(0.2, CONFIDENCE_SOURCES.PARSER_SELF, [
-      "no amount match",
-    ]);
+    fields.amount = entry(0.2, CONFIDENCE_SOURCES.PARSER_SELF, ["no amount match"]);
   }
 
   // description: non-trivial leftover text after stripping date/amount.
@@ -101,14 +109,16 @@ export function scoreParserSelf(ctx) {
       : entry(0.35, CONFIDENCE_SOURCES.PARSER_SELF, ["defaulted to Other"]);
 
   let overall = overallOf(fields);
+  let financial = financialOf(fields);
   if (ctx.multiline) {
     // Date/amount/description spread across separate lines is a weaker
     // association than all three on one line — cap regardless of per-field
     // scores.
     overall = Math.min(overall, 0.7);
+    financial = Math.min(financial, 0.7);
   }
 
-  return { overall, fields };
+  return { overall, financial, fields };
 }
 
 function normalizeForCompare(str) {
@@ -160,7 +170,7 @@ export function scoreAgreement(parserTx, modelTx) {
     fields.category = parserTx.confidence.fields.category;
   }
 
-  return { overall: overallOf(fields), fields };
+  return { overall: overallOf(fields), financial: financialOf(fields), fields };
 }
 
 /**
@@ -179,7 +189,7 @@ export function scoreModelOnly() {
       "guessed from model description, unverified",
     ]),
   };
-  return { overall: overallOf(fields), fields };
+  return { overall: overallOf(fields), financial: financialOf(fields), fields };
 }
 
-export { overallOf };
+export { overallOf, financialOf };

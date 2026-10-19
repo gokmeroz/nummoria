@@ -14,6 +14,8 @@ artifact and a resume bullet that survives interview scrutiny.
 | `file-structure.html` | Visual before/after of the repo tree — which directories and files each phase adds. |
 | `PLAN.md` | Plain-text version of the roadmap for quick reading / editing in the repo. |
 | `FILE-STRUCTURE.md` | Projected repo layout once P0–P5 are done, with each new path tagged by phase. |
+| `SCHEMA.md` | Frozen transaction / confidence / golden-set formats, and the escalation gate. |
+| `EVALUATION.md` | What the eval measures, how, and the before/after evidence (`eval-evidence/`). |
 
 Published (private) artifact versions:
 - Roadmap: https://claude.ai/code/artifact/41fd857f-54f1-4799-936b-d534bac458b6
@@ -43,6 +45,19 @@ Published (private) artifact versions:
 | P5 · Hardening & portfolio | 10–11 | PII redaction + prompt-injection defense; ADRs, public benchmark, before/after writeup; README leads with eval numbers. |
 
 Phases overlap: P1/P2 and P3/P4 run in parallel; P5 folds into P4's last week.
+
+## Status (as of 2026-10-19)
+
+Measured results and methodology: [`EVALUATION.md`](EVALUATION.md).
+
+| Phase | Implemented | Not yet |
+|-------|-------------|---------|
+| P0 | Tracing on every model call site (extraction, advisor) with prompt version/hash, tokens, cost (null when unknown), latency, TTL'd payloads; synthetic generator (CSV + text-layer PDF, fixed seed); 50 extraction + 12 advisor golden cases; schema/confidence freeze ([`SCHEMA.md`](SCHEMA.md)); `npm run eval` | — |
+| P1 | Deterministic CSV/PDF-text parsing shared by every upload route; per-field confidence; two-tier cascade with validated model output and mocked-provider tests | Cascade **off by default** and never run against a live model; 3 layouts, not 15; no correction UI; no cost-per-document numbers |
+| P2 | Offline CI gate: versioned thresholds, dataset fingerprints, deterministic assertions, regression set, PDF-stage track | LLM-as-judge; dashboard; online feedback loop |
+| P3 | — | Learned categorization (category F1 is 72% on the synthetic set, from a keyword dictionary) |
+| P4 | — | Agentic analyst and numeric-grounding guard (the advisor's 12/12 is arithmetic self-consistency, not answer quality) |
+| P5 | Basic payload redaction in production traces; statement text fenced as untrusted in the extraction prompt; model output validated before use | PII classification, prompt-injection evaluation, threat model |
 
 ## A note on the numbers
 

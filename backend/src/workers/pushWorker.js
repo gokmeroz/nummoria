@@ -4,12 +4,13 @@ import { Expo } from "expo-server-sdk";
 
 import Notification from "../models/Notification.js";
 import Device from "../models/Device.js";
-import { connection } from "../queues/pushQueue.js";
+import { getRedisConnection } from "../queues/redis.js";
+import { PUSH_QUEUE_NAME } from "../queues/pushQueue.js";
 
 const expo = new Expo();
 
 new Worker(
-  "pushQueue",
+  PUSH_QUEUE_NAME,
   async (job) => {
     const { notificationId } = job.data;
 
@@ -51,7 +52,7 @@ new Worker(
     notif.sentAt = new Date();
     await notif.save();
   },
-  { connection }
+  { connection: getRedisConnection() }
 );
 
 console.log("[push-worker] worker online");

@@ -201,7 +201,16 @@ class TraceContext {
       },
       { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
     );
-    const costUsd = llmSpans.reduce((a, s) => a + (s.cost?.totalUsd || 0), 0);
+    // Unknown is not zero: a call with no usage data, or a model missing from
+    // the price table, has an unknown cost. Any such call makes the trace's
+    // total unknown (null) rather than an undercount presented as complete.
+    const uncostedLlmCallCount = llmSpans.filter((s) => typeof s.cost?.totalUsd !== "number").length;
+    const usageComplete = llmSpans.every(
+      (s) => typeof s.usage?.inputTokens === "number" && typeof s.usage?.outputTokens === "number",
+    );
+    const costUsd = uncostedLlmCallCount
+      ? null
+      : llmSpans.reduce((a, s) => a + s.cost.totalUsd, 0);
     const priceVersion =
       llmSpans.find((s) => s.cost?.priceVersion)?.cost.priceVersion || null;
 
@@ -223,24 +232,30 @@ class TraceContext {
       spanCount: this._spans.length,
       llmCallCount: llmSpans.length,
       usage,
-      costUsd: Number(costUsd.toFixed(6)),
+      usageComplete,
+      costUsd: costUsd == null ? null : Number(costUsd.toFixed(6)),
+      uncostedLlmCallCount,
       priceVersion,
       fallbackUsed: this._fallbackUsed,
       attributes: this.attributes,
       schemaVersion: 1,
     };
 
-    try {
-      const ops = [AiTrace.create(traceDoc)];
-      if (this._spans.length)
-        ops.push(AiSpan.insertMany(this._spans, { ordered: false }));
-      if (this._payloads.length)
-        ops.push(AiSpanPayload.insertMany(this._payloads, { ordered: false }));
-      await Promise.allSettled(ops);
-    } catch (err) {
-      // Never let instrumentation break a response.
-      console.error("TRACE_WRITE_FAILED", this.id, err?.message || err);
-    }
+    // Never let instrumentation break a response — but never fail silently
+    // either: allSettled() doesn't throw, so each rejection is logged here
+    // (collection + error message only; payloads may hold user data).
+    const ops = [["AiTrace", () => AiTrace.create(traceDoc)]];
+    if (this._spans.length)
+      ops.push(["AiSpan", () => AiSpan.insertMany(this._spans, { ordered: false })]);
+    if (this._payloads.length)
+      ops.push(["AiSpanPayload", () => AiSpanPayload.insertMany(this._payloads, { ordered: false })]);
+    const results = await Promise.allSettled(ops.map(([, run]) => Promise.resolve().then(run)));
+    results.forEach((r, i) => {
+      if (r.status === "rejected") {
+        console.error("TRACE_WRITE_FAILED", this.id, ops[i][0], r.reason?.message || String(r.reason));
+      }
+    });
+    return results.every((r) => r.status === "fulfilled");
   }
 }
 

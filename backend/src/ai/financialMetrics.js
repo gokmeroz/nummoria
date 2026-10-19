@@ -1,7 +1,28 @@
 /* eslint-disable */
-export function computeMetrics(txs = []) {
-  if (!Array.isArray(txs) || !txs.length) {
+
+// A row the arithmetic can use: a finite numeric amount and a parseable
+// date. Anything else is dropped and counted — a string amount would be
+// concatenated by the sums below ("0" + "12.5"), and an unparseable date
+// would turn coverage into NaN.
+function usableRows(txs) {
+  const rows = [];
+  let invalid = 0;
+  for (const t of Array.isArray(txs) ? txs : []) {
+    const d = t?.date instanceof Date ? t.date : new Date(t?.date);
+    if (typeof t?.amount !== "number" || !Number.isFinite(t.amount) || Number.isNaN(d.getTime())) {
+      invalid++;
+      continue;
+    }
+    rows.push(typeof t.date === "string" ? t : { ...t, date: d.toISOString().slice(0, 10) });
+  }
+  return { rows, invalid };
+}
+
+export function computeMetrics(input = []) {
+  const { rows: txs, invalid: invalidRows } = usableRows(input);
+  if (!txs.length) {
     return {
+      invalidRows,
       txCount: 0,
       months: [],
       categoryBreakdown: {},
@@ -127,6 +148,7 @@ export function computeMetrics(txs = []) {
     !hasIncomeLast90;
 
   return {
+    invalidRows,
     txCount: txs.length,
     months: totals,
     savingsRate: Number((savingsRate * 100).toFixed(1)),

@@ -1,0 +1,109 @@
+name: CI
+
+# Offline checks only: no paid model APIs, no production services, no
+# secrets. The backend job gets a throwaway MongoDB service container for
+# the ownership/idempotency/tracing integration tests; Redis is deliberately
+# absent (the tests prove queue side effects don't block ledger writes).
+#
+# Not covered here: mobile builds (Expo/EAS needs a macOS/Android toolchain
+# and credentials), live model evaluation (`npm run eval:live`, paid), and
+# load testing.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend — install, tests, offline eval
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      MONGO_TEST_URI: mongodb://127.0.0.1:27017
+      # A green run must mean the DB-backed suites ran, not that they skipped.
+      REQUIRE_DB_TESTS: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Clean install (fails if package-lock.json is out of sync)
+        run: npm ci
+
+      - name: Tests + coverage (unit + MongoDB integration)
+        run: |
+          mkdir -p ../ci-artifacts
+          npm run test:coverage 2>&1 | tee ../ci-artifacts/test-output.txt
+          exit "${PIPESTATUS[0]}"
+
+      - name: Offline eval + regression gate
+        run: |
+          set +e
+          npm run eval -- --out ../ci-artifacts/eval-report.json
+          status=$?
+          node src/eval/summary.js ../ci-artifacts/eval-report.json >> "$GITHUB_STEP_SUMMARY" || true
+          exit $status
+
+      - name: Synthetic generator reproduces the committed golden fixtures
+        run: |
+          npm run gen:synthetic -- --golden
+          git diff --exit-code -- src/eval/datasets/golden/extraction
+          npm run gen:synthetic -- --count 3
+
+      - name: Upload test, coverage and eval reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-reports
+          path: |
+            ci-artifacts/
+            backend/coverage/lcov.info
+          if-no-files-found: warn
+
+  web:
+    name: Web — install, lint, build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Clean install
+        run: npm ci
+
+      - name: Lint (errors fail; warnings are reported)
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build

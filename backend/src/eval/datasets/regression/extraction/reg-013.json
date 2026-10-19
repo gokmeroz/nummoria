@@ -1,0 +1,27 @@
+{
+  "id": "reg-013",
+  "layout": "regression-fx",
+  "format": "pdf-text",
+  "notes": "Foreign-currency lines carry two monetary values (original amount in the descriptor, booked amount last); merchant ids with glued digits.",
+  "rawText": "Date        Description                          Amount\n09/03/2025  BOOKING.COM AMSTERDAM 85.00 EUR      -92.47\n09/12/2025  APPLE.COM/BILL                        -2.99\n09/19/2025  SPOTIFY P1A2B3 STOCKHOLM 10.99 EUR  -11.95",
+  "groundTruth": [
+    {
+      "date": "2025-09-03",
+      "amount": -92.47,
+      "description": "BOOKING.COM AMSTERDAM 85.00 EUR",
+      "category": "Travel"
+    },
+    {
+      "date": "2025-09-12",
+      "amount": -2.99,
+      "description": "APPLE.COM/BILL",
+      "category": "Software"
+    },
+    {
+      "date": "2025-09-19",
+      "amount": -11.95,
+      "description": "SPOTIFY P1A2B3 STOCKHOLM 10.99 EUR",
+      "category": "Entertainment"
+    }
+  ]
+}

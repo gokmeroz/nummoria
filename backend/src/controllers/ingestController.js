@@ -20,12 +20,14 @@ try {
   Multer = m?.default ?? m;
 }
 
-// ESM libs
-import { parse } from "csv-parse/sync";
+import crypto from "node:crypto";
+import mongoose from "mongoose";
 
 // IMPORTANT:
 // Keep Transaction import for /ingest/csv and /ingest/pdf routes
 import { Transaction } from "../models/transaction.js";
+import { Account } from "../models/account.js";
+import { Category } from "../models/category.js";
 
 // ✅ AI Advisor storage + metrics
 import AiAdvisorFile from "../models/AiAdvisorFile.js";
@@ -33,9 +35,12 @@ import { computeMetrics } from "../ai/financialMetrics.js";
 
 // ---- PDF text extraction (shared, line-preserving) + advisor cascade ----
 import { extractPdfText } from "../ai/pdfText.js";
-import { parseTransactionsFromText } from "../ai/pdfParser.js";
+import { parseTransactionsFromText, parseStatementText } from "../ai/pdfParser.js";
+import { parseCsvStatement } from "../ai/csvParser.js";
 import { consumeQuota } from "../middlewares/aiQuota.js";
 import { startTrace } from "../observability/trace.js";
+import { majorToMinor, minorToMajor } from "../utils/money.js";
+import { ensureIndexOnce } from "../utils/ensureIndex.js";
 
 /* ------------------------------ Upload middleware ------------------------------ */
 /**
@@ -71,40 +76,6 @@ export const upload = Multer({
 });
 
 /* ------------------------------ Helpers ------------------------------ */
-function decimalsForCurrency(code = "USD") {
-  const zero = new Set(["JPY", "KRW", "CLP", "VND"]);
-  const three = new Set(["BHD", "IQD", "JOD", "KWD", "OMR", "TND"]);
-  if (zero.has(code)) return 0;
-  if (three.has(code)) return 3;
-  return 2;
-}
-function majorToMinor(major, currency = "USD") {
-  const d = decimalsForCurrency(currency);
-  return Math.round(Number(major) * Math.pow(10, d));
-}
-function minorToMajor(minor, currency = "USD") {
-  const d = decimalsForCurrency(currency);
-  return Number(minor) / Math.pow(10, d);
-}
-
-function normalizeDate(d) {
-  if (!d) return null;
-  const s = String(d).trim();
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return new Date(s);
-
-  const m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/);
-  if (m) {
-    let [, a, b, c] = m;
-    if (c.length === 2) c = String(2000 + Number(c));
-    const mmdd = new Date(`${c}-${a.padStart(2, "0")}-${b.padStart(2, "0")}`);
-    const ddmm = new Date(`${c}-${b.padStart(2, "0")}-${a.padStart(2, "0")}`);
-    return isNaN(mmdd) ? (isNaN(ddmm) ? null : ddmm) : mmdd;
-  }
-
-  const dt = new Date(s);
-  return isNaN(dt) ? null : dt;
-}
-
 function safeJsonError(res, status, payload) {
   return res.status(status).json(payload);
 }
@@ -127,112 +98,24 @@ function detectFileKind(file) {
   return isPdf ? "PDF" : isCsv ? "CSV" : "UNKNOWN";
 }
 
-function stripBom(s) {
-  if (!s) return s;
-  return s.charCodeAt(0) === 0xfeff ? s.slice(1) : s;
-}
-
-function detectDelimiter(sample) {
-  const s = String(sample || "");
-  const commas = (s.match(/,/g) || []).length;
-  const semis = (s.match(/;/g) || []).length;
-  return semis > commas ? ";" : ",";
-}
-
-function parseAmountToNumber(raw) {
-  if (raw === null || raw === undefined) return NaN;
-
-  let s = String(raw).trim();
-  if (!s) return NaN;
-
-  const neg = /^\(.*\)$/.test(s) ? -1 : 1;
-  s = s.replace(/[()]/g, "").trim();
-
-  s = s.replace(/\s/g, "");
-
-  const hasDot = s.includes(".");
-  const hasComma = s.includes(",");
-
-  if (hasDot && hasComma) {
-    if (s.lastIndexOf(",") > s.lastIndexOf(".")) {
-      s = s.replace(/\./g, "").replace(",", ".");
-    } else {
-      s = s.replace(/,/g, "");
-    }
-  } else if (hasComma && !hasDot) {
-    s = s.replace(",", ".");
-  }
-
-  const n = Number(s);
-  return neg * n;
-}
-
 /* =============================== CSV Ingest =============================== */
-async function ingestCsvBuffer(buffer, req) {
-  const raw = stripBom(buffer.toString("utf8"));
-  const delimiter = detectDelimiter(raw.slice(0, 4096));
+// Parsed statement rows ({date: "YYYY-MM-DD", amount: signed major, ...}) ->
+// internal docs (integer minor units + type). The one conversion both the
+// ledger import and the advisor upload use.
+function rowsToDocs(rows, currency) {
+  return rows.map((r) => ({
+    date: r.date,
+    description: String(r.description || "").slice(0, 512),
+    amountMinor: majorToMinor(Math.abs(r.amount), r.currency || currency),
+    currency: r.currency || currency,
+    type: r.amount >= 0 ? "income" : "expense",
+    category: r.category,
+  }));
+}
 
-  const records = parse(raw, {
-    columns: true,
-    skip_empty_lines: true,
-    trim: true,
-    relax_column_count: true,
-    relax_quotes: true,
-    bom: true,
-    delimiter,
-  });
-
-  const defaultCurrency = req.query.currency || "USD";
-  const defaultAccountId = req.query.accountId || null;
-  const defaultCategoryId = req.query.categoryId || null;
-
-  const docs = [];
-  let skipped = 0;
-
-  for (const row of records) {
-    const dateRaw = row.Date ?? row.date ?? row.DATE ?? row.Tarih ?? row.tarih;
-    const descRaw =
-      row.Description ??
-      row.description ??
-      row.DESCRIPTION ??
-      row.Aciklama ??
-      row.ACIKLAMA ??
-      row["Açıklama"] ??
-      "";
-    const amtRaw =
-      row.Amount ??
-      row.amount ??
-      row.AMOUNT ??
-      row.Tutar ??
-      row.tutar ??
-      row["Tutar (TL)"] ??
-      row["Tutar"];
-
-    const date = normalizeDate(dateRaw);
-    const desc = String(descRaw || "").slice(0, 512);
-    const amountMajor = parseAmountToNumber(amtRaw);
-
-    if (!date || !isFinite(amountMajor)) {
-      skipped++;
-      continue;
-    }
-
-    const type = amountMajor >= 0 ? "income" : "expense";
-    const currency = row.Currency || row.currency || defaultCurrency;
-    const amountMinor = majorToMinor(Math.abs(amountMajor), currency);
-
-    docs.push({
-      date,
-      description: desc,
-      amountMinor,
-      currency,
-      type,
-      accountId: row.accountId || defaultAccountId,
-      categoryId: row.categoryId || defaultCategoryId,
-    });
-  }
-
-  return { docs, skipped, kind: "CSV" };
+async function ingestCsvBuffer(buffer, { currency }) {
+  const { rows, skipped, skippedReasons, meta } = parseCsvStatement(buffer.toString("utf8"));
+  return { docs: rowsToDocs(rows, currency), skipped, skippedReasons, meta, kind: "CSV" };
 }
 
 /* =============================== PDF Ingest =============================== */
@@ -248,58 +131,13 @@ async function extractPdfTextOrThrow(buffer) {
 }
 
 // Ledger path (/ingest/pdf writes these into Transaction): deterministic
-// regex only. Model-extracted rows must not reach the ledger until there is
+// tier only. Model-extracted rows must not reach the ledger until there is
 // a human review step in between.
-async function ingestPdfBuffer(buffer, req) {
+async function ingestPdfBuffer(buffer, { currency }) {
   const rawText = await extractPdfTextOrThrow(buffer);
-
-  const lines = rawText
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean);
-
-  const defaultCurrency = req.query.currency || "USD";
-  const defaultAccountId = req.query.accountId || null;
-  const defaultCategoryId = req.query.categoryId || null;
-
-  const docs = [];
-  let skipped = 0;
-
-  const rx =
-    /^(\d{4}-\d{2}-\d{2}|\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4})\s+(.+?)\s+([()\-+]?[\d.,\s]+)\s*$/;
-
-  for (const line of lines) {
-    const m = line.match(rx);
-    if (!m) {
-      skipped++;
-      continue;
-    }
-
-    const date = normalizeDate(m[1]);
-    const desc = String(m[2] || "").slice(0, 512);
-    const amountMajor = parseAmountToNumber(m[3]);
-
-    if (!date || !isFinite(amountMajor)) {
-      skipped++;
-      continue;
-    }
-
-    const type = amountMajor >= 0 ? "income" : "expense";
-    const currency = defaultCurrency;
-    const amountMinor = majorToMinor(Math.abs(amountMajor), currency);
-
-    docs.push({
-      date,
-      description: desc,
-      amountMinor,
-      currency,
-      type,
-      accountId: defaultAccountId,
-      categoryId: defaultCategoryId,
-    });
-  }
-
-  return { docs, skipped, kind: "PDF" };
+  const { rows, meta } = parseStatementText(rawText);
+  const skipped = Object.values(meta.skipped || {}).reduce((a, b) => a + b, 0);
+  return { docs: rowsToDocs(rows, currency), skipped, skippedReasons: meta.skipped, meta, kind: "PDF" };
 }
 
 // Advisor path: the confidence-gated cascade (parser first, model only when
@@ -313,44 +151,32 @@ async function ingestPdfBufferWithCascade(
   const rawText = await extractPdfTextOrThrow(buffer);
   trace.setAttributes({ format: "pdf", textLength: rawText.length });
 
+  let cascade = null;
   const rows = await parseTransactionsFromText(rawText, {
-    // Off unless EXTRACTION_ESCALATION=on. The escalation gate isn't
-    // calibrated yet: confidence.overall is min(fields) and includes
-    // category, so an unknown merchant (0.35) escalates an otherwise clean
-    // statement — 33/54 synthetic PDFs would — and the model can't fix
-    // category anyway. Turn on once the gate is recalibrated (P1).
+    // Off unless EXTRACTION_ESCALATION=on. Calibration on the synthetic set
+    // shows no document where escalating would have improved recall (the
+    // remaining errors are in the source text itself) — see
+    // docs/ai-roadmap/EVALUATION.md before turning this on.
     useLLMFallback:
       process.env.EXTRACTION_ESCALATION === "on" &&
       Boolean(process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY),
     trace,
     allowEscalation,
+    onCascade: (info) => {
+      cascade = info;
+      trace.setAttributes({
+        cascadeDecision: info.decision,
+        parserRows: info.parserRows,
+        meanFinancialConfidence: info.meanFinancialConfidence,
+      });
+    },
   });
 
-  // The cascade speaks signed MAJOR-unit floats (-7.33); convert to the
-  // internal integer-minor form (733 + type) at this boundary, like the CSV
-  // and regex paths do, so money is never summed as floats downstream.
-  const currency = req.query.currency || "USD";
-  const docs = [];
-  let skipped = 0;
-  for (const row of rows) {
-    const amountMajor = Number(row.amount);
-    // Model-tier rows are unvalidated JSON; an unparseable date would throw
-    // later in toISOString() and fail the whole upload.
-    if (!row.date || isNaN(Date.parse(row.date)) || !isFinite(amountMajor)) {
-      skipped++;
-      continue;
-    }
-    docs.push({
-      date: row.date,
-      description: String(row.description || "").slice(0, 512),
-      amountMinor: majorToMinor(Math.abs(amountMajor), currency),
-      currency,
-      type: amountMajor >= 0 ? "income" : "expense",
-      category: row.category,
-    });
-  }
-
-  return { docs, skipped, kind: "PDF" };
+  // The cascade speaks signed MAJOR-unit floats (-7.33) with validated
+  // ISO dates; convert to the internal integer-minor form (733 + type) at
+  // this boundary, so money is never summed as floats downstream.
+  const docs = rowsToDocs(rows, req.query.currency || "USD");
+  return { docs, skipped: 0, kind: "PDF", cascade };
 }
 
 /* =============================== Unified Ingest for AI Advisor =============================== */
@@ -438,7 +264,7 @@ export async function ingestFile(req, res) {
     // Parse into docs (internal normalized form)
     const parsed =
       kind === "CSV"
-        ? await ingestCsvBuffer(buffer, req)
+        ? await ingestCsvBuffer(buffer, { currency: req.query.currency || "USD" })
         : await ingestPdfBufferWithCascade(buffer, req, {
             trace,
             allowEscalation,
@@ -462,9 +288,9 @@ export async function ingestFile(req, res) {
         minorToMajor(d.amountMinor, d.currency);
 
       return {
-        date: new Date(d.date).toISOString().slice(0, 10),
+        date: d.date,
         description: d.description || "",
-        // Only the PDF cascade guesses a category today; CSV rows stay "Other".
+        // Best-effort dictionary label from the shared parser (CSV and PDF).
         category: d.category || "Other",
         amount: signedMajor,
         type: d.type,
@@ -525,52 +351,169 @@ export async function ingestFile(req, res) {
   }
 }
 
-/* =============================== Existing /ingest endpoints (keep as-is) =============================== */
+/* =============================== Ledger import: /ingest/csv, /ingest/pdf =============================== */
+// These write real ledger rows, so every rule a manual create enforces
+// applies here too: the caller is authenticated (route), the account and
+// optional category belong to the caller, rows use the account's currency.
+//
+// Idempotency: each row carries importId + importRowKey, guarded by a unique
+// partial index. Re-uploading a file — or retrying after a partial failure —
+// inserts only rows that are not already there. Rows that are genuinely
+// identical inside one file get distinct keys (#0, #1, ...), so they persist.
+//
+// Imports do not change Account.balance (unchanged behaviour): whether a
+// historical statement should move the current balance is a product decision
+// (it double-counts if the balance was entered as of today).
+
+const { ObjectId } = mongoose.Types;
+
+function ensureImportIndex() {
+  // Correctness under concurrent double-submits depends on this index, and
+  // autoIndex is off in production — see utils/ensureIndex.js.
+  return ensureIndexOnce(
+    Transaction,
+    { userId: 1, importId: 1, importRowKey: 1 },
+    { unique: true, partialFilterExpression: { importId: { $type: "string" } } },
+  );
+}
+
+export function importRowKeys(docs) {
+  const seen = new Map();
+  return docs.map((d) => {
+    const base = [d.date, d.amountMinor, d.type, String(d.description || "").trim().toLowerCase()].join("|");
+    const n = seen.get(base) || 0;
+    seen.set(base, n + 1);
+    return `${base}#${n}`;
+  });
+}
+
+function isDuplicateKeyError(e) {
+  return e?.code === 11000 || (Array.isArray(e?.writeErrors) && e.writeErrors.length > 0 && e.writeErrors.every((w) => (w.code ?? w.err?.code) === 11000));
+}
+
+async function importToLedger(req, res, kind) {
+  if (!req.file?.buffer?.length) {
+    return safeJsonError(res, 400, { code: "NO_FILE", error: "No file provided" });
+  }
+  const userId = req.userId;
+  const { accountId, categoryId } = req.query;
+  if (!accountId) {
+    return safeJsonError(res, 400, {
+      code: "ACCOUNT_REQUIRED",
+      error: "Choose the account to import into (select an account in the filter first), then import again.",
+    });
+  }
+  if (!ObjectId.isValid(accountId) || (categoryId && !ObjectId.isValid(categoryId))) {
+    return safeJsonError(res, 400, { code: "INVALID_ID", error: "Invalid accountId or categoryId" });
+  }
+
+  // Ownership: a foreign id looks exactly like a missing one (404 either
+  // way), so the response does not reveal whether another user's account
+  // exists.
+  const account = await Account.findOne({ _id: accountId, userId, isDeleted: { $ne: true } })
+    .select("_id currency")
+    .lean();
+  if (!account) return safeJsonError(res, 404, { code: "ACCOUNT_NOT_FOUND", error: "Account not found" });
+
+  let category = null;
+  if (categoryId) {
+    category = await Category.findOne({ _id: categoryId, userId, isDeleted: { $ne: true } })
+      .select("_id kind")
+      .lean();
+    if (!category) return safeJsonError(res, 404, { code: "CATEGORY_NOT_FOUND", error: "Category not found" });
+  }
+
+  const currency = String(account.currency || "USD").toUpperCase();
+  const parsed = kind === "CSV" ? await ingestCsvBuffer(req.file.buffer, { currency }) : await ingestPdfBuffer(req.file.buffer, { currency });
+
+  // A row that names another currency can't be booked into this account
+  // (no FX here, same rule as POST /transactions).
+  const currencyMismatch = parsed.docs.filter((d) => d.currency !== currency).length;
+  const docs = parsed.docs.filter((d) => d.currency === currency);
+  if (!docs.length) {
+    return safeJsonError(res, 400, {
+      code: "NO_TRANSACTIONS",
+      error: `No transactions could be parsed from this ${kind}.`,
+      skipped: parsed.skipped + currencyMismatch,
+    });
+  }
+
+  const importId = crypto
+    .createHash("sha256")
+    .update(`${userId}:${account._id}:`)
+    .update(req.file.buffer)
+    .digest("hex");
+  const keys = importRowKeys(docs);
+
+  const rows = docs.map((d, i) => ({
+    userId,
+    accountId: account._id,
+    categoryId: category && category.kind === d.type ? category._id : null,
+    type: d.type,
+    amountMinor: d.amountMinor,
+    currency,
+    date: new Date(`${d.date}T00:00:00.000Z`),
+    description: d.description || null,
+    isDeleted: false,
+    importId,
+    importRowKey: keys[i],
+  }));
+
+  await ensureImportIndex();
+  // Sequential retries are filtered here (works even without the index);
+  // the unique index catches concurrent duplicates that slip past this read.
+  const existing = new Set(
+    (await Transaction.find({ userId, importId }).select("importRowKey").lean()).map((t) => t.importRowKey),
+  );
+  const fresh = rows.filter((r) => !existing.has(r.importRowKey));
+
+  let inserted = 0;
+  let duplicates = rows.length - fresh.length;
+  if (fresh.length) {
+    try {
+      inserted = (await Transaction.insertMany(fresh, { ordered: false })).length;
+    } catch (e) {
+      if (!isDuplicateKeyError(e)) throw e;
+      // ordered:false keeps going past duplicates; count what landed.
+      inserted = e.insertedDocs?.length ?? e.result?.insertedCount ?? fresh.length - e.writeErrors.length;
+      duplicates += fresh.length - inserted;
+    }
+  }
+
+  return res.json({
+    inserted,
+    duplicates,
+    skipped: parsed.skipped + currencyMismatch,
+    skippedReasons: { ...(parsed.skippedReasons || {}), currencyMismatch },
+    importId,
+    message:
+      inserted === 0 && duplicates > 0
+        ? "This file was already imported into this account; nothing new was added."
+        : `Imported ${inserted} transaction${inserted === 1 ? "" : "s"}.`,
+  });
+}
+
 export async function ingestCsv(req, res) {
   try {
-    if (!req.file) return res.status(400).json({ error: "No file provided" });
-    const { docs, skipped } = await ingestCsvBuffer(req.file.buffer, req);
-
-    if (!docs.length) {
-      return safeJsonError(res, 400, {
-        code: "NO_TRANSACTIONS",
-        message: "No transactions could be parsed from this CSV.",
-      });
-    }
-
-    // NOTE: These endpoints still write to Transaction collection
-    const inserted = (await Transaction.insertMany(docs)).length;
-    res.json({ inserted, skipped });
+    return await importToLedger(req, res, "CSV");
   } catch (e) {
-    console.error("ingestCsv error:", e);
-    res.status(500).json({ error: e.message || "CSV ingest failed" });
+    console.error("ingestCsv error:", e?.message || e);
+    return res.status(500).json({ error: "CSV import failed" });
   }
 }
 
 export async function ingestPdf(req, res) {
   try {
-    if (!req.file) return res.status(400).json({ error: "No file provided" });
-    const { docs, skipped } = await ingestPdfBuffer(req.file.buffer, req);
-
-    if (!docs.length) {
-      return safeJsonError(res, 400, {
-        code: "NO_TRANSACTIONS",
-        message: "No transactions could be parsed from this PDF.",
-      });
-    }
-
-    // NOTE: These endpoints still write to Transaction collection
-    const inserted = (await Transaction.insertMany(docs)).length;
-    res.json({ inserted, skipped });
+    return await importToLedger(req, res, "PDF");
   } catch (e) {
     if (e?.code === "PDF_NO_TEXT" || e?.message === "PDF_NO_TEXT") {
       return safeJsonError(res, 400, {
         code: "PDF_NO_TEXT",
-        message:
+        error:
           "This PDF appears to be scanned/image-only or has no extractable text. Please upload a text-based PDF or a CSV export.",
       });
     }
-    console.error("ingestPdf error:", e);
-    res.status(500).json({ error: e.message || "PDF ingest failed" });
+    console.error("ingestPdf error:", e?.message || e);
+    return res.status(500).json({ error: "PDF import failed" });
   }
 }

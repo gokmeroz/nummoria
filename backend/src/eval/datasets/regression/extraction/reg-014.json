@@ -1,0 +1,33 @@
+{
+  "id": "reg-014",
+  "layout": "regression-no-date-evidence-slash",
+  "format": "csv",
+  "notes": "Every date is ambiguous and there is no period: the documented fallback policy reads '/' dates month-first. A day-first '/' bank would fail here — that is the policy's known cost, made visible.",
+  "rawText": "Date,Description,Amount\n10/01/2025,ACME CORP PAYROLL,2500.00\n10/02/2025,SAFEWAY GROCERY,-41.10\n10/03/2025,UBER TRIP,-9.80\n10/06/2025,CITY WATER BILL,-30.00",
+  "groundTruth": [
+    {
+      "date": "2025-10-01",
+      "amount": 2500,
+      "description": "ACME CORP PAYROLL",
+      "category": "Salary"
+    },
+    {
+      "date": "2025-10-02",
+      "amount": -41.1,
+      "description": "SAFEWAY GROCERY",
+      "category": "Groceries"
+    },
+    {
+      "date": "2025-10-03",
+      "amount": -9.8,
+      "description": "UBER TRIP",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-10-06",
+      "amount": -30,
+      "description": "CITY WATER BILL",
+      "category": "Utilities"
+    }
+  ]
+}

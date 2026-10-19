@@ -1,65 +1,117 @@
 // backend/src/services/recurringService.js
+//
+// Materializes occurrences of recurring transactions (templates created via
+// POST /transactions with `frequency`, which sets `nextProcessedDate`).
+//
+// NOT SCHEDULED ANYWHERE YET. startRecurringExpenseCron() exists, but
+// nothing calls it: enabling it starts writing ledger rows for every user
+// with a recurring template, and one product question is open first —
+// should a generated occurrence move Account.balance like a manual entry
+// does? (It doesn't here, matching the previous implementation.)
+//
+// Guarantees (tested in recurringService.test.js):
+//   - each occurrence is booked once: children are keyed by
+//     (recurrenceParentId, recurrenceDate) under a unique index, and the
+//     template only advances after its occurrence exists — a crash between
+//     the two steps is repaired by the next run, not duplicated by it
+//   - concurrent runs: the duplicate insert fails on the index, and the
+//     template advance is compare-and-set on nextProcessedDate
+//   - missed runs catch up with correctly dated occurrences (bounded)
+//   - children carry the template's userId (the old job omitted it, which
+//     the schema rejects) and never recur themselves
 import cron from "node-cron";
-import Transaction from "../models/transaction"; // Adjust path to your Mongoose model
+import { Transaction } from "../models/transaction.js";
+import { ensureIndexOnce } from "../utils/ensureIndex.js";
 
-// Runs every day at 00:05 AM Server Time
-export const startRecurringExpenseCron = () => {
-  cron.schedule("5 0 * * *", async () => {
-    console.log("[CRON] Checking for recurring transactions...");
+const FREQUENCIES = ["daily", "weekly", "monthly", "yearly"];
+// A template that hasn't run for years must not write thousands of rows in
+// one go; the rest is picked up on later runs.
+const MAX_OCCURRENCES_PER_TEMPLATE_PER_RUN = 62;
 
-    try {
-      const today = new Date();
-      today.setUTCHours(0, 0, 0, 0);
+function startOfUTC(date) {
+  const d = new Date(date);
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+}
 
-      // 1. Find all templates that have a frequency
-      // We look for ones where the nextProcessedDate is today or earlier
-      const recurringTx = await Transaction.find({
-        frequency: { $in: ["daily", "weekly", "monthly", "yearly"] },
-        nextProcessedDate: { $lte: today },
-        $or: [{ endDate: null }, { endDate: { $gte: today } }],
-      });
+export function nextOccurrence(date, frequency) {
+  const d = new Date(date);
+  if (frequency === "daily") d.setUTCDate(d.getUTCDate() + 1);
+  else if (frequency === "weekly") d.setUTCDate(d.getUTCDate() + 7);
+  else if (frequency === "monthly") d.setUTCMonth(d.getUTCMonth() + 1);
+  else if (frequency === "yearly") d.setUTCFullYear(d.getUTCFullYear() + 1);
+  else throw new Error(`unknown frequency: ${frequency}`);
+  return d;
+}
 
-      if (!recurringTx.length) {
-        return console.log("[CRON] No recurring transactions due today.");
-      }
+/**
+ * @returns {Promise<{ templates: number, created: number, alreadyBooked: number }>}
+ */
+export async function processDueRecurringTransactions({ now = new Date() } = {}) {
+  // The once-per-occurrence guarantee IS this index (autoIndex is off in
+  // production, so don't assume it was built at startup).
+  await ensureIndexOnce(
+    Transaction,
+    { recurrenceParentId: 1, recurrenceDate: 1 },
+    { unique: true, partialFilterExpression: { recurrenceParentId: { $exists: true } } },
+  );
+  const today = startOfUTC(now);
+  const templates = await Transaction.find({
+    frequency: { $in: FREQUENCIES },
+    nextProcessedDate: { $lte: today },
+    isDeleted: { $ne: true },
+    recurrenceParentId: { $exists: false },
+  }).lean();
 
-      for (const template of recurringTx) {
-        // 2. Clone the transaction as a fresh, actual expense
-        const newExpense = new Transaction({
-          accountId: template.accountId,
-          categoryId: template.categoryId,
-          type: template.type,
-          amountMinor: template.amountMinor,
-          currency: template.currency,
-          date: today,
-          description: template.description || "Recurring Expense",
-          tags: template.tags,
-          // Important: We strip frequency from the child so it doesn't clone itself
+  let created = 0;
+  let alreadyBooked = 0;
+
+  for (const tpl of templates) {
+    let occurrence = tpl.nextProcessedDate;
+    for (let n = 0; n < MAX_OCCURRENCES_PER_TEMPLATE_PER_RUN && occurrence <= today; n++) {
+      if (tpl.endDate && occurrence > tpl.endDate) break;
+
+      try {
+        await Transaction.create({
+          userId: tpl.userId,
+          accountId: tpl.accountId,
+          categoryId: tpl.categoryId ?? null,
+          type: tpl.type,
+          amountMinor: tpl.amountMinor,
+          currency: tpl.currency,
+          date: occurrence,
+          description: tpl.description || "Recurring transaction",
+          tags: tpl.tags || [],
+          isDeleted: false,
+          recurrenceParentId: tpl._id,
+          recurrenceDate: occurrence,
         });
-
-        await newExpense.save();
-
-        // 3. Calculate the NEXT processing date for the template
-        const nextDate = new Date(today);
-        if (template.frequency === "daily")
-          nextDate.setUTCDate(nextDate.getUTCDate() + 1);
-        if (template.frequency === "weekly")
-          nextDate.setUTCDate(nextDate.getUTCDate() + 7);
-        if (template.frequency === "monthly")
-          nextDate.setUTCMonth(nextDate.getUTCMonth() + 1);
-        if (template.frequency === "yearly")
-          nextDate.setUTCFullYear(nextDate.getUTCFullYear() + 1);
-
-        // 4. Update the template's next processing date
-        template.nextProcessedDate = nextDate;
-        await template.save();
-
-        console.log(
-          `[CRON] Generated recurring expense for: ${template.description}`,
-        );
+        created++;
+      } catch (e) {
+        if (e?.code !== 11000) throw e;
+        alreadyBooked++; // a previous (crashed) or concurrent run booked it
       }
+
+      const next = nextOccurrence(occurrence, tpl.frequency);
+      const advanced = await Transaction.updateOne(
+        { _id: tpl._id, nextProcessedDate: occurrence },
+        { $set: { nextProcessedDate: next } },
+      );
+      if (advanced.modifiedCount === 0) break; // another run moved it on
+      occurrence = next;
+    }
+  }
+
+  return { templates: templates.length, created, alreadyBooked };
+}
+
+// Runs every day at 00:05 server time. Not called anywhere — see header.
+export const startRecurringExpenseCron = () =>
+  cron.schedule("5 0 * * *", async () => {
+    try {
+      const r = await processDueRecurringTransactions();
+      console.log(`[CRON] recurring: ${r.created} created, ${r.alreadyBooked} already booked, ${r.templates} templates`);
     } catch (error) {
-      console.error("[CRON] Failed to process recurring transactions:", error);
+      console.error("[CRON] Failed to process recurring transactions:", error?.message || error);
     }
   });
-};

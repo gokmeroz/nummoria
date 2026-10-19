@@ -72,6 +72,15 @@ function getRedis() {
   }
 }
 
+/** Close the quota client (graceful shutdown, tests); the next call reconnects. */
+export async function closeQuotaRedis() {
+  const r = redis;
+  redis = null;
+  redisReady = false;
+  redisInitTried = false;
+  if (r) r.disconnect();
+}
+
 /* ------------------------------------------------------------------ */
 /*  IN-MEMORY FALLBACK (dev / redis-down safety net)                   */
 /* ------------------------------------------------------------------ */

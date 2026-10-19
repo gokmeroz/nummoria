@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // backend/src/eval/calibrate.js — does parser-self confidence mean anything?
 //
-// npm run eval:calibrate                          -> gate = confidence.overall (what ships)
+// npm run eval:calibrate                          -> gate = confidence.financial (what ships:
+//                                                    min(date, amount, description), multiline-capped)
+// npm run eval:calibrate -- --gate overall         -> gate = confidence.overall (all four fields; the old gate)
 // npm run eval:calibrate -- --fields date,amount  -> gate = min over just these fields
 // npm run eval:calibrate -- --agg min              -> doc gate = worst row, not mean row
 //
@@ -21,11 +23,11 @@
 //
 // Deterministic tier only (no model calls), over the golden pdf-text cases.
 
-import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { parseTransactionsFromText } from "../ai/pdfParser.js";
+import { parseStatementText, ESCALATION_CONFIDENCE_THRESHOLD } from "../ai/pdfParser.js";
 import { FIELDS, matchRows, fieldsAgree } from "./scorecard.js";
+import { loadExtractionDataset } from "./dataset.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const GOLDEN_EXTRACTION_DIR = path.join(__dirname, "datasets", "golden", "extraction");
@@ -39,25 +41,24 @@ function parseArgs(argv) {
   const j = argv.indexOf("--agg");
   const agg = j >= 0 ? argv[j + 1] : "avg";
   if (!["avg", "min"].includes(agg)) throw new Error(`--agg: use avg or min, got "${agg}"`);
-  return { fields, agg };
+  const k = argv.indexOf("--gate");
+  const gate = k >= 0 ? argv[k + 1] : "financial";
+  if (!["financial", "overall"].includes(gate)) throw new Error(`--gate: use financial or overall, got "${gate}"`);
+  return { fields, agg, gate };
 }
 
-// The per-row value the gate averages. null fields = the shipped behaviour
-// (confidence.overall, which is min over all four fields + multiline cap).
-function gateValue(tx, fields) {
-  if (!fields) return tx.confidence.overall;
-  return Math.min(...fields.map((f) => tx.confidence.fields[f].value));
+// The per-row value the gate averages. Default = the shipped behaviour
+// (confidence.financial: min over date/amount/description + multiline cap).
+function gateValue(tx, fields, gate) {
+  if (fields) return Math.min(...fields.map((f) => tx.confidence.fields[f].value));
+  return gate === "overall" ? tx.confidence.overall : tx.confidence.financial;
 }
 
 const pct = (x) => (Number.isFinite(x) ? `${(x * 100).toFixed(1)}%` : "   —");
 
 async function main() {
-  const { fields, agg } = parseArgs(process.argv.slice(2));
-  const cases = fs
-    .readdirSync(GOLDEN_EXTRACTION_DIR)
-    .filter((f) => f.endsWith(".json"))
-    .map((f) => JSON.parse(fs.readFileSync(path.join(GOLDEN_EXTRACTION_DIR, f), "utf8")))
-    .filter((c) => c.format === "pdf-text");
+  const { fields, agg, gate } = parseArgs(process.argv.slice(2));
+  const cases = loadExtractionDataset(GOLDEN_EXTRACTION_DIR).fixtures.filter((c) => c.format === "pdf-text");
 
   // field -> confidence value -> { n, correct }
   const reliability = Object.fromEntries(FIELDS.map((f) => [f, new Map()]));
@@ -65,7 +66,7 @@ async function main() {
   const docs = [];
 
   for (const c of cases) {
-    const extracted = await parseTransactionsFromText(c.rawText, { useLLMFallback: false });
+    const extracted = parseStatementText(c.rawText).rows;
     const { pairs, falsePositives } = matchRows(extracted, c.groundTruth);
 
     for (const { ex, gt } of pairs) {
@@ -77,7 +78,7 @@ async function main() {
         reliability[f].set(v, bucket);
       }
     }
-    for (const ex of falsePositives) phantomConfidence.push(gateValue(ex, fields));
+    for (const ex of falsePositives) phantomConfidence.push(gateValue(ex, fields, gate));
 
     // Document quality = share of real transactions recovered with the two
     // fields money depends on (date, amount) both right.
@@ -90,15 +91,15 @@ async function main() {
       gate: !extracted.length
         ? 0
         : agg === "min"
-          ? Math.min(...extracted.map((t) => gateValue(t, fields)))
-          : extracted.reduce((s, t) => s + gateValue(t, fields), 0) / extracted.length,
+          ? Math.min(...extracted.map((t) => gateValue(t, fields, gate)))
+          : extracted.reduce((s, t) => s + gateValue(t, fields, gate), 0) / extracted.length,
       rows: extracted.length,
       recall: c.groundTruth.length ? rowsRight / c.groundTruth.length : 1,
       phantoms: falsePositives.length,
     });
   }
 
-  console.log(`Calibration over ${cases.length} golden pdf-text cases — row gate = ${fields ? `min(${fields.join(", ")})` : "confidence.overall (shipped)"}, doc gate = ${agg} over rows\n`);
+  console.log(`Calibration over ${cases.length} golden pdf-text cases — row gate = ${fields ? `min(${fields.join(", ")})` : gate === "overall" ? "confidence.overall (old gate)" : "confidence.financial (shipped)"}; shipped threshold ${ESCALATION_CONFIDENCE_THRESHOLD}, doc gate = ${agg} over rows\n`);
 
   console.log("=== 1. Reliability: does a field's confidence predict that field being correct? ===");
   console.log("field         conf     rows   actually correct   gap (correct − conf)");

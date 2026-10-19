@@ -1,6 +1,6 @@
 import express from "express";
 import Notification from "../models/Notification.js";
-import { pushQueue } from "../queues/pushQueue.js";
+import { getPushQueue } from "../queues/pushQueue.js";
 
 const router = express.Router();
 
@@ -66,7 +66,7 @@ router.post("/test", async (req, res) => {
     status: "queued",
   });
 
-  await pushQueue.add(
+  await getPushQueue().add(
     "sendPush",
     { notificationId: notif._id.toString() },
     { attempts: 3 }

@@ -1,0 +1,33 @@
+{
+  "id": "reg-010",
+  "layout": "regression-dirty-csv",
+  "format": "csv",
+  "notes": "Blank row, an impossible date (02/30, excluded from ground truth), a row with an empty description (kept), and a trailing TOTAL row with no date (excluded).",
+  "rawText": "Date,Description,Amount\n07/01/2025,ACME CORP PAYROLL,2500.00\n\n07/03/2025,UBER TRIP,-14.20\n02/30/2025,BROKEN EXPORT ROW,-9.99\n07/09/2025,,-3.00\n07/15/2025,CHIPOTLE MEXICAN GRILL,-12.85\n,TOTAL,2459.96",
+  "groundTruth": [
+    {
+      "date": "2025-07-01",
+      "amount": 2500,
+      "description": "ACME CORP PAYROLL",
+      "category": "Salary"
+    },
+    {
+      "date": "2025-07-03",
+      "amount": -14.2,
+      "description": "UBER TRIP",
+      "category": "Transport"
+    },
+    {
+      "date": "2025-07-09",
+      "amount": -3,
+      "description": "",
+      "category": "Other"
+    },
+    {
+      "date": "2025-07-15",
+      "amount": -12.85,
+      "description": "CHIPOTLE MEXICAN GRILL",
+      "category": "Dining"
+    }
+  ]
+}

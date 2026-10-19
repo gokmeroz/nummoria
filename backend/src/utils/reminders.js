@@ -1,5 +1,24 @@
 // backend/src/utils/reminders.js
-import { reminderQueue } from "../queues/reminderQueue.js";
+import { getReminderQueue } from "../queues/reminderQueue.js";
+
+// Queue calls are bounded: the shared Redis connection retries forever
+// (BullMQ requires maxRetriesPerRequest: null), so with Redis down an
+// un-bounded call never settles and the HTTP request awaiting it hangs.
+// A reminder is a side effect of a transaction write, never a reason to
+// hold or fail it.
+const QUEUE_OP_TIMEOUT_MS = 2000;
+
+function withTimeout(promise, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${label} timed out after ${QUEUE_OP_TIMEOUT_MS}ms (is Redis reachable?)`)),
+      QUEUE_OP_TIMEOUT_MS,
+    );
+    timer.unref?.();
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
 
 /**
  * Upsert a reminder job for a transaction.
@@ -28,14 +47,17 @@ export async function upsertTransactionReminderJob({
   const jobId = `tx_${String(transactionId)}`;
 
   // Remove previous job (if exists) then add again (true upsert)
-  await reminderQueue.remove(jobId).catch(() => {});
+  await withTimeout(getReminderQueue().remove(jobId), "reminder remove").catch(() => {});
 
-  const job = await reminderQueue.add("transaction-reminder", payload, {
-    jobId,
-    delay,
-    removeOnComplete: true,
-    removeOnFail: 50,
-  });
+  const job = await withTimeout(
+    getReminderQueue().add("transaction-reminder", payload, {
+      jobId,
+      delay,
+      removeOnComplete: true,
+      removeOnFail: 50,
+    }),
+    "reminder add",
+  );
 
   return { scheduled: true, jobId: job.id, delay };
 }
@@ -46,5 +68,5 @@ export async function upsertTransactionReminderJob({
 export async function removeTransactionReminderJob(transactionId) {
   if (!transactionId) return;
   const jobId = `tx_${String(transactionId)}`;
-  await reminderQueue.remove(jobId).catch(() => {});
+  await withTimeout(getReminderQueue().remove(jobId), "reminder remove").catch(() => {});
 }

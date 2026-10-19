@@ -1,15 +1,10 @@
 // backend/src/server.js
-import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
+// Load env first (single source of truth). This must be the FIRST import:
+// ES modules evaluate imports before the importing module's body, so a
+// dotenv.config() call written below the imports would run after every
+// module that reads process.env at load time (e.g. the model clients).
+import "./config/env.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Load env first (single source of truth)
-dotenv.config({ path: path.join(__dirname, "../.env") });
-
-// Now other imports
 import app from "./app.js";
 import { connectDB } from "./config/db.js";
 import { startRenewalReminderJob } from "./jobs/renewalReminders.js";

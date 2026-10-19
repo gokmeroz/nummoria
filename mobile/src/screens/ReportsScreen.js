@@ -586,6 +586,9 @@ export default function ReportsScreen() {
       setLoading(true);
       const response = await api.post("/ingest/csv", formData, {
         headers: { "Content-Type": "multipart/form-data" },
+        // The import books rows into one account; the server rejects a
+        // request without one (ACCOUNT_REQUIRED) and says why.
+        params: fAccountId !== "ALL" ? { accountId: fAccountId } : undefined,
       });
 
       Alert.alert(
@@ -623,6 +626,9 @@ export default function ReportsScreen() {
       setLoading(true);
       const response = await api.post("/ingest/pdf", formData, {
         headers: { "Content-Type": "multipart/form-data" },
+        // The import books rows into one account; the server rejects a
+        // request without one (ACCOUNT_REQUIRED) and says why.
+        params: fAccountId !== "ALL" ? { accountId: fAccountId } : undefined,
       });
 
       Alert.alert(

@@ -3,12 +3,13 @@
 // ---------- IMPORTS ----------
 import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { parse as parseCSV } from "csv-parse/sync";
 
 import AiAdvisorFile from "../models/AiAdvisorFile.js";
 import { User } from "../models/user.js";
 import { Transaction } from "../models/transaction.js";
+import mongoose from "mongoose";
 import { computeMetrics } from "../ai/financialMetrics.js";
+import { ledgerToAdvisorTransactions } from "../ai/advisorContext.js";
 import { getPromptForSubscription } from "../ai/prompts/index.js";
 import { startTrace, noopTrace } from "../observability/trace.js";
 import { describePrompt } from "../observability/promptRegistry.js";
@@ -390,139 +391,6 @@ function groupByCategory(arr) {
 
 function topN(arr, n) {
   return arr.slice(0, n);
-}
-
-/* -------------------------------------------------------------------------- */
-/*                            FILE / CSV HELPER UTILS                         */
-/* -------------------------------------------------------------------------- */
-
-function normalizeAmount(s) {
-  if (s == null) return NaN;
-  const raw = String(s).replace(/[^0-9.,-]/g, "");
-  const neg = raw.includes("-");
-  let numStr = raw;
-
-  if (raw.includes(".") && raw.includes(",")) {
-    if (raw.lastIndexOf(",") > raw.lastIndexOf(".")) {
-      numStr = raw.replace(/\./g, "").replace(",", ".");
-    } else {
-      numStr = raw.replace(/,/g, "");
-    }
-  } else if (raw.includes(",") && !raw.includes(".")) {
-    numStr = raw.replace(",", ".");
-  }
-
-  const v = parseFloat(numStr);
-  return neg ? -Math.abs(v) : v;
-}
-
-function normalizeDate(s) {
-  const p = String(s).replace(/-/g, "/").replace(/\./g, "/").split("/");
-  let d, m, y;
-
-  if (p[2]?.length === 4) {
-    const a = +p[0];
-    const b = +p[1];
-
-    if (a > 12) {
-      d = a;
-      m = b;
-    } else if (b > 12) {
-      d = b;
-      m = a;
-    } else {
-      m = a;
-      d = b;
-    }
-
-    y = p[2];
-  } else {
-    const a = +p[0];
-    const b = +p[1];
-    y = String(2000 + +(p[2] || "0"));
-
-    if (a > 12) {
-      d = a;
-      m = b;
-    } else {
-      m = a;
-      d = b;
-    }
-  }
-
-  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-}
-
-export function csvToTxRows(buf) {
-  const text = buf.toString("utf8");
-  const delimiters = [",", ";", "\t", "|"];
-  let rows = [];
-
-  for (const delim of delimiters) {
-    try {
-      rows = parseCSV(text, {
-        columns: true,
-        skip_empty_lines: true,
-        delimiter: delim,
-        relax_column_count: true,
-        relax_quotes: true,
-        trim: true,
-      });
-
-      if (Array.isArray(rows) && rows.length) break;
-    } catch {
-      // try next delimiter
-    }
-  }
-
-  if (!Array.isArray(rows) || rows.length === 0) return [];
-
-  const out = [];
-
-  for (const r of rows) {
-    const date =
-      r.Date ||
-      r.Tarih ||
-      r["Transaction Date"] ||
-      r["İşlem Tarihi"] ||
-      r.islemTarihi;
-
-    const desc =
-      r.Description ||
-      r.Açıklama ||
-      r["Transaction Description"] ||
-      r.Aciklama ||
-      r["Islem Aciklama"];
-
-    const credit = r.Credit || r.Alacak || r.Yatan || r["Credit Amount"];
-    const debit = r.Debit || r.Borç || r.Çekilen || r["Debit Amount"];
-    const amountRaw =
-      r.Amount || r.Tutar || r["İşlem Tutarı"] || r["Islem Tutari"];
-
-    let amount = NaN;
-
-    if (amountRaw != null) {
-      amount = normalizeAmount(amountRaw);
-    } else if (credit != null || debit != null) {
-      const c = normalizeAmount(credit ?? "0");
-      const d = normalizeAmount(debit ?? "0");
-      amount = (isNaN(c) ? 0 : c) - (isNaN(d) ? 0 : d);
-    }
-
-    if (!date || isNaN(amount)) continue;
-
-    const iso = normalizeDate(date);
-
-    out.push({
-      date: iso,
-      description: (desc || "").toString().trim(),
-      category: "Other",
-      amount,
-      type: amount >= 0 ? "income" : "expense",
-    });
-  }
-
-  return out;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -963,13 +831,16 @@ async function getSubscriptionForUser(userId) {
   return "Free";
 }
 
-async function getLatestFileForUser(userId, fileId) {
-  if (fileId) {
-    return await AiAdvisorFile.findById(fileId);
-  }
+// Every lookup is scoped to the caller. fileId comes from the request body,
+// so an unscoped findById let any signed-in user feed someone else's parsed
+// statement into their own advisor answer. A foreign, unknown or malformed
+// id resolves to "no file" — indistinguishable, so it can't probe for ids.
+export async function getLatestFileForUser(userId, fileId) {
+  if (!userId) return null;
 
-  if (!userId) {
-    return null;
+  if (fileId) {
+    if (!mongoose.Types.ObjectId.isValid(String(fileId))) return null;
+    return await AiAdvisorFile.findOne({ _id: fileId, userId });
   }
 
   return await AiAdvisorFile.findOne({ userId }).sort({ createdAt: -1 });
@@ -989,7 +860,7 @@ function buildContextFromFile(fileDoc) {
   };
 }
 
-async function buildContextFromUserTransactions(userId) {
+export async function buildContextFromUserTransactions(userId) {
   if (!userId) return { parsedTransactions: [], computedMetrics: {} };
 
   const dbTxs = await Transaction.find({ userId, isDeleted: false })
@@ -998,22 +869,10 @@ async function buildContextFromUserTransactions(userId) {
     .limit(500)
     .lean();
 
-  const parsedTransactions = dbTxs.map((t) => {
-    const isExpense = t.type === "expense";
-    const isIncome = t.type === "income";
-    const amount =
-      (t.amountMinor / 100) * (isExpense ? -1 : 1);
-    return {
-      date: t.date instanceof Date ? t.date.toISOString().slice(0, 10) : String(t.date).slice(0, 10),
-      amount,
-      description: t.description || "",
-      type: t.type,
-      category: t.categoryId?.name || t.type,
-      currency: t.currency,
-    };
-  });
-
-  const computedMetrics = computeMetrics(parsedTransactions);
+  // Scope + sign rules live in ai/advisorContext.js (posted rows only,
+  // investments are outflows, one currency).
+  const { parsedTransactions, currency, excluded } = ledgerToAdvisorTransactions(dbTxs);
+  const computedMetrics = { ...computeMetrics(parsedTransactions), currency, excluded };
   return { parsedTransactions, computedMetrics };
 }
 
