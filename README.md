@@ -57,6 +57,24 @@ The model-assisted tier exists but is off by default and has not been
 evaluated against a live model. Methodology, before/after numbers and
 limitations: [`docs/ai-roadmap/EVALUATION.md`](docs/ai-roadmap/EVALUATION.md).
 
+## Measured API load
+
+k6 against an **isolated local stack** (one API process, local MongoDB and
+Redis, generator on the same 8-CPU host). Each virtual user logs in as its
+own synthetic user, then reads and writes its own records with 5–10 s
+think time.
+
+| virtual users | plateau | requests/s | p95 | p99 |
+|---:|---:|---:|---:|---:|
+| 1,000 | 180 s | 133.5 | 10.9 ms | 22.5 ms |
+| 1,250 | 60 s | 167.8 | 14.9 ms | 59.9 ms |
+
+All 4,471 acknowledged writes reconciled against account balances; two
+transport-level errors (under 0.01%). Not a production capacity claim: no
+TLS or proxy, rate limits raised for the test process only, no AI or
+market-data endpoints, no soak. Design, thresholds and raw evidence:
+[`docs/performance/RESULTS.md`](docs/performance/RESULTS.md).
+
 ## Quick start
 
 Prerequisites: **Node.js 22** (`backend/package.json` pins `>=22 <23`),
