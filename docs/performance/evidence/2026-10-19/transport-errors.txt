@@ -1,0 +1,2 @@
+time="2026-10-19T14:47:05Z" level=warning msg="Request Failed" error="Post \"http://127.0.0.1:36157/transactions\": read tcp 127.0.0.1:35220->127.0.0.1:36157: read: connection reset by peer"
+time="2026-10-19T14:49:18Z" level=warning msg="Request Failed" error="Post \"http://127.0.0.1:36157/transactions\": EOF"

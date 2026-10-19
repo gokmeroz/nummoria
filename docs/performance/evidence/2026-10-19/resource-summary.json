@@ -1,0 +1,11 @@
+{
+  "apiPeakRssMiB": 313.9921875,
+  "worstOneSecondEventLoopP95Ms": 41.910271,
+  "pool": {
+    "peakCheckedOut": 11,
+    "checkoutFailures": 0,
+    "worstOneSecondP95CheckoutMs": 25,
+    "maxSingleCheckoutMs": 39
+  },
+  "osProcessSamples": "incomplete; database CPU/RSS and load-generator headroom not established"
+}

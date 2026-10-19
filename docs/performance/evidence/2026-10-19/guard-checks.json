@@ -1,0 +1,17 @@
+[
+  {
+    "name": "server rejects non-test runtime",
+    "exitCode": 1,
+    "passed": true
+  },
+  {
+    "name": "server rejects remote database",
+    "exitCode": 1,
+    "passed": true
+  },
+  {
+    "name": "k6 refuses external target before execution",
+    "exitCode": 107,
+    "passed": true
+  }
+]

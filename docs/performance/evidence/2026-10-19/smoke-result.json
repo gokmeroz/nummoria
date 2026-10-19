@@ -1,0 +1,28 @@
+{
+  "profile": "smoke",
+  "runId": "20261019144201979_200aa1",
+  "k6ExitCode": 0,
+  "limiter": {
+    "requests": 302,
+    "identities": 2,
+    "sourceIps": 1,
+    "statuses": {
+      "200": 300,
+      "429": 2
+    },
+    "passed": true
+  },
+  "reconciliation": {
+    "accounts": 5,
+    "buckets": 5,
+    "expectedAccounts": 5,
+    "mismatches": [],
+    "duplicateIdentifiers": [],
+    "persistedWrites": 77,
+    "acknowledgedWrites": 77,
+    "passed": true
+  },
+  "failedThresholds": [],
+  "passed": true,
+  "warning": "Isolated local API benchmark only; inspect per-plateau metrics and actual throughput. No production or live-provider capacity claim."
+}

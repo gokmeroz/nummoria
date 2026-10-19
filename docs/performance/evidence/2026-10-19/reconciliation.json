@@ -1,0 +1,10 @@
+{
+  "accounts": 1250,
+  "buckets": 1250,
+  "expectedAccounts": 1250,
+  "mismatches": [],
+  "duplicateIdentifiers": [],
+  "persistedWrites": 4471,
+  "acknowledgedWrites": 4471,
+  "passed": true
+}

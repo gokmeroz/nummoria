@@ -23,6 +23,7 @@ coverage/
 # are committed on purpose, this is not
 src/eval/datasets/synthetic/output/
 src/eval/reports/
+perf-results/
 
 # OS / editor
 .DS_Store

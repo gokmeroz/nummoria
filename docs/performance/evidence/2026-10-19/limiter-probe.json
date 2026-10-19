@@ -1,0 +1,10 @@
+{
+  "requests": 302,
+  "identities": 2,
+  "sourceIps": 1,
+  "statuses": {
+    "200": 300,
+    "429": 2
+  },
+  "passed": true
+}

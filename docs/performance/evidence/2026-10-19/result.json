@@ -1,0 +1,28 @@
+{
+  "profile": "capacity",
+  "runId": "20261019144310070_a92717",
+  "k6ExitCode": 0,
+  "limiter": {
+    "requests": 302,
+    "identities": 2,
+    "sourceIps": 1,
+    "statuses": {
+      "200": 300,
+      "429": 2
+    },
+    "passed": true
+  },
+  "reconciliation": {
+    "accounts": 1250,
+    "buckets": 1250,
+    "expectedAccounts": 1250,
+    "mismatches": [],
+    "duplicateIdentifiers": [],
+    "persistedWrites": 4471,
+    "acknowledgedWrites": 4471,
+    "passed": true
+  },
+  "failedThresholds": [],
+  "passed": true,
+  "warning": "Isolated local API benchmark only; inspect per-plateau metrics and actual throughput. No production or live-provider capacity claim."
+}

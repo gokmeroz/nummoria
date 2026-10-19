@@ -1,0 +1,23 @@
+{
+  "at": "2026-10-19T14:43:10.283Z",
+  "startCommit": "516fdfd1b4d0d391a8a5f143b1d6a95509a40099",
+  "trackedDiffAtStart": " backend/.gitignore | 3 ++-\n 1 file changed, 2 insertions(+), 1 deletion(-)\n",
+  "harnessSha256": {
+    "run.mjs": "36e55bd08b2ebb9f78579ea8c12e3180b24f200637edb3f498a8acf2d7f1f6a0",
+    "server.mjs": "d4d21af77a12d506aabbeac28b0deb02d5912eb27b573fd6eac8ee7ed15d93cb",
+    "session.k6.js": "da0db9a2d77f765da3a4e963da1dcecc2ab77ddbfc5e288c76062c7ece67f1db"
+  },
+  "platform": "linux",
+  "arch": "x64",
+  "node": "v22.23.3",
+  "cpu": "AMD EPYC 9V74 80-Core Processor",
+  "logicalCpus": 9,
+  "cpuQuota": "800000 100000",
+  "memoryLimit": "8589934592",
+  "mongo": "db version v7.0.28\nBuild Info: {\n    \"version\": \"7.0.28\",\n    \"gitVersion\": \"cfc346c59d2cc3dbc903507fc642e22e3097f362\",\n    \"openSSLVersion\": \"OpenSSL 3.0.13 30 Jan 2024\",\n    \"modules\": [],\n    \"allocator\": \"tcmalloc\",\n    \"environment\": {\n        \"distmod\": \"ubuntu2204\",\n        \"distarch\": \"x86_64\",\n        \"target_arch\": \"x86_64\"\n    }\n}",
+  "redis": "Redis server v=7.2.5 sha=00000000:0 malloc=libc bits=64 build=e39c2295c0e5924e",
+  "k6": "k6 v2.3.0 (commit/e088784614, go1.26.8, linux/amd64)",
+  "topology": "load generator, one API process, one MongoDB server and one Redis server share this host; loopback HTTP; no TLS/proxy",
+  "mongoPoolSize": "default (100); untouched",
+  "database": "nummoria_load_20261019144310070_a92717"
+}

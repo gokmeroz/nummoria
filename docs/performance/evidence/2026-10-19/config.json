@@ -1,0 +1,104 @@
+{
+  "profile": "capacity",
+  "runId": "20261019144310070_a92717",
+  "maxVus": 1250,
+  "transactionsPerUser": 100,
+  "stages": [
+    {
+      "seconds": 10,
+      "duration": "10s",
+      "target": 10,
+      "phase": "ramp-10"
+    },
+    {
+      "seconds": 10,
+      "duration": "10s",
+      "target": 10,
+      "phase": "hold-10"
+    },
+    {
+      "seconds": 10,
+      "duration": "10s",
+      "target": 100,
+      "phase": "ramp-100"
+    },
+    {
+      "seconds": 20,
+      "duration": "20s",
+      "target": 100,
+      "phase": "hold-100"
+    },
+    {
+      "seconds": 15,
+      "duration": "15s",
+      "target": 250,
+      "phase": "ramp-250"
+    },
+    {
+      "seconds": 20,
+      "duration": "20s",
+      "target": 250,
+      "phase": "hold-250"
+    },
+    {
+      "seconds": 15,
+      "duration": "15s",
+      "target": 500,
+      "phase": "ramp-500"
+    },
+    {
+      "seconds": 20,
+      "duration": "20s",
+      "target": 500,
+      "phase": "hold-500"
+    },
+    {
+      "seconds": 30,
+      "duration": "30s",
+      "target": 1000,
+      "phase": "ramp-1000"
+    },
+    {
+      "seconds": 180,
+      "duration": "180s",
+      "target": 1000,
+      "phase": "hold-1000"
+    },
+    {
+      "seconds": 20,
+      "duration": "20s",
+      "target": 1250,
+      "phase": "ramp-1250"
+    },
+    {
+      "seconds": 60,
+      "duration": "60s",
+      "target": 1250,
+      "phase": "hold-1250"
+    },
+    {
+      "seconds": 20,
+      "duration": "20s",
+      "target": 0,
+      "phase": "drain"
+    }
+  ],
+  "gatedPhases": [
+    "hold-1000",
+    "hold-1250"
+  ],
+  "assumptions": {
+    "thinkSeconds": [
+      5,
+      10
+    ],
+    "loginOnce": true,
+    "defaultIpRateLimitPreservedInProbe": true,
+    "capacityRateMax": 1000000000,
+    "capacityLoginMax": 1000000000,
+    "paidProviders": false,
+    "nodeEnv": "test",
+    "appEntrypoint": "src/perf/server.mjs",
+    "workerAndCron": false
+  }
+}
